@@ -3,23 +3,12 @@ from typing import Any
 
 from fastapi import FastAPI, File, HTTPException, UploadFile, status
 from fastapi.responses import JSONResponse
-import bcrypt
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from fitter.auth import CurrentUser, DbSession, create_session_cookie
+from fitter.auth import CurrentUser, DbSession, LoginRequest, create_session_cookie, verify_password
 from fitter.db import Base, async_session, engine
 from fitter.models import Activity, Lap, Record, User
-
-pwd = bcrypt
-
-
-def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-
-
-def verify_password(password: str, hashed: str) -> bool:
-    return bcrypt.checkpw(password.encode(), hashed.encode())
 
 
 def create_app() -> FastAPI:
@@ -32,12 +21,10 @@ def create_app() -> FastAPI:
     return app
 
 
-async def login(db: DbSession, request: dict[str, str]):
-    username = request["username"]
-    password = request["password"]
-    result = await db.execute(select(User).where(User.username == username))
+async def login(db: DbSession, request: LoginRequest):
+    result = await db.execute(select(User).where(User.username == request.username))
     user = result.scalar_one_or_none()
-    if user is None or not verify_password(password, user.password_hash):
+    if user is None or not verify_password(request.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     cookie = create_session_cookie(user.id)
     response = JSONResponse({"user_id": user.id, "username": user.username})
@@ -92,22 +79,35 @@ async def get_activity_records(db: DbSession, user: CurrentUser, activity_id: in
         select(Record).where(Record.activity_id == activity_id).order_by(Record.timestamp)
     )
     records = result.scalars().all()
+
+    features = []
+    for r in records:
+        props = {
+            "timestamp": r.timestamp.isoformat(),
+            "distance_m": r.distance_m,
+            "hr_bpm": r.hr_bpm,
+            "power_w": r.power_w,
+            "speed_mps": r.speed_mps,
+            "altitude_m": r.altitude_m,
+            "cadence_rpm": r.cadence_rpm,
+        }
+        if r.lat is not None and r.lon is not None:
+            features.append({
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [r.lon, r.lat]},
+                "properties": props,
+            })
+        else:
+            features.append({
+                "type": "Feature",
+                "geometry": None,
+                "properties": props,
+            })
+
     return {
+        "type": "FeatureCollection",
         "activity_id": activity_id,
-        "records": [
-            {
-                "timestamp": r.timestamp.isoformat(),
-                "lat": r.lat,
-                "lon": r.lon,
-                "distance_m": r.distance_m,
-                "hr_bpm": r.hr_bpm,
-                "power_w": r.power_w,
-                "speed_mps": r.speed_mps,
-                "altitude_m": r.altitude_m,
-                "cadence_rpm": r.cadence_rpm,
-            }
-            for r in records
-        ],
+        "features": features,
     }
 
 

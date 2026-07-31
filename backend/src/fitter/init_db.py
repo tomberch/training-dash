@@ -6,7 +6,7 @@ from sqlalchemy import text
 
 from fitter.db import async_session, engine
 from fitter.models import Base, User
-from fitter.app import hash_password
+from fitter.auth import hash_password
 
 
 async def init_db():

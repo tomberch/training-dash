@@ -1,8 +1,12 @@
+import sys
+from pathlib import Path
+
 import pytest
 from sqlalchemy import select
 
-from generate_fit import make_test_fit
-from fitter.models import Activity, Lap, Record
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "tests" / "fixtures"))
+from generate_fit import make_test_fit  # noqa: E402
+from fitter.models import Activity, Lap, Record  # noqa: E402
 
 
 class TestUpload:

@@ -6,8 +6,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from fitter.models import Activity, Lap, Record
 
-FIT_EPOCH = datetime(1989, 12, 31, tzinfo=timezone.utc)
-
 
 def _field(msg: Any, name: str) -> Any:
     field = msg.get_field_by_name(name)
@@ -44,6 +42,9 @@ def parse_records(fit_bytes: bytes) -> dict[str, Any]:
 
     records = []
     for rm in record_msgs:
+        # fit_tool's get_value() applies scale/offset internally:
+        # position_lat/long are returned in degrees (not semicircles),
+        # timestamp in ms since FIT epoch, speed in m/s, distance in m.
         lat = _field(rm, "position_lat")
         lon = _field(rm, "position_long")
         ts = _fit_timestamp_to_datetime(_field(rm, "timestamp"))

@@ -1,9 +1,10 @@
 from datetime import datetime, timezone
 from typing import Annotated
 
+import bcrypt
 from fastapi import Depends, HTTPException, Request, status
-from fastapi.security import HTTPBasic
 from itsdangerous import BadSignature, URLSafeSerializer
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +13,19 @@ from fitter.db import async_session
 from fitter.models import User
 
 serializer = URLSafeSerializer(settings.secret_key, salt="session")
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
+
+def verify_password(password: str, hashed: str) -> bool:
+    return bcrypt.checkpw(password.encode(), hashed.encode())
 
 
 def create_session_cookie(user_id: int) -> str:

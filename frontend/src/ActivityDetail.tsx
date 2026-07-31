@@ -9,19 +9,9 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import type { Activity, ActivityRecord } from "./api";
+import type { Activity, GeoJSONFeatureCollection } from "./api";
 import { fetchActivity, fetchActivityRecords } from "./api";
-
-function formatDistance(m: number): string {
-  return `${(m / 1000).toFixed(1)} km`;
-}
-
-function formatTime(s: number): string {
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m}m`;
-}
+import { formatDistance, formatTime } from "./format";
 
 interface Props {
   activityId: number;
@@ -30,7 +20,7 @@ interface Props {
 
 export function ActivityDetail({ activityId, onBack }: Props) {
   const [activity, setActivity] = useState<Activity | null>(null);
-  const [records, setRecords] = useState<ActivityRecord[]>([]);
+  const [geojson, setGeojson] = useState<GeoJSONFeatureCollection | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -38,24 +28,33 @@ export function ActivityDetail({ activityId, onBack }: Props) {
       fetchActivity(activityId),
       fetchActivityRecords(activityId),
     ])
-      .then(([a, r]) => {
+      .then(([a, g]) => {
         setActivity(a);
-        setRecords(r.records);
+        setGeojson(g);
       })
       .catch((e) => setError(e.message));
   }, [activityId]);
 
   if (error) return <div>Error: {error}</div>;
-  if (!activity) return <div>Loading...</div>;
+  if (!activity || !geojson) return <div>Loading...</div>;
 
-  const gpsRecords = records.filter((r) => r.lat !== null && r.lon !== null);
-  const positions: [number, number][] = gpsRecords.map((r) => [r.lat!, r.lon!]);
+  const gpsFeatures = geojson.features.filter(
+    (f) => f.geometry !== null && f.geometry.coordinates.length >= 2
+  );
+  const positions: [number, number][] = gpsFeatures.map((f) => [
+    f.geometry!.coordinates[1],
+    f.geometry!.coordinates[0],
+  ]);
 
-  const chartData = records.map((r, i) => ({
-    time: i,
-    speed: r.speed_mps,
-    distance: r.distance_m,
-  }));
+  const chartData = geojson.features.map((f) => {
+    const ts = new Date(f.properties.timestamp).getTime() / 1000;
+    return {
+      time: ts,
+      speed: f.properties.speed_mps,
+      distance: f.properties.distance_m,
+    };
+  });
+  const firstTs = chartData.length > 0 ? chartData[0].time : 0;
 
   const center: [number, number] =
     positions.length > 0 ? positions[0] : [47.3769, 8.5417];
@@ -95,7 +94,13 @@ export function ActivityDetail({ activityId, onBack }: Props) {
           <ResponsiveContainer width="100%" height={250}>
             <LineChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="time" label={{ value: "Time (s)", position: "bottom" }} />
+              <XAxis
+                dataKey="time"
+                tickFormatter={(t) => `${(t - firstTs).toFixed(0)}`}
+                label={{ value: "Time (s)", position: "bottom" }}
+                type="number"
+                domain={["dataMin", "dataMax"]}
+              />
               <YAxis label={{ value: "Speed (m/s)", angle: -90, position: "insideLeft" }} />
               <Tooltip />
               <Line type="monotone" dataKey="speed" stroke="#8884d8" dot={false} />

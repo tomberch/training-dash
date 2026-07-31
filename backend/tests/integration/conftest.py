@@ -1,7 +1,6 @@
 import sys
 from pathlib import Path
 
-import bcrypt
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -10,16 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 from sqlalchemy.pool import NullPool
 from testcontainers.postgres import PostgresContainer
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "tests" / "fixtures"))
 from generate_fit import make_test_fit  # noqa: E402
 
 from fitter.app import create_app
+from fitter.auth import hash_password
 from fitter.db import Base
 from fitter.models import User
-
-
-def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 
 @pytest.fixture(scope="session")

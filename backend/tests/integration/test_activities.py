@@ -1,8 +1,12 @@
+import sys
+from pathlib import Path
+
 import pytest
 from sqlalchemy import select
 
-from generate_fit import make_test_fit
-from fitter.models import Activity, Record
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "tests" / "fixtures"))
+from generate_fit import make_test_fit  # noqa: E402
+from fitter.models import Activity, Record  # noqa: E402
 
 
 class TestActivityEndpoints:
@@ -49,14 +53,17 @@ class TestActivityEndpoints:
         response = await auth_client.get(f"/activities/{activity_id}/records")
         assert response.status_code == 200
         data = response.json()
+        assert data["type"] == "FeatureCollection"
         assert data["activity_id"] == activity_id
-        assert len(data["records"]) == 5
-        r0 = data["records"][0]
-        assert r0["lat"] is not None
-        assert r0["lon"] is not None
-        assert "distance_m" in r0
-        assert "hr_bpm" in r0
-        assert "speed_mps" in r0
+        assert len(data["features"]) == 5
+        f0 = data["features"][0]
+        assert f0["type"] == "Feature"
+        assert f0["geometry"]["type"] == "Point"
+        assert f0["geometry"]["coordinates"] is not None
+        assert len(f0["geometry"]["coordinates"]) == 2
+        assert "distance_m" in f0["properties"]
+        assert "hr_bpm" in f0["properties"]
+        assert "speed_mps" in f0["properties"]
 
     @pytest.mark.asyncio
     async def test_get_activity_not_found(self, auth_client):

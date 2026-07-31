@@ -12,21 +12,24 @@ export interface Activity {
   max_hr_bpm: number | null;
 }
 
-export interface ActivityRecord {
-  timestamp: string;
-  lat: number | null;
-  lon: number | null;
-  distance_m: number;
-  hr_bpm: number | null;
-  power_w: number | null;
-  speed_mps: number | null;
-  altitude_m: number | null;
-  cadence_rpm: number | null;
+export interface GeoJSONFeature {
+  type: "Feature";
+  geometry: { type: string; coordinates: number[] } | null;
+  properties: {
+    timestamp: string;
+    distance_m: number;
+    hr_bpm: number | null;
+    power_w: number | null;
+    speed_mps: number | null;
+    altitude_m: number | null;
+    cadence_rpm: number | null;
+  };
 }
 
-export interface RecordsResponse {
+export interface GeoJSONFeatureCollection {
+  type: "FeatureCollection";
   activity_id: number;
-  records: ActivityRecord[];
+  features: GeoJSONFeature[];
 }
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
@@ -47,8 +50,8 @@ export async function fetchActivity(id: number): Promise<Activity> {
 
 export async function fetchActivityRecords(
   id: number
-): Promise<RecordsResponse> {
-  return apiFetch<RecordsResponse>(`/activities/${id}/records`);
+): Promise<GeoJSONFeatureCollection> {
+  return apiFetch<GeoJSONFeatureCollection>(`/activities/${id}/records`);
 }
 
 export async function login(
