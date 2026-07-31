@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { MapContainer, Polyline, TileLayer } from "react-leaflet";
 import {
   LineChart,
@@ -13,6 +13,7 @@ import type { Activity, GeoJSONFeatureCollection } from "./api";
 import { fetchActivity, fetchActivityRecords } from "./api";
 import { formatDistance, formatTime } from "./format";
 import { resampleByDistance } from "./resampler";
+import type { FitRecord } from "./resampler";
 
 type AxisMode = "time" | "distance";
 
@@ -36,11 +37,25 @@ interface Props {
   onBack: () => void;
 }
 
+function geojsonToRecords(geojson: GeoJSONFeatureCollection): FitRecord[] {
+  return geojson.features.map((f) => ({
+    distance_m: f.properties.distance_m,
+    hr_bpm: f.properties.hr_bpm,
+    power_w: f.properties.power_w,
+    speed_mps: f.properties.speed_mps,
+    altitude_m: f.properties.altitude_m,
+  }));
+}
+
+function geojsonToTimestamps(geojson: GeoJSONFeatureCollection): number[] {
+  return geojson.features.map((f) => new Date(f.properties.timestamp).getTime() / 1000);
+}
+
 export function ActivityDetail({ activityId, onBack }: Props) {
   const [activity, setActivity] = useState<Activity | null>(null);
   const [geojson, setGeojson] = useState<GeoJSONFeatureCollection | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [axisModes, setAxisModes] = useState<Record<string, AxisMode>>({
+  const [axisModes, setAxisModes] = useState<{ [key: string]: AxisMode }>({
     speed: "time",
     hr: "time",
     power: "time",
@@ -58,6 +73,10 @@ export function ActivityDetail({ activityId, onBack }: Props) {
       })
       .catch((e) => setError(e.message));
   }, [activityId]);
+
+  const records = useMemo(() => (geojson ? geojsonToRecords(geojson) : []), [geojson]);
+  const timestamps = useMemo(() => (geojson ? geojsonToTimestamps(geojson) : []), [geojson]);
+  const firstTs = timestamps.length > 0 ? timestamps[0] : 0;
 
   if (error) return <div>Error: {error}</div>;
   if (!activity || !geojson) return <div>Loading...</div>;
@@ -80,31 +99,45 @@ export function ActivityDetail({ activityId, onBack }: Props) {
     }));
   }
 
+  interface ChartDataPoint {
+    distance_m: number;
+    elapsed: number;
+    speed_mps: number | null;
+    hr_bpm: number | null;
+    power_w: number | null;
+    altitude_m: number | null;
+  }
+
   function getChartData(chart: ChartConfig) {
     const mode = axisModes[chart.key];
-    const raw = geojson!.features.map((f) => ({
-      time: new Date(f.properties.timestamp).getTime() / 1000,
-      distance_m: f.properties.distance_m,
-      speed_mps: f.properties.speed_mps,
-      hr_bpm: f.properties.hr_bpm,
-      power_w: f.properties.power_w,
-      altitude_m: f.properties.altitude_m,
-    }));
-
     if (mode === "distance") {
-      const resampled = resampleByDistance(raw);
+      const resampled = resampleByDistance(records);
+      const data: ChartDataPoint[] = resampled.map((r, i) => ({
+        distance_m: r.distance_m,
+        elapsed: i,
+        speed_mps: r.speed_mps,
+        hr_bpm: r.hr_bpm,
+        power_w: r.power_w,
+        altitude_m: r.altitude_m,
+      }));
       return {
-        data: resampled,
-        xKey: "distance_m",
+        data,
+        xKey: "distance_m" as const,
         xLabel: "Distance (m)",
         tickFormatter: (v: number) => formatDistance(v),
       };
     }
-
-    const firstTs = raw.length > 0 ? raw[0].time : 0;
+    const data: ChartDataPoint[] = timestamps.map((ts, i) => ({
+      distance_m: records[i].distance_m,
+      elapsed: ts - firstTs,
+      speed_mps: records[i].speed_mps,
+      hr_bpm: records[i].hr_bpm,
+      power_w: records[i].power_w,
+      altitude_m: records[i].altitude_m,
+    }));
     return {
-      data: raw.map((r) => ({ ...r, elapsed: r.time - firstTs })),
-      xKey: "elapsed",
+      data,
+      xKey: "elapsed" as const,
       xLabel: "Time (s)",
       tickFormatter: (v: number) => `${v.toFixed(0)}`,
     };

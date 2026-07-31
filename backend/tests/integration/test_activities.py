@@ -120,7 +120,14 @@ class TestActivityEndpoints:
         activity_id = upload_resp.json()["id"]
         response = await auth_client.get(f"/activities/{activity_id}/records")
         data = response.json()
-        distances = [f["properties"]["distance_m"] for f in data["features"]]
+        features = data["features"]
+        distances = [f["properties"]["distance_m"] for f in features]
         assert distances[0] == 0
         assert distances[-1] == 90.0
         assert distances == sorted(distances)
+        # Verify resampling fields are present and non-null
+        r0 = features[0]["properties"]
+        assert r0["hr_bpm"] is not None
+        assert r0["power_w"] is not None
+        assert r0["speed_mps"] is not None
+        assert r0["altitude_m"] is not None

@@ -92,6 +92,9 @@ describe("ActivityDetail", () => {
     await waitFor(() => {
       const distanceButtons = screen.getAllByText(/Axis: distance/);
       expect(distanceButtons).toHaveLength(1);
+      // Verify other charts still on time
+      const timeButtons = screen.getAllByText(/Axis: time/);
+      expect(timeButtons).toHaveLength(3);
     });
   });
 });

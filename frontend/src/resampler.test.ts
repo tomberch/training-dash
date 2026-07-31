@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { resampleByDistance, BUCKET_SIZE_M } from "./resampler";
-import type { ResampleInput } from "./resampler";
+import type { FitRecord } from "./resampler";
 
-function makeRecords(num: number, step: number = 10): ResampleInput[] {
-  const records: ResampleInput[] = [];
+function makeRecords(num: number, step: number = 10): FitRecord[] {
+  const records: FitRecord[] = [];
   for (let i = 0; i < num; i++) {
     records.push({
       distance_m: i * step,
@@ -27,7 +27,7 @@ describe("resampleByDistance", () => {
   });
 
   it("handles zero-distance activity", () => {
-    const records: ResampleInput[] = [
+    const records: FitRecord[] = [
       { distance_m: 0, hr_bpm: 120, power_w: 200, speed_mps: 8.0, altitude_m: 500 },
     ];
     const result = resampleByDistance(records);
@@ -54,20 +54,18 @@ describe("resampleByDistance", () => {
     expect(b50.power_w).toBe(205);
   });
 
-  it("truncates to the shorter ride when comparing (max distance)", () => {
+  it("produces fewer buckets for a shorter ride", () => {
     const short = makeRecords(5, 10); // 0 to 40m
     const long = makeRecords(20, 10); // 0 to 190m
     const shortRes = resampleByDistance(short);
     const longRes = resampleByDistance(long);
-    // Short ride has fewer buckets
     expect(shortRes.length).toBeLessThan(longRes.length);
-    // Both start at 0
     expect(shortRes[0].distance_m).toBe(0);
     expect(longRes[0].distance_m).toBe(0);
   });
 
   it("handles null fields in records", () => {
-    const records: ResampleInput[] = [
+    const records: FitRecord[] = [
       { distance_m: 0, hr_bpm: null, power_w: null, speed_mps: null, altitude_m: null },
       { distance_m: 100, hr_bpm: 140, power_w: 250, speed_mps: 9.0, altitude_m: 520 },
     ];
