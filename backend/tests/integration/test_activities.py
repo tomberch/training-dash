@@ -109,3 +109,18 @@ class TestActivityEndpoints:
         response = await auth_client.get("/activities")
         assert response.status_code == 200
         assert response.json() == []
+
+    @pytest.mark.asyncio
+    async def test_records_have_distance_m_for_resampling(self, auth_client):
+        fit_data = make_test_fit(num_records=10)
+        upload_resp = await auth_client.post(
+            "/upload",
+            files={"file": ("test.fit", fit_data, "application/octet-stream")},
+        )
+        activity_id = upload_resp.json()["id"]
+        response = await auth_client.get(f"/activities/{activity_id}/records")
+        data = response.json()
+        distances = [f["properties"]["distance_m"] for f in data["features"]]
+        assert distances[0] == 0
+        assert distances[-1] == 90.0
+        assert distances == sorted(distances)

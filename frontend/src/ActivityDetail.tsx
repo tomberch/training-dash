@@ -12,6 +12,24 @@ import {
 import type { Activity, GeoJSONFeatureCollection } from "./api";
 import { fetchActivity, fetchActivityRecords } from "./api";
 import { formatDistance, formatTime } from "./format";
+import { resampleByDistance } from "./resampler";
+
+type AxisMode = "time" | "distance";
+
+interface ChartConfig {
+  key: string;
+  label: string;
+  unit: string;
+  color: string;
+  dataKey: string;
+}
+
+const CHARTS: ChartConfig[] = [
+  { key: "speed", label: "Speed", unit: "m/s", color: "#8884d8", dataKey: "speed_mps" },
+  { key: "hr", label: "Heart Rate", unit: "bpm", color: "#e84a5f", dataKey: "hr_bpm" },
+  { key: "power", label: "Power", unit: "W", color: "#f6a623", dataKey: "power_w" },
+  { key: "elevation", label: "Elevation", unit: "m", color: "#48b366", dataKey: "altitude_m" },
+];
 
 interface Props {
   activityId: number;
@@ -22,6 +40,12 @@ export function ActivityDetail({ activityId, onBack }: Props) {
   const [activity, setActivity] = useState<Activity | null>(null);
   const [geojson, setGeojson] = useState<GeoJSONFeatureCollection | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [axisModes, setAxisModes] = useState<Record<string, AxisMode>>({
+    speed: "time",
+    hr: "time",
+    power: "time",
+    elevation: "time",
+  });
 
   useEffect(() => {
     Promise.all([
@@ -46,18 +70,45 @@ export function ActivityDetail({ activityId, onBack }: Props) {
     f.geometry!.coordinates[0],
   ]);
 
-  const chartData = geojson.features.map((f) => {
-    const ts = new Date(f.properties.timestamp).getTime() / 1000;
-    return {
-      time: ts,
-      speed: f.properties.speed_mps,
-      distance: f.properties.distance_m,
-    };
-  });
-  const firstTs = chartData.length > 0 ? chartData[0].time : 0;
-
   const center: [number, number] =
     positions.length > 0 ? positions[0] : [47.3769, 8.5417];
+
+  function toggleAxis(chartKey: string) {
+    setAxisModes((prev) => ({
+      ...prev,
+      [chartKey]: prev[chartKey] === "time" ? "distance" : "time",
+    }));
+  }
+
+  function getChartData(chart: ChartConfig) {
+    const mode = axisModes[chart.key];
+    const raw = geojson!.features.map((f) => ({
+      time: new Date(f.properties.timestamp).getTime() / 1000,
+      distance_m: f.properties.distance_m,
+      speed_mps: f.properties.speed_mps,
+      hr_bpm: f.properties.hr_bpm,
+      power_w: f.properties.power_w,
+      altitude_m: f.properties.altitude_m,
+    }));
+
+    if (mode === "distance") {
+      const resampled = resampleByDistance(raw);
+      return {
+        data: resampled,
+        xKey: "distance_m",
+        xLabel: "Distance (m)",
+        tickFormatter: (v: number) => formatDistance(v),
+      };
+    }
+
+    const firstTs = raw.length > 0 ? raw[0].time : 0;
+    return {
+      data: raw.map((r) => ({ ...r, elapsed: r.time - firstTs })),
+      xKey: "elapsed",
+      xLabel: "Time (s)",
+      tickFormatter: (v: number) => `${v.toFixed(0)}`,
+    };
+  }
 
   return (
     <div>
@@ -88,26 +139,39 @@ export function ActivityDetail({ activityId, onBack }: Props) {
         </MapContainer>
       )}
 
-      {chartData.length > 0 && (
-        <div>
-          <h2>Speed</h2>
-          <ResponsiveContainer width="100%" height={250}>
-            <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis
-                dataKey="time"
-                tickFormatter={(t) => `${(t - firstTs).toFixed(0)}`}
-                label={{ value: "Time (s)", position: "bottom" }}
-                type="number"
-                domain={["dataMin", "dataMax"]}
-              />
-              <YAxis label={{ value: "Speed (m/s)", angle: -90, position: "insideLeft" }} />
-              <Tooltip />
-              <Line type="monotone" dataKey="speed" stroke="#8884d8" dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      )}
+      {CHARTS.map((chart) => {
+        const { data, xKey, xLabel, tickFormatter } = getChartData(chart);
+        const hasData = data.some((d) => d[chart.dataKey as keyof typeof d] !== null);
+        if (!hasData) return null;
+        return (
+          <div key={chart.key}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <h2>{chart.label}</h2>
+              <button
+                onClick={() => toggleAxis(chart.key)}
+                style={{ fontSize: "0.75rem", padding: "0.15rem 0.5rem" }}
+              >
+                Axis: {axisModes[chart.key]}
+              </button>
+            </div>
+            <ResponsiveContainer width="100%" height={200}>
+              <LineChart data={data}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis
+                  dataKey={xKey}
+                  tickFormatter={tickFormatter}
+                  label={{ value: xLabel, position: "bottom" }}
+                  type="number"
+                  domain={["dataMin", "dataMax"]}
+                />
+                <YAxis label={{ value: chart.unit, angle: -90, position: "insideLeft" }} />
+                <Tooltip />
+                <Line type="monotone" dataKey={chart.dataKey} stroke={chart.color} dot={false} name={chart.label} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        );
+      })}
     </div>
   );
 }

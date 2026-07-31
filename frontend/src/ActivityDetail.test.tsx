@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { ActivityDetail } from "./ActivityDetail";
 
 vi.mock("./api", () => ({
@@ -64,10 +64,34 @@ describe("ActivityDetail", () => {
     });
   });
 
-  it("renders the speed chart heading", async () => {
+  it("renders all chart series headings", async () => {
     render(<ActivityDetail activityId={1} onBack={() => {}} />);
     await waitFor(() => {
       expect(screen.getByText("Speed")).toBeInTheDocument();
+      expect(screen.getByText("Heart Rate")).toBeInTheDocument();
+      expect(screen.getByText("Power")).toBeInTheDocument();
+      expect(screen.getAllByText("Elevation").length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  it("defaults to time axis for all charts", async () => {
+    render(<ActivityDetail activityId={1} onBack={() => {}} />);
+    await waitFor(() => {
+      const buttons = screen.getAllByText(/Axis: time/);
+      expect(buttons).toHaveLength(4);
+    });
+  });
+
+  it("toggles a chart to distance axis on button click", async () => {
+    render(<ActivityDetail activityId={1} onBack={() => {}} />);
+    await waitFor(() => {
+      expect(screen.getByText("Speed")).toBeInTheDocument();
+    });
+    const speedButtons = screen.getAllByText(/Axis: time/);
+    fireEvent.click(speedButtons[0]);
+    await waitFor(() => {
+      const distanceButtons = screen.getAllByText(/Axis: distance/);
+      expect(distanceButtons).toHaveLength(1);
     });
   });
 });
