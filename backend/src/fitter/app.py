@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import FastAPI, File, HTTPException, UploadFile, status
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import JSONResponse
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
@@ -51,49 +51,22 @@ def _activity_summary(a: Activity) -> dict[str, Any]:
     }
 
 
-async def list_activities(db: DbSession, user: CurrentUser):
-    result = await db.execute(
-        select(Activity)
-        .where(Activity.user_id == user.id)
-        .order_by(Activity.started_at.desc())
-    )
-    activities = result.scalars().all()
-    return [_activity_summary(a) for a in activities]
-
-
-async def get_activity(db: DbSession, user: CurrentUser, activity_id: int):
+async def _get_owned_activity(db: DbSession, user: CurrentUser, activity_id: int) -> Activity:
     result = await db.execute(
         select(Activity).where(Activity.id == activity_id, Activity.user_id == user.id)
     )
     activity = result.scalar_one_or_none()
     if activity is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Activity not found")
-    return _activity_summary(activity)
+    return activity
 
 
-async def get_activity_records(db: DbSession, user: CurrentUser, activity_id: int):
-    result = await db.execute(
-        select(Activity).where(Activity.id == activity_id, Activity.user_id == user.id)
-    )
-    activity = result.scalar_one_or_none()
-    if activity is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Activity not found")
-    result = await db.execute(
-        select(Record).where(Record.activity_id == activity_id).order_by(Record.timestamp)
-    )
-    records = result.scalars().all()
-
+def _records_to_geojson(records: list[Record], props_keys: list[str]) -> dict:
     features = []
     for r in records:
-        props = {
-            "timestamp": r.timestamp.isoformat(),
-            "distance_m": r.distance_m,
-            "hr_bpm": r.hr_bpm,
-            "power_w": r.power_w,
-            "speed_mps": r.speed_mps,
-            "altitude_m": r.altitude_m,
-            "cadence_rpm": r.cadence_rpm,
-        }
+        props = {key: getattr(r, key) for key in props_keys}
+        if "timestamp" in props and props["timestamp"] is not None:
+            props["timestamp"] = props["timestamp"].isoformat()
         if r.lat is not None and r.lon is not None:
             features.append({
                 "type": "Feature",
@@ -106,12 +79,35 @@ async def get_activity_records(db: DbSession, user: CurrentUser, activity_id: in
                 "geometry": None,
                 "properties": props,
             })
+    return {"type": "FeatureCollection", "features": features}
 
-    return {
-        "type": "FeatureCollection",
-        "activity_id": activity_id,
-        "features": features,
-    }
+
+async def list_activities(db: DbSession, user: CurrentUser):
+    result = await db.execute(
+        select(Activity)
+        .where(Activity.user_id == user.id)
+        .order_by(Activity.started_at.desc())
+    )
+    activities = result.scalars().all()
+    return [_activity_summary(a) for a in activities]
+
+
+async def get_activity(db: DbSession, user: CurrentUser, activity_id: int):
+    activity = await _get_owned_activity(db, user, activity_id)
+    return _activity_summary(activity)
+
+
+async def get_activity_records(db: DbSession, user: CurrentUser, activity_id: int):
+    await _get_owned_activity(db, user, activity_id)
+    result = await db.execute(
+        select(Record).where(Record.activity_id == activity_id).order_by(Record.timestamp)
+    )
+    records = result.scalars().all()
+    geojson = _records_to_geojson(records, [
+        "timestamp", "distance_m", "hr_bpm", "power_w", "speed_mps", "altitude_m", "cadence_rpm"
+    ])
+    geojson["activity_id"] = activity_id
+    return geojson
 
 
 async def upload_activity(db: DbSession, user: CurrentUser, file: UploadFile = File(...)):
@@ -124,12 +120,7 @@ async def upload_activity(db: DbSession, user: CurrentUser, file: UploadFile = F
 
 
 async def get_same_route_activities(db: DbSession, user: CurrentUser, activity_id: int):
-    result = await db.execute(
-        select(Activity).where(Activity.id == activity_id, Activity.user_id == user.id)
-    )
-    activity = result.scalar_one_or_none()
-    if activity is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Activity not found")
+    activity = await _get_owned_activity(db, user, activity_id)
     if activity.route_id is None:
         return {"route_id": None, "activities": []}
     result = await db.execute(
@@ -147,21 +138,10 @@ async def get_same_route_activities(db: DbSession, user: CurrentUser, activity_i
 
 
 async def compare_activities(
-    db: DbSession, user: CurrentUser, activity_id: int, other: int
+    db: DbSession, user: CurrentUser, activity_id: int, other_activity_id: int = Query(alias="other")
 ):
-    result_a = await db.execute(
-        select(Activity).where(Activity.id == activity_id, Activity.user_id == user.id)
-    )
-    activity_a = result_a.scalar_one_or_none()
-    if activity_a is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Activity not found")
-
-    result_b = await db.execute(
-        select(Activity).where(Activity.id == other, Activity.user_id == user.id)
-    )
-    activity_b = result_b.scalar_one_or_none()
-    if activity_b is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Other activity not found")
+    activity_a = await _get_owned_activity(db, user, activity_id)
+    activity_b = await _get_owned_activity(db, user, other_activity_id)
 
     if activity_a.route_id is None or activity_a.route_id != activity_b.route_id:
         return {"comparable": False, "gap_series": [], "other_geojson": None}
@@ -170,7 +150,7 @@ async def compare_activities(
         select(Record).where(Record.activity_id == activity_id).order_by(Record.timestamp)
     )
     records_b_result = await db.execute(
-        select(Record).where(Record.activity_id == other).order_by(Record.timestamp)
+        select(Record).where(Record.activity_id == other_activity_id).order_by(Record.timestamp)
     )
     records_a = records_a_result.scalars().all()
     records_b = records_b_result.scalars().all()
@@ -193,24 +173,12 @@ async def compare_activities(
         to_resample_input(records_b, first_ts_b),
     )
 
-    features_b = []
-    for r in records_b:
-        props = {
-            "timestamp": r.timestamp.isoformat(),
-            "distance_m": r.distance_m,
-            "speed_mps": r.speed_mps,
-        }
-        if r.lat is not None and r.lon is not None:
-            features_b.append({
-                "type": "Feature",
-                "geometry": {"type": "Point", "coordinates": [r.lon, r.lat]},
-                "properties": props,
-            })
+    other_geojson = _records_to_geojson(records_b, ["timestamp", "distance_m", "speed_mps"])
 
     return {
         "comparable": True,
         "gap_series": gap_series,
-        "other_geojson": {"type": "FeatureCollection", "features": features_b},
+        "other_geojson": other_geojson,
     }
 
 
@@ -239,8 +207,6 @@ async def get_records(db: DbSession, user: CurrentUser):
         "highest_sustained_power_w": _pr(row.highest_sustained_power_w),
     }
 
-    # Fastest N km point-to-point: find the ride with the best pace (avg speed)
-    # among rides that covered at least N km. Project the time for N km from avg speed.
     for target_m in [5000, 10000, 40000]:
         result = await db.execute(
             select(Activity.id, Activity.avg_speed_mps).where(
@@ -253,10 +219,7 @@ async def get_records(db: DbSession, user: CurrentUser):
         key = f"fastest_{target_m}_m"
         if fastest is not None:
             projected_time_s = target_m / fastest.avg_speed_mps
-            prs[key] = {
-                "value": projected_time_s,
-                "activity_id": fastest.id,
-            }
+            prs[key] = {"value": projected_time_s, "activity_id": fastest.id}
         else:
             prs[key] = None
 

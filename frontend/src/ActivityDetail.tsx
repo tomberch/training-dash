@@ -10,13 +10,55 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
-import type { Activity, GeoJSONFeatureCollection, CompareResponse, SameRouteResponse } from "./api";
+import type { Activity, GeoJSONFeatureCollection, CompareResponse, SameRouteResponse, GapPoint } from "./api";
 import { fetchActivity, fetchActivityRecords, fetchSameRouteActivities, fetchComparison } from "./api";
 import { formatDistance, formatTime } from "./format";
 import { resampleByDistance } from "./resampler";
 import type { FitRecord } from "./resampler";
 
 type AxisMode = "time" | "distance";
+
+function gapColor(gap: number): string {
+  if (gap < -0.5) return "#2ecc71"; // green = faster
+  if (gap > 0.5) return "#e74c3c"; // red = slower
+  return "#8884d8"; // neutral
+}
+
+function positionsByDistance(gpsFeatures: GeoJSONFeatureCollection["features"]): { distance_m: number; pos: [number, number] }[] {
+  return gpsFeatures
+    .filter((f) => f.geometry !== null && f.geometry.coordinates.length >= 2)
+    .map((f) => ({
+      distance_m: f.properties.distance_m,
+      pos: [f.geometry!.coordinates[1], f.geometry!.coordinates[0]] as [number, number],
+    }));
+}
+
+function buildColoredSegments(
+  gapSeries: GapPoint[],
+  posByDist: { distance_m: number; pos: [number, number] }[]
+): { positions: [number, number][]; color: string }[] {
+  if (gapSeries.length < 2 || posByDist.length < 2) return [];
+
+  const segments: { positions: [number, number][]; color: string }[] = [];
+
+  for (let i = 0; i < gapSeries.length - 1; i++) {
+    const distStart = gapSeries[i].distance_m;
+    const distEnd = gapSeries[i + 1].distance_m;
+    const color = gapColor(gapSeries[i].gap_s);
+
+    const pointsInSegment: [number, number][] = [];
+    for (const p of posByDist) {
+      if (p.distance_m >= distStart && p.distance_m <= distEnd) {
+        pointsInSegment.push(p.pos);
+      }
+    }
+    if (pointsInSegment.length >= 2) {
+      segments.push({ positions: pointsInSegment, color });
+    }
+  }
+
+  return segments;
+}
 
 interface ChartConfig {
   key: string;
@@ -94,6 +136,7 @@ export function ActivityDetail({ activityId, onBack }: Props) {
 
   const records = useMemo(() => (geojson ? geojsonToRecords(geojson) : []), [geojson]);
   const timestamps = useMemo(() => (geojson ? geojsonToTimestamps(geojson) : []), [geojson]);
+  const posByDist = useMemo(() => (geojson ? positionsByDistance(geojson.features) : []), [geojson]);
   const firstTs = timestamps.length > 0 ? timestamps[0] : 0;
 
   if (error) return <div>Error: {error}</div>;
@@ -168,6 +211,9 @@ export function ActivityDetail({ activityId, onBack }: Props) {
     : null;
 
   const gapSeries = comparison?.gap_series ?? [];
+  const coloredSegments = comparison?.comparable
+    ? buildColoredSegments(gapSeries, posByDist)
+    : [];
 
   return (
     <div>
@@ -215,7 +261,11 @@ export function ActivityDetail({ activityId, onBack }: Props) {
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             attribution='&copy; OpenStreetMap'
           />
-          <Polyline positions={positions} color="blue" weight={3} />
+          {coloredSegments.length > 0
+            ? coloredSegments.map((seg, i) => (
+                <Polyline key={i} positions={seg.positions} color={seg.color} weight={4} />
+              ))
+            : <Polyline positions={positions} color="blue" weight={3} />}
           {otherPositions && (
             <Polyline positions={otherPositions} color="orange" weight={3} dashArray="5,5" />
           )}

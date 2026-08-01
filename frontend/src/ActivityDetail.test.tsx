@@ -171,4 +171,30 @@ describe("ActivityDetail", () => {
       expect(screen.getByText("These rides are not on the same route and cannot be compared.")).toBeInTheDocument();
     });
   });
+
+  it("renders gap series data in time gap curve when comparison active", async () => {
+    const { fetchComparison } = await import("./api");
+    (fetchComparison as ReturnType<typeof vi.fn>).mockResolvedValue({
+      comparable: true,
+      gap_series: [
+        { distance_m: 0, gap_s: 0 },
+        { distance_m: 50, gap_s: -5 },
+        { distance_m: 100, gap_s: 3 },
+      ],
+      other_geojson: {
+        type: "FeatureCollection",
+        features: [],
+      },
+    });
+
+    render(<ActivityDetail activityId={1} onBack={() => {}} />);
+    await waitFor(() => {
+      expect(screen.getByText("Compare with:")).toBeInTheDocument();
+    });
+    const select = screen.getByRole("combobox");
+    fireEvent.change(select, { target: { value: "2" } });
+    await waitFor(() => {
+      expect(screen.getByText("Time Gap (vs other ride)")).toBeInTheDocument();
+    });
+  });
 });

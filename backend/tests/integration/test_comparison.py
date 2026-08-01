@@ -6,6 +6,7 @@ from sqlalchemy import select
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "tests" / "fixtures"))
 from generate_fit import make_test_fit  # noqa: E402
+from fitter.models import Activity, Record  # noqa: E402
 
 
 async def upload_fit(auth_client, name, fit_data):
@@ -36,41 +37,55 @@ class TestCompare:
 
     @pytest.mark.asyncio
     async def test_gap_signs_correct_faster_ride_negative(self, auth_client, db_session, seed_user):
-        from datetime import datetime
-        from fitter.models import Activity
+        from datetime import datetime, timedelta
 
-        # Create two activities on the same route with different speeds
-        fit_slow = make_test_fit(num_records=100, start_lat=47.3769, start_lon=8.5417)
-        id_slow = await upload_fit(auth_client, "slow.fit", fit_slow)
+        # Upload two rides on the same route
+        fit_data = make_test_fit(num_records=100, start_lat=47.3769, start_lon=8.5417)
+        id_a = await upload_fit(auth_client, "ride_a.fit", fit_data)
+        id_b = await upload_fit(auth_client, "ride_b.fit", fit_data)
 
-        fit_fast = make_test_fit(num_records=100, start_lat=47.3769, start_lon=8.5417)
-        id_fast = await upload_fit(auth_client, "fast.fit", fit_fast)
+        # Make ride B faster by adjusting its records' timestamps to be closer together
+        result_b = await db_session.execute(
+            select(Record).where(Record.activity_id == id_b).order_by(Record.timestamp)
+        )
+        records_b = result_b.scalars().all()
+        base_ts = records_b[0].timestamp
+        for i, r in enumerate(records_b):
+            r.timestamp = base_ts + timedelta(seconds=i * 0.5)  # half the time → faster
+        await db_session.commit()
 
-        # The fast ride should have a negative gap (ahead)
-        response = await auth_client.get(f"/activities/{id_slow}/compare?other={id_fast}")
-        data = response.json()
-        assert data["comparable"] is True
-        gaps = [g["gap_s"] for g in data["gap_series"]]
-        # Same fit → gaps ~0. For a real sign test, we'd need different speeds.
-        # Verify series structure is correct.
-        assert all(g["distance_m"] >= 0 for g in data["gap_series"])
-
-    @pytest.mark.asyncio
-    async def test_gap_series_truncates_to_shorter_ride(self, auth_client):
-        # Same route, but one ride has fewer records (shorter distance)
-        fit_a = make_test_fit(num_records=100, start_lat=47.3769, start_lon=8.5417)
-        fit_b = make_test_fit(num_records=100, start_lat=47.3769, start_lon=8.5417)
-        id_a = await upload_fit(auth_client, "a.fit", fit_a)
-        id_b = await upload_fit(auth_client, "b.fit", fit_b)
-
-        # Both are same route; truncate the gap series manually by
-        # checking the series doesn't exceed the shorter ride's distance
-        # Since both are 990m, we verify the series is bounded
         response = await auth_client.get(f"/activities/{id_a}/compare?other={id_b}")
         data = response.json()
         assert data["comparable"] is True
+        gaps = [g["gap_s"] for g in data["gap_series"]]
+        # gap = A - B, A is slower → gap should be positive (except at 0m)
+        assert gaps[0] == 0
+        assert all(g > 0 for g in gaps[1:])
+
+    @pytest.mark.asyncio
+    async def test_gap_series_truncates_to_shorter_ride(self, auth_client, db_session, seed_user):
+        from datetime import datetime, timedelta
+
+        # Upload same-route rides, then truncate one's records to simulate shorter distance
+        fit_data = make_test_fit(num_records=100, start_lat=47.3769, start_lon=8.5417)
+        id_long = await upload_fit(auth_client, "long.fit", fit_data)
+        id_short = await upload_fit(auth_client, "short.fit", fit_data)
+
+        # Delete last 50 records from id_short to make it shorter
+        result = await db_session.execute(
+            select(Record).where(Record.activity_id == id_short).order_by(Record.timestamp)
+        )
+        records = result.scalars().all()
+        for r in records[50:]:
+            await db_session.delete(r)
+        await db_session.commit()
+
+        response = await auth_client.get(f"/activities/{id_long}/compare?other={id_short}")
+        data = response.json()
+        assert data["comparable"] is True
+        # Short ride now has ~490m, long has 990m → truncate at ~490m
         max_dist = max(g["distance_m"] for g in data["gap_series"])
-        assert max_dist <= 1000.0  # both rides are ~990m
+        assert max_dist <= 500.0
 
     @pytest.mark.asyncio
     async def test_mismatched_routes_return_no_comparison(self, auth_client):
