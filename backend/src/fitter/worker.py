@@ -3,6 +3,7 @@ import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
+from arq.cron import cron
 from fitter.jobs import get_redis_settings, create_redis_pool
 
 logger = logging.getLogger(__name__)
@@ -271,9 +272,5 @@ class WorkerSettings:
     
     # Cron schedule: run nightly_sync_all_xert at 2 AM daily
     cron_jobs = [
-        {
-            "function": nightly_sync_all_xert,
-            "cron": "0 2 * * *",  # 2 AM every day
-            "unique": True,
-        }
+        cron(nightly_sync_all_xert, hour=2, minute=0, unique=True),
     ]
