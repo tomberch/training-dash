@@ -148,6 +148,9 @@ async def sync_xert_job(ctx, user_id: int):
                 except XertAPIError as e:
                     logger.warning(f"sync_xert_job: Failed to download activity {xert_activity.id}: {e}")
                     continue
+                except Exception as e:
+                    logger.exception(f"sync_xert_job: Unexpected error processing activity {xert_activity.id}")
+                    continue
             
             logger.info(f"sync_xert_job: Synced {synced} activities for user {user_id}")
             return {"success": True, "user_id": user_id, "synced_activities": synced}
