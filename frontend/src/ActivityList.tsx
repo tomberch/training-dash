@@ -11,6 +11,7 @@ export function ActivityList({
   const [activities, setActivities] = useState<Activity[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [processing, setProcessing] = useState(false);
 
   useEffect(() => {
     fetchActivities()
@@ -23,9 +24,28 @@ export function ActivityList({
     if (!file) return;
     setUploading(true);
     try {
-      await uploadFit(file);
-      const updated = await fetchActivities();
-      setActivities(updated);
+      const result = await uploadFit(file);
+      // If upload returned 202 (async), poll until the activity appears
+      if ("job_id" in result && result.job_id) {
+        setProcessing(true);
+        const maxPolls = 30;
+        for (let i = 0; i < maxPolls; i++) {
+          await new Promise((r) => setTimeout(r, 2000));
+          try {
+            const updated = await fetchActivities();
+            if (updated.length > activities.length) {
+              setActivities(updated);
+              break;
+            }
+          } catch {
+            // activity not visible yet, keep polling
+          }
+        }
+        setProcessing(false);
+      } else {
+        const updated = await fetchActivities();
+        setActivities(updated);
+      }
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -46,6 +66,7 @@ export function ActivityList({
           disabled={uploading}
         />
         {uploading && <span> Uploading...</span>}
+        {processing && <span> Processing...</span>}
       </div>
       {activities.length === 0 ? (
         <p>No activities yet. Upload a FIT file to get started.</p>

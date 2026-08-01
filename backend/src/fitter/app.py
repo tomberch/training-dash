@@ -112,8 +112,22 @@ async def get_activity_records(db: DbSession, user: CurrentUser, activity_id: in
 
 async def upload_activity(db: DbSession, user: CurrentUser, file: UploadFile = File(...)):
     fit_bytes = await file.read()
+    source_ref = file.filename or "upload.fit"
+
+    from fitter.jobs import redis_available, create_redis_pool
+
+    if redis_available():
+        from fastapi import BackgroundTasks
+        pool = await create_redis_pool()
+        job = await pool.enqueue_job("ingest_job", user_id=user.id, fit_bytes=fit_bytes, source="upload", source_ref=source_ref)
+        await pool.aclose()
+        return JSONResponse(
+            status_code=status.HTTP_202_ACCEPTED,
+            content={"job_id": job.job_id, "source_ref": source_ref},
+        )
+
     from fitter.ingest import ingest_fit
-    activity = await ingest_fit(db, user.id, fit_bytes, "upload", file.filename or "upload.fit")
+    activity = await ingest_fit(db, user.id, fit_bytes, "upload", source_ref)
     if activity is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to parse FIT file")
     return {"id": activity.id, "started_at": activity.started_at.isoformat()}

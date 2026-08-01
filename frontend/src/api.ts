@@ -124,7 +124,7 @@ export async function login(
   return res.ok;
 }
 
-export async function uploadFit(file: File): Promise<{ id: number }> {
+export async function uploadFit(file: File): Promise<{ id?: number; job_id?: string; source_ref?: string }> {
   const formData = new FormData();
   formData.append("file", file);
   const res = await fetch(`${API_BASE}/upload`, {
