@@ -3,7 +3,7 @@ from typing import Any
 
 from fastapi import FastAPI, File, HTTPException, UploadFile, status
 from fastapi.responses import JSONResponse
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
 from fitter.auth import CurrentUser, DbSession, LoginRequest, create_session_cookie, verify_password
@@ -17,6 +17,7 @@ def create_app() -> FastAPI:
     app.get("/activities")(list_activities)
     app.get("/activities/{activity_id}")(get_activity)
     app.get("/activities/{activity_id}/records")(get_activity_records)
+    app.get("/records")(get_records)
     app.post("/upload")(upload_activity)
     return app
 
@@ -118,6 +119,57 @@ async def upload_activity(db: DbSession, user: CurrentUser, file: UploadFile = F
     if activity is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to parse FIT file")
     return {"id": activity.id, "started_at": activity.started_at.isoformat()}
+
+
+async def get_records(db: DbSession, user: CurrentUser):
+    result = await db.execute(
+        select(
+            func.max(Activity.total_distance_m).label("longest_distance_m"),
+            func.max(Activity.moving_time_s).label("longest_moving_time_s"),
+            func.max(Activity.max_speed_mps).label("max_speed_mps"),
+            func.max(Activity.max_hr_bpm).label("max_hr_bpm"),
+            func.max(Activity.elevation_gain_m).label("biggest_elevation_gain_m"),
+            func.max(Activity.np_power_w).label("highest_sustained_power_w"),
+        ).where(Activity.user_id == user.id)
+    )
+    row = result.one()
+
+    def _pr(val, unit_label=None):
+        return {"value": val, "activity_id": None} if val is not None else None
+
+    prs = {
+        "longest_distance_m": _pr(row.longest_distance_m),
+        "longest_moving_time_s": _pr(row.longest_moving_time_s),
+        "max_speed_mps": _pr(row.max_speed_mps),
+        "max_hr_bpm": _pr(row.max_hr_bpm),
+        "biggest_elevation_gain_m": _pr(row.biggest_elevation_gain_m),
+        "highest_sustained_power_w": _pr(row.highest_sustained_power_w),
+    }
+
+    # Fastest point-to-point: compute from activities where total_distance_m >= target
+    for target_m in [5000, 10000, 40000]:
+        result = await db.execute(
+            select(
+                Activity.id,
+                Activity.total_distance_m,
+                Activity.moving_time_s,
+            ).where(
+                Activity.user_id == user.id,
+                Activity.total_distance_m >= target_m,
+            ).order_by(Activity.moving_time_s.asc()).limit(1)
+        )
+        fastest = result.first()
+        key = f"fastest_{target_m}_m"
+        if fastest is not None and fastest.moving_time_s > 0:
+            prs[key] = {
+                "value": fastest.moving_time_s,
+                "activity_id": fastest.id,
+                "distance_m": fastest.total_distance_m,
+            }
+        else:
+            prs[key] = None
+
+    return prs
 
 
 app = create_app()

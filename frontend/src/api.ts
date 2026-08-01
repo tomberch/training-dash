@@ -32,6 +32,24 @@ export interface GeoJSONFeatureCollection {
   features: GeoJSONFeature[];
 }
 
+export interface PRValue {
+  value: number;
+  activity_id: number | null;
+  distance_m?: number;
+}
+
+export interface Records {
+  longest_distance_m: PRValue | null;
+  longest_moving_time_s: PRValue | null;
+  fastest_5000_m: PRValue | null;
+  fastest_10000_m: PRValue | null;
+  fastest_40000_m: PRValue | null;
+  max_speed_mps: PRValue | null;
+  max_hr_bpm: PRValue | null;
+  biggest_elevation_gain_m: PRValue | null;
+  highest_sustained_power_w: PRValue | null;
+}
+
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
 async function apiFetch<T>(path: string): Promise<T> {
@@ -52,6 +70,10 @@ export async function fetchActivityRecords(
   id: number
 ): Promise<GeoJSONFeatureCollection> {
   return apiFetch<GeoJSONFeatureCollection>(`/activities/${id}/records`);
+}
+
+export async function fetchRecords(): Promise<Records> {
+  return apiFetch<Records>("/records");
 }
 
 export async function login(
