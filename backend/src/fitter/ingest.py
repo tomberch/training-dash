@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from geoalchemy2.functions import ST_SetSRID, ST_MakePoint
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fitter.models import Activity, Lap, Record
@@ -187,4 +188,16 @@ async def ingest_fit(
 
     await db.commit()
     await db.refresh(activity)
+
+    from fitter.route_matching import match_route
+    records_result = await db.execute(
+        select(Record).where(Record.activity_id == activity.id).order_by(Record.timestamp)
+    )
+    all_records = records_result.scalars().all()
+    route_id = await match_route(db, activity, all_records)
+    if route_id is not None:
+        activity.route_id = route_id
+        await db.commit()
+        await db.refresh(activity)
+
     return activity
