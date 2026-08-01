@@ -63,6 +63,8 @@ class Activity(Base):
     np_power_w: Mapped[int | None] = mapped_column(Integer, nullable=True)
     max_speed_mps: Mapped[float] = mapped_column(Float, nullable=False, default=0)
     max_hr_bpm: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Training load metrics (TSS for FIT files, XSS for Xert)
+    training_load: Mapped[float | None] = mapped_column(Float, nullable=True)
     route_id: Mapped[int | None] = mapped_column(
         ForeignKey("routes.id"), nullable=True
     )

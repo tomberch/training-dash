@@ -38,3 +38,8 @@ packages = ["src/fitter"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "python-dotenv>=1.2.2",
+]

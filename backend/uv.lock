@@ -511,6 +511,11 @@ dev = [
     { name = "testcontainers" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "python-dotenv" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "arq", specifier = ">=0.28.0" },
@@ -533,6 +538,9 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.34" },
 ]
 provides-extras = ["dev"]
+
+[package.metadata.requires-dev]
+dev = [{ name = "python-dotenv", specifier = ">=1.2.2" }]
 
 [[package]]
 name = "geoalchemy2"
