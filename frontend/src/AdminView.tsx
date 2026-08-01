@@ -3,6 +3,12 @@ import type { AdminUser } from "./api";
 import { ApiError, fetchAdminUsers, createUser, resetUserPassword, triggerUserSync } from "./api";
 import { ErrorDisplay } from "./ErrorDisplay";
 
+interface SyncStatus {
+  userId: number;
+  status: "syncing" | "success" | "error";
+  message?: string;
+}
+
 export function AdminView({ onBack }: { onBack: () => void }) {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [error, setError] = useState<Error | ApiError | null>(null);
@@ -16,6 +22,9 @@ export function AdminView({ onBack }: { onBack: () => void }) {
   // Reset password state
   const [resetUserId, setResetUserId] = useState<number | null>(null);
   const [resetPassword, setResetPassword] = useState("");
+
+  // Sync status per user
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
 
   useEffect(() => {
     loadUsers();
@@ -62,11 +71,21 @@ export function AdminView({ onBack }: { onBack: () => void }) {
   }
 
   async function handleTriggerSync(userId: number) {
+    setSyncStatus({ userId, status: "syncing" });
     try {
-      await triggerUserSync(userId);
+      const result = await triggerUserSync(userId);
+      if (result.job_id) {
+        setSyncStatus({ userId, status: "success", message: `Sync started (job: ${result.job_id.slice(0, 8)}...)` });
+      } else {
+        setSyncStatus({ userId, status: "success", message: "Sync triggered (no job queue)" });
+      }
+      // Clear success message after 5 seconds
+      setTimeout(() => setSyncStatus(null), 5000);
       setError(null);
     } catch (e) {
-      setError(e as Error);
+      setSyncStatus({ userId, status: "error", message: (e as Error).message });
+      // Clear error status after 5 seconds
+      setTimeout(() => setSyncStatus(null), 5000);
     }
   }
 
@@ -227,11 +246,24 @@ export function AdminView({ onBack }: { onBack: () => void }) {
                           )}
                           <button
                             onClick={() => handleTriggerSync(user.id)}
+                            disabled={syncStatus?.userId === user.id && syncStatus.status === "syncing"}
                             data-testid={`sync-btn-${user.id}`}
-                            className="px-3 py-1 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors"
+                            className="px-3 py-1 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded hover:bg-amber-200 dark:hover:bg-amber-900/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                           >
-                            Trigger Sync
+                            {syncStatus?.userId === user.id && syncStatus.status === "syncing"
+                              ? "Syncing..."
+                              : "Trigger Sync"}
                           </button>
+                          {syncStatus?.userId === user.id && syncStatus.status === "success" && (
+                            <span className="px-2 py-1 text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded">
+                              {syncStatus.message}
+                            </span>
+                          )}
+                          {syncStatus?.userId === user.id && syncStatus.status === "error" && (
+                            <span className="px-2 py-1 text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded">
+                              {syncStatus.message}
+                            </span>
+                          )}
                         </div>
                       </td>
                     </tr>
