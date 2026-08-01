@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 
 from fitter.auth import CurrentUser, DbSession, LoginRequest, create_session_cookie, verify_password
 from fitter.db import Base, async_session, engine
-from fitter.models import Activity, Lap, Record, User
+from fitter.models import Activity, Lap, Record, Route, User
 
 
 def create_app() -> FastAPI:
@@ -223,7 +223,36 @@ async def get_records(db: DbSession, user: CurrentUser):
         else:
             prs[key] = None
 
-    return prs
+    # Per-route PRs: fastest elapsed_time per route for this user
+    route_result = await db.execute(
+        select(
+            Activity.route_id,
+            func.min(Activity.elapsed_time_s).label("fastest_time"),
+        ).where(
+            Activity.user_id == user.id,
+            Activity.route_id.isnot(None),
+        ).group_by(Activity.route_id)
+    )
+    route_rows = route_result.all()
+
+    route_prs = []
+    for row in route_rows:
+        # Get the activity that holds the record
+        pr_activity_result = await db.execute(
+            select(Activity.id, Activity.started_at).where(
+                Activity.user_id == user.id,
+                Activity.route_id == row.route_id,
+                Activity.elapsed_time_s == row.fastest_time,
+            ).order_by(Activity.started_at.asc()).limit(1)
+        )
+        pr_activity = pr_activity_result.first()
+        route_prs.append({
+            "route_id": row.route_id,
+            "fastest_time_s": row.fastest_time,
+            "activity_id": pr_activity.id if pr_activity else None,
+        })
+
+    return {"lifetime_prs": prs, "route_prs": route_prs}
 
 
 app = create_app()

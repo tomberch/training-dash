@@ -49,6 +49,17 @@ export interface Records {
   highest_sustained_power_w: PRValue | null;
 }
 
+export interface RoutePR {
+  route_id: number;
+  fastest_time_s: number;
+  activity_id: number | null;
+}
+
+export interface RecordsResponse {
+  lifetime_prs: Records;
+  route_prs: RoutePR[];
+}
+
 export interface GapPoint {
   distance_m: number;
   gap_s: number;
@@ -87,8 +98,8 @@ export async function fetchActivityRecords(
   return apiFetch<GeoJSONFeatureCollection>(`/activities/${id}/records`);
 }
 
-export async function fetchRecords(): Promise<Records> {
-  return apiFetch<Records>("/records");
+export async function fetchRecords(): Promise<RecordsResponse> {
+  return apiFetch<RecordsResponse>("/records");
 }
 
 export async function fetchSameRouteActivities(id: number): Promise<SameRouteResponse> {

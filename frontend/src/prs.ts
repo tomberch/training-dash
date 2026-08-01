@@ -1,4 +1,4 @@
-import type { Records } from "./api";
+import type { Records, RoutePR } from "./api";
 
 export interface PR {
   label: string;
@@ -48,4 +48,11 @@ export function prsFromRecords(records: Records): PR[] {
     }
   }
   return prs;
+}
+
+export function routePRsFromRecords(routePrs: RoutePR[]): PR[] {
+  return routePrs.map((rp) => ({
+    label: `Route ${rp.route_id}`,
+    value: formatTime(rp.fastest_time_s),
+  }));
 }

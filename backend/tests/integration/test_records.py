@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "tests" / "fixtures"))
 from generate_fit import make_test_fit  # noqa: E402
-from fitter.models import Activity, User  # noqa: E402
+from fitter.models import Activity, User, Route  # noqa: E402
 from fitter.auth import hash_password  # noqa: E402
 
 
@@ -21,26 +21,25 @@ class TestRecords:
         response = await auth_client.get("/records")
         assert response.status_code == 200
         data = response.json()
-        assert data["longest_distance_m"] is not None
-        assert data["longest_distance_m"]["value"] == 990.0
-        assert data["longest_moving_time_s"] is not None
-        assert data["longest_moving_time_s"]["value"] == 99
-        assert data["max_speed_mps"] is not None
-        assert data["max_speed_mps"]["value"] == 12.0
-        assert data["max_hr_bpm"] is not None
-        assert data["max_hr_bpm"]["value"] == 160
-        assert data["biggest_elevation_gain_m"] is not None
-        assert data["biggest_elevation_gain_m"]["value"] == 50.0
-        assert data["highest_sustained_power_w"] is None
-        # Fastest N km — ride has 990m, under 5km threshold, so all null
-        assert data["fastest_5000_m"] is None
-        assert data["fastest_10000_m"] is None
-        assert data["fastest_40000_m"] is None
+        lp = data["lifetime_prs"]
+        assert lp["longest_distance_m"] is not None
+        assert lp["longest_distance_m"]["value"] == 990.0
+        assert lp["longest_moving_time_s"] is not None
+        assert lp["longest_moving_time_s"]["value"] == 99
+        assert lp["max_speed_mps"] is not None
+        assert lp["max_speed_mps"]["value"] == 12.0
+        assert lp["max_hr_bpm"] is not None
+        assert lp["max_hr_bpm"]["value"] == 160
+        assert lp["biggest_elevation_gain_m"] is not None
+        assert lp["biggest_elevation_gain_m"]["value"] == 50.0
+        assert lp["highest_sustained_power_w"] is None
+        assert lp["fastest_5000_m"] is None
+        assert lp["fastest_10000_m"] is None
+        assert lp["fastest_40000_m"] is None
 
     @pytest.mark.asyncio
     async def test_records_fastest_point_to_point(self, auth_client, db_session, seed_user):
         from datetime import datetime
-        # Create activities with known avg speeds and distances >= targets
         for dist, time_s, avg_speed in [(10000, 1200, 10000/1200), (40000, 5400, 40000/5400)]:
             activity = Activity(
                 user_id=seed_user.id,
@@ -58,18 +57,15 @@ class TestRecords:
         await db_session.commit()
 
         response = await auth_client.get("/records")
-        data = response.json()
-        # Fastest 5km: best avg speed ride is the 10km one (8.33 m/s)
-        assert data["fastest_5000_m"] is not None
+        lp = response.json()["lifetime_prs"]
+        assert lp["fastest_5000_m"] is not None
         expected_5k = 5000 / (10000 / 1200)
-        assert data["fastest_5000_m"]["value"] == pytest.approx(expected_5k, rel=0.01)
-        assert data["fastest_5000_m"]["activity_id"] is not None
-        # Fastest 10km: only the 10km ride qualifies (10km exactly)
-        assert data["fastest_10000_m"] is not None
-        assert data["fastest_10000_m"]["value"] == pytest.approx(1200, rel=0.01)
-        # Fastest 40km: only the 40km ride qualifies
-        assert data["fastest_40000_m"] is not None
-        assert data["fastest_40000_m"]["value"] == pytest.approx(5400, rel=0.01)
+        assert lp["fastest_5000_m"]["value"] == pytest.approx(expected_5k, rel=0.01)
+        assert lp["fastest_5000_m"]["activity_id"] is not None
+        assert lp["fastest_10000_m"] is not None
+        assert lp["fastest_10000_m"]["value"] == pytest.approx(1200, rel=0.01)
+        assert lp["fastest_40000_m"] is not None
+        assert lp["fastest_40000_m"]["value"] == pytest.approx(5400, rel=0.01)
 
     @pytest.mark.asyncio
     async def test_records_cross_user_isolation(self, auth_client, db_session, seed_user):
@@ -110,22 +106,77 @@ class TestRecords:
         await db_session.commit()
 
         response = await auth_client.get("/records")
-        data = response.json()
-        # All PRs should reflect user A's values, not user B's
-        assert data["longest_distance_m"]["value"] == 10000
-        assert data["longest_moving_time_s"]["value"] == 1800
-        assert data["max_speed_mps"]["value"] == 12.0
-        assert data["max_hr_bpm"]["value"] == 160
-        assert data["biggest_elevation_gain_m"]["value"] == 200
-        # User B's 99999m ride should NOT appear as user A's fastest 5/10/40km
-        assert data["fastest_40000_m"] is None  # user A has no ride >= 40km
+        lp = response.json()["lifetime_prs"]
+        assert lp["longest_distance_m"]["value"] == 10000
+        assert lp["longest_moving_time_s"]["value"] == 1800
+        assert lp["max_speed_mps"]["value"] == 12.0
+        assert lp["max_hr_bpm"]["value"] == 160
+        assert lp["biggest_elevation_gain_m"]["value"] == 200
+        assert lp["fastest_40000_m"] is None
 
     @pytest.mark.asyncio
     async def test_records_empty(self, auth_client):
         response = await auth_client.get("/records")
         assert response.status_code == 200
         data = response.json()
-        assert data["longest_distance_m"] is None
-        assert data["max_speed_mps"] is None
-        assert data["fastest_5000_m"] is None
-        assert data["highest_sustained_power_w"] is None
+        assert data["lifetime_prs"]["longest_distance_m"] is None
+        assert data["lifetime_prs"]["max_speed_mps"] is None
+        assert data["lifetime_prs"]["fastest_5000_m"] is None
+        assert data["lifetime_prs"]["highest_sustained_power_w"] is None
+        assert data["route_prs"] == []
+
+    @pytest.mark.asyncio
+    async def test_per_route_prs_faster_ride_holds_record(self, auth_client, db_session, seed_user):
+        from datetime import datetime
+        # Upload two rides on the same route
+        fit_data = make_test_fit(num_records=100, start_lat=47.3769, start_lon=8.5417)
+        resp1 = await auth_client.post(
+            "/upload",
+            files={"file": ("ride1.fit", fit_data, "application/octet-stream")},
+        )
+        resp2 = await auth_client.post(
+            "/upload",
+            files={"file": ("ride2.fit", fit_data, "application/octet-stream")},
+        )
+        id1 = resp1.json()["id"]
+        id2 = resp2.json()["id"]
+
+        # Make ride 2 faster by setting a lower elapsed_time
+        result = await db_session.execute(select(Activity).where(Activity.id == id2))
+        activity2 = result.scalar_one()
+        activity2.elapsed_time_s = 60  # faster
+        await db_session.commit()
+
+        response = await auth_client.get("/records")
+        data = response.json()
+        route_prs = data["route_prs"]
+        assert len(route_prs) == 1
+        assert route_prs[0]["fastest_time_s"] == 60
+        assert route_prs[0]["activity_id"] == id2
+
+    @pytest.mark.asyncio
+    async def test_per_route_prs_cross_user_isolation(self, auth_client, db_session, seed_user):
+        from datetime import datetime
+        # User A uploads a ride
+        fit_data = make_test_fit(num_records=100, start_lat=47.3769, start_lon=8.5417)
+        await auth_client.post(
+            "/upload",
+            files={"file": ("ride_a.fit", fit_data, "application/octet-stream")},
+        )
+
+        # User B uploads a ride on a different route
+        user_b = User(username="userb", password_hash=hash_password("passb"))
+        db_session.add(user_b)
+        await db_session.commit()
+        await db_session.refresh(user_b)
+
+        fit_b = make_test_fit(num_records=100, start_lat=46.5197, start_lon=6.6323)
+        from fitter.ingest import ingest_fit
+        await ingest_fit(db_session, user_b.id, fit_b, "upload", "ride_b.fit")
+
+        response = await auth_client.get("/records")
+        data = response.json()
+        route_prs = data["route_prs"]
+        # User A should only see their own route, not user B's
+        assert len(route_prs) == 1
+        assert route_prs[0]["route_id"] is not None
