@@ -1,6 +1,7 @@
 import logging
 import os
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
 from fitter.jobs import get_redis_settings, create_redis_pool
 
@@ -30,8 +31,10 @@ async def ingest_job(ctx, user_id: int, fit_bytes: bytes, source: str, source_re
             return {"success": False, "activity_id": None}
 
         pool = await create_redis_pool()
-        await pool.enqueue_job("match_route_job", activity_id=activity.id, user_id=user_id)
-        await pool.aclose()
+        try:
+            await pool.enqueue_job("match_route_job", activity_id=activity.id, user_id=user_id)
+        finally:
+            await pool.aclose()
 
         return {"success": True, "activity_id": activity.id}
 
@@ -63,13 +66,17 @@ async def sync_xert_job(ctx, user_id: int):
     Sync activities from Xert for a user.
     
     - Decrypts stored Xert credentials
-    - Logs in to Xert API
-    - Fetches activity list
-    - Downloads FIT files for activities not yet imported (by source_ref)
-    - Enqueues ingest_fit job for each new FIT
+    - Logs in to Xert API (OAuth2 password grant)
+    - Fetches activity list for last 30 days
+    - Creates Activity records for activities not yet imported (by source_ref)
+    
+    Note: Xert API does not provide FIT file download. Activities are imported
+    directly from the API response data (activity details with session_data).
     """
+    import time
+    from datetime import datetime
     from sqlalchemy import select
-    from fitter.models import Activity, XertCredentials
+    from fitter.models import Activity, Record, XertCredentials
     from fitter.crypto import decrypt, EncryptionError
     from fitter.xert import get_xert_client, XertAPIError
     
@@ -87,7 +94,7 @@ async def sync_xert_job(ctx, user_id: int):
         # Decrypt password
         try:
             xert_password = decrypt(creds.encrypted_password)
-        except EncryptionError as e:
+        except EncryptionError:
             logger.error(f"sync_xert_job: Failed to decrypt credentials for user {user_id}")
             return {"success": False, "user_id": user_id, "error": "Failed to decrypt credentials"}
         
@@ -102,11 +109,14 @@ async def sync_xert_job(ctx, user_id: int):
         
         # Connect to Xert
         client = get_xert_client()
+        pool = None
         try:
             await client.login(creds.xert_email, xert_password)
             
-            # List activities
-            activities = await client.list_activities()
+            # List activities for last 90 days
+            to_ts = int(time.time())
+            from_ts = to_ts - (90 * 24 * 60 * 60)
+            activities = await client.list_activities(from_timestamp=from_ts, to_timestamp=to_ts)
             
             # Filter to new activities
             new_activities = [a for a in activities if f"xert:{a.id}" not in existing_refs]
@@ -115,29 +125,75 @@ async def sync_xert_job(ctx, user_id: int):
                 logger.info(f"sync_xert_job: No new activities for user {user_id}")
                 return {"success": True, "user_id": user_id, "synced_activities": 0}
             
-            # Download and enqueue each new activity
+            # Import each new activity
             synced = 0
             pool = await create_redis_pool()
             
-            for activity in new_activities:
+            for xert_activity in new_activities:
                 try:
-                    fit_bytes = await client.download_fit(activity)
-                    source_ref = f"xert:{activity.id}"
+                    # Get full activity details with session data
+                    details = await client.get_activity_details(xert_activity.id, include_session_data=True)
+                    summary = details.get("summary", {})
+                    session_data = details.get("session_data", [])
                     
-                    await pool.enqueue_job(
-                        "ingest_job",
+                    # Create Activity record
+                    activity = Activity(
                         user_id=user_id,
-                        fit_bytes=fit_bytes,
                         source="xert",
-                        source_ref=source_ref,
+                        source_ref=f"xert:{xert_activity.id}",
+                        started_at=xert_activity.started_at,
+                        total_distance_m=summary.get("distance", 0) * 1000,  # km to m
+                        moving_time_s=summary.get("duration", 0),
+                        elapsed_time_s=summary.get("duration", 0),
+                        elevation_gain_m=summary.get("session", {}).get("total_elevation_gain", 0),
+                        avg_speed_mps=(summary.get("distance", 0) * 1000) / max(summary.get("duration", 1), 1),
+                        avg_hr_bpm=None,  # Not in summary
+                        avg_power_w=summary.get("session", {}).get("avg_power"),
+                        np_power_w=summary.get("xep"),  # XEP is similar to NP
+                        max_speed_mps=0,
+                        max_hr_bpm=None,
+                        raw_fit=None,  # No FIT file from Xert API
                     )
+                    db.add(activity)
+                    await db.flush()  # Get the activity ID
+                    
+                    # Create Record entries from session_data
+                    for i, point in enumerate(session_data):
+                        # Convert unix_time (ms) to datetime
+                        unix_ms = point.get("unix_time", 0)
+                        ts = datetime.fromtimestamp(unix_ms / 1000, tz=timezone.utc).replace(tzinfo=None) if unix_ms else xert_activity.started_at
+                        
+                        record = Record(
+                            activity_id=activity.id,
+                            timestamp=ts,
+                            lat=point.get("lat"),
+                            lon=point.get("lng"),
+                            distance_m=point.get("dist", 0),
+                            hr_bpm=point.get("hr"),
+                            power_w=int(point.get("power", 0)) if point.get("power") else None,
+                            speed_mps=point.get("spd", 0) / 1000 if point.get("spd") else None,  # mm/s to m/s
+                            altitude_m=point.get("alt"),
+                            cadence_rpm=point.get("cad"),
+                            geom=f"POINT({point.get('lng')} {point.get('lat')})" if point.get("lat") and point.get("lng") else None,
+                        )
+                        db.add(record)
+                    
+                    await db.commit()
+                    
+                    # Enqueue route matching job
+                    await pool.enqueue_job("match_route_job", activity_id=activity.id, user_id=user_id)
+                    
                     synced += 1
-                    logger.info(f"sync_xert_job: Enqueued {source_ref} for user {user_id}")
+                    logger.info(f"sync_xert_job: Imported xert:{xert_activity.id} for user {user_id}")
+                    
                 except XertAPIError as e:
-                    logger.warning(f"sync_xert_job: Failed to download activity {activity.id}: {e}")
+                    logger.warning(f"sync_xert_job: Failed to import activity {xert_activity.id}: {e}")
+                    await db.rollback()
                     continue
-            
-            await pool.aclose()
+                except Exception as e:
+                    logger.warning(f"sync_xert_job: Error importing activity {xert_activity.id}: {e}")
+                    await db.rollback()
+                    continue
             
             logger.info(f"sync_xert_job: Synced {synced} activities for user {user_id}")
             return {"success": True, "user_id": user_id, "synced_activities": synced}
@@ -147,6 +203,8 @@ async def sync_xert_job(ctx, user_id: int):
             return {"success": False, "user_id": user_id, "error": str(e)}
         finally:
             await client.close()
+            if pool is not None:
+                await pool.aclose()
 
 
 async def nightly_sync_all_xert(ctx):
@@ -166,10 +224,12 @@ async def nightly_sync_all_xert(ctx):
         return {"success": True, "users_queued": 0}
     
     pool = await create_redis_pool()
-    for user_id in user_ids:
-        await pool.enqueue_job("sync_xert_job", user_id=user_id)
-        logger.info(f"nightly_sync_all_xert: Enqueued sync for user {user_id}")
-    await pool.aclose()
+    try:
+        for user_id in user_ids:
+            await pool.enqueue_job("sync_xert_job", user_id=user_id)
+            logger.info(f"nightly_sync_all_xert: Enqueued sync for user {user_id}")
+    finally:
+        await pool.aclose()
     
     logger.info(f"nightly_sync_all_xert: Enqueued {len(user_ids)} sync jobs")
     return {"success": True, "users_queued": len(user_ids)}

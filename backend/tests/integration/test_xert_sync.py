@@ -1,4 +1,7 @@
-"""Integration tests for Xert sync functionality."""
+"""Integration tests for Xert sync functionality.
+
+Based on Xert Online API v1.4: https://www.xertonline.com/API.html
+"""
 
 import base64
 import os
@@ -11,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from fitter.auth import hash_password
-from fitter.models import Activity, User, XertCredentials
+from fitter.models import Activity, Record, User, XertCredentials
 from fitter.xert import XertActivity, XertAPIError
 
 
@@ -20,29 +23,66 @@ TEST_ENCRYPTION_KEY = base64.b64encode(os.urandom(32)).decode("ascii")
 
 
 class MockXertClient:
-    """Mock Xert client for testing."""
+    """Mock Xert client for testing based on actual Xert API v1.4."""
     
     def __init__(self):
         self.activities: list[XertActivity] = []
-        self.fit_data: dict[str, bytes] = {}
+        self.activity_details: dict[str, dict] = {}
         self.login_called = False
-        self.login_email: str | None = None
+        self.login_username: str | None = None
         self.should_fail_login = False
-        self.should_fail_download: set[str] = set()
+        self.should_fail_details: set[str] = set()
     
-    async def login(self, email: str, password: str) -> None:
+    async def login(self, username: str, password: str) -> None:
         self.login_called = True
-        self.login_email = email
+        self.login_username = username
         if self.should_fail_login:
             raise XertAPIError("Invalid credentials")
     
-    async def list_activities(self, since: datetime | None = None) -> list[XertActivity]:
+    async def list_activities(
+        self, 
+        from_timestamp: int | None = None, 
+        to_timestamp: int | None = None
+    ) -> list[XertActivity]:
         return self.activities
     
-    async def download_fit(self, activity: XertActivity) -> bytes:
-        if activity.id in self.should_fail_download:
-            raise XertAPIError(f"Failed to download {activity.id}")
-        return self.fit_data.get(activity.id, b"mock-fit-data")
+    async def get_activity_details(self, activity_id: str, include_session_data: bool = False) -> dict:
+        if activity_id in self.should_fail_details:
+            raise XertAPIError(f"Failed to get activity {activity_id}")
+        return self.activity_details.get(activity_id, {
+            "success": True,
+            "name": "Test Activity",
+            "summary": {
+                "distance": 30,  # km
+                "duration": 3600,  # seconds
+                "session": {"total_elevation_gain": 500, "avg_power": 200},
+                "xep": 210,
+            },
+            "session_data": [
+                {
+                    "unix_time": 1704067200000,  # 2024-01-01 00:00:00 UTC
+                    "lat": 43.6,
+                    "lng": -79.4,
+                    "power": 200,
+                    "hr": 140,
+                    "spd": 10000,  # mm/s
+                    "alt": 100,
+                    "dist": 0,
+                    "cad": 90,
+                },
+                {
+                    "unix_time": 1704067201000,
+                    "lat": 43.6001,
+                    "lng": -79.4001,
+                    "power": 210,
+                    "hr": 142,
+                    "spd": 10500,
+                    "alt": 101,
+                    "dist": 10,
+                    "cad": 92,
+                },
+            ],
+        })
     
     async def close(self) -> None:
         pass
@@ -179,23 +219,16 @@ class TestSyncXertJob:
     async def test_sync_xert_imports_new_activities(
         self, db_engine, user_with_xert_creds, mock_xert_client, encryption_key_env
     ):
-        """sync_xert_job should import new activities from Xert."""
-        import sys
-        from pathlib import Path
-        sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "tests" / "fixtures"))
-        from generate_fit import make_test_fit
-        
+        """sync_xert_job should import new activities from Xert API."""
         # Set up mock client with activities
-        fit_bytes = make_test_fit()
         mock_xert_client.activities = [
             XertActivity(
                 id="xert-activity-1",
                 name="Morning Ride",
-                started_at=datetime(2024, 1, 15, 8, 0, 0, tzinfo=timezone.utc),
-                fit_url="https://xert.com/fit/1",
+                started_at=datetime(2024, 1, 15, 8, 0, 0),
+                activity_type="Cycling",
             ),
         ]
-        mock_xert_client.fit_data["xert-activity-1"] = fit_bytes
         
         # Mock worker_db_session to use test database
         from contextlib import asynccontextmanager
@@ -219,13 +252,32 @@ class TestSyncXertJob:
         assert result["success"] is True
         assert result["synced_activities"] == 1
         assert mock_xert_client.login_called
-        assert mock_xert_client.login_email == "user@xert.com"
+        assert mock_xert_client.login_username == "user@xert.com"
         
-        # Verify ingest job was enqueued
+        # Verify route matching job was enqueued
         mock_arq.enqueue_job.assert_called_once()
-        call_kwargs = mock_arq.enqueue_job.call_args.kwargs
-        assert call_kwargs["source"] == "xert"
-        assert call_kwargs["source_ref"] == "xert:xert-activity-1"
+        call_args = mock_arq.enqueue_job.call_args
+        assert call_args[0][0] == "match_route_job"
+        
+        # Verify activity was created in database
+        async with session_factory() as session:
+            result = await session.execute(
+                select(Activity).where(Activity.source_ref == "xert:xert-activity-1")
+            )
+            activity = result.scalar_one_or_none()
+            assert activity is not None
+            assert activity.source == "xert"
+            assert activity.total_distance_m == 30000  # 30km in meters
+            assert activity.moving_time_s == 3600
+            
+            # Verify records were created
+            records_result = await session.execute(
+                select(Record).where(Record.activity_id == activity.id)
+            )
+            records = records_result.scalars().all()
+            assert len(records) == 2
+            assert records[0].power_w == 200
+            assert records[0].hr_bpm == 140
 
     @pytest.mark.asyncio
     async def test_sync_xert_skips_already_imported(
@@ -250,8 +302,8 @@ class TestSyncXertJob:
             XertActivity(
                 id="xert-activity-1",
                 name="Morning Ride",
-                started_at=datetime(2024, 1, 15, 8, 0, 0, tzinfo=timezone.utc),
-                fit_url="https://xert.com/fit/1",
+                started_at=datetime(2024, 1, 15, 8, 0, 0),
+                activity_type="Cycling",
             ),
         ]
         
@@ -330,32 +382,25 @@ class TestSyncXertJob:
         assert "Invalid credentials" in result["error"]
 
     @pytest.mark.asyncio
-    async def test_sync_xert_continues_on_download_failure(
+    async def test_sync_xert_continues_on_activity_details_failure(
         self, db_engine, user_with_xert_creds, mock_xert_client, encryption_key_env
     ):
-        """sync_xert_job should continue if one download fails."""
-        import sys
-        from pathlib import Path
-        sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "tests" / "fixtures"))
-        from generate_fit import make_test_fit
-        
-        fit_bytes = make_test_fit()
+        """sync_xert_job should continue if fetching one activity's details fails."""
         mock_xert_client.activities = [
             XertActivity(
                 id="fail-activity",
-                name="Failed Download",
-                started_at=datetime(2024, 1, 15, 8, 0, 0, tzinfo=timezone.utc),
-                fit_url="https://xert.com/fit/fail",
+                name="Failed Details",
+                started_at=datetime(2024, 1, 15, 8, 0, 0),
+                activity_type="Cycling",
             ),
             XertActivity(
                 id="success-activity",
                 name="Success",
-                started_at=datetime(2024, 1, 16, 8, 0, 0, tzinfo=timezone.utc),
-                fit_url="https://xert.com/fit/success",
+                started_at=datetime(2024, 1, 16, 8, 0, 0),
+                activity_type="Cycling",
             ),
         ]
-        mock_xert_client.should_fail_download.add("fail-activity")
-        mock_xert_client.fit_data["success-activity"] = fit_bytes
+        mock_xert_client.should_fail_details.add("fail-activity")
         
         # Mock worker_db_session to use test database
         from contextlib import asynccontextmanager
@@ -469,3 +514,62 @@ class TestNightlySyncAllXert:
         assert result["success"] is True
         assert result["users_queued"] == 0
         mock_arq.enqueue_job.assert_not_called()
+
+
+@pytest.mark.skipif(
+    not os.environ.get("XERT_TEST_USERNAME"),
+    reason="Set XERT_TEST_USERNAME and XERT_TEST_PASSWORD to run real API tests"
+)
+class TestXertClientRealAPI:
+    """Integration tests against real Xert API. Skipped unless credentials are provided."""
+
+    @pytest.mark.asyncio
+    async def test_real_xert_login_and_list_activities(self):
+        """Test real Xert API login and activity listing."""
+        from fitter.xert import XertClient
+        
+        username = os.environ["XERT_TEST_USERNAME"]
+        password = os.environ["XERT_TEST_PASSWORD"]
+        
+        client = XertClient()
+        try:
+            # Test login
+            await client.login(username, password)
+            assert client._access_token is not None
+            
+            # Test list activities (last 7 days)
+            import time
+            to_ts = int(time.time())
+            from_ts = to_ts - (7 * 24 * 60 * 60)
+            
+            activities = await client.list_activities(from_timestamp=from_ts, to_timestamp=to_ts)
+            
+            # Just verify the shape - we may or may not have activities
+            assert isinstance(activities, list)
+            
+            if activities:
+                activity = activities[0]
+                assert hasattr(activity, 'id')
+                assert hasattr(activity, 'name')
+                assert hasattr(activity, 'started_at')
+                assert hasattr(activity, 'activity_type')
+                
+                # Test get activity details
+                details = await client.get_activity_details(activity.id, include_session_data=True)
+                assert details.get("success") is True
+                assert "summary" in details
+                
+        finally:
+            await client.close()
+
+    @pytest.mark.asyncio
+    async def test_real_xert_invalid_credentials(self):
+        """Test that invalid credentials raise XertAPIError."""
+        from fitter.xert import XertClient, XertAPIError
+        
+        client = XertClient()
+        try:
+            with pytest.raises(XertAPIError, match="Invalid"):
+                await client.login("invalid@example.com", "wrongpassword")
+        finally:
+            await client.close()

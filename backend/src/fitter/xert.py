@@ -1,6 +1,19 @@
-"""Xert API client for syncing activities."""
+"""Xert API client for syncing activities.
+
+Based on Xert Online API Version 1.4:
+https://www.xertonline.com/API.html
+
+Authentication: OAuth2 password grant with public client credentials.
+Activity list: GET /oauth/activity?from=<timestamp>&to=<timestamp>
+Activity details: GET /oauth/activity/<path>?include_session_data=1
+FIT upload: POST /oauth/upload (multipart/form-data)
+
+Note: Xert API does not provide a direct FIT download endpoint.
+Activities must be fetched via the activity details endpoint.
+"""
 
 import logging
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
@@ -18,25 +31,30 @@ class XertAPIError(Exception):
 @dataclass
 class XertActivity:
     """Represents an activity from Xert's API."""
-    id: str
+    id: str  # 'path' field from Xert API
     name: str
     started_at: datetime
-    fit_url: str | None  # URL to download FIT file
+    activity_type: str
+    description: str = ""
 
 
 class XertClientProtocol(Protocol):
     """Protocol for Xert API client, allows mocking in tests."""
     
-    async def login(self, email: str, password: str) -> None:
-        """Authenticate with Xert."""
+    async def login(self, username: str, password: str) -> None:
+        """Authenticate with Xert using OAuth2 password grant."""
         ...
     
-    async def list_activities(self, since: datetime | None = None) -> list[XertActivity]:
-        """List activities, optionally filtered by date."""
+    async def list_activities(
+        self, 
+        from_timestamp: int | None = None, 
+        to_timestamp: int | None = None
+    ) -> list[XertActivity]:
+        """List activities within a date range."""
         ...
     
-    async def download_fit(self, activity: XertActivity) -> bytes:
-        """Download the FIT file for an activity."""
+    async def get_activity_details(self, activity_id: str, include_session_data: bool = False) -> dict:
+        """Get full activity details including session data."""
         ...
     
     async def close(self) -> None:
@@ -46,86 +64,202 @@ class XertClientProtocol(Protocol):
 
 class XertClient:
     """
-    Real Xert API client.
+    Real Xert API client based on Xert Online API v1.4.
     
-    Note: The actual Xert API details (endpoints, auth flow, response shapes)
-    depend on Xert's API documentation. This implementation is based on
-    common patterns and may need adjustment once the actual API is researched.
+    Authentication uses OAuth2 password grant with public client credentials:
+    - client_id: xert_public
+    - client_secret: xert_public
+    
+    Tokens expire after 604800 seconds (7 days) and can be refreshed.
     """
     
-    BASE_URL = "https://www.xertonline.com/api"
+    BASE_URL = "https://www.xertonline.com"
+    CLIENT_ID = "xert_public"
+    CLIENT_SECRET = "xert_public"
     
     def __init__(self):
         self._client = httpx.AsyncClient(timeout=30.0)
-        self._token: str | None = None
+        self._access_token: str | None = None
+        self._refresh_token: str | None = None
+        self._token_expires_at: float = 0
     
-    async def login(self, email: str, password: str) -> None:
-        """Authenticate with Xert and store the session token."""
+    async def login(self, username: str, password: str) -> None:
+        """
+        Authenticate with Xert using OAuth2 password grant.
+        
+        curl -u xert_public:xert_public -POST "https://www.xertonline.com/oauth/token" 
+             -d 'grant_type=password' -d 'username=...' -d 'password=...'
+        """
         try:
             response = await self._client.post(
-                f"{self.BASE_URL}/auth/login",
-                json={"email": email, "password": password},
+                f"{self.BASE_URL}/oauth/token",
+                auth=(self.CLIENT_ID, self.CLIENT_SECRET),
+                data={
+                    "grant_type": "password",
+                    "username": username,
+                    "password": password,
+                },
+            )
+            
+            if response.status_code == 401:
+                raise XertAPIError("Invalid Xert credentials")
+            
+            response.raise_for_status()
+            data = response.json()
+            
+            self._access_token = data.get("access_token")
+            self._refresh_token = data.get("refresh_token")
+            expires_in = data.get("expires_in", 604800)
+            self._token_expires_at = time.time() + expires_in - 60  # 60s buffer
+            
+            if not self._access_token:
+                raise XertAPIError("No access_token in login response")
+                
+        except httpx.HTTPStatusError as e:
+            raise XertAPIError(f"Xert login failed: HTTP {e.response.status_code}") from e
+        except httpx.RequestError as e:
+            raise XertAPIError(f"Failed to connect to Xert: {e}") from e
+    
+    async def _refresh_access_token(self) -> None:
+        """Refresh the access token using the refresh token."""
+        if not self._refresh_token:
+            raise XertAPIError("No refresh token available")
+        
+        try:
+            response = await self._client.post(
+                f"{self.BASE_URL}/oauth/token",
+                auth=(self.CLIENT_ID, self.CLIENT_SECRET),
+                data={
+                    "grant_type": "refresh_token",
+                    "refresh_token": self._refresh_token,
+                },
             )
             response.raise_for_status()
             data = response.json()
-            self._token = data.get("token") or data.get("access_token")
-            if not self._token:
-                raise XertAPIError("No token in login response")
+            
+            self._access_token = data.get("access_token")
+            self._refresh_token = data.get("refresh_token")
+            expires_in = data.get("expires_in", 604800)
+            self._token_expires_at = time.time() + expires_in - 60
+            
         except httpx.HTTPStatusError as e:
-            if e.response.status_code == 401:
-                raise XertAPIError("Invalid Xert credentials") from e
-            raise XertAPIError(f"Xert login failed: {e}") from e
+            raise XertAPIError(f"Token refresh failed: HTTP {e.response.status_code}") from e
         except httpx.RequestError as e:
             raise XertAPIError(f"Failed to connect to Xert: {e}") from e
     
     def _auth_headers(self) -> dict[str, str]:
-        if not self._token:
+        if not self._access_token:
             raise XertAPIError("Not authenticated")
-        return {"Authorization": f"Bearer {self._token}"}
+        return {"Authorization": f"Bearer {self._access_token}"}
     
-    async def list_activities(self, since: datetime | None = None) -> list[XertActivity]:
-        """List activities from Xert."""
-        params = {}
-        if since:
-            params["since"] = since.isoformat()
+    async def _ensure_valid_token(self) -> None:
+        """Refresh token if expired or about to expire."""
+        if time.time() >= self._token_expires_at and self._refresh_token:
+            await self._refresh_access_token()
+    
+    async def list_activities(
+        self, 
+        from_timestamp: int | None = None, 
+        to_timestamp: int | None = None
+    ) -> list[XertActivity]:
+        """
+        List activities within a date range.
+        
+        curl -X GET "https://www.xertonline.com/oauth/activity?from=<ts>&to=<ts>" 
+             -H "Authorization: Bearer <token>"
+        
+        Args:
+            from_timestamp: Unix timestamp for start of range (required by API)
+            to_timestamp: Unix timestamp for end of range (required by API)
+        
+        Returns:
+            List of XertActivity objects
+        """
+        await self._ensure_valid_token()
+        
+        # Default to last 30 days if not specified
+        if to_timestamp is None:
+            to_timestamp = int(time.time())
+        if from_timestamp is None:
+            from_timestamp = to_timestamp - (30 * 24 * 60 * 60)
         
         try:
             response = await self._client.get(
-                f"{self.BASE_URL}/activities",
+                f"{self.BASE_URL}/oauth/activity",
+                headers=self._auth_headers(),
+                params={
+                    "from": from_timestamp,
+                    "to": to_timestamp,
+                },
+            )
+            response.raise_for_status()
+            data = response.json()
+            
+            if not data.get("success"):
+                raise XertAPIError("Xert API returned success=false")
+            
+            activities = []
+            for item in data.get("activities", []):
+                # Parse start_date object: {"date": "2017-08-12 11:08:29.000000", "timezone_type": 3, "timezone": "UTC"}
+                start_date_obj = item.get("start_date", {})
+                date_str = start_date_obj.get("date", "")
+                
+                if date_str:
+                    # Parse "2017-08-12 11:08:29.000000" format
+                    try:
+                        started_at = datetime.strptime(date_str.split(".")[0], "%Y-%m-%d %H:%M:%S")
+                    except ValueError:
+                        started_at = datetime.now()
+                else:
+                    started_at = datetime.now()
+                
+                activities.append(XertActivity(
+                    id=item.get("path", ""),
+                    name=item.get("name", ""),
+                    started_at=started_at,
+                    activity_type=item.get("activity_type", ""),
+                    description=item.get("description", ""),
+                ))
+            
+            return activities
+            
+        except httpx.HTTPStatusError as e:
+            raise XertAPIError(f"Failed to list activities: HTTP {e.response.status_code}") from e
+        except httpx.RequestError as e:
+            raise XertAPIError(f"Failed to connect to Xert: {e}") from e
+    
+    async def get_activity_details(self, activity_id: str, include_session_data: bool = False) -> dict:
+        """
+        Get full activity details.
+        
+        curl -X GET "https://www.xertonline.com/oauth/activity/<path>?include_session_data=1" 
+             -H "Authorization: Bearer <token>"
+        
+        Note: Xert API does not provide direct FIT file download. 
+        The session_data contains per-second data that can be used instead.
+        """
+        await self._ensure_valid_token()
+        
+        try:
+            params = {}
+            if include_session_data:
+                params["include_session_data"] = 1
+            
+            response = await self._client.get(
+                f"{self.BASE_URL}/oauth/activity/{activity_id}",
                 headers=self._auth_headers(),
                 params=params,
             )
             response.raise_for_status()
             data = response.json()
             
-            activities = []
-            for item in data.get("activities", []):
-                activities.append(XertActivity(
-                    id=str(item["id"]),
-                    name=item.get("name", ""),
-                    started_at=datetime.fromisoformat(item["start_time"].replace("Z", "+00:00")),
-                    fit_url=item.get("fit_file_url"),
-                ))
-            return activities
+            if not data.get("success"):
+                raise XertAPIError(f"Failed to get activity {activity_id}")
+            
+            return data
+            
         except httpx.HTTPStatusError as e:
-            raise XertAPIError(f"Failed to list activities: {e}") from e
-        except httpx.RequestError as e:
-            raise XertAPIError(f"Failed to connect to Xert: {e}") from e
-    
-    async def download_fit(self, activity: XertActivity) -> bytes:
-        """Download the FIT file for an activity."""
-        if not activity.fit_url:
-            raise XertAPIError(f"No FIT URL for activity {activity.id}")
-        
-        try:
-            response = await self._client.get(
-                activity.fit_url,
-                headers=self._auth_headers(),
-            )
-            response.raise_for_status()
-            return response.content
-        except httpx.HTTPStatusError as e:
-            raise XertAPIError(f"Failed to download FIT: {e}") from e
+            raise XertAPIError(f"Failed to get activity details: HTTP {e.response.status_code}") from e
         except httpx.RequestError as e:
             raise XertAPIError(f"Failed to connect to Xert: {e}") from e
     
