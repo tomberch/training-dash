@@ -150,3 +150,69 @@ class TestArqIngest:
                 )
                 records = records_result.scalars().all()
                 assert len(records) == 50
+
+    @pytest.mark.asyncio
+    async def test_job_survives_worker_restart(self, arq_engine, arq_user, redis_container):
+        """Test that jobs persist in Redis and survive a worker restart."""
+        redis_host, redis_port = redis_container
+
+        session_factory = async_sessionmaker(arq_engine, expire_on_commit=False)
+        import fitter.auth as authmod
+
+        async def override_get_db():
+            async with session_factory() as session:
+                yield session
+
+        app = create_app()
+        app.dependency_overrides[authmod.get_db] = override_get_db
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            # Login
+            resp = await client.post("/login", json={"username": "testuser", "password": "testpass"})
+            assert resp.status_code == 200
+
+            # Upload — job is enqueued but we don't run the worker yet
+            fit_data = make_test_fit(num_records=30)
+            resp = await client.post(
+                "/upload",
+                files={"file": ("restart_test.fit", fit_data, "application/octet-stream")},
+            )
+            assert resp.status_code == 202
+            data = resp.json()
+            job_id = data["job_id"]
+
+            # Verify job is queued in Redis
+            from arq.connections import RedisSettings
+            from arq.jobs import Job
+            pool = await create_pool(RedisSettings(host=redis_host, port=redis_port))
+            job = Job(job_id, pool)
+            status_before = await job.status()
+            await pool.aclose()
+            # Job should be queued or deferred
+            assert str(status_before) in ["JobStatus.queued", "JobStatus.deferred"]
+
+            # Verify no activity exists yet
+            async with session_factory() as session:
+                result = await session.execute(
+                    select(Activity).where(Activity.source_ref == "restart_test.fit")
+                )
+                activity = result.scalar_one_or_none()
+                assert activity is None
+
+            # Now "restart" the worker by starting a fresh one that processes the queued job
+            await run_worker_briefly(redis_host, redis_port, timeout=15)
+
+            # Verify the activity was created after the "restart"
+            async with session_factory() as session:
+                result = await session.execute(
+                    select(Activity).where(Activity.source_ref == "restart_test.fit")
+                )
+                activity = result.scalar_one_or_none()
+                assert activity is not None
+                assert activity.source == "upload"
+
+                records_result = await session.execute(
+                    select(Record).where(Record.activity_id == activity.id)
+                )
+                records = records_result.scalars().all()
+                assert len(records) == 30

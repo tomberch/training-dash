@@ -21,6 +21,7 @@ def create_app() -> FastAPI:
     app.get("/activities/{activity_id}/compare")(compare_activities)
     app.get("/records")(get_records)
     app.post("/upload")(upload_activity)
+    app.get("/jobs/{job_id}")(get_job_status)
     return app
 
 
@@ -114,16 +115,13 @@ async def upload_activity(db: DbSession, user: CurrentUser, file: UploadFile = F
     fit_bytes = await file.read()
     source_ref = file.filename or "upload.fit"
 
-    from fitter.jobs import redis_available, create_redis_pool
+    from fitter.jobs import enqueue_ingest_job
 
-    if redis_available():
-        from fastapi import BackgroundTasks
-        pool = await create_redis_pool()
-        job = await pool.enqueue_job("ingest_job", user_id=user.id, fit_bytes=fit_bytes, source="upload", source_ref=source_ref)
-        await pool.aclose()
+    job_id = await enqueue_ingest_job(user.id, fit_bytes, "upload", source_ref)
+    if job_id is not None:
         return JSONResponse(
             status_code=status.HTTP_202_ACCEPTED,
-            content={"job_id": job.job_id, "source_ref": source_ref},
+            content={"job_id": job_id, "source_ref": source_ref},
         )
 
     from fitter.ingest import ingest_fit
@@ -131,6 +129,12 @@ async def upload_activity(db: DbSession, user: CurrentUser, file: UploadFile = F
     if activity is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to parse FIT file")
     return {"id": activity.id, "started_at": activity.started_at.isoformat()}
+
+
+async def get_job_status(user: CurrentUser, job_id: str):
+    """Get the status of an ingest job."""
+    from fitter.jobs import get_job_status as _get_job_status
+    return await _get_job_status(job_id)
 
 
 async def get_same_route_activities(db: DbSession, user: CurrentUser, activity_id: int):

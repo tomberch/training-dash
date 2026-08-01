@@ -135,3 +135,12 @@ export async function uploadFit(file: File): Promise<{ id?: number; job_id?: str
   if (!res.ok) throw new Error("Upload failed");
   return res.json();
 }
+
+export interface JobStatus {
+  status: "pending" | "processing" | "complete" | "not_found" | "unknown";
+  result: { success: boolean; activity_id: number | null } | null;
+}
+
+export async function fetchJobStatus(jobId: string): Promise<JobStatus> {
+  return apiFetch<JobStatus>(`/jobs/${jobId}`);
+}

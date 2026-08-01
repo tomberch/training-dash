@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import type { Activity } from "./api";
-import { fetchActivities, login, uploadFit } from "./api";
+import { fetchActivities, login, uploadFit, fetchJobStatus } from "./api";
 import { formatDistance, formatTime, formatDate } from "./format";
 
 export function ActivityList({
@@ -25,20 +25,28 @@ export function ActivityList({
     setUploading(true);
     try {
       const result = await uploadFit(file);
-      // If upload returned 202 (async), poll until the activity appears
+      // If upload returned 202 (async), poll job status until complete
       if ("job_id" in result && result.job_id) {
         setProcessing(true);
+        const jobId = result.job_id;
         const maxPolls = 30;
         for (let i = 0; i < maxPolls; i++) {
           await new Promise((r) => setTimeout(r, 2000));
           try {
-            const updated = await fetchActivities();
-            if (updated.length > activities.length) {
+            const status = await fetchJobStatus(jobId);
+            if (status.status === "complete") {
+              const updated = await fetchActivities();
+              setActivities(updated);
+              break;
+            } else if (status.status === "not_found") {
+              // Job disappeared, refresh activities anyway
+              const updated = await fetchActivities();
               setActivities(updated);
               break;
             }
+            // Still pending/processing, continue polling
           } catch {
-            // activity not visible yet, keep polling
+            // Error checking status, keep polling
           }
         }
         setProcessing(false);
