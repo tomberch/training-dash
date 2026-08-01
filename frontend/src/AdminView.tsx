@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import type { AdminUser } from "./api";
-import { fetchAdminUsers, createUser, resetUserPassword, triggerUserSync } from "./api";
+import { ApiError, fetchAdminUsers, createUser, resetUserPassword, triggerUserSync } from "./api";
+import { ErrorDisplay } from "./ErrorDisplay";
 
 export function AdminView({ onBack }: { onBack: () => void }) {
   const [users, setUsers] = useState<AdminUser[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Error | ApiError | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Create user form
@@ -26,7 +27,7 @@ export function AdminView({ onBack }: { onBack: () => void }) {
       setUsers(data);
       setError(null);
     } catch (e) {
-      setError((e as Error).message);
+      setError(e as Error);
     } finally {
       setLoading(false);
     }
@@ -42,7 +43,7 @@ export function AdminView({ onBack }: { onBack: () => void }) {
       setNewPassword("");
       await loadUsers();
     } catch (e) {
-      setError((e as Error).message);
+      setError(e as Error);
     } finally {
       setCreating(false);
     }
@@ -56,7 +57,7 @@ export function AdminView({ onBack }: { onBack: () => void }) {
       setResetPassword("");
       setError(null);
     } catch (e) {
-      setError((e as Error).message);
+      setError(e as Error);
     }
   }
 
@@ -65,7 +66,7 @@ export function AdminView({ onBack }: { onBack: () => void }) {
       await triggerUserSync(userId);
       setError(null);
     } catch (e) {
-      setError((e as Error).message);
+      setError(e as Error);
     }
   }
 
@@ -95,8 +96,8 @@ export function AdminView({ onBack }: { onBack: () => void }) {
 
         {/* Error alert */}
         {error && (
-          <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400">
-            {error}
+          <div className="mb-6">
+            <ErrorDisplay error={error} />
           </div>
         )}
 

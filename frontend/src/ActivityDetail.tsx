@@ -13,10 +13,11 @@ import {
   ReferenceLine,
 } from "recharts";
 import type { Activity, GeoJSONFeatureCollection, CompareResponse, SameRouteResponse, GapPoint } from "./api";
-import { fetchActivity, fetchActivityRecords, fetchSameRouteActivities, fetchComparison } from "./api";
+import { ApiError, fetchActivity, fetchActivityRecords, fetchSameRouteActivities, fetchComparison } from "./api";
 import { formatDistance, formatTime } from "./format";
 import { resampleByDistance } from "./resampler";
 import type { FitRecord } from "./resampler";
+import { ErrorDisplay } from "./ErrorDisplay";
 
 type AxisMode = "time" | "distance";
 
@@ -111,7 +112,7 @@ function geojsonToTimestamps(geojson: GeoJSONFeatureCollection): number[] {
 export function ActivityDetail({ activityId, onBack }: Props) {
   const [activity, setActivity] = useState<Activity | null>(null);
   const [geojson, setGeojson] = useState<GeoJSONFeatureCollection | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Error | ApiError | null>(null);
   const [axisModes, setAxisModes] = useState<{ [key: string]: AxisMode }>({
     speed: "time",
     hr: "time",
@@ -135,7 +136,7 @@ export function ActivityDetail({ activityId, onBack }: Props) {
         setGeojson(g);
         setSameRoute(sr);
       })
-      .catch((e) => setError(e.message));
+      .catch((e) => setError(e));
   }, [activityId]);
 
   useEffect(() => {
@@ -145,7 +146,7 @@ export function ActivityDetail({ activityId, onBack }: Props) {
     }
     fetchComparison(activityId, compareOtherId)
       .then(setComparison)
-      .catch((e) => setError(e.message));
+      .catch((e) => setError(e));
   }, [activityId, compareOtherId]);
 
   const records = useMemo(() => (geojson ? geojsonToRecords(geojson) : []), [geojson]);
@@ -157,9 +158,7 @@ export function ActivityDetail({ activityId, onBack }: Props) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
         <div className="max-w-6xl mx-auto">
-          <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400">
-            Error: {error}
-          </div>
+          <ErrorDisplay error={error} context="loading activity" />
         </div>
       </div>
     );

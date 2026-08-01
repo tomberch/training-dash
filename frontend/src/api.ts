@@ -77,11 +77,37 @@ export interface SameRouteResponse {
   activities: Activity[];
 }
 
+// Structured API error with optional error_id for tracking
+export class ApiError extends Error {
+  status: number;
+  errorId?: string;
+  
+  constructor(message: string, status: number, errorId?: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.errorId = errorId;
+  }
+}
+
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
 async function apiFetch<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, { credentials: "include" });
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  if (!res.ok) {
+    // Try to parse structured error response
+    let detail = `Request failed`;
+    let errorId: string | undefined;
+    try {
+      const body = await res.json();
+      detail = body.detail || detail;
+      errorId = body.error_id;
+    } catch {
+      // Response wasn't JSON, use status text
+      detail = res.statusText || detail;
+    }
+    throw new ApiError(detail, res.status, errorId);
+  }
   return res.json();
 }
 
@@ -133,7 +159,18 @@ export async function uploadFit(file: File): Promise<{ id?: number; job_id?: str
     credentials: "include",
     body: formData,
   });
-  if (!res.ok) throw new Error("Upload failed");
+  if (!res.ok) {
+    let detail = "Upload failed";
+    let errorId: string | undefined;
+    try {
+      const body = await res.json();
+      detail = body.detail || detail;
+      errorId = body.error_id;
+    } catch {
+      // ignore
+    }
+    throw new ApiError(detail, res.status, errorId);
+  }
   return res.json();
 }
 
@@ -173,8 +210,16 @@ export async function createUser(username: string, password: string): Promise<Ad
     body: JSON.stringify({ username, password }),
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: "Failed to create user" }));
-    throw new Error(err.detail || "Failed to create user");
+    let detail = "Failed to create user";
+    let errorId: string | undefined;
+    try {
+      const body = await res.json();
+      detail = body.detail || detail;
+      errorId = body.error_id;
+    } catch {
+      // ignore
+    }
+    throw new ApiError(detail, res.status, errorId);
   }
   return res.json();
 }
@@ -186,7 +231,18 @@ export async function resetUserPassword(userId: number, password: string): Promi
     credentials: "include",
     body: JSON.stringify({ password }),
   });
-  if (!res.ok) throw new Error("Failed to reset password");
+  if (!res.ok) {
+    let detail = "Failed to reset password";
+    let errorId: string | undefined;
+    try {
+      const body = await res.json();
+      detail = body.detail || detail;
+      errorId = body.error_id;
+    } catch {
+      // ignore
+    }
+    throw new ApiError(detail, res.status, errorId);
+  }
 }
 
 export async function triggerUserSync(userId: number): Promise<{ job_id: string | null }> {
@@ -194,6 +250,17 @@ export async function triggerUserSync(userId: number): Promise<{ job_id: string 
     method: "POST",
     credentials: "include",
   });
-  if (!res.ok) throw new Error("Failed to trigger sync");
+  if (!res.ok) {
+    let detail = "Failed to trigger sync";
+    let errorId: string | undefined;
+    try {
+      const body = await res.json();
+      detail = body.detail || detail;
+      errorId = body.error_id;
+    } catch {
+      // ignore
+    }
+    throw new ApiError(detail, res.status, errorId);
+  }
   return res.json();
 }

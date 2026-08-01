@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import type { Activity } from "./api";
-import { fetchActivities, login, uploadFit, fetchJobStatus } from "./api";
+import { ApiError, fetchActivities, login, uploadFit, fetchJobStatus } from "./api";
 import { formatDistance, formatTime, formatDate } from "./format";
+import { ErrorDisplay } from "./ErrorDisplay";
 
 export function ActivityList({
   onSelect,
@@ -9,14 +10,14 @@ export function ActivityList({
   onSelect: (id: number) => void;
 }) {
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Error | ApiError | null>(null);
   const [uploading, setUploading] = useState(false);
   const [processing, setProcessing] = useState(false);
 
   useEffect(() => {
     fetchActivities()
       .then(setActivities)
-      .catch((e) => setError(e.message));
+      .catch((e) => setError(e));
   }, []);
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -52,18 +53,14 @@ export function ActivityList({
         setActivities(updated);
       }
     } catch (err) {
-      setError((err as Error).message);
+      setError(err as Error);
     } finally {
       setUploading(false);
     }
   }
 
   if (error) {
-    return (
-      <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400">
-        Error: {error}
-      </div>
-    );
+    return <ErrorDisplay error={error} context="loading activities" />;
   }
 
   return (

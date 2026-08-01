@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import type { RecordsResponse } from "./api";
-import { fetchRecords } from "./api";
+import { ApiError, fetchRecords } from "./api";
 import { prsFromRecords, routePRsFromRecords } from "./prs";
 import type { PR } from "./prs";
+import { ErrorDisplay } from "./ErrorDisplay";
 
 function PRTile({ pr, variant }: { pr: PR; variant: "lifetime" | "route" }) {
   const bgClass =
@@ -34,20 +35,16 @@ function PRGrid({ prs, variant }: { prs: PR[]; variant: "lifetime" | "route" }) 
 
 export function RecordsView() {
   const [data, setData] = useState<RecordsResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Error | ApiError | null>(null);
 
   useEffect(() => {
     fetchRecords()
       .then(setData)
-      .catch((e) => setError(e.message));
+      .catch((e) => setError(e));
   }, []);
 
   if (error) {
-    return (
-      <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400">
-        Error: {error}
-      </div>
-    );
+    return <ErrorDisplay error={error} context="loading records" />;
   }
 
   if (!data) {

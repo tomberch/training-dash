@@ -1,7 +1,9 @@
+import logging
+import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import FastAPI, File, HTTPException, Query, UploadFile, status
+from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import select, func
@@ -11,9 +13,53 @@ from fitter.auth import AdminUser, CurrentUser, DbSession, LoginRequest, create_
 from fitter.db import Base, async_session, engine
 from fitter.models import Activity, Lap, Record, User, XertCredentials
 
+logger = logging.getLogger(__name__)
+
+
+def generate_error_id() -> str:
+    """Generate a short, unique error ID for tracking."""
+    return uuid.uuid4().hex[:8]
+
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Fitter")
+    
+    # Global exception handler for unhandled errors
+    @app.exception_handler(Exception)
+    async def global_exception_handler(request: Request, exc: Exception):
+        # Don't intercept HTTPExceptions - let FastAPI handle those
+        if isinstance(exc, HTTPException):
+            raise exc
+        
+        error_id = generate_error_id()
+        logger.error(
+            f"Unhandled exception [error_id={error_id}] {request.method} {request.url.path}: {exc}",
+            exc_info=True,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "detail": "An internal error occurred",
+                "error_id": error_id,
+            },
+        )
+    
+    # Enhanced HTTPException handler to include error_id for 500s
+    @app.exception_handler(HTTPException)
+    async def http_exception_handler(request: Request, exc: HTTPException):
+        content = {"detail": exc.detail}
+        if exc.status_code >= 500:
+            error_id = generate_error_id()
+            content["error_id"] = error_id
+            logger.error(
+                f"HTTP {exc.status_code} [error_id={error_id}] {request.method} {request.url.path}: {exc.detail}"
+            )
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=content,
+            headers=getattr(exc, "headers", None),
+        )
+    
     app.post("/login")(login)
     app.get("/activities")(list_activities)
     app.get("/activities/{activity_id}")(get_activity)
