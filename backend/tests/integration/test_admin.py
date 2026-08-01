@@ -1,4 +1,6 @@
 import pytest
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from fitter.auth import hash_password
 from fitter.models import User
@@ -131,9 +133,22 @@ class TestAdminEndpoints:
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_unauthenticated_cannot_access_admin(self, app_client):
-        # Don't login, just try to access admin
-        # Need a fresh client without cookies
-        response = await app_client.get("/admin/users")
-        # Will be 401 or 403 depending on auth check order
-        assert response.status_code in [401, 403]
+    async def test_unauthenticated_cannot_access_admin(self, db_engine):
+        """Test that unauthenticated requests cannot access admin routes."""
+        import fitter.auth as authmod
+        from fitter.app import create_app
+
+        session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
+
+        async def override_get_db():
+            async with session_factory() as session:
+                yield session
+
+        app = create_app()
+        app.dependency_overrides[authmod.get_db] = override_get_db
+
+        # Use a fresh client with no cookies
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as fresh_client:
+            response = await fresh_client.get("/admin/users")
+            assert response.status_code == 401

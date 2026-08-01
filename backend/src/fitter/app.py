@@ -300,19 +300,30 @@ class ResetPasswordRequest(BaseModel):
     password: str
 
 
+async def _get_user_or_404(db: DbSession, user_id: int) -> User:
+    """Fetch a user by ID or raise 404."""
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    return user
+
+
+def _user_summary(user: User) -> dict:
+    """Return a dict summary of a user for admin responses."""
+    return {
+        "id": user.id,
+        "username": user.username,
+        "is_admin": user.is_admin,
+        "created_at": user.created_at.isoformat(),
+    }
+
+
 async def admin_list_users(db: DbSession, admin: AdminUser):
     """List all users (admin only)."""
     result = await db.execute(select(User).order_by(User.id))
     users = result.scalars().all()
-    return [
-        {
-            "id": u.id,
-            "username": u.username,
-            "is_admin": u.is_admin,
-            "created_at": u.created_at.isoformat(),
-        }
-        for u in users
-    ]
+    return [_user_summary(u) for u in users]
 
 
 async def admin_create_user(db: DbSession, admin: AdminUser, request: CreateUserRequest):
@@ -330,21 +341,12 @@ async def admin_create_user(db: DbSession, admin: AdminUser, request: CreateUser
     db.add(user)
     await db.commit()
     await db.refresh(user)
-    return {
-        "id": user.id,
-        "username": user.username,
-        "is_admin": user.is_admin,
-        "created_at": user.created_at.isoformat(),
-    }
+    return _user_summary(user)
 
 
 async def admin_reset_password(db: DbSession, admin: AdminUser, user_id: int, request: ResetPasswordRequest):
     """Reset a user's password (admin only)."""
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
-    if user is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    
+    user = await _get_user_or_404(db, user_id)
     user.password_hash = hash_password(request.password)
     await db.commit()
     return {"success": True}
@@ -352,10 +354,7 @@ async def admin_reset_password(db: DbSession, admin: AdminUser, user_id: int, re
 
 async def admin_trigger_sync(db: DbSession, admin: AdminUser, user_id: int):
     """Trigger Xert sync for a user (admin only). Job is a stub until ticket 10."""
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
-    if user is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    await _get_user_or_404(db, user_id)
     
     from fitter.jobs import enqueue_sync_xert_job
     job_id = await enqueue_sync_xert_job(user_id)
