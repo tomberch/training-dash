@@ -1,17 +1,26 @@
+import math
+
 from sqlalchemy import text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fitter.models import Activity, Record, Route
 
 HAUSDORFF_THRESHOLD_M = 100.0
-# ST_Simplify tolerance in degrees (~50m at equator)
-SIMPLIFY_TOLERANCE_DEG = 50.0 / 111000.0
-# Hausdorff threshold in degrees (~100m at equator)
-HAUSDORFF_THRESHOLD_DEG = 100.0 / 111000.0
+SIMPLIFY_TOLERANCE_M = 50.0
 
 
-def build_linestring_wkt(records: list[Record]) -> str | None:
-    points = [(r.lon, r.lat) for r in records if r.lat is not None and r.lon is not None]
+def _meters_to_deg(meters: float, lat: float) -> float:
+    return meters / (111000.0 * math.cos(math.radians(lat)))
+
+
+def build_linestring_wkt(records: list[Record] | list[dict]) -> str | None:
+    def get_lat_lon(r):
+        if isinstance(r, dict):
+            return r.get("lat"), r.get("lon")
+        return r.lat, r.lon
+
+    points = [get_lat_lon(r) for r in records]
+    points = [(lon, lat) for lat, lon in points if lat is not None and lon is not None]
     if len(points) < 2:
         return None
     coords = ", ".join(f"{lon} {lat}" for lon, lat in points)
@@ -22,15 +31,25 @@ def _simplified_geometry_sql(expr: str) -> str:
     return f"CAST(ST_SetSRID(ST_Simplify(ST_GeomFromText({expr}, 4326), :tolerance), 4326) AS geometry)"
 
 
-async def match_route(
+async def find_or_create_route_id(
     db: AsyncSession,
     activity: Activity,
     records: list[Record],
-    threshold_deg: float = HAUSDORFF_THRESHOLD_DEG,
+    threshold_m: float = HAUSDORFF_THRESHOLD_M,
 ) -> int | None:
     wkt = build_linestring_wkt(records)
     if wkt is None:
         return None
+
+    gps_records = [(r["lat"], r["lon"]) if isinstance(r, dict) else (r.lat, r.lon)
+                   for r in records
+                   if (r.get("lat") if isinstance(r, dict) else r.lat) is not None
+                   and (r.get("lon") if isinstance(r, dict) else r.lon) is not None]
+    if not gps_records:
+        return None
+    mid_lat = sum(lat for lat, lon in gps_records) / len(gps_records)
+    tolerance_deg = _meters_to_deg(SIMPLIFY_TOLERANCE_M, mid_lat)
+    threshold_deg = _meters_to_deg(threshold_m, mid_lat)
 
     simplified_expr = _simplified_geometry_sql(":wkt")
 
@@ -43,7 +62,7 @@ async def match_route(
         WHERE user_id = :user_id
         ORDER BY distance
         LIMIT 1
-    """).params(wkt=wkt, tolerance=SIMPLIFY_TOLERANCE_DEG, user_id=activity.user_id)
+    """).params(wkt=wkt, tolerance=tolerance_deg, user_id=activity.user_id)
 
     result = await db.execute(query)
     match = result.first()
@@ -65,7 +84,7 @@ async def match_route(
     """).params(
         user_id=activity.user_id,
         wkt=wkt,
-        tolerance=SIMPLIFY_TOLERANCE_DEG,
+        tolerance=tolerance_deg,
         activity_id=activity.id,
     )
     result = await db.execute(insert_sql)

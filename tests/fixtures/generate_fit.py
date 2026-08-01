@@ -14,6 +14,7 @@ def make_test_fit(
     start_lat: float = 47.3769,
     start_lon: float = 8.5417,
     reverse: bool = False,
+    out_and_back: bool = False,
 ) -> bytes:
     builder = FitFileBuilder()
 
@@ -33,7 +34,16 @@ def make_test_fit(
         record.timestamp = ts_ms
 
         if include_gps:
-            offset = i if not reverse else (num_records - 1 - i)
+            if out_and_back:
+                half = num_records // 2
+                if i <= half:
+                    offset = i
+                else:
+                    offset = 2 * half - i
+            elif reverse:
+                offset = num_records - 1 - i
+            else:
+                offset = i
             record.position_lat = start_lat + offset * 0.0001
             record.position_long = start_lon + offset * 0.0001
 
