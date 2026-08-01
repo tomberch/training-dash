@@ -13,7 +13,7 @@ import { fetchAdminUsers, createUser, resetUserPassword, triggerUserSync } from 
 
 const mockFetchAdminUsers = vi.mocked(fetchAdminUsers);
 const mockCreateUser = vi.mocked(createUser);
-const _mockResetUserPassword = vi.mocked(resetUserPassword);
+vi.mocked(resetUserPassword);
 const mockTriggerUserSync = vi.mocked(triggerUserSync);
 
 const mockUsers = [
@@ -125,10 +125,10 @@ describe("AdminView", () => {
     render(<AdminView onBack={onBack} />);
 
     await waitFor(() => {
-      expect(screen.getByText("Back")).toBeInTheDocument();
+      expect(screen.getByText(/Back/)).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText("Back"));
+    fireEvent.click(screen.getByText(/Back/));
     expect(onBack).toHaveBeenCalled();
   });
 });

@@ -113,7 +113,8 @@ describe("ActivityDetail", () => {
   it("defaults to time axis for all charts", async () => {
     render(<ActivityDetail activityId={1} onBack={() => {}} />);
     await waitFor(() => {
-      const buttons = screen.getAllByText(/Axis: time/);
+      // Toggle buttons now show just "Time" or "Distance"
+      const buttons = screen.getAllByRole("button", { name: "Time" });
       expect(buttons).toHaveLength(4);
     });
   });
@@ -123,33 +124,33 @@ describe("ActivityDetail", () => {
     await waitFor(() => {
       expect(screen.getByText("Speed")).toBeInTheDocument();
     });
-    const speedButtons = screen.getAllByText(/Axis: time/);
-    fireEvent.click(speedButtons[0]);
+    const timeButtons = screen.getAllByRole("button", { name: "Time" });
+    fireEvent.click(timeButtons[0]);
     await waitFor(() => {
-      const distanceButtons = screen.getAllByText(/Axis: distance/);
+      const distanceButtons = screen.getAllByRole("button", { name: "Distance" });
       expect(distanceButtons).toHaveLength(1);
       // Verify other charts still on time
-      const timeButtons = screen.getAllByText(/Axis: time/);
-      expect(timeButtons).toHaveLength(3);
+      const remainingTimeButtons = screen.getAllByRole("button", { name: "Time" });
+      expect(remainingTimeButtons).toHaveLength(3);
     });
   });
 
   it("renders comparison picker when same-route activities exist", async () => {
     render(<ActivityDetail activityId={1} onBack={() => {}} />);
     await waitFor(() => {
-      expect(screen.getByText("Compare with:")).toBeInTheDocument();
+      expect(screen.getByText(/Compare with another ride/)).toBeInTheDocument();
     });
   });
 
   it("renders time gap curve heading when comparison is active", async () => {
     render(<ActivityDetail activityId={1} onBack={() => {}} />);
     await waitFor(() => {
-      expect(screen.getByText("Compare with:")).toBeInTheDocument();
+      expect(screen.getByText(/Compare with another ride/)).toBeInTheDocument();
     });
     const select = screen.getByRole("combobox");
     fireEvent.change(select, { target: { value: "2" } });
     await waitFor(() => {
-      expect(screen.getByText("Time Gap (vs other ride)")).toBeInTheDocument();
+      expect(screen.getByText("Time Gap")).toBeInTheDocument();
     });
   });
 
@@ -163,7 +164,7 @@ describe("ActivityDetail", () => {
 
     render(<ActivityDetail activityId={1} onBack={() => {}} />);
     await waitFor(() => {
-      expect(screen.getByText("Compare with:")).toBeInTheDocument();
+      expect(screen.getByText(/Compare with another ride/)).toBeInTheDocument();
     });
     const select = screen.getByRole("combobox");
     fireEvent.change(select, { target: { value: "2" } });
@@ -189,12 +190,12 @@ describe("ActivityDetail", () => {
 
     render(<ActivityDetail activityId={1} onBack={() => {}} />);
     await waitFor(() => {
-      expect(screen.getByText("Compare with:")).toBeInTheDocument();
+      expect(screen.getByText(/Compare with another ride/)).toBeInTheDocument();
     });
     const select = screen.getByRole("combobox");
     fireEvent.change(select, { target: { value: "2" } });
     await waitFor(() => {
-      expect(screen.getByText("Time Gap (vs other ride)")).toBeInTheDocument();
+      expect(screen.getByText("Time Gap")).toBeInTheDocument();
     });
   });
 });

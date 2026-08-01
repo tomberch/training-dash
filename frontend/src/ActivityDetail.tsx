@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
-import { MapContainer, Polyline, TileLayer } from "react-leaflet";
+import { MapContainer, Polyline, TileLayer, useMap } from "react-leaflet";
+import type { LatLngBounds } from "leaflet";
+import L from "leaflet";
 import {
   LineChart,
   Line,
@@ -19,9 +21,9 @@ import type { FitRecord } from "./resampler";
 type AxisMode = "time" | "distance";
 
 function gapColor(gap: number): string {
-  if (gap < -0.5) return "#2ecc71"; // green = faster
-  if (gap > 0.5) return "#e74c3c"; // red = slower
-  return "#8884d8"; // neutral
+  if (gap < -0.5) return "#10b981"; // green = faster
+  if (gap > 0.5) return "#ef4444"; // red = slower
+  return "#6366f1"; // neutral indigo
 }
 
 function positionsByDistance(gpsFeatures: GeoJSONFeatureCollection["features"]): { distance_m: number; pos: [number, number] }[] {
@@ -60,6 +62,18 @@ function buildColoredSegments(
   return segments;
 }
 
+// Component to fit map bounds to polyline
+function FitBounds({ positions }: { positions: [number, number][] }) {
+  const map = useMap();
+  useEffect(() => {
+    if (positions.length > 0) {
+      const bounds: LatLngBounds = L.latLngBounds(positions.map(p => L.latLng(p[0], p[1])));
+      map.fitBounds(bounds, { padding: [20, 20] });
+    }
+  }, [map, positions]);
+  return null;
+}
+
 interface ChartConfig {
   key: string;
   label: string;
@@ -69,10 +83,10 @@ interface ChartConfig {
 }
 
 const CHARTS: ChartConfig[] = [
-  { key: "speed", label: "Speed", unit: "m/s", color: "#8884d8", dataKey: "speed_mps" },
-  { key: "hr", label: "Heart Rate", unit: "bpm", color: "#e84a5f", dataKey: "hr_bpm" },
-  { key: "power", label: "Power", unit: "W", color: "#f6a623", dataKey: "power_w" },
-  { key: "elevation", label: "Elevation", unit: "m", color: "#48b366", dataKey: "altitude_m" },
+  { key: "speed", label: "Speed", unit: "m/s", color: "#6366f1", dataKey: "speed_mps" },
+  { key: "hr", label: "Heart Rate", unit: "bpm", color: "#ef4444", dataKey: "hr_bpm" },
+  { key: "power", label: "Power", unit: "W", color: "#f59e0b", dataKey: "power_w" },
+  { key: "elevation", label: "Elevation", unit: "m", color: "#10b981", dataKey: "altitude_m" },
 ];
 
 interface Props {
@@ -139,8 +153,25 @@ export function ActivityDetail({ activityId, onBack }: Props) {
   const posByDist = useMemo(() => (geojson ? positionsByDistance(geojson.features) : []), [geojson]);
   const firstTs = timestamps.length > 0 ? timestamps[0] : 0;
 
-  if (error) return <div>Error: {error}</div>;
-  if (!activity || !geojson) return <div>Loading...</div>;
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400">
+            Error: {error}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!activity || !geojson) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="text-gray-500 dark:text-gray-400">Loading...</div>
+      </div>
+    );
+  }
 
   const gpsFeatures = geojson.features.filter(
     (f) => f.geometry !== null && f.geometry.coordinates.length >= 2
@@ -216,139 +247,225 @@ export function ActivityDetail({ activityId, onBack }: Props) {
     : [];
 
   return (
-    <div>
-      <button onClick={onBack}>Back</button>
-      <h1>Activity {activity.id}</h1>
-
-      <div style={{ display: "flex", gap: "1rem", marginBottom: "1rem" }}>
-        <StatTile label="Date" value={new Date(activity.started_at).toLocaleDateString()} />
-        <StatTile label="Distance" value={formatDistance(activity.total_distance_m)} />
-        <StatTile label="Moving Time" value={formatTime(activity.moving_time_s)} />
-        <StatTile label="Elevation" value={`${activity.elevation_gain_m.toFixed(0)} m`} />
-        <StatTile label="Avg Speed" value={`${activity.avg_speed_mps.toFixed(1)} m/s`} />
-        {activity.avg_hr_bpm && <StatTile label="Avg HR" value={`${activity.avg_hr_bpm} bpm`} />}
-        {activity.avg_power_w && <StatTile label="Avg Power" value={`${activity.avg_power_w} W`} />}
-      </div>
-
-      {sameRoute && sameRoute.route_id !== null && sameRoute.activities.length > 0 && (
-        <div style={{ marginBottom: "1rem" }}>
-          <label>Compare with: </label>
-          <select
-            value={compareOtherId ?? ""}
-            onChange={(e) => setCompareOtherId(e.target.value ? Number(e.target.value) : null)}
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <div className="max-w-6xl mx-auto px-4 py-6">
+        {/* Header */}
+        <div className="flex items-center gap-4 mb-6">
+          <button
+            onClick={onBack}
+            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
           >
-            <option value="">Select a ride...</option>
-            {sameRoute.activities.map((a) => (
-              <option key={a.id} value={a.id}>
-                {new Date(a.started_at).toLocaleDateString()} — {formatDistance(a.total_distance_m)}
-              </option>
-            ))}
-          </select>
+            &larr; Back
+          </button>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            Activity Details
+          </h1>
         </div>
-      )}
 
-      {comparison && !comparison.comparable && (
-        <p>These rides are not on the same route and cannot be compared.</p>
-      )}
-
-      {positions.length > 0 && (
-        <MapContainer
-          center={center}
-          zoom={13}
-          style={{ height: "400px", marginBottom: "1rem" }}
-        >
-          <TileLayer
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            attribution='&copy; OpenStreetMap'
-          />
-          {coloredSegments.length > 0
-            ? coloredSegments.map((seg, i) => (
-                <Polyline key={i} positions={seg.positions} color={seg.color} weight={4} />
-              ))
-            : <Polyline positions={positions} color="blue" weight={3} />}
-          {otherPositions && (
-            <Polyline positions={otherPositions} color="orange" weight={3} dashArray="5,5" />
-          )}
-        </MapContainer>
-      )}
-
-      {comparison && comparison.comparable && gapSeries.length > 0 && (
-        <div>
-          <h2>Time Gap (vs other ride)</h2>
-          <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={gapSeries}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis
-                dataKey="distance_m"
-                tickFormatter={(v) => formatDistance(v)}
-                label={{ value: "Distance (m)", position: "bottom" }}
-                type="number"
-                domain={["dataMin", "dataMax"]}
-              />
-              <YAxis label={{ value: "Gap (s)", angle: -90, position: "insideLeft" }} />
-              <Tooltip />
-              <ReferenceLine y={0} stroke="#999" />
-              <Line
-                type="monotone"
-                dataKey="gap_s"
-                stroke="#8884d8"
-                dot={false}
-                name="Time Gap"
-              />
-            </LineChart>
-          </ResponsiveContainer>
+        {/* Stats Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 mb-6">
+          <StatTile label="Date" value={new Date(activity.started_at).toLocaleDateString()} />
+          <StatTile label="Distance" value={formatDistance(activity.total_distance_m)} />
+          <StatTile label="Moving Time" value={formatTime(activity.moving_time_s)} />
+          <StatTile label="Elevation" value={`${activity.elevation_gain_m.toFixed(0)} m`} />
+          <StatTile label="Avg Speed" value={`${activity.avg_speed_mps.toFixed(1)} m/s`} />
+          {activity.avg_hr_bpm && <StatTile label="Avg HR" value={`${activity.avg_hr_bpm} bpm`} />}
+          {activity.avg_power_w && <StatTile label="Avg Power" value={`${activity.avg_power_w} W`} />}
         </div>
-      )}
 
-      {CHARTS.map((chart) => {
-        const { data, xKey, xLabel, tickFormatter } = getChartData(chart);
-        const hasData = data.some((d) => d[chart.dataKey as keyof typeof d] !== null);
-        if (!hasData) return null;
-        return (
-          <div key={chart.key}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <h2>{chart.label}</h2>
-              <button
-                onClick={() => toggleAxis(chart.key)}
-                style={{ fontSize: "0.75rem", padding: "0.15rem 0.5rem" }}
-              >
-                Axis: {axisModes[chart.key]}
-              </button>
-            </div>
+        {/* Compare selector */}
+        {sameRoute && sameRoute.route_id !== null && sameRoute.activities.length > 0 && (
+          <div className="mb-6 p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Compare with another ride on this route
+            </label>
+            <select
+              value={compareOtherId ?? ""}
+              onChange={(e) => setCompareOtherId(e.target.value ? Number(e.target.value) : null)}
+              className="w-full sm:w-auto px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="">Select a ride...</option>
+              {sameRoute.activities.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {new Date(a.started_at).toLocaleDateString()} — {formatDistance(a.total_distance_m)}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {comparison && !comparison.comparable && (
+          <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg text-yellow-700 dark:text-yellow-400">
+            These rides are not on the same route and cannot be compared.
+          </div>
+        )}
+
+        {/* Map */}
+        {positions.length > 0 && (
+          <div className="mb-6 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <MapContainer
+              center={center}
+              zoom={13}
+              className="h-80 md:h-96"
+            >
+              <TileLayer
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                attribution='&copy; OpenStreetMap'
+              />
+              <FitBounds positions={positions} />
+              {coloredSegments.length > 0
+                ? coloredSegments.map((seg, i) => (
+                    <Polyline key={i} positions={seg.positions} color={seg.color} weight={4} />
+                  ))
+                : <Polyline positions={positions} color="#6366f1" weight={3} />}
+              {otherPositions && (
+                <Polyline positions={otherPositions} color="#f59e0b" weight={3} dashArray="5,5" />
+              )}
+            </MapContainer>
+          </div>
+        )}
+
+        {/* Gap Chart (comparison mode) */}
+        {comparison && comparison.comparable && gapSeries.length > 0 && (
+          <ChartCard title="Time Gap" subtitle="vs comparison ride">
             <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={data}>
-                <CartesianGrid strokeDasharray="3 3" />
+              <LineChart data={gapSeries}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                 <XAxis
-                  dataKey={xKey}
-                  tickFormatter={tickFormatter}
-                  label={{ value: xLabel, position: "bottom" }}
-                  type="number"
-                  domain={["dataMin", "dataMax"]}
+                  dataKey="distance_m"
+                  tickFormatter={(v) => formatDistance(v)}
+                  tick={{ fontSize: 12, fill: "#6b7280" }}
+                  axisLine={{ stroke: "#d1d5db" }}
+                  tickLine={{ stroke: "#d1d5db" }}
                 />
-                <YAxis label={{ value: chart.unit, angle: -90, position: "insideLeft" }} />
-                <Tooltip />
-                <Line type="monotone" dataKey={chart.dataKey} stroke={chart.color} dot={false} name={chart.label} />
+                <YAxis
+                  tick={{ fontSize: 12, fill: "#6b7280" }}
+                  axisLine={{ stroke: "#d1d5db" }}
+                  tickLine={{ stroke: "#d1d5db" }}
+                  label={{ value: "Gap (s)", angle: -90, position: "insideLeft", fontSize: 12, fill: "#6b7280" }}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "white",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: "8px",
+                    fontSize: "12px",
+                  }}
+                />
+                <ReferenceLine y={0} stroke="#9ca3af" strokeDasharray="3 3" />
+                <Line
+                  type="monotone"
+                  dataKey="gap_s"
+                  stroke="#6366f1"
+                  strokeWidth={2}
+                  dot={false}
+                  name="Time Gap"
+                />
               </LineChart>
             </ResponsiveContainer>
-          </div>
-        );
-      })}
+          </ChartCard>
+        )}
+
+        {/* Data Charts */}
+        {CHARTS.map((chart) => {
+          const { data, xKey, tickFormatter } = getChartData(chart);
+          const hasData = data.some((d) => d[chart.dataKey as keyof typeof d] !== null);
+          if (!hasData) return null;
+          return (
+            <ChartCard
+              key={chart.key}
+              title={chart.label}
+              action={
+                <button
+                  onClick={() => toggleAxis(chart.key)}
+                  className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+                    axisModes[chart.key] === "distance"
+                      ? "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300"
+                      : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
+                  }`}
+                >
+                  {axisModes[chart.key] === "distance" ? "Distance" : "Time"}
+                </button>
+              }
+            >
+              <ResponsiveContainer width="100%" height={200}>
+                <LineChart data={data}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis
+                    dataKey={xKey}
+                    tickFormatter={tickFormatter}
+                    tick={{ fontSize: 12, fill: "#6b7280" }}
+                    axisLine={{ stroke: "#d1d5db" }}
+                    tickLine={{ stroke: "#d1d5db" }}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 12, fill: "#6b7280" }}
+                    axisLine={{ stroke: "#d1d5db" }}
+                    tickLine={{ stroke: "#d1d5db" }}
+                    label={{ value: chart.unit, angle: -90, position: "insideLeft", fontSize: 12, fill: "#6b7280" }}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "white",
+                      border: "1px solid #e5e7eb",
+                      borderRadius: "8px",
+                      fontSize: "12px",
+                    }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey={chart.dataKey}
+                    stroke={chart.color}
+                    strokeWidth={2}
+                    dot={false}
+                    name={chart.label}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </ChartCard>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
 function StatTile({ label, value }: { label: string; value: string }) {
   return (
-    <div
-      style={{
-        padding: "0.5rem 1rem",
-        background: "#f0f0f0",
-        borderRadius: "4px",
-        textAlign: "center",
-      }}
-    >
-      <div style={{ fontSize: "0.75rem", color: "#666" }}>{label}</div>
-      <div style={{ fontSize: "1.1rem", fontWeight: "bold" }}>{value}</div>
+    <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 text-center">
+      <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
+        {label}
+      </div>
+      <div className="text-lg font-semibold text-gray-900 dark:text-white tabular-nums">
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function ChartCard({
+  title,
+  subtitle,
+  action,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="mb-6 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+        <div>
+          <h2 className="text-sm font-semibold text-gray-900 dark:text-white">{title}</h2>
+          {subtitle && (
+            <p className="text-xs text-gray-500 dark:text-gray-400">{subtitle}</p>
+          )}
+        </div>
+        {action}
+      </div>
+      <div className="p-4">{children}</div>
     </div>
   );
 }

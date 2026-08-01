@@ -4,28 +4,29 @@ import { fetchRecords } from "./api";
 import { prsFromRecords, routePRsFromRecords } from "./prs";
 import type { PR } from "./prs";
 
-function PRTile({ pr, background }: { pr: PR; background: string }) {
+function PRTile({ pr, variant }: { pr: PR; variant: "lifetime" | "route" }) {
+  const bgClass =
+    variant === "lifetime"
+      ? "bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800"
+      : "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800";
+
   return (
-    <div
-      style={{
-        padding: "1rem 1.5rem",
-        background,
-        borderRadius: "8px",
-        textAlign: "center",
-        minWidth: "150px",
-      }}
-    >
-      <div style={{ fontSize: "0.75rem", color: "#666" }}>{pr.label}</div>
-      <div style={{ fontSize: "1.4rem", fontWeight: "bold" }}>{pr.value}</div>
+    <div className={`p-4 rounded-lg border ${bgClass} text-center min-w-36`}>
+      <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
+        {pr.label}
+      </div>
+      <div className="text-xl font-bold text-gray-900 dark:text-white tabular-nums">
+        {pr.value}
+      </div>
     </div>
   );
 }
 
-function PRGrid({ prs, background }: { prs: PR[]; background: string }) {
+function PRGrid({ prs, variant }: { prs: PR[]; variant: "lifetime" | "route" }) {
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: "1rem" }}>
+    <div className="flex flex-wrap gap-3">
       {prs.map((pr) => (
-        <PRTile key={pr.label} pr={pr} background={background} />
+        <PRTile key={pr.label} pr={pr} variant={variant} />
       ))}
     </div>
   );
@@ -41,8 +42,19 @@ export function RecordsView() {
       .catch((e) => setError(e.message));
   }, []);
 
-  if (error) return <div>Error: {error}</div>;
-  if (!data) return <div>Loading...</div>;
+  if (error) {
+    return (
+      <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400">
+        Error: {error}
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="text-gray-500 dark:text-gray-400">Loading...</div>
+    );
+  }
 
   const lifetimePRs = prsFromRecords(data.lifetime_prs);
   const routePRs = routePRsFromRecords(data.route_prs);
@@ -50,28 +62,36 @@ export function RecordsView() {
   if (lifetimePRs.length === 0 && routePRs.length === 0) {
     return (
       <div>
-        <h1>Records</h1>
-        <p>No activities yet. Upload a FIT file to see your PRs.</p>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Records</h1>
+        <p className="text-gray-500 dark:text-gray-400">
+          No activities yet. Upload a FIT file to see your PRs.
+        </p>
       </div>
     );
   }
 
   return (
-    <div>
-      <h1>Records</h1>
+    <div className="space-y-8">
+      <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Records</h1>
 
       {lifetimePRs.length > 0 && (
-        <div style={{ marginBottom: "2rem" }}>
-          <h2>Lifetime PRs</h2>
-          <PRGrid prs={lifetimePRs} background="#f0f0f0" />
-        </div>
+        <section>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
+            Lifetime PRs
+          </h2>
+          <PRGrid prs={lifetimePRs} variant="lifetime" />
+        </section>
       )}
 
       {routePRs.length > 0 && (
-        <div>
-          <h2>Route PRs</h2>
-          <PRGrid prs={routePRs} background="#e8f5e9" />
-        </div>
+        <section>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-green-500"></span>
+            Route PRs
+          </h2>
+          <PRGrid prs={routePRs} variant="route" />
+        </section>
       )}
     </div>
   );
