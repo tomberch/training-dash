@@ -51,6 +51,7 @@ export interface Records {
 
 export interface RoutePR {
   route_id: number;
+  route_label: string;
   fastest_time_s: number;
   activity_id: number | null;
 }

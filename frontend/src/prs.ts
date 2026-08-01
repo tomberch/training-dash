@@ -52,7 +52,7 @@ export function prsFromRecords(records: Records): PR[] {
 
 export function routePRsFromRecords(routePrs: RoutePR[]): PR[] {
   return routePrs.map((rp) => ({
-    label: `Route ${rp.route_id}`,
+    label: `Route ${rp.route_label}`,
     value: formatTime(rp.fastest_time_s),
   }));
 }

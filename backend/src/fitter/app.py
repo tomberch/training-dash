@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 
 from fitter.auth import CurrentUser, DbSession, LoginRequest, create_session_cookie, verify_password
 from fitter.db import Base, async_session, engine
-from fitter.models import Activity, Lap, Record, Route, User
+from fitter.models import Activity, Lap, Record, User
 
 
 def create_app() -> FastAPI:
@@ -237,7 +237,7 @@ async def get_records(db: DbSession, user: CurrentUser):
 
     route_prs = []
     for row in route_rows:
-        # Get the activity that holds the record
+        # Get the activity that holds the record + its date as a label
         pr_activity_result = await db.execute(
             select(Activity.id, Activity.started_at).where(
                 Activity.user_id == user.id,
@@ -246,8 +246,18 @@ async def get_records(db: DbSession, user: CurrentUser):
             ).order_by(Activity.started_at.asc()).limit(1)
         )
         pr_activity = pr_activity_result.first()
+        # Get the first activity on this route for a label
+        first_activity_result = await db.execute(
+            select(Activity.started_at).where(
+                Activity.user_id == user.id,
+                Activity.route_id == row.route_id,
+            ).order_by(Activity.started_at.asc()).limit(1)
+        )
+        first_started = first_activity_result.scalar()
+        route_label = first_started.strftime("%Y-%m-%d") if first_started else f"Route {row.route_id}"
         route_prs.append({
             "route_id": row.route_id,
+            "route_label": route_label,
             "fastest_time_s": row.fastest_time,
             "activity_id": pr_activity.id if pr_activity else None,
         })
