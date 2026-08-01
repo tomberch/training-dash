@@ -67,16 +67,15 @@ async def sync_xert_job(ctx, user_id: int):
     
     - Decrypts stored Xert credentials
     - Logs in to Xert API (OAuth2 password grant)
-    - Fetches activity list for last 30 days
-    - Creates Activity records for activities not yet imported (by source_ref)
+    - Fetches activity list for last 90 days
+    - Downloads FIT files for activities not yet imported (by source_ref)
+    - Enqueues ingest_job for each new FIT
     
-    Note: Xert API does not provide FIT file download. Activities are imported
-    directly from the API response data (activity details with session_data).
+    FIT download URL: https://www.xertonline.com/activities/download/<path>
     """
     import time
-    from datetime import datetime
     from sqlalchemy import select
-    from fitter.models import Activity, Record, XertCredentials
+    from fitter.models import Activity, XertCredentials
     from fitter.crypto import decrypt, EncryptionError
     from fitter.xert import get_xert_client, XertAPIError
     
@@ -125,74 +124,29 @@ async def sync_xert_job(ctx, user_id: int):
                 logger.info(f"sync_xert_job: No new activities for user {user_id}")
                 return {"success": True, "user_id": user_id, "synced_activities": 0}
             
-            # Import each new activity
+            # Download and enqueue each new activity
             synced = 0
             pool = await create_redis_pool()
             
             for xert_activity in new_activities:
                 try:
-                    # Get full activity details with session data
-                    details = await client.get_activity_details(xert_activity.id, include_session_data=True)
-                    summary = details.get("summary", {})
-                    session_data = details.get("session_data", [])
+                    # Download FIT file from /activities/download/<path>
+                    fit_bytes = await client.download_fit(xert_activity)
+                    source_ref = f"xert:{xert_activity.id}"
                     
-                    # Create Activity record
-                    activity = Activity(
+                    # Enqueue for ingestion (same as upload flow)
+                    await pool.enqueue_job(
+                        "ingest_job",
                         user_id=user_id,
+                        fit_bytes=fit_bytes,
                         source="xert",
-                        source_ref=f"xert:{xert_activity.id}",
-                        started_at=xert_activity.started_at,
-                        total_distance_m=summary.get("distance", 0) * 1000,  # km to m
-                        moving_time_s=summary.get("duration", 0),
-                        elapsed_time_s=summary.get("duration", 0),
-                        elevation_gain_m=summary.get("session", {}).get("total_elevation_gain", 0),
-                        avg_speed_mps=(summary.get("distance", 0) * 1000) / max(summary.get("duration", 1), 1),
-                        avg_hr_bpm=None,  # Not in summary
-                        avg_power_w=summary.get("session", {}).get("avg_power"),
-                        np_power_w=summary.get("xep"),  # XEP is similar to NP
-                        max_speed_mps=0,
-                        max_hr_bpm=None,
-                        raw_fit=None,  # No FIT file from Xert API
+                        source_ref=source_ref,
                     )
-                    db.add(activity)
-                    await db.flush()  # Get the activity ID
-                    
-                    # Create Record entries from session_data
-                    for i, point in enumerate(session_data):
-                        # Convert unix_time (ms) to datetime
-                        unix_ms = point.get("unix_time", 0)
-                        ts = datetime.fromtimestamp(unix_ms / 1000, tz=timezone.utc).replace(tzinfo=None) if unix_ms else xert_activity.started_at
-                        
-                        record = Record(
-                            activity_id=activity.id,
-                            timestamp=ts,
-                            lat=point.get("lat"),
-                            lon=point.get("lng"),
-                            distance_m=point.get("dist", 0),
-                            hr_bpm=point.get("hr"),
-                            power_w=int(point.get("power", 0)) if point.get("power") else None,
-                            speed_mps=point.get("spd", 0) / 1000 if point.get("spd") else None,  # mm/s to m/s
-                            altitude_m=point.get("alt"),
-                            cadence_rpm=point.get("cad"),
-                            geom=f"POINT({point.get('lng')} {point.get('lat')})" if point.get("lat") and point.get("lng") else None,
-                        )
-                        db.add(record)
-                    
-                    await db.commit()
-                    
-                    # Enqueue route matching job
-                    await pool.enqueue_job("match_route_job", activity_id=activity.id, user_id=user_id)
-                    
                     synced += 1
-                    logger.info(f"sync_xert_job: Imported xert:{xert_activity.id} for user {user_id}")
+                    logger.info(f"sync_xert_job: Enqueued {source_ref} for user {user_id}")
                     
                 except XertAPIError as e:
-                    logger.warning(f"sync_xert_job: Failed to import activity {xert_activity.id}: {e}")
-                    await db.rollback()
-                    continue
-                except Exception as e:
-                    logger.warning(f"sync_xert_job: Error importing activity {xert_activity.id}: {e}")
-                    await db.rollback()
+                    logger.warning(f"sync_xert_job: Failed to download activity {xert_activity.id}: {e}")
                     continue
             
             logger.info(f"sync_xert_job: Synced {synced} activities for user {user_id}")

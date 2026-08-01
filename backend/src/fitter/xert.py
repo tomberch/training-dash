@@ -6,10 +6,8 @@ https://www.xertonline.com/API.html
 Authentication: OAuth2 password grant with public client credentials.
 Activity list: GET /oauth/activity?from=<timestamp>&to=<timestamp>
 Activity details: GET /oauth/activity/<path>?include_session_data=1
+FIT download: GET /activities/download/<path> (requires auth)
 FIT upload: POST /oauth/upload (multipart/form-data)
-
-Note: Xert API does not provide a direct FIT download endpoint.
-Activities must be fetched via the activity details endpoint.
 """
 
 import logging
@@ -31,7 +29,7 @@ class XertAPIError(Exception):
 @dataclass
 class XertActivity:
     """Represents an activity from Xert's API."""
-    id: str  # 'path' field from Xert API
+    id: str  # 'path' field from Xert API - used for download URL
     name: str
     started_at: datetime
     activity_type: str
@@ -53,8 +51,8 @@ class XertClientProtocol(Protocol):
         """List activities within a date range."""
         ...
     
-    async def get_activity_details(self, activity_id: str, include_session_data: bool = False) -> dict:
-        """Get full activity details including session data."""
+    async def download_fit(self, activity: XertActivity) -> bytes:
+        """Download the FIT file for an activity."""
         ...
     
     async def close(self) -> None:
@@ -78,7 +76,7 @@ class XertClient:
     CLIENT_SECRET = "xert_public"
     
     def __init__(self):
-        self._client = httpx.AsyncClient(timeout=30.0)
+        self._client = httpx.AsyncClient(timeout=60.0)
         self._access_token: str | None = None
         self._refresh_token: str | None = None
         self._token_expires_at: float = 0
@@ -173,7 +171,7 @@ class XertClient:
             to_timestamp: Unix timestamp for end of range (required by API)
         
         Returns:
-            List of XertActivity objects
+            List of XertActivity objects with id (path) for FIT download
         """
         await self._ensure_valid_token()
         
@@ -213,6 +211,7 @@ class XertClient:
                 else:
                     started_at = datetime.now()
                 
+                # The 'path' field is used for download URL: /activities/download/<path>
                 activities.append(XertActivity(
                     id=item.get("path", ""),
                     name=item.get("name", ""),
@@ -228,38 +227,28 @@ class XertClient:
         except httpx.RequestError as e:
             raise XertAPIError(f"Failed to connect to Xert: {e}") from e
     
-    async def get_activity_details(self, activity_id: str, include_session_data: bool = False) -> dict:
+    async def download_fit(self, activity: XertActivity) -> bytes:
         """
-        Get full activity details.
+        Download the FIT file for an activity.
         
-        curl -X GET "https://www.xertonline.com/oauth/activity/<path>?include_session_data=1" 
-             -H "Authorization: Bearer <token>"
-        
-        Note: Xert API does not provide direct FIT file download. 
-        The session_data contains per-second data that can be used instead.
+        URL format: https://www.xertonline.com/activities/download/<path>
+        Where <path> is the activity's 'path' field from list_activities.
         """
         await self._ensure_valid_token()
         
+        if not activity.id:
+            raise XertAPIError(f"No activity path/id for download")
+        
         try:
-            params = {}
-            if include_session_data:
-                params["include_session_data"] = 1
-            
             response = await self._client.get(
-                f"{self.BASE_URL}/oauth/activity/{activity_id}",
+                f"{self.BASE_URL}/activities/download/{activity.id}",
                 headers=self._auth_headers(),
-                params=params,
             )
             response.raise_for_status()
-            data = response.json()
-            
-            if not data.get("success"):
-                raise XertAPIError(f"Failed to get activity {activity_id}")
-            
-            return data
+            return response.content
             
         except httpx.HTTPStatusError as e:
-            raise XertAPIError(f"Failed to get activity details: HTTP {e.response.status_code}") from e
+            raise XertAPIError(f"Failed to download FIT: HTTP {e.response.status_code}") from e
         except httpx.RequestError as e:
             raise XertAPIError(f"Failed to connect to Xert: {e}") from e
     
