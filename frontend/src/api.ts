@@ -34,8 +34,7 @@ export interface GeoJSONFeatureCollection {
 
 export interface PRValue {
   value: number;
-  activity_id: number | null;
-  distance_m?: number;
+  activity_id?: number;
 }
 
 export interface Records {

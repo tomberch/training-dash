@@ -21,36 +21,31 @@ function formatSpeed(mps: number): string {
   return `${(mps * 3.6).toFixed(1)} km/h`;
 }
 
+interface PRDef {
+  key: keyof Records;
+  label: string;
+  format: (value: number) => string;
+}
+
+const PR_DEFS: PRDef[] = [
+  { key: "longest_distance_m", label: "Longest Ride", format: formatDistance },
+  { key: "longest_moving_time_s", label: "Longest Ride (Time)", format: formatTime },
+  { key: "fastest_5000_m", label: "Fastest 5km", format: formatTime },
+  { key: "fastest_10000_m", label: "Fastest 10km", format: formatTime },
+  { key: "fastest_40000_m", label: "Fastest 40km", format: formatTime },
+  { key: "max_speed_mps", label: "Max Speed", format: formatSpeed },
+  { key: "max_hr_bpm", label: "Max HR", format: (v) => `${v} bpm` },
+  { key: "biggest_elevation_gain_m", label: "Biggest Climb", format: (v) => `${v.toFixed(0)} m` },
+  { key: "highest_sustained_power_w", label: "Highest NP", format: (v) => `${v} W` },
+];
+
 export function prsFromRecords(records: Records): PR[] {
   const prs: PR[] = [];
-
-  if (records.longest_distance_m) {
-    prs.push({ label: "Longest Ride", value: formatDistance(records.longest_distance_m.value) });
+  for (const def of PR_DEFS) {
+    const pr = records[def.key];
+    if (pr) {
+      prs.push({ label: def.label, value: def.format(pr.value) });
+    }
   }
-  if (records.longest_moving_time_s) {
-    prs.push({ label: "Longest Ride (Time)", value: formatTime(records.longest_moving_time_s.value) });
-  }
-  if (records.fastest_5000_m) {
-    prs.push({ label: "Fastest 5km", value: formatTime(records.fastest_5000_m.value) });
-  }
-  if (records.fastest_10000_m) {
-    prs.push({ label: "Fastest 10km", value: formatTime(records.fastest_10000_m.value) });
-  }
-  if (records.fastest_40000_m) {
-    prs.push({ label: "Fastest 40km", value: formatTime(records.fastest_40000_m.value) });
-  }
-  if (records.max_speed_mps) {
-    prs.push({ label: "Max Speed", value: formatSpeed(records.max_speed_mps.value) });
-  }
-  if (records.max_hr_bpm) {
-    prs.push({ label: "Max HR", value: `${records.max_hr_bpm.value} bpm` });
-  }
-  if (records.biggest_elevation_gain_m) {
-    prs.push({ label: "Biggest Climb", value: `${records.biggest_elevation_gain_m.value.toFixed(0)} m` });
-  }
-  if (records.highest_sustained_power_w) {
-    prs.push({ label: "Highest NP", value: `${records.highest_sustained_power_w.value} W` });
-  }
-
   return prs;
 }

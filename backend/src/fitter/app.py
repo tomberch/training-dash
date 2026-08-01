@@ -134,8 +134,8 @@ async def get_records(db: DbSession, user: CurrentUser):
     )
     row = result.one()
 
-    def _pr(val, unit_label=None):
-        return {"value": val, "activity_id": None} if val is not None else None
+    def _pr(val):
+        return {"value": val} if val is not None else None
 
     prs = {
         "longest_distance_m": _pr(row.longest_distance_m),
@@ -146,25 +146,23 @@ async def get_records(db: DbSession, user: CurrentUser):
         "highest_sustained_power_w": _pr(row.highest_sustained_power_w),
     }
 
-    # Fastest point-to-point: compute from activities where total_distance_m >= target
+    # Fastest N km point-to-point: find the ride with the best pace (avg speed)
+    # among rides that covered at least N km. Project the time for N km from avg speed.
     for target_m in [5000, 10000, 40000]:
         result = await db.execute(
-            select(
-                Activity.id,
-                Activity.total_distance_m,
-                Activity.moving_time_s,
-            ).where(
+            select(Activity.id, Activity.avg_speed_mps).where(
                 Activity.user_id == user.id,
                 Activity.total_distance_m >= target_m,
-            ).order_by(Activity.moving_time_s.asc()).limit(1)
+                Activity.avg_speed_mps > 0,
+            ).order_by(Activity.avg_speed_mps.desc()).limit(1)
         )
         fastest = result.first()
         key = f"fastest_{target_m}_m"
-        if fastest is not None and fastest.moving_time_s > 0:
+        if fastest is not None:
+            projected_time_s = target_m / fastest.avg_speed_mps
             prs[key] = {
-                "value": fastest.moving_time_s,
+                "value": projected_time_s,
                 "activity_id": fastest.id,
-                "distance_m": fastest.total_distance_m,
             }
         else:
             prs[key] = None

@@ -13,9 +13,9 @@ const mockFetchRecords = vi.mocked(fetchRecords);
 const fullRecords = {
   longest_distance_m: { value: 50000, activity_id: 1 },
   longest_moving_time_s: { value: 5400, activity_id: 1 },
-  fastest_5000_m: { value: 600, activity_id: 1, distance_m: 5000 },
-  fastest_10000_m: { value: 1200, activity_id: 2, distance_m: 10000 },
-  fastest_40000_m: { value: 5400, activity_id: 3, distance_m: 40000 },
+  fastest_5000_m: { value: 600, activity_id: 1 },
+  fastest_10000_m: { value: 1200, activity_id: 2 },
+  fastest_40000_m: { value: 5400, activity_id: 3 },
   max_speed_mps: { value: 15.0, activity_id: 1 },
   max_hr_bpm: { value: 185, activity_id: 2 },
   biggest_elevation_gain_m: { value: 1200, activity_id: 3 },
