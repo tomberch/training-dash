@@ -17,6 +17,8 @@ def create_app() -> FastAPI:
     app.get("/activities")(list_activities)
     app.get("/activities/{activity_id}")(get_activity)
     app.get("/activities/{activity_id}/records")(get_activity_records)
+    app.get("/activities/{activity_id}/same-route")(get_same_route_activities)
+    app.get("/activities/{activity_id}/compare")(compare_activities)
     app.get("/records")(get_records)
     app.post("/upload")(upload_activity)
     return app
@@ -119,6 +121,97 @@ async def upload_activity(db: DbSession, user: CurrentUser, file: UploadFile = F
     if activity is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to parse FIT file")
     return {"id": activity.id, "started_at": activity.started_at.isoformat()}
+
+
+async def get_same_route_activities(db: DbSession, user: CurrentUser, activity_id: int):
+    result = await db.execute(
+        select(Activity).where(Activity.id == activity_id, Activity.user_id == user.id)
+    )
+    activity = result.scalar_one_or_none()
+    if activity is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Activity not found")
+    if activity.route_id is None:
+        return {"route_id": None, "activities": []}
+    result = await db.execute(
+        select(Activity).where(
+            Activity.route_id == activity.route_id,
+            Activity.user_id == user.id,
+            Activity.id != activity_id,
+        ).order_by(Activity.started_at.desc())
+    )
+    others = result.scalars().all()
+    return {
+        "route_id": activity.route_id,
+        "activities": [_activity_summary(a) for a in others],
+    }
+
+
+async def compare_activities(
+    db: DbSession, user: CurrentUser, activity_id: int, other: int
+):
+    result_a = await db.execute(
+        select(Activity).where(Activity.id == activity_id, Activity.user_id == user.id)
+    )
+    activity_a = result_a.scalar_one_or_none()
+    if activity_a is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Activity not found")
+
+    result_b = await db.execute(
+        select(Activity).where(Activity.id == other, Activity.user_id == user.id)
+    )
+    activity_b = result_b.scalar_one_or_none()
+    if activity_b is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Other activity not found")
+
+    if activity_a.route_id is None or activity_a.route_id != activity_b.route_id:
+        return {"comparable": False, "gap_series": [], "other_geojson": None}
+
+    records_a_result = await db.execute(
+        select(Record).where(Record.activity_id == activity_id).order_by(Record.timestamp)
+    )
+    records_b_result = await db.execute(
+        select(Record).where(Record.activity_id == other).order_by(Record.timestamp)
+    )
+    records_a = records_a_result.scalars().all()
+    records_b = records_b_result.scalars().all()
+
+    first_ts_a = records_a[0].timestamp if records_a else None
+    first_ts_b = records_b[0].timestamp if records_b else None
+
+    def to_resample_input(records, first_ts):
+        return [
+            {
+                "distance_m": r.distance_m,
+                "timestamp_s": (r.timestamp - first_ts).total_seconds(),
+            }
+            for r in records
+        ]
+
+    from fitter.resampler import compute_time_gap_series
+    gap_series = compute_time_gap_series(
+        to_resample_input(records_a, first_ts_a),
+        to_resample_input(records_b, first_ts_b),
+    )
+
+    features_b = []
+    for r in records_b:
+        props = {
+            "timestamp": r.timestamp.isoformat(),
+            "distance_m": r.distance_m,
+            "speed_mps": r.speed_mps,
+        }
+        if r.lat is not None and r.lon is not None:
+            features_b.append({
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [r.lon, r.lat]},
+                "properties": props,
+            })
+
+    return {
+        "comparable": True,
+        "gap_series": gap_series,
+        "other_geojson": {"type": "FeatureCollection", "features": features_b},
+    }
 
 
 async def get_records(db: DbSession, user: CurrentUser):

@@ -8,9 +8,10 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  ReferenceLine,
 } from "recharts";
-import type { Activity, GeoJSONFeatureCollection } from "./api";
-import { fetchActivity, fetchActivityRecords } from "./api";
+import type { Activity, GeoJSONFeatureCollection, CompareResponse, SameRouteResponse } from "./api";
+import { fetchActivity, fetchActivityRecords, fetchSameRouteActivities, fetchComparison } from "./api";
 import { formatDistance, formatTime } from "./format";
 import { resampleByDistance } from "./resampler";
 import type { FitRecord } from "./resampler";
@@ -61,18 +62,35 @@ export function ActivityDetail({ activityId, onBack }: Props) {
     power: "time",
     elevation: "time",
   });
+  const [sameRoute, setSameRoute] = useState<SameRouteResponse | null>(null);
+  const [compareOtherId, setCompareOtherId] = useState<number | null>(null);
+  const [comparison, setComparison] = useState<CompareResponse | null>(null);
 
   useEffect(() => {
+    setComparison(null);
+    setCompareOtherId(null);
     Promise.all([
       fetchActivity(activityId),
       fetchActivityRecords(activityId),
+      fetchSameRouteActivities(activityId),
     ])
-      .then(([a, g]) => {
+      .then(([a, g, sr]) => {
         setActivity(a);
         setGeojson(g);
+        setSameRoute(sr);
       })
       .catch((e) => setError(e.message));
   }, [activityId]);
+
+  useEffect(() => {
+    if (compareOtherId === null) {
+      setComparison(null);
+      return;
+    }
+    fetchComparison(activityId, compareOtherId)
+      .then(setComparison)
+      .catch((e) => setError(e.message));
+  }, [activityId, compareOtherId]);
 
   const records = useMemo(() => (geojson ? geojsonToRecords(geojson) : []), [geojson]);
   const timestamps = useMemo(() => (geojson ? geojsonToTimestamps(geojson) : []), [geojson]);
@@ -143,6 +161,14 @@ export function ActivityDetail({ activityId, onBack }: Props) {
     };
   }
 
+  const otherPositions: [number, number][] | null = comparison?.other_geojson
+    ? comparison.other_geojson.features
+        .filter((f) => f.geometry !== null && f.geometry.coordinates.length >= 2)
+        .map((f) => [f.geometry!.coordinates[1], f.geometry!.coordinates[0]])
+    : null;
+
+  const gapSeries = comparison?.gap_series ?? [];
+
   return (
     <div>
       <button onClick={onBack}>Back</button>
@@ -158,6 +184,27 @@ export function ActivityDetail({ activityId, onBack }: Props) {
         {activity.avg_power_w && <StatTile label="Avg Power" value={`${activity.avg_power_w} W`} />}
       </div>
 
+      {sameRoute && sameRoute.route_id !== null && sameRoute.activities.length > 0 && (
+        <div style={{ marginBottom: "1rem" }}>
+          <label>Compare with: </label>
+          <select
+            value={compareOtherId ?? ""}
+            onChange={(e) => setCompareOtherId(e.target.value ? Number(e.target.value) : null)}
+          >
+            <option value="">Select a ride...</option>
+            {sameRoute.activities.map((a) => (
+              <option key={a.id} value={a.id}>
+                {new Date(a.started_at).toLocaleDateString()} — {formatDistance(a.total_distance_m)}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {comparison && !comparison.comparable && (
+        <p>These rides are not on the same route and cannot be compared.</p>
+      )}
+
       {positions.length > 0 && (
         <MapContainer
           center={center}
@@ -169,7 +216,38 @@ export function ActivityDetail({ activityId, onBack }: Props) {
             attribution='&copy; OpenStreetMap'
           />
           <Polyline positions={positions} color="blue" weight={3} />
+          {otherPositions && (
+            <Polyline positions={otherPositions} color="orange" weight={3} dashArray="5,5" />
+          )}
         </MapContainer>
+      )}
+
+      {comparison && comparison.comparable && gapSeries.length > 0 && (
+        <div>
+          <h2>Time Gap (vs other ride)</h2>
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={gapSeries}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis
+                dataKey="distance_m"
+                tickFormatter={(v) => formatDistance(v)}
+                label={{ value: "Distance (m)", position: "bottom" }}
+                type="number"
+                domain={["dataMin", "dataMax"]}
+              />
+              <YAxis label={{ value: "Gap (s)", angle: -90, position: "insideLeft" }} />
+              <Tooltip />
+              <ReferenceLine y={0} stroke="#999" />
+              <Line
+                type="monotone"
+                dataKey="gap_s"
+                stroke="#8884d8"
+                dot={false}
+                name="Time Gap"
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
       )}
 
       {CHARTS.map((chart) => {

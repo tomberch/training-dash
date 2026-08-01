@@ -49,6 +49,22 @@ export interface Records {
   highest_sustained_power_w: PRValue | null;
 }
 
+export interface GapPoint {
+  distance_m: number;
+  gap_s: number;
+}
+
+export interface CompareResponse {
+  comparable: boolean;
+  gap_series: GapPoint[];
+  other_geojson: GeoJSONFeatureCollection | null;
+}
+
+export interface SameRouteResponse {
+  route_id: number | null;
+  activities: Activity[];
+}
+
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
 async function apiFetch<T>(path: string): Promise<T> {
@@ -73,6 +89,14 @@ export async function fetchActivityRecords(
 
 export async function fetchRecords(): Promise<Records> {
   return apiFetch<Records>("/records");
+}
+
+export async function fetchSameRouteActivities(id: number): Promise<SameRouteResponse> {
+  return apiFetch<SameRouteResponse>(`/activities/${id}/same-route`);
+}
+
+export async function fetchComparison(id: number, otherId: number): Promise<CompareResponse> {
+  return apiFetch<CompareResponse>(`/activities/${id}/compare?other=${otherId}`);
 }
 
 export async function login(
