@@ -55,8 +55,14 @@ async def match_route_job(ctx, activity_id: int, user_id: int):
         return {"success": True, "route_id": route_id}
 
 
+async def sync_xert_job(ctx, user_id: int):
+    """Stub for Xert sync job. Actual implementation in ticket 10."""
+    # TODO: Implement actual Xert API sync in ticket 10
+    return {"success": True, "user_id": user_id, "synced_activities": 0}
+
+
 class WorkerSettings:
-    functions = [ingest_job, match_route_job]
+    functions = [ingest_job, match_route_job, sync_xert_job]
     redis_settings = get_redis_settings()
     max_tries = 3
     retry_delay = 10  # seconds between retries

@@ -114,14 +114,15 @@ export async function fetchComparison(id: number, otherId: number): Promise<Comp
 export async function login(
   username: string,
   password: string
-): Promise<boolean> {
+): Promise<LoginResponse | null> {
   const res = await fetch(`${API_BASE}/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
     body: JSON.stringify({ username, password }),
   });
-  return res.ok;
+  if (!res.ok) return null;
+  return res.json();
 }
 
 export async function uploadFit(file: File): Promise<{ id?: number; job_id?: string; source_ref?: string }> {
@@ -143,4 +144,56 @@ export interface JobStatus {
 
 export async function fetchJobStatus(jobId: string): Promise<JobStatus> {
   return apiFetch<JobStatus>(`/jobs/${jobId}`);
+}
+
+// Admin API
+
+export interface AdminUser {
+  id: number;
+  username: string;
+  is_admin: boolean;
+  created_at: string;
+}
+
+export interface LoginResponse {
+  user_id: number;
+  username: string;
+  is_admin?: boolean;
+}
+
+export async function fetchAdminUsers(): Promise<AdminUser[]> {
+  return apiFetch<AdminUser[]>("/admin/users");
+}
+
+export async function createUser(username: string, password: string): Promise<AdminUser> {
+  const res = await fetch(`${API_BASE}/admin/users`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ username, password }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Failed to create user" }));
+    throw new Error(err.detail || "Failed to create user");
+  }
+  return res.json();
+}
+
+export async function resetUserPassword(userId: number, password: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/admin/users/${userId}/reset-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ password }),
+  });
+  if (!res.ok) throw new Error("Failed to reset password");
+}
+
+export async function triggerUserSync(userId: number): Promise<{ job_id: string | null }> {
+  const res = await fetch(`${API_BASE}/admin/users/${userId}/sync`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error("Failed to trigger sync");
+  return res.json();
 }

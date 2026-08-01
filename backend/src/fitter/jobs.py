@@ -55,3 +55,15 @@ async def get_job_status(job_id: str) -> dict:
         }
     finally:
         await pool.aclose()
+
+
+async def enqueue_sync_xert_job(user_id: int) -> str | None:
+    """Enqueue a Xert sync job for a user. Returns job_id or None if Redis not available."""
+    if not redis_available():
+        return None
+    pool = await create_redis_pool()
+    try:
+        job = await pool.enqueue_job("sync_xert_job", user_id=user_id)
+        return job.job_id
+    finally:
+        await pool.aclose()

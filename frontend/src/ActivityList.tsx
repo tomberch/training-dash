@@ -117,7 +117,7 @@ export function ActivityList({
 export function Login({
   onLogin,
 }: {
-  onLogin: () => void;
+  onLogin: (isAdmin: boolean) => void;
 }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -125,9 +125,9 @@ export function Login({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const ok = await login(username, password);
-    if (ok) {
-      onLogin();
+    const result = await login(username, password);
+    if (result) {
+      onLogin(result.is_admin ?? false);
     } else {
       setError("Invalid credentials");
     }

@@ -3,10 +3,11 @@ from typing import Any
 
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
-from fitter.auth import CurrentUser, DbSession, LoginRequest, create_session_cookie, verify_password
+from fitter.auth import AdminUser, CurrentUser, DbSession, LoginRequest, create_session_cookie, hash_password, verify_password
 from fitter.db import Base, async_session, engine
 from fitter.models import Activity, Lap, Record, User
 
@@ -22,6 +23,11 @@ def create_app() -> FastAPI:
     app.get("/records")(get_records)
     app.post("/upload")(upload_activity)
     app.get("/jobs/{job_id}")(get_job_status)
+    # Admin routes
+    app.get("/admin/users")(admin_list_users)
+    app.post("/admin/users")(admin_create_user)
+    app.post("/admin/users/{user_id}/reset-password")(admin_reset_password)
+    app.post("/admin/users/{user_id}/sync")(admin_trigger_sync)
     return app
 
 
@@ -31,7 +37,7 @@ async def login(db: DbSession, request: LoginRequest):
     if user is None or not verify_password(request.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     cookie = create_session_cookie(user.id)
-    response = JSONResponse({"user_id": user.id, "username": user.username})
+    response = JSONResponse({"user_id": user.id, "username": user.username, "is_admin": user.is_admin})
     response.set_cookie("session", cookie, httponly=True, samesite="lax")
     return response
 
@@ -281,6 +287,82 @@ async def get_records(db: DbSession, user: CurrentUser):
         })
 
     return {"lifetime_prs": prs, "route_prs": route_prs}
+
+
+# Admin endpoints
+
+class CreateUserRequest(BaseModel):
+    username: str
+    password: str
+
+
+class ResetPasswordRequest(BaseModel):
+    password: str
+
+
+async def admin_list_users(db: DbSession, admin: AdminUser):
+    """List all users (admin only)."""
+    result = await db.execute(select(User).order_by(User.id))
+    users = result.scalars().all()
+    return [
+        {
+            "id": u.id,
+            "username": u.username,
+            "is_admin": u.is_admin,
+            "created_at": u.created_at.isoformat(),
+        }
+        for u in users
+    ]
+
+
+async def admin_create_user(db: DbSession, admin: AdminUser, request: CreateUserRequest):
+    """Create a new user account (admin only)."""
+    # Check if username already exists
+    existing = await db.execute(select(User).where(User.username == request.username))
+    if existing.scalar_one_or_none() is not None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username already exists")
+    
+    user = User(
+        username=request.username,
+        password_hash=hash_password(request.password),
+        is_admin=False,
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return {
+        "id": user.id,
+        "username": user.username,
+        "is_admin": user.is_admin,
+        "created_at": user.created_at.isoformat(),
+    }
+
+
+async def admin_reset_password(db: DbSession, admin: AdminUser, user_id: int, request: ResetPasswordRequest):
+    """Reset a user's password (admin only)."""
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    
+    user.password_hash = hash_password(request.password)
+    await db.commit()
+    return {"success": True}
+
+
+async def admin_trigger_sync(db: DbSession, admin: AdminUser, user_id: int):
+    """Trigger Xert sync for a user (admin only). Job is a stub until ticket 10."""
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    
+    from fitter.jobs import enqueue_sync_xert_job
+    job_id = await enqueue_sync_xert_job(user_id)
+    if job_id is None:
+        # Redis not available, return immediately (no-op)
+        return {"success": True, "job_id": None, "message": "Sync not available (Redis not configured)"}
+    return {"success": True, "job_id": job_id}
 
 
 app = create_app()
