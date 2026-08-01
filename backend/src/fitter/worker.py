@@ -1,7 +1,10 @@
+import logging
 import os
 from contextlib import asynccontextmanager
 
 from fitter.jobs import get_redis_settings, create_redis_pool
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -56,14 +59,134 @@ async def match_route_job(ctx, activity_id: int, user_id: int):
 
 
 async def sync_xert_job(ctx, user_id: int):
-    """Stub for Xert sync job. Actual implementation in ticket 10."""
-    # TODO: Implement actual Xert API sync in ticket 10
-    return {"success": True, "user_id": user_id, "synced_activities": 0}
+    """
+    Sync activities from Xert for a user.
+    
+    - Decrypts stored Xert credentials
+    - Logs in to Xert API
+    - Fetches activity list
+    - Downloads FIT files for activities not yet imported (by source_ref)
+    - Enqueues ingest_fit job for each new FIT
+    """
+    from sqlalchemy import select
+    from fitter.models import Activity, XertCredentials
+    from fitter.crypto import decrypt, EncryptionError
+    from fitter.xert import get_xert_client, XertAPIError
+    
+    async with worker_db_session() as db:
+        # Get user's Xert credentials
+        result = await db.execute(
+            select(XertCredentials).where(XertCredentials.user_id == user_id)
+        )
+        creds = result.scalar_one_or_none()
+        
+        if creds is None:
+            logger.warning(f"sync_xert_job: No Xert credentials for user {user_id}")
+            return {"success": False, "user_id": user_id, "error": "No Xert credentials configured"}
+        
+        # Decrypt password
+        try:
+            xert_password = decrypt(creds.encrypted_password)
+        except EncryptionError as e:
+            logger.error(f"sync_xert_job: Failed to decrypt credentials for user {user_id}")
+            return {"success": False, "user_id": user_id, "error": "Failed to decrypt credentials"}
+        
+        # Get existing source_refs to skip already-imported activities
+        existing_result = await db.execute(
+            select(Activity.source_ref).where(
+                Activity.user_id == user_id,
+                Activity.source == "xert",
+            )
+        )
+        existing_refs = set(existing_result.scalars().all())
+        
+        # Connect to Xert
+        client = get_xert_client()
+        try:
+            await client.login(creds.xert_email, xert_password)
+            
+            # List activities
+            activities = await client.list_activities()
+            
+            # Filter to new activities
+            new_activities = [a for a in activities if f"xert:{a.id}" not in existing_refs]
+            
+            if not new_activities:
+                logger.info(f"sync_xert_job: No new activities for user {user_id}")
+                return {"success": True, "user_id": user_id, "synced_activities": 0}
+            
+            # Download and enqueue each new activity
+            synced = 0
+            pool = await create_redis_pool()
+            
+            for activity in new_activities:
+                try:
+                    fit_bytes = await client.download_fit(activity)
+                    source_ref = f"xert:{activity.id}"
+                    
+                    await pool.enqueue_job(
+                        "ingest_job",
+                        user_id=user_id,
+                        fit_bytes=fit_bytes,
+                        source="xert",
+                        source_ref=source_ref,
+                    )
+                    synced += 1
+                    logger.info(f"sync_xert_job: Enqueued {source_ref} for user {user_id}")
+                except XertAPIError as e:
+                    logger.warning(f"sync_xert_job: Failed to download activity {activity.id}: {e}")
+                    continue
+            
+            await pool.aclose()
+            
+            logger.info(f"sync_xert_job: Synced {synced} activities for user {user_id}")
+            return {"success": True, "user_id": user_id, "synced_activities": synced}
+            
+        except XertAPIError as e:
+            logger.error(f"sync_xert_job: Xert API error for user {user_id}: {e}")
+            return {"success": False, "user_id": user_id, "error": str(e)}
+        finally:
+            await client.close()
+
+
+async def nightly_sync_all_xert(ctx):
+    """
+    Nightly cron job: enqueue sync_xert_job for every user with stored credentials.
+    Runs at 2 AM daily.
+    """
+    from sqlalchemy import select
+    from fitter.models import XertCredentials
+    
+    async with worker_db_session() as db:
+        result = await db.execute(select(XertCredentials.user_id))
+        user_ids = result.scalars().all()
+    
+    if not user_ids:
+        logger.info("nightly_sync_all_xert: No users with Xert credentials")
+        return {"success": True, "users_queued": 0}
+    
+    pool = await create_redis_pool()
+    for user_id in user_ids:
+        await pool.enqueue_job("sync_xert_job", user_id=user_id)
+        logger.info(f"nightly_sync_all_xert: Enqueued sync for user {user_id}")
+    await pool.aclose()
+    
+    logger.info(f"nightly_sync_all_xert: Enqueued {len(user_ids)} sync jobs")
+    return {"success": True, "users_queued": len(user_ids)}
 
 
 class WorkerSettings:
-    functions = [ingest_job, match_route_job, sync_xert_job]
+    functions = [ingest_job, match_route_job, sync_xert_job, nightly_sync_all_xert]
     redis_settings = get_redis_settings()
     max_tries = 3
     retry_delay = 10  # seconds between retries
     job_timeout = 300  # 5 minutes max per job
+    
+    # Cron schedule: run nightly_sync_all_xert at 2 AM daily
+    cron_jobs = [
+        {
+            "function": nightly_sync_all_xert,
+            "cron": "0 2 * * *",  # 2 AM every day
+            "unique": True,
+        }
+    ]

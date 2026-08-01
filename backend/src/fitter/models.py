@@ -86,6 +86,21 @@ class Lap(Base):
     max_hr_bpm: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
+class XertCredentials(Base):
+    __tablename__ = "xert_credentials"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False
+    )
+    xert_email: Mapped[str] = mapped_column(String(255), nullable=False)
+    encrypted_password: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
+    updated_at: Mapped[datetime] = mapped_column(
+        server_default=text("now()"), onupdate=text("now()")
+    )
+
+
 class Record(Base):
     __tablename__ = "records"
 

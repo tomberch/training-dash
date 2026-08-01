@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from fitter.auth import AdminUser, CurrentUser, DbSession, LoginRequest, create_session_cookie, hash_password, verify_password
 from fitter.db import Base, async_session, engine
-from fitter.models import Activity, Lap, Record, User
+from fitter.models import Activity, Lap, Record, User, XertCredentials
 
 
 def create_app() -> FastAPI:
@@ -28,6 +28,9 @@ def create_app() -> FastAPI:
     app.post("/admin/users")(admin_create_user)
     app.post("/admin/users/{user_id}/reset-password")(admin_reset_password)
     app.post("/admin/users/{user_id}/sync")(admin_trigger_sync)
+    app.get("/admin/users/{user_id}/xert-credentials")(admin_get_xert_credentials)
+    app.put("/admin/users/{user_id}/xert-credentials")(admin_set_xert_credentials)
+    app.delete("/admin/users/{user_id}/xert-credentials")(admin_delete_xert_credentials)
     return app
 
 
@@ -353,7 +356,7 @@ async def admin_reset_password(db: DbSession, admin: AdminUser, user_id: int, re
 
 
 async def admin_trigger_sync(db: DbSession, admin: AdminUser, user_id: int):
-    """Trigger Xert sync for a user (admin only). Job is a stub until ticket 10."""
+    """Trigger Xert sync for a user (admin only)."""
     await _get_user_or_404(db, user_id)
     
     from fitter.jobs import enqueue_sync_xert_job
@@ -362,6 +365,67 @@ async def admin_trigger_sync(db: DbSession, admin: AdminUser, user_id: int):
         # Redis not available, return immediately (no-op)
         return {"success": True, "job_id": None, "message": "Sync not available (Redis not configured)"}
     return {"success": True, "job_id": job_id}
+
+
+class XertCredentialsRequest(BaseModel):
+    xert_email: str
+    xert_password: str
+
+
+async def admin_get_xert_credentials(db: DbSession, admin: AdminUser, user_id: int):
+    """Get Xert credentials status for a user (admin only). Never returns the password."""
+    await _get_user_or_404(db, user_id)
+    result = await db.execute(
+        select(XertCredentials).where(XertCredentials.user_id == user_id)
+    )
+    creds = result.scalar_one_or_none()
+    if creds is None:
+        return {"configured": False, "xert_email": None}
+    return {"configured": True, "xert_email": creds.xert_email}
+
+
+async def admin_set_xert_credentials(db: DbSession, admin: AdminUser, user_id: int, request: XertCredentialsRequest):
+    """Set or update Xert credentials for a user (admin only). Password is encrypted at rest."""
+    await _get_user_or_404(db, user_id)
+    
+    from fitter.crypto import encrypt, EncryptionError
+    
+    try:
+        encrypted_password = encrypt(request.xert_password)
+    except EncryptionError as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    
+    result = await db.execute(
+        select(XertCredentials).where(XertCredentials.user_id == user_id)
+    )
+    creds = result.scalar_one_or_none()
+    
+    if creds is None:
+        creds = XertCredentials(
+            user_id=user_id,
+            xert_email=request.xert_email,
+            encrypted_password=encrypted_password,
+        )
+        db.add(creds)
+    else:
+        creds.xert_email = request.xert_email
+        creds.encrypted_password = encrypted_password
+    
+    await db.commit()
+    return {"success": True, "xert_email": request.xert_email}
+
+
+async def admin_delete_xert_credentials(db: DbSession, admin: AdminUser, user_id: int):
+    """Delete Xert credentials for a user (admin only)."""
+    await _get_user_or_404(db, user_id)
+    result = await db.execute(
+        select(XertCredentials).where(XertCredentials.user_id == user_id)
+    )
+    creds = result.scalar_one_or_none()
+    if creds is not None:
+        await db.delete(creds)
+        await db.commit()
+    return {"success": True}
 
 
 app = create_app()
