@@ -451,3 +451,220 @@ class TestThresholdHistory:
             json={"ftp_watts": 250, "lthr_bpm": 160, "hrmax_bpm": 180}
         )
         assert response.status_code == 401
+
+
+
+class TestZones:
+    """Tests for power and HR zone management."""
+
+    @pytest.mark.asyncio
+    async def test_get_zones_empty_when_no_thresholds(self, auth_client):
+        """GET /me/zones returns empty lists when user has no thresholds."""
+        response = await auth_client.get("/me/zones")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["power_zones"] == []
+        assert data["hr_zones"] == []
+
+    @pytest.mark.asyncio
+    async def test_get_zones_creates_defaults_from_thresholds(self, auth_client):
+        """GET /me/zones auto-creates default zones when thresholds exist."""
+        # First set DOB to trigger default thresholds
+        await auth_client.patch("/me", json={"date_of_birth": "1990-01-01"})
+        # Fetch thresholds to trigger creation
+        await auth_client.get("/me/thresholds")
+        
+        response = await auth_client.get("/me/zones")
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Should have 7 power zones (Coggan)
+        assert len(data["power_zones"]) == 7
+        assert data["power_zones"][0]["zone_number"] == 1
+        assert data["power_zones"][0]["name"] == "Recovery"
+        assert data["power_zones"][6]["zone_number"] == 7
+        assert data["power_zones"][6]["name"] == "Neuromuscular"
+        
+        # Should have 5 HR zones (Friel)
+        assert len(data["hr_zones"]) == 5
+        assert data["hr_zones"][0]["zone_number"] == 1
+        assert data["hr_zones"][4]["zone_number"] == 5
+
+    @pytest.mark.asyncio
+    async def test_zones_calculated_from_ftp(self, auth_client):
+        """Power zones are calculated as percentages of FTP."""
+        # Create explicit threshold with known FTP
+        await auth_client.post(
+            "/me/thresholds",
+            json={"ftp_watts": 200, "lthr_bpm": 170, "hrmax_bpm": 185}
+        )
+        
+        response = await auth_client.get("/me/zones")
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Zone 1 Recovery: 0-55% of 200 = 0-110W
+        assert data["power_zones"][0]["min_watts"] == 0
+        assert data["power_zones"][0]["max_watts"] == 110
+        
+        # Zone 4 Threshold: 90-105% of 200 = 180-210W
+        assert data["power_zones"][3]["min_watts"] == 180
+        assert data["power_zones"][3]["max_watts"] == 210
+        
+        # Zone 7 Neuromuscular: 150%+ = 300W+, no upper limit
+        assert data["power_zones"][6]["min_watts"] == 300
+        assert data["power_zones"][6]["max_watts"] is None
+
+    @pytest.mark.asyncio
+    async def test_hr_zones_calculated_from_lthr(self, auth_client):
+        """HR zones are calculated as percentages of LTHR."""
+        await auth_client.post(
+            "/me/thresholds",
+            json={"ftp_watts": 200, "lthr_bpm": 170, "hrmax_bpm": 185}
+        )
+        
+        response = await auth_client.get("/me/zones")
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Zone 1: 0-81% of 170 = 0-137 bpm
+        assert data["hr_zones"][0]["min_bpm"] == 0
+        assert data["hr_zones"][0]["max_bpm"] == 137
+        
+        # Zone 5: 100%+ = 170+ bpm, no upper limit
+        assert data["hr_zones"][4]["min_bpm"] == 170
+        assert data["hr_zones"][4]["max_bpm"] is None
+
+    @pytest.mark.asyncio
+    async def test_update_zone_marks_as_custom(self, auth_client):
+        """PUT /me/zones with zone updates marks zones as custom."""
+        # Create thresholds and zones
+        await auth_client.post(
+            "/me/thresholds",
+            json={"ftp_watts": 200, "lthr_bpm": 170, "hrmax_bpm": 185}
+        )
+        await auth_client.get("/me/zones")  # Trigger zone creation
+        
+        # Update a power zone
+        response = await auth_client.put(
+            "/me/zones",
+            json={
+                "power_zones": [
+                    {"zone_number": 4, "name": "Sweet Spot", "min_value": 175, "max_value": 195}
+                ]
+            }
+        )
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Zone 4 should be updated and marked custom
+        zone4 = next(z for z in data["power_zones"] if z["zone_number"] == 4)
+        assert zone4["name"] == "Sweet Spot"
+        assert zone4["min_watts"] == 175
+        assert zone4["max_watts"] == 195
+        assert zone4["is_custom"] is True
+
+    @pytest.mark.asyncio
+    async def test_reset_zones_to_defaults(self, auth_client):
+        """PUT /me/zones with reset_to_defaults recalculates from thresholds."""
+        # Create thresholds and zones
+        await auth_client.post(
+            "/me/thresholds",
+            json={"ftp_watts": 200, "lthr_bpm": 170, "hrmax_bpm": 185}
+        )
+        await auth_client.get("/me/zones")
+        
+        # Customize a zone
+        await auth_client.put(
+            "/me/zones",
+            json={"power_zones": [{"zone_number": 4, "name": "Custom Zone"}]}
+        )
+        
+        # Reset to defaults
+        response = await auth_client.put(
+            "/me/zones",
+            json={"reset_to_defaults": True}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Zone 4 should be back to default name and not custom
+        zone4 = next(z for z in data["power_zones"] if z["zone_number"] == 4)
+        assert zone4["name"] == "Threshold"
+        assert zone4["is_custom"] is False
+
+    @pytest.mark.asyncio
+    async def test_new_threshold_regenerates_non_custom_zones(self, auth_client):
+        """Creating a new threshold regenerates zones that aren't custom."""
+        # Create initial thresholds and zones
+        await auth_client.post(
+            "/me/thresholds",
+            json={"ftp_watts": 200, "lthr_bpm": 170, "hrmax_bpm": 185}
+        )
+        response = await auth_client.get("/me/zones")
+        initial_zone4 = next(z for z in response.json()["power_zones"] if z["zone_number"] == 4)
+        assert initial_zone4["max_watts"] == 210  # 105% of 200
+        
+        # Create new threshold with higher FTP
+        await auth_client.post(
+            "/me/thresholds",
+            json={"ftp_watts": 250, "lthr_bpm": 175, "hrmax_bpm": 190}
+        )
+        
+        # Zones should be regenerated
+        response = await auth_client.get("/me/zones")
+        new_zone4 = next(z for z in response.json()["power_zones"] if z["zone_number"] == 4)
+        assert new_zone4["max_watts"] == 262  # 105% of 250
+
+    @pytest.mark.asyncio
+    async def test_new_threshold_preserves_custom_zones(self, auth_client):
+        """Creating a new threshold preserves zones marked as custom."""
+        # Create initial thresholds and zones
+        await auth_client.post(
+            "/me/thresholds",
+            json={"ftp_watts": 200, "lthr_bpm": 170, "hrmax_bpm": 185}
+        )
+        await auth_client.get("/me/zones")
+        
+        # Customize a zone
+        await auth_client.put(
+            "/me/zones",
+            json={"power_zones": [{"zone_number": 4, "name": "My Custom Zone"}]}
+        )
+        
+        # Create new threshold
+        await auth_client.post(
+            "/me/thresholds",
+            json={"ftp_watts": 250, "lthr_bpm": 175, "hrmax_bpm": 190}
+        )
+        
+        # Custom zone should be preserved
+        response = await auth_client.get("/me/zones")
+        zone4 = next(z for z in response.json()["power_zones"] if z["zone_number"] == 4)
+        assert zone4["name"] == "My Custom Zone"
+        assert zone4["is_custom"] is True
+
+    @pytest.mark.asyncio
+    async def test_update_nonexistent_zone_returns_error(self, auth_client):
+        """PUT /me/zones with invalid zone_number returns error."""
+        await auth_client.post(
+            "/me/thresholds",
+            json={"ftp_watts": 200, "lthr_bpm": 170, "hrmax_bpm": 185}
+        )
+        await auth_client.get("/me/zones")
+        
+        response = await auth_client.put(
+            "/me/zones",
+            json={"power_zones": [{"zone_number": 99, "name": "Invalid"}]}
+        )
+        assert response.status_code == 400
+        assert "99" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_zones_endpoints_require_auth(self, app_client):
+        """Zone endpoints require authentication."""
+        response = await app_client.get("/me/zones")
+        assert response.status_code == 401
+
+        response = await app_client.put("/me/zones", json={"reset_to_defaults": True})
+        assert response.status_code == 401
