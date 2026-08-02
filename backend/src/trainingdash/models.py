@@ -69,8 +69,17 @@ class Activity(Base):
     np_power_w: Mapped[int | None] = mapped_column(Integer, nullable=True)
     max_speed_mps: Mapped[float] = mapped_column(Float, nullable=False, default=0)
     max_hr_bpm: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    # Training load metrics (TSS for FIT files, XSS for Xert)
+    # Training metrics
+    intensity_factor: Mapped[float | None] = mapped_column(Float, nullable=True)
+    tss: Mapped[float | None] = mapped_column(Float, nullable=True)
     training_load: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Zone time distribution (JSON: {zone_number: seconds})
+    power_zone_times: Mapped[str | None] = mapped_column(Text, nullable=True)
+    hr_zone_times: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # W'bal metrics
+    wbal_min_joules: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    wbal_min_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Routing
     route_id: Mapped[int | None] = mapped_column(
         ForeignKey("routes.id"), nullable=True
     )

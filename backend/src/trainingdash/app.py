@@ -1,3 +1,4 @@
+import json
 import logging
 import uuid
 from datetime import datetime, timezone, timedelta, date
@@ -869,6 +870,25 @@ def _activity_summary(a: Activity) -> dict[str, Any]:
     }
 
 
+def _activity_detail(a: Activity) -> dict[str, Any]:
+    """Return full activity details including training metrics."""
+    result = _activity_summary(a)
+    result.update({
+        # Training metrics
+        "np_power_w": a.np_power_w,
+        "intensity_factor": a.intensity_factor,
+        "tss": a.tss,
+        "training_load": a.training_load,
+        # Zone times (parse JSON if present)
+        "power_zone_times": json.loads(a.power_zone_times) if a.power_zone_times else None,
+        "hr_zone_times": json.loads(a.hr_zone_times) if a.hr_zone_times else None,
+        # W'bal
+        "wbal_min_joules": a.wbal_min_joules,
+        "wbal_min_pct": a.wbal_min_pct,
+    })
+    return result
+
+
 async def _get_owned_activity(db: DbSession, user: CurrentUser, activity_id: int) -> Activity:
     result = await db.execute(
         select(Activity).where(Activity.id == activity_id, Activity.user_id == user.id)
@@ -912,7 +932,7 @@ async def list_activities(db: DbSession, user: CurrentUser):
 
 async def get_activity(db: DbSession, user: CurrentUser, activity_id: int):
     activity = await _get_owned_activity(db, user, activity_id)
-    return _activity_summary(activity)
+    return _activity_detail(activity)
 
 
 async def get_activity_records(db: DbSession, user: CurrentUser, activity_id: int):

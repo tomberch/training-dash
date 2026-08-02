@@ -1,4 +1,5 @@
 from datetime import datetime, timezone, timedelta
+import json
 import logging
 from typing import Any
 
@@ -6,7 +7,14 @@ from geoalchemy2.functions import ST_SetSRID, ST_MakePoint
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from trainingdash.models import Activity, Lap, Record
+from trainingdash.models import Activity, Lap, Record, ThresholdHistory, PowerZone, HrZone
+from trainingdash.metrics import (
+    compute_normalized_power,
+    compute_intensity_factor,
+    compute_tss,
+    compute_zone_times,
+)
+from trainingdash.wbal import compute_wbal_series
 
 logger = logging.getLogger(__name__)
 
@@ -315,6 +323,10 @@ async def ingest_fit(
     await db.commit()
     await db.refresh(activity)
 
+    # Compute training metrics if user has thresholds
+    await _compute_activity_metrics(db, activity, parsed["records"])
+
+    # Route matching
     from trainingdash.route_matching import find_or_create_route_id
     route_id = await find_or_create_route_id(db, activity, parsed["records"])
     if route_id is not None:
@@ -323,3 +335,114 @@ async def ingest_fit(
         await db.refresh(activity)
 
     return activity
+
+
+async def _compute_activity_metrics(
+    db: AsyncSession,
+    activity: Activity,
+    records: list[dict],
+) -> None:
+    """
+    Compute training metrics for an activity based on user's thresholds.
+    
+    Metrics computed:
+    - Normalized Power (NP)
+    - Intensity Factor (IF)
+    - Training Stress Score (TSS)
+    - Power zone times
+    - HR zone times
+    - W'bal minimum
+    """
+    # Get threshold effective at activity date
+    activity_date = activity.started_at.date()
+    result = await db.execute(
+        select(ThresholdHistory)
+        .where(
+            ThresholdHistory.user_id == activity.user_id,
+            ThresholdHistory.effective_date <= activity_date,
+        )
+        .order_by(ThresholdHistory.effective_date.desc())
+        .limit(1)
+    )
+    threshold = result.scalar_one_or_none()
+    
+    if threshold is None:
+        # No thresholds configured, can't compute metrics
+        return
+    
+    # Extract power and HR arrays from records
+    power_array = [r.get("power_w") for r in records]
+    hr_array = [r.get("hr_bpm") for r in records]
+    
+    # Check if we have power data
+    has_power = any(p is not None and p > 0 for p in power_array)
+    has_hr = any(h is not None and h > 0 for h in hr_array)
+    
+    if has_power:
+        # Compute NP
+        np_watts = compute_normalized_power(power_array)
+        if np_watts is not None:
+            activity.np_power_w = int(np_watts)
+            
+            # Compute IF and TSS
+            if_value = compute_intensity_factor(np_watts, threshold.ftp_watts)
+            if if_value is not None:
+                activity.intensity_factor = if_value
+                
+                # Compute TSS
+                duration_s = activity.moving_time_s or activity.elapsed_time_s
+                tss = compute_tss(duration_s, np_watts, if_value, threshold.ftp_watts)
+                if tss is not None:
+                    activity.tss = tss
+                    activity.training_load = tss  # Use TSS as training load
+        
+        # Compute power zone times
+        power_zones_result = await db.execute(
+            select(PowerZone)
+            .where(PowerZone.user_id == activity.user_id)
+            .order_by(PowerZone.zone_number)
+        )
+        power_zones = power_zones_result.scalars().all()
+        
+        if power_zones:
+            zones_list = [
+                {"zone_number": z.zone_number, "min_watts": z.min_watts, "max_watts": z.max_watts}
+                for z in power_zones
+            ]
+            zone_times = compute_zone_times(power_array, zones_list)
+            if zone_times:
+                activity.power_zone_times = json.dumps(zone_times)
+        
+        # Compute W'bal
+        # Estimate W' from FTP if not available (rough estimate: W' = FTP * 60)
+        w_prime_joules = threshold.ftp_watts * 60  # Simple estimate
+        cp_watts = int(threshold.ftp_watts * 0.95)  # CP is ~95% of FTP
+        
+        wbal_result = compute_wbal_series(power_array, cp_watts, w_prime_joules)
+        if wbal_result["min_wbal"] is not None:
+            activity.wbal_min_joules = wbal_result["min_wbal"]
+            activity.wbal_min_pct = wbal_result["min_wbal_pct"]
+    
+    if has_hr:
+        # Compute HR zone times
+        hr_zones_result = await db.execute(
+            select(HrZone)
+            .where(HrZone.user_id == activity.user_id)
+            .order_by(HrZone.zone_number)
+        )
+        hr_zones = hr_zones_result.scalars().all()
+        
+        if hr_zones:
+            zones_list = [
+                {"zone_number": z.zone_number, "min_bpm": z.min_bpm, "max_bpm": z.max_bpm}
+                for z in hr_zones
+            ]
+            zone_times = compute_zone_times(
+                hr_array, zones_list,
+                value_key_min="min_bpm", value_key_max="max_bpm"
+            )
+            if zone_times:
+                activity.hr_zone_times = json.dumps(zone_times)
+    
+    await db.commit()
+    await db.refresh(activity)

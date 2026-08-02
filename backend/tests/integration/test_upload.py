@@ -103,3 +103,227 @@ class TestUpload:
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         assert response.status_code == 401
+
+
+class TestActivityMetricsOnIngest:
+    """Tests for activity metrics computed during ingest (#18)."""
+
+    @pytest.mark.asyncio
+    async def test_upload_without_thresholds_skips_metrics(self, auth_client, db_session):
+        """Upload without thresholds configured does not compute training metrics."""
+        fit_data = make_test_fit(num_records=60)  # 60 records for NP calculation
+        response = await auth_client.post(
+            "/upload",
+            files={"file": ("test.fit", fit_data, "application/octet-stream")},
+        )
+        assert response.status_code == 200
+        activity_id = response.json()["id"]
+        
+        result = await db_session.execute(select(Activity).where(Activity.id == activity_id))
+        activity = result.scalar_one()
+        
+        # No thresholds = no metrics
+        assert activity.np_power_w is None
+        assert activity.intensity_factor is None
+        assert activity.tss is None
+        assert activity.power_zone_times is None
+        assert activity.hr_zone_times is None
+        assert activity.wbal_min_joules is None
+
+    @pytest.mark.asyncio
+    async def test_upload_with_thresholds_computes_np_if_tss(self, auth_client, db_session):
+        """Upload with FTP threshold computes NP, IF, and TSS."""
+        # Set up threshold with effective_date before test FIT (2024-03-15)
+        await auth_client.post(
+            "/me/thresholds",
+            json={
+                "effective_date": "2024-01-01",
+                "ftp_watts": 250,
+                "lthr_bpm": 165,
+                "hrmax_bpm": 185
+            }
+        )
+        
+        # Upload FIT with 60+ records (enough for 30s rolling avg)
+        fit_data = make_test_fit(num_records=120)
+        response = await auth_client.post(
+            "/upload",
+            files={"file": ("test.fit", fit_data, "application/octet-stream")},
+        )
+        assert response.status_code == 200
+        activity_id = response.json()["id"]
+        
+        result = await db_session.execute(select(Activity).where(Activity.id == activity_id))
+        activity = result.scalar_one()
+        
+        # NP should be computed (test FIT has power data)
+        assert activity.np_power_w is not None
+        assert activity.np_power_w > 0
+        
+        # IF = NP / FTP
+        assert activity.intensity_factor is not None
+        assert 0 < activity.intensity_factor < 2  # Reasonable range
+        
+        # TSS should be computed
+        assert activity.tss is not None
+        assert activity.tss > 0
+        
+        # training_load should equal TSS
+        assert activity.training_load == activity.tss
+
+    @pytest.mark.asyncio
+    async def test_upload_with_zones_computes_power_zone_times(self, auth_client, db_session):
+        """Upload with power zones computes time in each zone."""
+        # Set up threshold with effective_date before test FIT (2024-03-15)
+        await auth_client.post(
+            "/me/thresholds",
+            json={
+                "effective_date": "2024-01-01",
+                "ftp_watts": 250,
+                "lthr_bpm": 165,
+                "hrmax_bpm": 185
+            }
+        )
+        
+        # Ensure zones exist by calling GET /me/zones
+        zones_resp = await auth_client.get("/me/zones")
+        assert zones_resp.status_code == 200
+        zones_data = zones_resp.json()
+        assert len(zones_data["power_zones"]) == 7  # Coggan 7-zone
+        
+        # Upload FIT
+        fit_data = make_test_fit(num_records=60)
+        response = await auth_client.post(
+            "/upload",
+            files={"file": ("test.fit", fit_data, "application/octet-stream")},
+        )
+        assert response.status_code == 200
+        activity_id = response.json()["id"]
+        
+        result = await db_session.execute(select(Activity).where(Activity.id == activity_id))
+        activity = result.scalar_one()
+        
+        # Power zone times should be computed
+        assert activity.power_zone_times is not None
+        import json
+        zone_times = json.loads(activity.power_zone_times)
+        assert isinstance(zone_times, dict)
+        # Total time should roughly equal number of valid power records
+        total_zone_time = sum(zone_times.values())
+        assert total_zone_time > 0
+
+    @pytest.mark.asyncio
+    async def test_upload_with_zones_computes_hr_zone_times(self, auth_client, db_session):
+        """Upload with HR zones computes time in each zone."""
+        # Set up threshold with effective_date before test FIT (2024-03-15)
+        await auth_client.post(
+            "/me/thresholds",
+            json={
+                "effective_date": "2024-01-01",
+                "ftp_watts": 250,
+                "lthr_bpm": 165,
+                "hrmax_bpm": 185
+            }
+        )
+        
+        # Ensure zones exist
+        zones_resp = await auth_client.get("/me/zones")
+        assert zones_resp.status_code == 200
+        zones_data = zones_resp.json()
+        assert len(zones_data["hr_zones"]) == 5  # Friel 5-zone
+        
+        # Upload FIT
+        fit_data = make_test_fit(num_records=60)
+        response = await auth_client.post(
+            "/upload",
+            files={"file": ("test.fit", fit_data, "application/octet-stream")},
+        )
+        assert response.status_code == 200
+        activity_id = response.json()["id"]
+        
+        result = await db_session.execute(select(Activity).where(Activity.id == activity_id))
+        activity = result.scalar_one()
+        
+        # HR zone times should be computed
+        assert activity.hr_zone_times is not None
+        import json
+        zone_times = json.loads(activity.hr_zone_times)
+        assert isinstance(zone_times, dict)
+        total_zone_time = sum(zone_times.values())
+        assert total_zone_time > 0
+
+    @pytest.mark.asyncio
+    async def test_upload_computes_wbal_min(self, auth_client, db_session):
+        """Upload with FTP computes W'bal minimum."""
+        # Set up threshold with effective_date before test FIT (2024-03-15)
+        await auth_client.post(
+            "/me/thresholds",
+            json={
+                "effective_date": "2024-01-01",
+                "ftp_watts": 250,
+                "lthr_bpm": 165,
+                "hrmax_bpm": 185
+            }
+        )
+        
+        # Upload FIT with power data
+        fit_data = make_test_fit(num_records=120)
+        response = await auth_client.post(
+            "/upload",
+            files={"file": ("test.fit", fit_data, "application/octet-stream")},
+        )
+        assert response.status_code == 200
+        activity_id = response.json()["id"]
+        
+        result = await db_session.execute(select(Activity).where(Activity.id == activity_id))
+        activity = result.scalar_one()
+        
+        # W'bal should be computed
+        assert activity.wbal_min_joules is not None
+        assert activity.wbal_min_pct is not None
+        assert 0 <= activity.wbal_min_pct <= 100
+
+    @pytest.mark.asyncio
+    async def test_get_activity_returns_metrics(self, auth_client):
+        """GET /activities/{id} returns computed training metrics."""
+        # Set up threshold with effective_date before test FIT (2024-03-15)
+        await auth_client.post(
+            "/me/thresholds",
+            json={
+                "effective_date": "2024-01-01",
+                "ftp_watts": 250,
+                "lthr_bpm": 165,
+                "hrmax_bpm": 185
+            }
+        )
+        await auth_client.get("/me/zones")  # Trigger zone creation
+        
+        # Upload FIT
+        fit_data = make_test_fit(num_records=120)
+        upload_resp = await auth_client.post(
+            "/upload",
+            files={"file": ("test.fit", fit_data, "application/octet-stream")},
+        )
+        activity_id = upload_resp.json()["id"]
+        
+        # Get activity detail
+        response = await auth_client.get(f"/activities/{activity_id}")
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Should include all metrics
+        assert "np_power_w" in data
+        assert "intensity_factor" in data
+        assert "tss" in data
+        assert "training_load" in data
+        assert "power_zone_times" in data
+        assert "hr_zone_times" in data
+        assert "wbal_min_joules" in data
+        assert "wbal_min_pct" in data
+        
+        # Values should be populated
+        assert data["np_power_w"] is not None
+        assert data["intensity_factor"] is not None
+        assert data["tss"] is not None
+        assert isinstance(data["power_zone_times"], dict)
+        assert isinstance(data["hr_zone_times"], dict)
