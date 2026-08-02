@@ -23,6 +23,7 @@ services:
       ADMIN_PASSWORD: admin
       REDIS_HOST: redis
       REDIS_PORT: "6379"
+      FITTER_ENCRYPTION_KEY: D1prO+2rx2zmauRYJc8yKA2rbW0ABdAo5uf8ZJMoXSQ=
     depends_on:
       db:
         condition: service_healthy
@@ -37,6 +38,7 @@ services:
       SECRET_KEY: dev-secret-change-me
       REDIS_HOST: redis
       REDIS_PORT: "6379"
+      FITTER_ENCRYPTION_KEY: D1prO+2rx2zmauRYJc8yKA2rbW0ABdAo5uf8ZJMoXSQ=
     depends_on:
       db:
         condition: service_healthy
