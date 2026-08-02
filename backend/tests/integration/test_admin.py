@@ -2,8 +2,8 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from fitter.auth import hash_password
-from fitter.models import User
+from trainingdash.auth import hash_password
+from trainingdash.models import User
 
 
 class TestAdminEndpoints:
@@ -135,8 +135,8 @@ class TestAdminEndpoints:
     @pytest.mark.asyncio
     async def test_unauthenticated_cannot_access_admin(self, db_engine):
         """Test that unauthenticated requests cannot access admin routes."""
-        import fitter.auth as authmod
-        from fitter.app import create_app
+        import trainingdash.auth as authmod
+        from trainingdash.app import create_app
 
         session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
 

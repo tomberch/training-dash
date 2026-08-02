@@ -8,9 +8,9 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from fitter.config import settings
-from fitter.db import async_session
-from fitter.models import User
+from trainingdash.config import settings
+from trainingdash.db import async_session
+from trainingdash.models import User
 
 serializer = URLSafeSerializer(settings.secret_key, salt="session")
 

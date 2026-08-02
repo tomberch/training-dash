@@ -13,7 +13,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
-from fitter.db import Base
+from trainingdash.db import Base
 
 
 class User(Base):

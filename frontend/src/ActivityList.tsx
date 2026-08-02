@@ -105,7 +105,7 @@ export function Login({
       <div className="w-full max-w-sm">
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8">
           <h1 className="text-2xl font-bold text-center text-gray-900 dark:text-white mb-6">
-            Fitter
+            TrainingDash
           </h1>
           
           {error && (

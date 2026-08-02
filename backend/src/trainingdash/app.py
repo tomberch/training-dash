@@ -9,12 +9,12 @@ from pydantic import BaseModel
 from sqlalchemy import select, func, delete
 from sqlalchemy.orm import selectinload
 
-from fitter.auth import AdminUser, CurrentUser, DbSession, LoginRequest, create_session_cookie, hash_password, verify_password
-from fitter.db import Base, async_session, engine
-from fitter.models import Activity, Lap, Record, User, XertCredentials, GarminCredentials
-from fitter.xert import get_xert_client, XertAPIError
-from fitter.garmin import get_garmin_client, GarminAPIError, GarminMFARequired
-from fitter.crypto import encrypt, decrypt, EncryptionError
+from trainingdash.auth import AdminUser, CurrentUser, DbSession, LoginRequest, create_session_cookie, hash_password, verify_password
+from trainingdash.db import Base, async_session, engine
+from trainingdash.models import Activity, Lap, Record, User, XertCredentials, GarminCredentials
+from trainingdash.xert import get_xert_client, XertAPIError
+from trainingdash.garmin import get_garmin_client, GarminAPIError, GarminMFARequired
+from trainingdash.crypto import encrypt, decrypt, EncryptionError
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ def generate_error_id() -> str:
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Fitter")
+    app = FastAPI(title="TrainingDash")
     
     # Global exception handler for unhandled errors
     @app.exception_handler(Exception)
@@ -452,7 +452,7 @@ async def upload_activity(db: DbSession, user: CurrentUser, file: UploadFile = F
     fit_bytes = await file.read()
     source_ref = file.filename or "upload.fit"
 
-    from fitter.jobs import enqueue_ingest_job
+    from trainingdash.jobs import enqueue_ingest_job
 
     job_id = await enqueue_ingest_job(user.id, fit_bytes, "upload", source_ref)
     if job_id is not None:
@@ -461,7 +461,7 @@ async def upload_activity(db: DbSession, user: CurrentUser, file: UploadFile = F
             content={"job_id": job_id, "source_ref": source_ref},
         )
 
-    from fitter.ingest import ingest_fit
+    from trainingdash.ingest import ingest_fit
     activity = await ingest_fit(db, user.id, fit_bytes, "upload", source_ref)
     if activity is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to parse FIT file")
@@ -470,7 +470,7 @@ async def upload_activity(db: DbSession, user: CurrentUser, file: UploadFile = F
 
 async def get_job_status(user: CurrentUser, job_id: str):
     """Get the status of an ingest job."""
-    from fitter.jobs import get_job_status as _get_job_status
+    from trainingdash.jobs import get_job_status as _get_job_status
     return await _get_job_status(job_id)
 
 
@@ -522,7 +522,7 @@ async def compare_activities(
             for r in records
         ]
 
-    from fitter.resampler import compute_time_gap_series
+    from trainingdash.resampler import compute_time_gap_series
     gap_series = compute_time_gap_series(
         to_resample_input(records_a, first_ts_a),
         to_resample_input(records_b, first_ts_b),
@@ -687,7 +687,7 @@ async def admin_trigger_sync(db: DbSession, admin: AdminUser, user_id: int):
     """Trigger sync for a user (admin only). Triggers both Xert and Garmin if configured."""
     await _get_user_or_404(db, user_id)
     
-    from fitter.jobs import enqueue_sync_xert_job, enqueue_sync_garmin_job
+    from trainingdash.jobs import enqueue_sync_xert_job, enqueue_sync_garmin_job
     
     job_ids = {}
     
@@ -735,7 +735,7 @@ async def admin_set_xert_credentials(db: DbSession, admin: AdminUser, user_id: i
     """Set or update Xert credentials for a user (admin only). Password is encrypted at rest."""
     await _get_user_or_404(db, user_id)
     
-    from fitter.crypto import encrypt, EncryptionError
+    from trainingdash.crypto import encrypt, EncryptionError
     
     try:
         encrypted_password = encrypt(request.xert_password)

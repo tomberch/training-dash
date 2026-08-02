@@ -15,9 +15,9 @@ from dotenv import load_dotenv
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from fitter.auth import hash_password
-from fitter.models import Activity, User, XertCredentials
-from fitter.xert import XertActivity, XertActivityDetail, XertSessionDataPoint, XertAPIError
+from trainingdash.auth import hash_password
+from trainingdash.models import Activity, User, XertCredentials
+from trainingdash.xert import XertActivity, XertActivityDetail, XertSessionDataPoint, XertAPIError
 
 # Load .env.test if it exists (for local Xert API testing)
 _env_test_path = Path(__file__).parent.parent.parent / ".env.test"
@@ -110,7 +110,7 @@ def mock_xert_client():
 @pytest.fixture
 def encryption_key_env():
     """Set up encryption key in environment."""
-    with mock.patch("fitter.crypto.settings") as mock_settings:
+    with mock.patch("trainingdash.crypto.settings") as mock_settings:
         mock_settings.encryption_key = TEST_ENCRYPTION_KEY
         yield
 
@@ -118,7 +118,7 @@ def encryption_key_env():
 @pytest_asyncio.fixture
 async def user_with_xert_creds(db_session, encryption_key_env):
     """Create a user with Xert credentials."""
-    from fitter.crypto import encrypt
+    from trainingdash.crypto import encrypt
     
     user = User(
         username="xertuser",
@@ -253,9 +253,9 @@ class TestSyncXertJob:
                 yield session
         
         # Patch the client factory and run the job
-        with mock.patch("fitter.xert.get_xert_client", return_value=mock_xert_client):
-            with mock.patch("fitter.worker.worker_db_session", mock_worker_db_session):
-                from fitter.worker import sync_xert_job
+        with mock.patch("trainingdash.xert.get_xert_client", return_value=mock_xert_client):
+            with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
+                from trainingdash.worker import sync_xert_job
                 result = await sync_xert_job({}, user_with_xert_creds.id)
         
         assert result["success"] is True
@@ -265,7 +265,7 @@ class TestSyncXertJob:
         
         # Verify Activity was created in database
         async with session_factory() as session:
-            from fitter.models import Activity, Record
+            from trainingdash.models import Activity, Record
             activity_result = await session.execute(
                 select(Activity).where(Activity.source_ref == "xert:s8pehgletoecmk5x")
             )
@@ -319,9 +319,9 @@ class TestSyncXertJob:
             async with session_factory() as session:
                 yield session
         
-        with mock.patch("fitter.xert.get_xert_client", return_value=mock_xert_client):
-            with mock.patch("fitter.worker.worker_db_session", mock_worker_db_session):
-                from fitter.worker import sync_xert_job
+        with mock.patch("trainingdash.xert.get_xert_client", return_value=mock_xert_client):
+            with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
+                from trainingdash.worker import sync_xert_job
                 result = await sync_xert_job({}, user_with_xert_creds.id)
         
         assert result["success"] is True
@@ -347,8 +347,8 @@ class TestSyncXertJob:
             async with session_factory() as session:
                 yield session
         
-        with mock.patch("fitter.worker.worker_db_session", mock_worker_db_session):
-            from fitter.worker import sync_xert_job
+        with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
+            from trainingdash.worker import sync_xert_job
             result = await sync_xert_job({}, user.id)
         
         assert result["success"] is False
@@ -370,9 +370,9 @@ class TestSyncXertJob:
             async with session_factory() as session:
                 yield session
         
-        with mock.patch("fitter.xert.get_xert_client", return_value=mock_xert_client):
-            with mock.patch("fitter.worker.worker_db_session", mock_worker_db_session):
-                from fitter.worker import sync_xert_job
+        with mock.patch("trainingdash.xert.get_xert_client", return_value=mock_xert_client):
+            with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
+                from trainingdash.worker import sync_xert_job
                 result = await sync_xert_job({}, user_with_xert_creds.id)
         
         assert result["success"] is False
@@ -408,9 +408,9 @@ class TestSyncXertJob:
             async with session_factory() as session:
                 yield session
         
-        with mock.patch("fitter.xert.get_xert_client", return_value=mock_xert_client):
-            with mock.patch("fitter.worker.worker_db_session", mock_worker_db_session):
-                from fitter.worker import sync_xert_job
+        with mock.patch("trainingdash.xert.get_xert_client", return_value=mock_xert_client):
+            with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
+                from trainingdash.worker import sync_xert_job
                 result = await sync_xert_job({}, user_with_xert_creds.id)
         
         # Should succeed with 1 activity (the one that didn't fail)
@@ -435,7 +435,7 @@ class TestNightlySyncAllXert:
         self, db_engine, db_session, encryption_key_env
     ):
         """nightly_sync_all_xert should enqueue sync for all users with credentials."""
-        from fitter.crypto import encrypt
+        from trainingdash.crypto import encrypt
         
         # Create multiple users, some with credentials
         user1 = User(username="user1", password_hash=hash_password("pass"))
@@ -468,12 +468,12 @@ class TestNightlySyncAllXert:
             async with session_factory() as session:
                 yield session
         
-        with mock.patch("fitter.worker.worker_db_session", mock_worker_db_session):
-            with mock.patch("fitter.worker.create_redis_pool") as mock_pool:
+        with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
+            with mock.patch("trainingdash.worker.create_redis_pool") as mock_pool:
                 mock_arq = mock.AsyncMock()
                 mock_pool.return_value = mock_arq
                 
-                from fitter.worker import nightly_sync_all_xert
+                from trainingdash.worker import nightly_sync_all_xert
                 result = await nightly_sync_all_xert({})
         
         assert result["success"] is True
@@ -505,12 +505,12 @@ class TestNightlySyncAllXert:
             async with session_factory() as session:
                 yield session
         
-        with mock.patch("fitter.worker.worker_db_session", mock_worker_db_session):
-            with mock.patch("fitter.worker.create_redis_pool") as mock_pool:
+        with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
+            with mock.patch("trainingdash.worker.create_redis_pool") as mock_pool:
                 mock_arq = mock.AsyncMock()
                 mock_pool.return_value = mock_arq
                 
-                from fitter.worker import nightly_sync_all_xert
+                from trainingdash.worker import nightly_sync_all_xert
                 result = await nightly_sync_all_xert({})
         
         assert result["success"] is True
@@ -528,7 +528,7 @@ class TestXertClientRealAPI:
     @pytest.mark.asyncio
     async def test_real_xert_login_and_list_activities(self):
         """Test real Xert API login, activity listing, and session_data retrieval."""
-        from fitter.xert import XertClient
+        from trainingdash.xert import XertClient
         
         username = os.environ["XERT_TEST_USERNAME"]
         password = os.environ["XERT_TEST_PASSWORD"]
@@ -598,7 +598,7 @@ class TestXertClientRealAPI:
     @pytest.mark.asyncio
     async def test_real_xert_invalid_credentials(self):
         """Test that invalid credentials raise XertAPIError."""
-        from fitter.xert import XertClient, XertAPIError
+        from trainingdash.xert import XertClient, XertAPIError
         
         client = XertClient()
         try:

@@ -13,10 +13,10 @@ class Settings:
         return cls(
             database_url=os.environ.get(
                 "DATABASE_URL",
-                "postgresql+asyncpg://fitter:fitter@localhost:5432/fitter",
+                "postgresql+asyncpg://trainingdash:trainingdash@localhost:5432/trainingdash",
             ),
             secret_key=os.environ.get("SECRET_KEY", "dev-secret-change-me"),
-            encryption_key=os.environ.get("FITTER_ENCRYPTION_KEY"),
+            encryption_key=os.environ.get("TRAININGDASH_ENCRYPTION_KEY"),
         )
 
 

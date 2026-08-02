@@ -13,7 +13,7 @@ TEST_ENCRYPTION_KEY = base64.b64encode(os.urandom(32)).decode("ascii")
 def encryption_key_env():
     """Set up encryption key in environment."""
     from unittest import mock
-    with mock.patch("fitter.crypto.settings") as mock_settings:
+    with mock.patch("trainingdash.crypto.settings") as mock_settings:
         mock_settings.encryption_key = TEST_ENCRYPTION_KEY
         yield
 
@@ -32,8 +32,8 @@ class TestUserXertCredentials:
     async def test_get_xert_credentials_when_configured_shows_email_and_sync_since(
         self, auth_client, db_session, seed_user, encryption_key_env
     ):
-        from fitter.models import XertCredentials
-        from fitter.crypto import encrypt
+        from trainingdash.models import XertCredentials
+        from trainingdash.crypto import encrypt
         from datetime import datetime
 
         # Create credentials directly in DB
@@ -58,11 +58,11 @@ class TestUserXertCredentials:
 
     @pytest.mark.asyncio
     async def test_put_xert_credentials_validates_and_saves(self, auth_client, seed_user, db_session, encryption_key_env):
-        from fitter.models import XertCredentials
+        from trainingdash.models import XertCredentials
         from sqlalchemy import select
 
         # Mock the Xert client to simulate successful login
-        with patch("fitter.app.get_xert_client") as mock_get_client:
+        with patch("trainingdash.app.get_xert_client") as mock_get_client:
             mock_client = AsyncMock()
             mock_client.login = AsyncMock()  # No exception = success
             mock_client.close = AsyncMock()
@@ -86,10 +86,10 @@ class TestUserXertCredentials:
 
     @pytest.mark.asyncio
     async def test_put_xert_credentials_rejects_invalid_credentials(self, auth_client, encryption_key_env):
-        from fitter.xert import XertAPIError
+        from trainingdash.xert import XertAPIError
 
         # Mock the Xert client to simulate failed login
-        with patch("fitter.app.get_xert_client") as mock_get_client:
+        with patch("trainingdash.app.get_xert_client") as mock_get_client:
             mock_client = AsyncMock()
             mock_client.login = AsyncMock(side_effect=XertAPIError("Invalid credentials"))
             mock_client.close = AsyncMock()
@@ -104,10 +104,10 @@ class TestUserXertCredentials:
 
     @pytest.mark.asyncio
     async def test_put_xert_credentials_with_custom_sync_since(self, auth_client, seed_user, db_session, encryption_key_env):
-        from fitter.models import XertCredentials
+        from trainingdash.models import XertCredentials
         from sqlalchemy import select
 
-        with patch("fitter.app.get_xert_client") as mock_get_client:
+        with patch("trainingdash.app.get_xert_client") as mock_get_client:
             mock_client = AsyncMock()
             mock_client.login = AsyncMock()
             mock_client.close = AsyncMock()
@@ -134,8 +134,8 @@ class TestUserXertCredentials:
     async def test_delete_xert_credentials_removes_credentials(
         self, auth_client, db_session, seed_user, encryption_key_env
     ):
-        from fitter.models import XertCredentials
-        from fitter.crypto import encrypt
+        from trainingdash.models import XertCredentials
+        from trainingdash.crypto import encrypt
         from sqlalchemy import select
 
         # First create credentials

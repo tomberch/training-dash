@@ -12,10 +12,10 @@ from testcontainers.postgres import PostgresContainer
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "tests" / "fixtures"))
 from generate_fit import make_test_fit  # noqa: E402
 
-from fitter.app import create_app
-from fitter.auth import hash_password
-from fitter.db import Base
-from fitter.models import User
+from trainingdash.app import create_app
+from trainingdash.auth import hash_password
+from trainingdash.db import Base
+from trainingdash.models import User
 
 
 @pytest.fixture(scope="session")
@@ -64,7 +64,7 @@ async def seed_user(db_session):
 
 @pytest_asyncio.fixture
 async def app_client(db_engine, seed_user):
-    import fitter.auth as authmod
+    import trainingdash.auth as authmod
 
     session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
 

@@ -6,7 +6,7 @@ from unittest import mock
 
 import pytest
 
-from fitter.crypto import encrypt, decrypt, generate_encryption_key, EncryptionError
+from trainingdash.crypto import encrypt, decrypt, generate_encryption_key, EncryptionError
 
 
 @pytest.fixture
@@ -18,7 +18,7 @@ def valid_encryption_key():
 @pytest.fixture
 def mock_settings_with_key(valid_encryption_key):
     """Mock settings with a valid encryption key."""
-    with mock.patch("fitter.crypto.settings") as mock_settings:
+    with mock.patch("trainingdash.crypto.settings") as mock_settings:
         mock_settings.encryption_key = valid_encryption_key
         yield mock_settings
 
@@ -60,13 +60,13 @@ class TestEncryption:
     def test_decrypt_with_wrong_key_raises(self, valid_encryption_key):
         """Decrypting with a different key should raise EncryptionError."""
         # Encrypt with one key
-        with mock.patch("fitter.crypto.settings") as mock_settings:
+        with mock.patch("trainingdash.crypto.settings") as mock_settings:
             mock_settings.encryption_key = valid_encryption_key
             encrypted = encrypt("secret-data")
 
         # Try to decrypt with a different key
         different_key = base64.b64encode(os.urandom(32)).decode("ascii")
-        with mock.patch("fitter.crypto.settings") as mock_settings:
+        with mock.patch("trainingdash.crypto.settings") as mock_settings:
             mock_settings.encryption_key = different_key
             with pytest.raises(EncryptionError, match="Decryption failed"):
                 decrypt(encrypted)
@@ -85,28 +85,28 @@ class TestEncryption:
             decrypt(b"short")
 
     def test_encrypt_without_key_raises(self):
-        """Encrypting without FITTER_ENCRYPTION_KEY configured should raise."""
-        with mock.patch("fitter.crypto.settings") as mock_settings:
+        """Encrypting without TRAININGDASH_ENCRYPTION_KEY configured should raise."""
+        with mock.patch("trainingdash.crypto.settings") as mock_settings:
             mock_settings.encryption_key = None
             with pytest.raises(EncryptionError, match="not configured"):
                 encrypt("test")
 
     def test_decrypt_without_key_raises(self, valid_encryption_key):
-        """Decrypting without FITTER_ENCRYPTION_KEY configured should raise."""
+        """Decrypting without TRAININGDASH_ENCRYPTION_KEY configured should raise."""
         # First encrypt with a valid key
-        with mock.patch("fitter.crypto.settings") as mock_settings:
+        with mock.patch("trainingdash.crypto.settings") as mock_settings:
             mock_settings.encryption_key = valid_encryption_key
             encrypted = encrypt("test")
 
         # Then try to decrypt without a key
-        with mock.patch("fitter.crypto.settings") as mock_settings:
+        with mock.patch("trainingdash.crypto.settings") as mock_settings:
             mock_settings.encryption_key = None
             with pytest.raises(EncryptionError, match="not configured"):
                 decrypt(encrypted)
 
     def test_invalid_key_format_raises(self):
         """Invalid base64 key should raise EncryptionError."""
-        with mock.patch("fitter.crypto.settings") as mock_settings:
+        with mock.patch("trainingdash.crypto.settings") as mock_settings:
             mock_settings.encryption_key = "not-valid-base64!!!"
             with pytest.raises(EncryptionError, match="Invalid"):
                 encrypt("test")
@@ -114,7 +114,7 @@ class TestEncryption:
     def test_wrong_key_length_raises(self):
         """Key that's not 32 bytes should raise EncryptionError."""
         short_key = base64.b64encode(os.urandom(16)).decode("ascii")  # 16 bytes, not 32
-        with mock.patch("fitter.crypto.settings") as mock_settings:
+        with mock.patch("trainingdash.crypto.settings") as mock_settings:
             mock_settings.encryption_key = short_key
             with pytest.raises(EncryptionError, match="32 bytes"):
                 encrypt("test")
@@ -135,7 +135,7 @@ class TestGenerateKey:
     def test_generated_key_works_for_encryption(self):
         """Generated key should work for encrypt/decrypt."""
         key = generate_encryption_key()
-        with mock.patch("fitter.crypto.settings") as mock_settings:
+        with mock.patch("trainingdash.crypto.settings") as mock_settings:
             mock_settings.encryption_key = key
             plaintext = "test-secret"
             encrypted = encrypt(plaintext)

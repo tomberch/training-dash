@@ -6,8 +6,8 @@ from sqlalchemy import select
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "tests" / "fixtures"))
 from generate_fit import make_test_fit  # noqa: E402
-from fitter.models import Activity, User, Route  # noqa: E402
-from fitter.auth import hash_password  # noqa: E402
+from trainingdash.models import Activity, User, Route  # noqa: E402
+from trainingdash.auth import hash_password  # noqa: E402
 
 
 class TestRecords:
@@ -171,7 +171,7 @@ class TestRecords:
         await db_session.refresh(user_b)
 
         fit_b = make_test_fit(num_records=100, start_lat=46.5197, start_lon=6.6323)
-        from fitter.ingest import ingest_fit
+        from trainingdash.ingest import ingest_fit
         await ingest_fit(db_session, user_b.id, fit_b, "upload", "ride_b.fit")
 
         response = await auth_client.get("/records")

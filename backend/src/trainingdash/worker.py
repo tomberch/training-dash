@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 from arq.cron import cron
-from fitter.jobs import get_redis_settings, create_redis_pool
+from trainingdash.jobs import get_redis_settings, create_redis_pool
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ async def worker_db_session():
 
 
 async def ingest_job(ctx, user_id: int, fit_bytes: bytes, source: str, source_ref: str):
-    from fitter.ingest import ingest_fit
+    from trainingdash.ingest import ingest_fit
 
     async with worker_db_session() as db:
         activity = await ingest_fit(db, user_id, fit_bytes, source, source_ref)
@@ -42,8 +42,8 @@ async def ingest_job(ctx, user_id: int, fit_bytes: bytes, source: str, source_re
 
 async def match_route_job(ctx, activity_id: int, user_id: int):
     from sqlalchemy import select
-    from fitter.models import Activity, Record
-    from fitter.route_matching import find_or_create_route_id
+    from trainingdash.models import Activity, Record
+    from trainingdash.route_matching import find_or_create_route_id
 
     async with worker_db_session() as db:
         result = await db.execute(select(Activity).where(Activity.id == activity_id))
@@ -76,7 +76,7 @@ async def _create_activity_from_xert(
     """
     from datetime import timedelta
     from geoalchemy2 import WKTElement
-    from fitter.models import Activity, Record
+    from trainingdash.models import Activity, Record
     
     # Calculate summary stats from session_data
     total_distance_m = detail.distance * 1000 if detail.distance else 0
@@ -191,9 +191,9 @@ async def sync_xert_job(ctx, user_id: int):
     """
     import time
     from sqlalchemy import select
-    from fitter.models import Activity, XertCredentials
-    from fitter.crypto import decrypt, EncryptionError
-    from fitter.xert import get_xert_client, XertAPIError
+    from trainingdash.models import Activity, XertCredentials
+    from trainingdash.crypto import decrypt, EncryptionError
+    from trainingdash.xert import get_xert_client, XertAPIError
     
     async with worker_db_session() as db:
         # Get user's Xert credentials
@@ -298,7 +298,7 @@ async def nightly_sync_all_xert(ctx):
     Runs at 2 AM daily.
     """
     from sqlalchemy import select
-    from fitter.models import XertCredentials
+    from trainingdash.models import XertCredentials
     
     async with worker_db_session() as db:
         result = await db.execute(select(XertCredentials.user_id))
@@ -337,10 +337,10 @@ async def sync_garmin_job(ctx, user_id: int):
     """
     from datetime import datetime as dt, timedelta
     from sqlalchemy import select
-    from fitter.models import Activity, GarminCredentials
-    from fitter.crypto import decrypt, EncryptionError
-    from fitter.garmin import get_garmin_client, GarminAPIError, GarminMFARequired
-    from fitter.ingest import ingest_fit, is_duplicate_activity
+    from trainingdash.models import Activity, GarminCredentials
+    from trainingdash.crypto import decrypt, EncryptionError
+    from trainingdash.garmin import get_garmin_client, GarminAPIError, GarminMFARequired
+    from trainingdash.ingest import ingest_fit, is_duplicate_activity
     
     async with worker_db_session() as db:
         # Get user's Garmin credentials
@@ -456,7 +456,7 @@ async def nightly_sync_all_garmin(ctx):
     Runs at 3 AM daily (1 hour after Xert sync).
     """
     from sqlalchemy import select
-    from fitter.models import GarminCredentials
+    from trainingdash.models import GarminCredentials
     
     async with worker_db_session() as db:
         result = await db.execute(select(GarminCredentials.user_id))

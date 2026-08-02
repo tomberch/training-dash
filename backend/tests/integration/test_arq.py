@@ -12,10 +12,10 @@ from testcontainers.redis import RedisContainer
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "tests" / "fixtures"))
 from generate_fit import make_test_fit  # noqa: E402
-from fitter.models import Activity, Record  # noqa: E402
-from fitter.auth import hash_password  # noqa: E402
-from fitter.db import Base  # noqa: E402
-from fitter.app import create_app  # noqa: E402
+from trainingdash.models import Activity, Record  # noqa: E402
+from trainingdash.auth import hash_password  # noqa: E402
+from trainingdash.db import Base  # noqa: E402
+from trainingdash.app import create_app  # noqa: E402
 
 import bcrypt
 from httpx import ASGITransport, AsyncClient
@@ -42,12 +42,12 @@ async def arq_engine(redis_container, pg_container):
     url = pg_container.get_connection_url()
     os.environ["DATABASE_URL"] = url
 
-    # Also update fitter.config.settings to use the testcontainer URL
-    import fitter.config as configmod
+    # Also update trainingdash.config.settings to use the testcontainer URL
+    import trainingdash.config as configmod
     configmod.settings = configmod.Settings.from_env()
 
     # Update the global engine to use the testcontainer
-    import fitter.db as dbmod
+    import trainingdash.db as dbmod
     dbmod.engine = create_async_engine(url, poolclass=NullPool)
     dbmod.async_session = async_sessionmaker(dbmod.engine, expire_on_commit=False)
     async with dbmod.engine.begin() as conn:
@@ -77,7 +77,7 @@ async def arq_session(arq_engine):
 
 @pytest_asyncio.fixture
 async def arq_user(arq_engine):
-    from fitter.models import User
+    from trainingdash.models import User
     session_factory = async_sessionmaker(arq_engine, expire_on_commit=False)
     async with session_factory() as session:
         user = User(username="testuser", password_hash=hash_password("testpass"), is_admin=True)
@@ -90,7 +90,7 @@ async def arq_user(arq_engine):
 async def run_worker_briefly(redis_host, redis_port, timeout=10):
     """Run the arq worker for a short time to process pending jobs."""
     from arq.connections import RedisSettings
-    from fitter.worker import WorkerSettings
+    from trainingdash.worker import WorkerSettings
 
     worker = Worker(
         WorkerSettings.functions,
@@ -111,7 +111,7 @@ class TestArqIngest:
         redis_host, redis_port = redis_container
 
         session_factory = async_sessionmaker(arq_engine, expire_on_commit=False)
-        import fitter.auth as authmod
+        import trainingdash.auth as authmod
 
         async def override_get_db():
             async with session_factory() as session:
@@ -157,7 +157,7 @@ class TestArqIngest:
         redis_host, redis_port = redis_container
 
         session_factory = async_sessionmaker(arq_engine, expire_on_commit=False)
-        import fitter.auth as authmod
+        import trainingdash.auth as authmod
 
         async def override_get_db():
             async with session_factory() as session:

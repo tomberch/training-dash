@@ -6,7 +6,7 @@ import secrets
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from fitter.config import settings
+from trainingdash.config import settings
 
 
 class EncryptionError(Exception):

@@ -85,8 +85,8 @@ class TestAuth:
 
     @pytest.mark.asyncio
     async def test_user_a_cannot_see_user_b_activities(self, app_client, auth_client, db_session):
-        from fitter.models import User, Activity
-        from fitter.auth import hash_password
+        from trainingdash.models import User, Activity
+        from trainingdash.auth import hash_password
         from datetime import datetime
 
         user_b = User(username="userb", password_hash=hash_password("passb"))

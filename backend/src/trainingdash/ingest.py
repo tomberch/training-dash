@@ -6,7 +6,7 @@ from geoalchemy2.functions import ST_SetSRID, ST_MakePoint
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from fitter.models import Activity, Lap, Record
+from trainingdash.models import Activity, Lap, Record
 
 logger = logging.getLogger(__name__)
 
@@ -315,7 +315,7 @@ async def ingest_fit(
     await db.commit()
     await db.refresh(activity)
 
-    from fitter.route_matching import find_or_create_route_id
+    from trainingdash.route_matching import find_or_create_route_id
     route_id = await find_or_create_route_id(db, activity, parsed["records"])
     if route_id is not None:
         activity.route_id = route_id
