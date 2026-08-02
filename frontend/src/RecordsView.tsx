@@ -3,6 +3,7 @@ import type { RecordsResponse } from "./api";
 import { ApiError, fetchRecords } from "./api";
 import { prsFromRecords, routePRsFromRecords } from "./prs";
 import type { PR } from "./prs";
+import type { UnitSystem } from "./format";
 import { ErrorDisplay } from "./ErrorDisplay";
 
 function PRTile({ pr, variant }: { pr: PR; variant: "lifetime" | "route" }) {
@@ -33,7 +34,11 @@ function PRGrid({ prs, variant }: { prs: PR[]; variant: "lifetime" | "route" }) 
   );
 }
 
-export function RecordsView() {
+interface RecordsViewProps {
+  unitSystem?: UnitSystem;
+}
+
+export function RecordsView({ unitSystem = "metric" }: RecordsViewProps) {
   const [data, setData] = useState<RecordsResponse | null>(null);
   const [error, setError] = useState<Error | ApiError | null>(null);
 
@@ -53,7 +58,7 @@ export function RecordsView() {
     );
   }
 
-  const lifetimePRs = prsFromRecords(data.lifetime_prs);
+  const lifetimePRs = prsFromRecords(data.lifetime_prs, unitSystem);
   const routePRs = routePRsFromRecords(data.route_prs);
 
   if (lifetimePRs.length === 0 && routePRs.length === 0) {
