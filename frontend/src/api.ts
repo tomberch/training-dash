@@ -561,3 +561,37 @@ export interface FitnessResponse {
 export async function fetchFitness(): Promise<FitnessResponse> {
   return apiFetch<FitnessResponse>("/fitness");
 }
+
+
+// Notifications types
+export interface Notification {
+  id: number;
+  type: string;
+  message: string;
+  payload: { suggested_ftp?: number } | null;
+  created_at: string;
+}
+
+export async function fetchNotifications(): Promise<Notification[]> {
+  return apiFetch<Notification[]>("/me/notifications");
+}
+
+export async function acceptNotification(id: number): Promise<void> {
+  const res = await fetch(`${API_BASE}/me/notifications/${id}/accept`, { 
+    method: "POST", 
+    credentials: "include" 
+  });
+  if (!res.ok) {
+    throw new ApiError("Failed to accept notification", res.status);
+  }
+}
+
+export async function dismissNotification(id: number): Promise<void> {
+  const res = await fetch(`${API_BASE}/me/notifications/${id}/dismiss`, { 
+    method: "POST", 
+    credentials: "include" 
+  });
+  if (!res.ok) {
+    throw new ApiError("Failed to dismiss notification", res.status);
+  }
+}
