@@ -23,6 +23,7 @@ class User(Base):
     username: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     is_admin: Mapped[bool] = mapped_column(default=False)
+    unit_system: Mapped[str] = mapped_column(String(10), default="metric", nullable=False)
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
 
 
@@ -97,6 +98,23 @@ class XertCredentials(Base):
     )
     xert_email: Mapped[str] = mapped_column(String(255), nullable=False)
     encrypted_password: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    sync_since: Mapped[datetime | None] = mapped_column(nullable=True)
+    created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
+    updated_at: Mapped[datetime] = mapped_column(
+        server_default=text("now()"), onupdate=text("now()")
+    )
+
+
+class GarminCredentials(Base):
+    __tablename__ = "garmin_credentials"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False
+    )
+    garmin_email: Mapped[str] = mapped_column(String(255), nullable=False)
+    encrypted_password: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    sync_since: Mapped[datetime | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
     updated_at: Mapped[datetime] = mapped_column(
         server_default=text("now()"), onupdate=text("now()")
