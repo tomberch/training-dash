@@ -198,9 +198,9 @@ export function Dashboard() {
           </div>
           
           {pmcData.length > 0 ? (
-            <div className="h-24">
+            <div className="h-24 overflow-hidden">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={pmcData}>
+                <LineChart data={pmcData} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
                   {TSB_ZONES.map((zone) => (
                     <ReferenceArea
                       key={zone.name}
@@ -208,12 +208,13 @@ export function Dashboard() {
                       y2={zone.max}
                       fill={zone.color}
                       fillOpacity={0.2}
+                      ifOverflow="hidden"
                     />
                   ))}
                   <XAxis dataKey="date" hide />
                   <YAxis domain={[-30, 50]} hide />
-                  <Line type="monotone" dataKey="tsb" stroke="#f59e0b" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="ctl" stroke="#3b82f6" strokeWidth={1.5} dot={false} />
+                  <Line type="monotone" dataKey="tsb" stroke="#f59e0b" strokeWidth={2} dot={false} isAnimationActive={false} />
+                  <Line type="monotone" dataKey="ctl" stroke="#3b82f6" strokeWidth={1.5} dot={false} isAnimationActive={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -393,22 +394,32 @@ export function Dashboard() {
           <span className="text-xs text-indigo-600 dark:text-indigo-400">View full →</span>
         </div>
         {powerCurve.length > 0 ? (
-          <div className="h-32">
+          <div className="h-32 overflow-hidden">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={powerCurve.map(p => ({ ...p, logDuration: Math.log10(p.duration_seconds) }))}>
+              <LineChart 
+                data={powerCurve.map(p => ({ ...p, logDuration: Math.log10(p.duration_seconds) }))}
+                margin={{ top: 10, right: 15, bottom: 5, left: 5 }}
+              >
                 <XAxis 
                   dataKey="logDuration" 
                   type="number"
                   domain={[Math.log10(5), Math.log10(7200)]}
                   hide 
                 />
-                <YAxis hide />
+                <YAxis 
+                  domain={['dataMin - 50', 'dataMax + 50']}
+                  tick={{ fontSize: 10, fill: "#9ca3af" }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={35}
+                />
                 <Line 
                   type="monotone" 
                   dataKey="watts" 
                   stroke="#6366f1" 
                   strokeWidth={2} 
-                  dot={{ fill: "#6366f1", r: 3 }} 
+                  dot={{ fill: "#6366f1", r: 3 }}
+                  isAnimationActive={false}
                 />
               </LineChart>
             </ResponsiveContainer>
