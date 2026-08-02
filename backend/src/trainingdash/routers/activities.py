@@ -110,6 +110,49 @@ async def update_activity(
     return activity_summary(activity)
 
 
+@router.post("/activities/{activity_id}/generate-title")
+async def generate_activity_title_endpoint(
+    db: DbSession, user: CurrentUser, activity_id: int
+):
+    """Generate title for an activity using geocoding.
+    
+    This is useful for activities that were bulk-imported and skipped
+    title generation due to rate limits.
+    """
+    activity = await _get_owned_activity(db, user, activity_id)
+    
+    # Don't overwrite manually set titles
+    if activity.title_source == "manual":
+        return activity_summary(activity)
+    
+    # Get GPS records
+    result = await db.execute(
+        select(Record)
+        .where(Record.activity_id == activity_id)
+        .order_by(Record.timestamp)
+    )
+    records = result.scalars().all()
+    
+    # Convert to dict format for title generator
+    records_dicts = [
+        {"lat": r.lat, "lon": r.lon, "altitude_m": r.altitude_m, "distance_m": r.distance_m}
+        for r in records
+    ]
+    
+    # Generate title
+    from trainingdash.title_generator import generate_activity_title
+    
+    title = await generate_activity_title(records_dicts, activity.started_at)
+    
+    if title:
+        activity.title = title
+        activity.title_source = "auto"
+        await db.commit()
+        await db.refresh(activity)
+    
+    return activity_summary(activity)
+
+
 @router.get("/activities/{activity_id}/records")
 async def get_activity_records(db: DbSession, user: CurrentUser, activity_id: int):
     """Get GPS and sensor records for an activity as GeoJSON."""

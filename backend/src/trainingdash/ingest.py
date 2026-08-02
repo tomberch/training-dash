@@ -642,8 +642,10 @@ async def _generate_activity_title(
             slowing down bulk imports. Titles can be generated later.
     """
     if skip_if_rate_limited:
-        # For bulk imports, skip title generation to avoid rate limit delays
+        # For bulk imports, mark as pending so UI can show a "generate" button
         # Titles will show as date until manually edited or regenerated
+        activity.title_source = "pending"
+        await db.commit()
         return
         
     try:

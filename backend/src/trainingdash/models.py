@@ -86,6 +86,7 @@ class Activity(Base):
     is_breakthrough: Mapped[bool] = mapped_column(default=False)
     # Activity title
     title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Title source: 'auto' (geocoded), 'manual' (user edited), 'pending' (bulk import, awaiting geocoding)
     title_source: Mapped[str] = mapped_column(String(20), server_default="auto", nullable=False)
     # Routing
     route_id: Mapped[int | None] = mapped_column(

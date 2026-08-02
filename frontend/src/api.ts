@@ -13,7 +13,7 @@ export interface PeakPower {
 export interface Activity {
   id: number;
   title: string | null;
-  title_source: "auto" | "manual";
+  title_source: "auto" | "manual" | "pending";
   started_at: string;
   total_distance_m: number;
   moving_time_s: number;
@@ -405,6 +405,10 @@ export async function fetchSameRouteActivities(id: number): Promise<SameRouteRes
 
 export async function updateActivityTitle(id: number, title: string): Promise<Activity> {
   return apiPatch<Activity>(`/activities/${id}`, { title }, "Failed to update activity title");
+}
+
+export async function generateActivityTitle(id: number): Promise<Activity> {
+  return apiPost<Activity>(`/activities/${id}/generate-title`, {}, "Failed to generate activity title");
 }
 
 export async function fetchComparison(id: number, otherId: number): Promise<CompareResponse> {

@@ -15,7 +15,7 @@ import {
   ReferenceArea,
 } from "recharts";
 import type { Activity, GeoJSONFeatureCollection, CompareResponse, SameRouteResponse, GapPoint, WbalResponse, PeakPower } from "./api";
-import { ApiError, fetchActivity, fetchActivityRecords, fetchActivityWbal, fetchSameRouteActivities, fetchComparison, updateActivityTitle } from "./api";
+import { ApiError, fetchActivity, fetchActivityRecords, fetchActivityWbal, fetchSameRouteActivities, fetchComparison, updateActivityTitle, generateActivityTitle } from "./api";
 import { formatDistance, formatTime, formatElevation, formatSpeed } from "./format";
 import type { UnitSystem } from "./format";
 import { resampleByDistance } from "./resampler";
@@ -153,6 +153,7 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
   const [hoveredPosition, setHoveredPosition] = useState<[number, number] | null>(null);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState("");
+  const [isGeneratingTitle, setIsGeneratingTitle] = useState(false);
 
   useEffect(() => {
     setComparison(null);
@@ -461,6 +462,34 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
                   {activity.title || new Date(activity.started_at).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                 </h1>
+                {activity.title_source === "pending" && !activity.title && (
+                  <button
+                    onClick={() => {
+                      setIsGeneratingTitle(true);
+                      generateActivityTitle(activityId)
+                        .then((updated) => {
+                          setActivity({ ...activity!, title: updated.title, title_source: updated.title_source });
+                        })
+                        .catch((e) => setError(e))
+                        .finally(() => setIsGeneratingTitle(false));
+                    }}
+                    disabled={isGeneratingTitle}
+                    className="p-1 text-indigo-500 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 disabled:opacity-50"
+                    title="Generate title from GPS"
+                  >
+                    {isGeneratingTitle ? (
+                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    )}
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     setEditedTitle(activity.title || "");
