@@ -46,10 +46,15 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 addopts = ["--durations=10"]
 
+[tool.coverage.run]
+# Use Python 3.12+ sys.monitoring for faster coverage (34% less CPU overhead)
+core = "sysmon"
+
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.1.0",
     "pytest-xdist>=3.8.0",
     "python-dotenv>=1.2.2",
     "testcontainers>=4.15.0",
