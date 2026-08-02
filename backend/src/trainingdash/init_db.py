@@ -1,19 +1,47 @@
 import asyncio
 import os
+import subprocess
 import sys
 
 from sqlalchemy import text
 
 from trainingdash.db import async_session, engine
-from trainingdash.models import Base, User
+from trainingdash.models import User
 from trainingdash.auth import hash_password
 
 
+def run_alembic_upgrade():
+    """Run alembic upgrade head using sync subprocess."""
+    # Get database URL and convert to sync driver for alembic
+    from trainingdash.config import settings
+    db_url = settings.database_url
+    if "+asyncpg" in db_url:
+        db_url = db_url.replace("+asyncpg", "")
+    
+    env = os.environ.copy()
+    env["DATABASE_URL"] = db_url
+    
+    result = subprocess.run(
+        ["alembic", "upgrade", "head"],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        print(f"Alembic upgrade failed: {result.stderr}", file=sys.stderr)
+        sys.exit(1)
+    print(result.stdout)
+
+
 async def init_db():
+    # Ensure PostGIS extension exists
     async with engine.begin() as conn:
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis"))
-        await conn.run_sync(Base.metadata.create_all)
 
+    # Run alembic migrations
+    run_alembic_upgrade()
+
+    # Seed admin user if not exists
     async with async_session() as session:
         result = await session.execute(
             text("SELECT count(*) FROM users WHERE username = :u"),

@@ -6,6 +6,8 @@ RUN pip install --no-cache-dir uv
 
 COPY pyproject.toml ./
 COPY src/ ./src/
+COPY alembic.ini ./
+COPY migrations/ ./migrations/
 
 RUN uv pip install --system --no-cache .
 
