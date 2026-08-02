@@ -29,6 +29,61 @@ class TestAuth:
         assert response.status_code == 401
 
     @pytest.mark.asyncio
+    async def test_logout_clears_session_cookie(self, auth_client):
+        # First verify we're authenticated
+        response = await auth_client.get("/activities")
+        assert response.status_code == 200
+
+        # Logout
+        response = await auth_client.post("/logout")
+        assert response.status_code == 200
+
+        # Subsequent requests should be unauthorized
+        response = await auth_client.get("/activities")
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_logout_requires_auth(self, app_client):
+        response = await app_client.post("/logout")
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_get_me_returns_user_info_with_unit_system(self, auth_client, seed_user):
+        response = await auth_client.get("/me")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == seed_user.id
+        assert data["username"] == seed_user.username
+        assert data["is_admin"] == seed_user.is_admin
+        assert data["unit_system"] == "metric"  # default
+
+    @pytest.mark.asyncio
+    async def test_get_me_requires_auth(self, app_client):
+        response = await app_client.get("/me")
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_patch_me_updates_unit_system(self, auth_client):
+        response = await auth_client.patch("/me", json={"unit_system": "imperial"})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["unit_system"] == "imperial"
+
+        # Verify it persisted
+        response = await auth_client.get("/me")
+        assert response.json()["unit_system"] == "imperial"
+
+    @pytest.mark.asyncio
+    async def test_patch_me_rejects_invalid_unit_system(self, auth_client):
+        response = await auth_client.patch("/me", json={"unit_system": "invalid"})
+        assert response.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_patch_me_requires_auth(self, app_client):
+        response = await app_client.patch("/me", json={"unit_system": "imperial"})
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
     async def test_user_a_cannot_see_user_b_activities(self, app_client, auth_client, db_session):
         from fitter.models import User, Activity
         from fitter.auth import hash_password

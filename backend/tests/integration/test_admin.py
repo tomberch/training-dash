@@ -124,8 +124,8 @@ class TestAdminEndpoints:
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
-        # job_id is None when Redis is not available
-        assert "job_id" in data
+        # job_ids is None when no integrations configured or Redis not available
+        assert "job_ids" in data
 
     @pytest.mark.asyncio
     async def test_admin_trigger_sync_user_not_found(self, auth_client):
