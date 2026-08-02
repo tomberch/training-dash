@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 PHOTON_URL = "https://photon.komoot.io/reverse"
 
 # Cache settings
-CACHE_TTL_SECONDS = 30 * 24 * 60 * 60  # 30 days
+CACHE_TTL_SECONDS = 365 * 24 * 60 * 60  # 1 year (place names rarely change)
 COORDINATE_PRECISION = 2  # Round to 2 decimals (~1km grid)
 
 # Rate limiting: 1 request per second to be safe
