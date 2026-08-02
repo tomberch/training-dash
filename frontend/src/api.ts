@@ -1,3 +1,7 @@
+// ============================================================================
+// Types
+// ============================================================================
+
 export interface PeakPower {
   duration_seconds: number;
   watts: number;
@@ -100,54 +104,6 @@ export interface SameRouteResponse {
   activities: Activity[];
 }
 
-// Structured API error with optional error_id for tracking
-export class ApiError extends Error {
-  status: number;
-  errorId?: string;
-  
-  constructor(message: string, status: number, errorId?: string) {
-    super(message);
-    this.name = "ApiError";
-    this.status = status;
-    this.errorId = errorId;
-  }
-}
-
-const API_BASE = import.meta.env.VITE_API_URL || "/api";
-
-async function apiFetch<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, { credentials: "include" });
-  if (!res.ok) {
-    // Try to parse structured error response
-    let detail = `Request failed`;
-    let errorId: string | undefined;
-    try {
-      const body = await res.json();
-      detail = body.detail || detail;
-      errorId = body.error_id;
-    } catch {
-      // Response wasn't JSON, use status text
-      detail = res.statusText || detail;
-    }
-    throw new ApiError(detail, res.status, errorId);
-  }
-  return res.json();
-}
-
-export async function fetchActivities(): Promise<Activity[]> {
-  return apiFetch<Activity[]>("/activities");
-}
-
-export async function fetchActivity(id: number): Promise<Activity> {
-  return apiFetch<Activity>(`/activities/${id}`);
-}
-
-export async function fetchActivityRecords(
-  id: number
-): Promise<GeoJSONFeatureCollection> {
-  return apiFetch<GeoJSONFeatureCollection>(`/activities/${id}/records`);
-}
-
 export interface WbalPoint {
   elapsed_s: number;
   distance_m: number;
@@ -163,79 +119,10 @@ export interface WbalResponse {
   wbal_min_pct: number | null;
 }
 
-export async function fetchActivityWbal(id: number): Promise<WbalResponse> {
-  return apiFetch<WbalResponse>(`/activities/${id}/wbal`);
-}
-
-export async function fetchRecords(): Promise<RecordsResponse> {
-  return apiFetch<RecordsResponse>("/records");
-}
-
-export async function fetchSameRouteActivities(id: number): Promise<SameRouteResponse> {
-  return apiFetch<SameRouteResponse>(`/activities/${id}/same-route`);
-}
-
-export async function fetchComparison(id: number, otherId: number): Promise<CompareResponse> {
-  return apiFetch<CompareResponse>(`/activities/${id}/compare?other=${otherId}`);
-}
-
-export async function login(
-  username: string,
-  password: string
-): Promise<LoginResponse | null> {
-  const res = await fetch(`${API_BASE}/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ username, password }),
-  });
-  if (!res.ok) return null;
-  return res.json();
-}
-
-export async function logout(): Promise<void> {
-  const res = await fetch(`${API_BASE}/logout`, {
-    method: "POST",
-    credentials: "include",
-  });
-  if (!res.ok) {
-    throw new ApiError("Logout failed", res.status);
-  }
-}
-
-export async function uploadFit(file: File): Promise<{ id?: number; job_id?: string; source_ref?: string }> {
-  const formData = new FormData();
-  formData.append("file", file);
-  const res = await fetch(`${API_BASE}/upload`, {
-    method: "POST",
-    credentials: "include",
-    body: formData,
-  });
-  if (!res.ok) {
-    let detail = "Upload failed";
-    let errorId: string | undefined;
-    try {
-      const body = await res.json();
-      detail = body.detail || detail;
-      errorId = body.error_id;
-    } catch {
-      // ignore
-    }
-    throw new ApiError(detail, res.status, errorId);
-  }
-  return res.json();
-}
-
 export interface JobStatus {
   status: "pending" | "processing" | "complete" | "not_found" | "unknown";
   result: { success: boolean; activity_id: number | null } | null;
 }
-
-export async function fetchJobStatus(jobId: string): Promise<JobStatus> {
-  return apiFetch<JobStatus>(`/jobs/${jobId}`);
-}
-
-// Admin API
 
 export interface AdminUser {
   id: number;
@@ -257,159 +144,11 @@ export interface User {
   unit_system: "metric" | "imperial";
 }
 
-export async function fetchMe(): Promise<User> {
-  return apiFetch<User>("/me");
-}
-
-export async function updatePreferences(prefs: { unit_system?: string }): Promise<User> {
-  const res = await fetch(`${API_BASE}/me`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify(prefs),
-  });
-  if (!res.ok) {
-    let detail = "Failed to update preferences";
-    let errorId: string | undefined;
-    try {
-      const body = await res.json();
-      detail = body.detail || detail;
-      errorId = body.error_id;
-    } catch {
-      // ignore
-    }
-    throw new ApiError(detail, res.status, errorId);
-  }
-  return res.json();
-}
-
-export async function fetchAdminUsers(): Promise<AdminUser[]> {
-  return apiFetch<AdminUser[]>("/admin/users");
-}
-
-export async function createUser(username: string, password: string): Promise<AdminUser> {
-  const res = await fetch(`${API_BASE}/admin/users`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ username, password }),
-  });
-  if (!res.ok) {
-    let detail = "Failed to create user";
-    let errorId: string | undefined;
-    try {
-      const body = await res.json();
-      detail = body.detail || detail;
-      errorId = body.error_id;
-    } catch {
-      // ignore
-    }
-    throw new ApiError(detail, res.status, errorId);
-  }
-  return res.json();
-}
-
-export async function resetUserPassword(userId: number, password: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/admin/users/${userId}/reset-password`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ password }),
-  });
-  if (!res.ok) {
-    let detail = "Failed to reset password";
-    let errorId: string | undefined;
-    try {
-      const body = await res.json();
-      detail = body.detail || detail;
-      errorId = body.error_id;
-    } catch {
-      // ignore
-    }
-    throw new ApiError(detail, res.status, errorId);
-  }
-}
-
-export async function triggerUserSync(userId: number): Promise<{ job_id: string | null }> {
-  const res = await fetch(`${API_BASE}/admin/users/${userId}/sync`, {
-    method: "POST",
-    credentials: "include",
-  });
-  if (!res.ok) {
-    let detail = "Failed to trigger sync";
-    let errorId: string | undefined;
-    try {
-      const body = await res.json();
-      detail = body.detail || detail;
-      errorId = body.error_id;
-    } catch {
-      // ignore
-    }
-    throw new ApiError(detail, res.status, errorId);
-  }
-  return res.json();
-}
-
-// User Xert credentials API
-
 export interface XertCredentialsStatus {
   configured: boolean;
   xert_email: string | null;
   sync_since: string | null;
 }
-
-export async function fetchMyXertCredentials(): Promise<XertCredentialsStatus> {
-  return apiFetch<XertCredentialsStatus>("/me/xert-credentials");
-}
-
-export async function saveMyXertCredentials(
-  xert_email: string,
-  xert_password: string,
-  sync_since?: string
-): Promise<void> {
-  const body: Record<string, string> = { xert_email, xert_password };
-  if (sync_since) body.sync_since = sync_since;
-  
-  const res = await fetch(`${API_BASE}/me/xert-credentials`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    let detail = "Failed to save Xert credentials";
-    let errorId: string | undefined;
-    try {
-      const body = await res.json();
-      detail = body.detail || detail;
-      errorId = body.error_id;
-    } catch {
-      // ignore
-    }
-    throw new ApiError(detail, res.status, errorId);
-  }
-}
-
-export async function deleteMyXertCredentials(): Promise<void> {
-  const res = await fetch(`${API_BASE}/me/xert-credentials`, {
-    method: "DELETE",
-    credentials: "include",
-  });
-  if (!res.ok) {
-    let detail = "Failed to disconnect Xert";
-    let errorId: string | undefined;
-    try {
-      const body = await res.json();
-      detail = body.detail || detail;
-      errorId = body.error_id;
-    } catch {
-      // ignore
-    }
-    throw new ApiError(detail, res.status, errorId);
-  }
-}
-
-// User Garmin credentials API
 
 export interface GarminCredentialsStatus {
   configured: boolean;
@@ -423,84 +162,6 @@ export interface GarminSaveResponse {
   mfa_required?: boolean;
 }
 
-export async function fetchMyGarminCredentials(): Promise<GarminCredentialsStatus> {
-  return apiFetch<GarminCredentialsStatus>("/me/garmin-credentials");
-}
-
-export async function saveMyGarminCredentials(
-  garmin_email: string,
-  garmin_password: string,
-  sync_since?: string
-): Promise<GarminSaveResponse> {
-  const body: Record<string, string> = { garmin_email, garmin_password };
-  if (sync_since) body.sync_since = sync_since;
-  
-  const res = await fetch(`${API_BASE}/me/garmin-credentials`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    let detail = "Failed to save Garmin credentials";
-    let errorId: string | undefined;
-    try {
-      const respBody = await res.json();
-      detail = respBody.detail || detail;
-      errorId = respBody.error_id;
-    } catch {
-      // ignore
-    }
-    throw new ApiError(detail, res.status, errorId);
-  }
-  return res.json();
-}
-
-export async function completeGarminMfa(mfa_code: string): Promise<GarminSaveResponse> {
-  const res = await fetch(`${API_BASE}/me/garmin-credentials/mfa`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ mfa_code }),
-  });
-  if (!res.ok) {
-    let detail = "Failed to complete MFA";
-    let errorId: string | undefined;
-    try {
-      const body = await res.json();
-      detail = body.detail || detail;
-      errorId = body.error_id;
-    } catch {
-      // ignore
-    }
-    throw new ApiError(detail, res.status, errorId);
-  }
-  return res.json();
-}
-
-export async function deleteMyGarminCredentials(): Promise<void> {
-  const res = await fetch(`${API_BASE}/me/garmin-credentials`, {
-    method: "DELETE",
-    credentials: "include",
-  });
-  if (!res.ok) {
-    let detail = "Failed to disconnect Garmin";
-    let errorId: string | undefined;
-    try {
-      const body = await res.json();
-      detail = body.detail || detail;
-      errorId = body.error_id;
-    } catch {
-      // ignore
-    }
-    throw new ApiError(detail, res.status, errorId);
-  }
-}
-
-
-
-
-// PMC (Performance Management Chart) types
 export interface PMCPoint {
   date: string;
   ctl: number;
@@ -508,15 +169,6 @@ export interface PMCPoint {
   tsb: number;
 }
 
-export async function fetchPMC(start?: string, end?: string): Promise<PMCPoint[]> {
-  const params = new URLSearchParams();
-  if (start) params.set("start", start);
-  if (end) params.set("end", end);
-  const query = params.toString();
-  return apiFetch<PMCPoint[]>(`/pmc${query ? `?${query}` : ""}`);
-}
-
-// Threshold history for FTP markers
 export interface ThresholdEntry {
   effective_date: string;
   ftp_watts: number | null;
@@ -524,12 +176,6 @@ export interface ThresholdEntry {
   max_hr_bpm: number | null;
 }
 
-export async function fetchThresholds(): Promise<ThresholdEntry[]> {
-  return apiFetch<ThresholdEntry[]>("/me/thresholds");
-}
-
-
-// Power curve types
 export interface PowerCurvePoint {
   duration_seconds: number;
   watts: number;
@@ -537,15 +183,6 @@ export interface PowerCurvePoint {
   days_ago: number;
 }
 
-export async function fetchPowerCurve(start?: string, end?: string): Promise<PowerCurvePoint[]> {
-  const params = new URLSearchParams();
-  if (start) params.set("start", start);
-  if (end) params.set("end", end);
-  const query = params.toString();
-  return apiFetch<PowerCurvePoint[]>(`/power-curve${query ? `?${query}` : ""}`);
-}
-
-// Fitness model types
 export interface FitnessSnapshot {
   computed_at: string;
   pp_watts: number;
@@ -558,12 +195,6 @@ export interface FitnessResponse {
   history: FitnessSnapshot[];
 }
 
-export async function fetchFitness(): Promise<FitnessResponse> {
-  return apiFetch<FitnessResponse>("/fitness");
-}
-
-
-// Notifications types
 export interface Notification {
   id: number;
   type: string;
@@ -572,32 +203,6 @@ export interface Notification {
   created_at: string;
 }
 
-export async function fetchNotifications(): Promise<Notification[]> {
-  return apiFetch<Notification[]>("/me/notifications");
-}
-
-export async function acceptNotification(id: number): Promise<void> {
-  const res = await fetch(`${API_BASE}/me/notifications/${id}/accept`, { 
-    method: "POST", 
-    credentials: "include" 
-  });
-  if (!res.ok) {
-    throw new ApiError("Failed to accept notification", res.status);
-  }
-}
-
-export async function dismissNotification(id: number): Promise<void> {
-  const res = await fetch(`${API_BASE}/me/notifications/${id}/dismiss`, { 
-    method: "POST", 
-    credentials: "include" 
-  });
-  if (!res.ok) {
-    throw new ApiError("Failed to dismiss notification", res.status);
-  }
-}
-
-
-// Zones types
 export interface PowerZone {
   zone_number: number;
   name: string;
@@ -619,10 +224,6 @@ export interface ZonesResponse {
   hr_zones: HrZone[];
 }
 
-export async function fetchZones(): Promise<ZonesResponse> {
-  return apiFetch<ZonesResponse>("/me/zones");
-}
-
 export interface ZoneUpdate {
   zone_number: number;
   name?: string;
@@ -636,25 +237,6 @@ export interface UpdateZonesRequest {
   reset_to_defaults?: boolean;
 }
 
-export async function updateZones(request: UpdateZonesRequest): Promise<ZonesResponse> {
-  const res = await fetch(`${API_BASE}/me/zones`, {
-    method: "PUT",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(request),
-  });
-  if (!res.ok) {
-    let detail = "Failed to update zones";
-    try {
-      const body = await res.json();
-      detail = body.detail || detail;
-    } catch {}
-    throw new ApiError(detail, res.status);
-  }
-  return res.json();
-}
-
-// Create threshold
 export interface CreateThresholdRequest {
   effective_date?: string;
   ftp_watts: number;
@@ -662,20 +244,349 @@ export interface CreateThresholdRequest {
   hrmax_bpm: number;
 }
 
-export async function createThreshold(request: CreateThresholdRequest): Promise<ThresholdEntry> {
-  const res = await fetch(`${API_BASE}/me/thresholds`, {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(request),
-  });
+// ============================================================================
+// API Error and Base Helpers
+// ============================================================================
+
+/**
+ * Structured API error with optional error_id for tracking.
+ */
+export class ApiError extends Error {
+  status: number;
+  errorId?: string;
+
+  constructor(message: string, status: number, errorId?: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.errorId = errorId;
+  }
+}
+
+const API_BASE = import.meta.env.VITE_API_URL || "/api";
+
+/**
+ * Extract error details from a failed response.
+ */
+async function extractError(
+  res: Response,
+  defaultMessage: string
+): Promise<{ detail: string; errorId?: string }> {
+  let detail = defaultMessage;
+  let errorId: string | undefined;
+  try {
+    const body = await res.json();
+    detail = body.detail || detail;
+    errorId = body.error_id;
+  } catch {
+    // Response wasn't JSON, use status text
+    detail = res.statusText || detail;
+  }
+  return { detail, errorId };
+}
+
+/**
+ * GET request helper - fetches JSON from an API endpoint.
+ */
+async function apiGet<T>(path: string): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, { credentials: "include" });
   if (!res.ok) {
-    let detail = "Failed to create threshold";
-    try {
-      const body = await res.json();
-      detail = body.detail || detail;
-    } catch {}
-    throw new ApiError(detail, res.status);
+    const { detail, errorId } = await extractError(res, "Request failed");
+    throw new ApiError(detail, res.status, errorId);
   }
   return res.json();
+}
+
+/**
+ * POST request helper - posts JSON to an API endpoint.
+ */
+async function apiPost<T>(
+  path: string,
+  body?: unknown,
+  errorMessage = "Request failed"
+): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: body !== undefined ? { "Content-Type": "application/json" } : {},
+    credentials: "include",
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    const { detail, errorId } = await extractError(res, errorMessage);
+    throw new ApiError(detail, res.status, errorId);
+  }
+  // Handle void responses (204 No Content or empty body)
+  const text = await res.text();
+  return text ? JSON.parse(text) : ({} as T);
+}
+
+/**
+ * PUT request helper - puts JSON to an API endpoint.
+ */
+async function apiPut<T>(
+  path: string,
+  body: unknown,
+  errorMessage = "Request failed"
+): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const { detail, errorId } = await extractError(res, errorMessage);
+    throw new ApiError(detail, res.status, errorId);
+  }
+  const text = await res.text();
+  return text ? JSON.parse(text) : ({} as T);
+}
+
+/**
+ * PATCH request helper - patches JSON to an API endpoint.
+ */
+async function apiPatch<T>(
+  path: string,
+  body: unknown,
+  errorMessage = "Request failed"
+): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const { detail, errorId } = await extractError(res, errorMessage);
+    throw new ApiError(detail, res.status, errorId);
+  }
+  return res.json();
+}
+
+/**
+ * DELETE request helper.
+ */
+async function apiDelete(path: string, errorMessage = "Request failed"): Promise<void> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const { detail, errorId } = await extractError(res, errorMessage);
+    throw new ApiError(detail, res.status, errorId);
+  }
+}
+
+// ============================================================================
+// Activity API
+// ============================================================================
+
+export async function fetchActivities(): Promise<Activity[]> {
+  return apiGet<Activity[]>("/activities");
+}
+
+export async function fetchActivity(id: number): Promise<Activity> {
+  return apiGet<Activity>(`/activities/${id}`);
+}
+
+export async function fetchActivityRecords(id: number): Promise<GeoJSONFeatureCollection> {
+  return apiGet<GeoJSONFeatureCollection>(`/activities/${id}/records`);
+}
+
+export async function fetchActivityWbal(id: number): Promise<WbalResponse> {
+  return apiGet<WbalResponse>(`/activities/${id}/wbal`);
+}
+
+export async function fetchSameRouteActivities(id: number): Promise<SameRouteResponse> {
+  return apiGet<SameRouteResponse>(`/activities/${id}/same-route`);
+}
+
+export async function fetchComparison(id: number, otherId: number): Promise<CompareResponse> {
+  return apiGet<CompareResponse>(`/activities/${id}/compare?other=${otherId}`);
+}
+
+export async function uploadFit(
+  file: File
+): Promise<{ id?: number; job_id?: string; source_ref?: string }> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(`${API_BASE}/upload`, {
+    method: "POST",
+    credentials: "include",
+    body: formData,
+  });
+  if (!res.ok) {
+    const { detail, errorId } = await extractError(res, "Upload failed");
+    throw new ApiError(detail, res.status, errorId);
+  }
+  return res.json();
+}
+
+export async function fetchJobStatus(jobId: string): Promise<JobStatus> {
+  return apiGet<JobStatus>(`/jobs/${jobId}`);
+}
+
+// ============================================================================
+// Auth API
+// ============================================================================
+
+export async function login(username: string, password: string): Promise<LoginResponse | null> {
+  const res = await fetch(`${API_BASE}/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ username, password }),
+  });
+  if (!res.ok) return null;
+  return res.json();
+}
+
+export async function logout(): Promise<void> {
+  return apiPost("/logout", undefined, "Logout failed");
+}
+
+// ============================================================================
+// User API
+// ============================================================================
+
+export async function fetchMe(): Promise<User> {
+  return apiGet<User>("/me");
+}
+
+export async function updatePreferences(prefs: { unit_system?: string }): Promise<User> {
+  return apiPatch<User>("/me", prefs, "Failed to update preferences");
+}
+
+export async function fetchNotifications(): Promise<Notification[]> {
+  return apiGet<Notification[]>("/me/notifications");
+}
+
+export async function acceptNotification(id: number): Promise<void> {
+  return apiPost(`/me/notifications/${id}/accept`, undefined, "Failed to accept notification");
+}
+
+export async function dismissNotification(id: number): Promise<void> {
+  return apiPost(`/me/notifications/${id}/dismiss`, undefined, "Failed to dismiss notification");
+}
+
+// ============================================================================
+// Thresholds and Zones API
+// ============================================================================
+
+export async function fetchThresholds(): Promise<ThresholdEntry[]> {
+  return apiGet<ThresholdEntry[]>("/me/thresholds");
+}
+
+export async function createThreshold(request: CreateThresholdRequest): Promise<ThresholdEntry> {
+  return apiPost<ThresholdEntry>("/me/thresholds", request, "Failed to create threshold");
+}
+
+export async function fetchZones(): Promise<ZonesResponse> {
+  return apiGet<ZonesResponse>("/me/zones");
+}
+
+export async function updateZones(request: UpdateZonesRequest): Promise<ZonesResponse> {
+  return apiPut<ZonesResponse>("/me/zones", request, "Failed to update zones");
+}
+
+// ============================================================================
+// Integration Credentials API
+// ============================================================================
+
+// Xert
+export async function fetchMyXertCredentials(): Promise<XertCredentialsStatus> {
+  return apiGet<XertCredentialsStatus>("/me/xert-credentials");
+}
+
+export async function saveMyXertCredentials(
+  xert_email: string,
+  xert_password: string,
+  sync_since?: string
+): Promise<void> {
+  const body: Record<string, string> = { xert_email, xert_password };
+  if (sync_since) body.sync_since = sync_since;
+  return apiPut("/me/xert-credentials", body, "Failed to save Xert credentials");
+}
+
+export async function deleteMyXertCredentials(): Promise<void> {
+  return apiDelete("/me/xert-credentials", "Failed to disconnect Xert");
+}
+
+// Garmin
+export async function fetchMyGarminCredentials(): Promise<GarminCredentialsStatus> {
+  return apiGet<GarminCredentialsStatus>("/me/garmin-credentials");
+}
+
+export async function saveMyGarminCredentials(
+  garmin_email: string,
+  garmin_password: string,
+  sync_since?: string
+): Promise<GarminSaveResponse> {
+  const body: Record<string, string> = { garmin_email, garmin_password };
+  if (sync_since) body.sync_since = sync_since;
+  return apiPut<GarminSaveResponse>("/me/garmin-credentials", body, "Failed to save Garmin credentials");
+}
+
+export async function completeGarminMfa(mfa_code: string): Promise<GarminSaveResponse> {
+  return apiPost<GarminSaveResponse>(
+    "/me/garmin-credentials/mfa",
+    { mfa_code },
+    "Failed to complete MFA"
+  );
+}
+
+export async function deleteMyGarminCredentials(): Promise<void> {
+  return apiDelete("/me/garmin-credentials", "Failed to disconnect Garmin");
+}
+
+// ============================================================================
+// Admin API
+// ============================================================================
+
+export async function fetchAdminUsers(): Promise<AdminUser[]> {
+  return apiGet<AdminUser[]>("/admin/users");
+}
+
+export async function createUser(username: string, password: string): Promise<AdminUser> {
+  return apiPost<AdminUser>("/admin/users", { username, password }, "Failed to create user");
+}
+
+export async function resetUserPassword(userId: number, password: string): Promise<void> {
+  return apiPost(`/admin/users/${userId}/reset-password`, { password }, "Failed to reset password");
+}
+
+export async function triggerUserSync(userId: number): Promise<{ job_id: string | null }> {
+  return apiPost<{ job_id: string | null }>(
+    `/admin/users/${userId}/sync`,
+    undefined,
+    "Failed to trigger sync"
+  );
+}
+
+// ============================================================================
+// Analytics API
+// ============================================================================
+
+export async function fetchRecords(): Promise<RecordsResponse> {
+  return apiGet<RecordsResponse>("/records");
+}
+
+export async function fetchPMC(start?: string, end?: string): Promise<PMCPoint[]> {
+  const params = new URLSearchParams();
+  if (start) params.set("start", start);
+  if (end) params.set("end", end);
+  const query = params.toString();
+  return apiGet<PMCPoint[]>(`/pmc${query ? `?${query}` : ""}`);
+}
+
+export async function fetchPowerCurve(start?: string, end?: string): Promise<PowerCurvePoint[]> {
+  const params = new URLSearchParams();
+  if (start) params.set("start", start);
+  if (end) params.set("end", end);
+  const query = params.toString();
+  return apiGet<PowerCurvePoint[]>(`/power-curve${query ? `?${query}` : ""}`);
+}
+
+export async function fetchFitness(): Promise<FitnessResponse> {
+  return apiGet<FitnessResponse>("/fitness");
 }
