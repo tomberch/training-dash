@@ -79,6 +79,8 @@ class Activity(Base):
     # W'bal metrics
     wbal_min_joules: Mapped[int | None] = mapped_column(Integer, nullable=True)
     wbal_min_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Breakthrough detection
+    is_breakthrough: Mapped[bool] = mapped_column(default=False)
     # Routing
     route_id: Mapped[int | None] = mapped_column(
         ForeignKey("routes.id"), nullable=True
@@ -113,6 +115,23 @@ class ActivityPeakPower(Base):
     )
     duration_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
     watts: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class FitnessHistory(Base):
+    """User fitness model snapshots over time (3-parameter CP model)."""
+    __tablename__ = "fitness_history"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    computed_at: Mapped[datetime] = mapped_column(nullable=False)
+    # Peak Power (neuromuscular, ~5s)
+    pp_watts: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Anaerobic Work Capacity (W')
+    w_prime_joules: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Critical Power (sustainable threshold)
+    cp_watts: Mapped[int] = mapped_column(Integer, nullable=False)
 
 
 class XertCredentials(Base):

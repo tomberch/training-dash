@@ -7,7 +7,7 @@ from geoalchemy2.functions import ST_SetSRID, ST_MakePoint
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from trainingdash.models import Activity, Lap, Record, ThresholdHistory, PowerZone, HrZone, ActivityPeakPower
+from trainingdash.models import Activity, Lap, Record, ThresholdHistory, PowerZone, HrZone, ActivityPeakPower, FitnessHistory
 from trainingdash.metrics import (
     compute_normalized_power,
     compute_intensity_factor,
@@ -16,6 +16,7 @@ from trainingdash.metrics import (
 )
 from trainingdash.wbal import compute_wbal_series
 from trainingdash.peaks import extract_peak_powers
+from trainingdash.fitness import detect_breakthrough, get_all_time_bests, fit_cp_model
 
 logger = logging.getLogger(__name__)
 
@@ -330,6 +331,9 @@ async def ingest_fit(
     # Extract and store peak powers
     await _extract_activity_peaks(db, activity, parsed["records"])
 
+    # Detect breakthroughs and update fitness model
+    await _detect_breakthrough_and_update_fitness(db, activity)
+
     # Route matching
     from trainingdash.route_matching import find_or_create_route_id
     route_id = await find_or_create_route_id(db, activity, parsed["records"])
@@ -484,4 +488,123 @@ async def _extract_activity_peaks(
             )
             db.add(peak)
     
+    await db.commit()
+
+
+
+
+async def _detect_breakthrough_and_update_fitness(
+    db: AsyncSession,
+    activity: Activity,
+) -> None:
+    """
+    Detect if activity is a breakthrough and update fitness model if so.
+    
+    A breakthrough occurs when the activity sets PRs at key durations
+    (5s, 1min, 5min, 20min).
+    """
+    # Get this activity's peaks
+    result = await db.execute(
+        select(ActivityPeakPower)
+        .where(ActivityPeakPower.activity_id == activity.id)
+    )
+    activity_peaks_rows = result.scalars().all()
+    
+    if not activity_peaks_rows:
+        return
+    
+    activity_peaks = {p.duration_seconds: p.watts for p in activity_peaks_rows}
+    
+    # Get all previous activities' peaks for this user (before this activity)
+    result = await db.execute(
+        select(ActivityPeakPower)
+        .join(Activity, ActivityPeakPower.activity_id == Activity.id)
+        .where(
+            Activity.user_id == activity.user_id,
+            Activity.id != activity.id,
+        )
+    )
+    previous_peaks_rows = result.scalars().all()
+    
+    # Group by activity
+    peaks_by_activity: dict[int, dict[int, int]] = {}
+    for p in previous_peaks_rows:
+        if p.activity_id not in peaks_by_activity:
+            peaks_by_activity[p.activity_id] = {}
+        peaks_by_activity[p.activity_id][p.duration_seconds] = p.watts
+    
+    # Get all-time bests before this activity
+    all_time_bests = get_all_time_bests(list(peaks_by_activity.values()))
+    
+    # Check if this is a breakthrough
+    is_breakthrough = detect_breakthrough(activity_peaks, all_time_bests)
+    
+    if is_breakthrough:
+        activity.is_breakthrough = True
+        await db.commit()
+        await db.refresh(activity)
+        
+        # Update fitness model with new data
+        await _update_fitness_model(db, activity.user_id)
+
+
+async def _update_fitness_model(
+    db: AsyncSession,
+    user_id: int,
+) -> None:
+    """
+    Recalculate and store the user's fitness model.
+    """
+    # Get all activities with peaks for this user
+    result = await db.execute(
+        select(Activity)
+        .where(Activity.user_id == user_id)
+        .order_by(Activity.started_at.desc())
+    )
+    activities = result.scalars().all()
+    
+    if not activities:
+        return
+    
+    # Get peaks for all activities
+    activity_ids = [a.id for a in activities]
+    result = await db.execute(
+        select(ActivityPeakPower)
+        .where(ActivityPeakPower.activity_id.in_(activity_ids))
+    )
+    all_peaks = result.scalars().all()
+    
+    # Group peaks by activity
+    peaks_by_activity: dict[int, dict[int, int]] = {}
+    for p in all_peaks:
+        if p.activity_id not in peaks_by_activity:
+            peaks_by_activity[p.activity_id] = {}
+        peaks_by_activity[p.activity_id][p.duration_seconds] = p.watts
+    
+    # Build lists for model fitting
+    peak_powers = []
+    activity_dates = []
+    for a in activities:
+        if a.id in peaks_by_activity:
+            peak_powers.append(peaks_by_activity[a.id])
+            activity_dates.append(a.started_at)
+    
+    if not peak_powers:
+        return
+    
+    # Fit the model
+    model = fit_cp_model(peak_powers, activity_dates)
+    
+    if model is None:
+        return
+    
+    # Store new fitness snapshot
+    fitness = FitnessHistory(
+        user_id=user_id,
+        computed_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        pp_watts=model["pp_watts"],
+        w_prime_joules=model["w_prime_joules"],
+        cp_watts=model["cp_watts"],
+    )
+    db.add(fitness)
     await db.commit()

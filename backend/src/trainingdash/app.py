@@ -12,7 +12,7 @@ from sqlalchemy.orm import selectinload
 
 from trainingdash.auth import AdminUser, CurrentUser, DbSession, LoginRequest, create_session_cookie, hash_password, verify_password
 from trainingdash.db import Base, async_session, engine
-from trainingdash.models import Activity, Lap, Record, User, XertCredentials, GarminCredentials, ThresholdHistory, PowerZone, HrZone, ActivityPeakPower
+from trainingdash.models import Activity, Lap, Record, User, XertCredentials, GarminCredentials, ThresholdHistory, PowerZone, HrZone, ActivityPeakPower, FitnessHistory
 from trainingdash.xert import get_xert_client, XertAPIError
 from trainingdash.garmin import get_garmin_client, GarminAPIError, GarminMFARequired
 from trainingdash.crypto import encrypt, decrypt, EncryptionError
@@ -99,6 +99,8 @@ def create_app() -> FastAPI:
     # User zones (power and HR)
     app.get("/me/zones")(get_my_zones)
     app.put("/me/zones")(update_my_zones)
+    # Fitness model
+    app.get("/fitness")(get_fitness)
     return app
 
 
@@ -867,6 +869,7 @@ def _activity_summary(a: Activity) -> dict[str, Any]:
         "avg_power_w": a.avg_power_w,
         "max_speed_mps": a.max_speed_mps,
         "max_hr_bpm": a.max_hr_bpm,
+        "is_breakthrough": a.is_breakthrough,
     }
 
 
@@ -1287,6 +1290,56 @@ async def admin_delete_xert_credentials(db: DbSession, admin: AdminUser, user_id
         await db.delete(creds)
         await db.commit()
     return {"success": True}
+
+
+async def get_fitness(db: DbSession, user: CurrentUser):
+    """
+    Get current fitness model and recent history.
+    
+    Returns the latest fitness snapshot (PP, W', CP) and
+    history of model changes over time.
+    """
+    # Get most recent fitness snapshot
+    result = await db.execute(
+        select(FitnessHistory)
+        .where(FitnessHistory.user_id == user.id)
+        .order_by(FitnessHistory.computed_at.desc())
+        .limit(1)
+    )
+    current = result.scalar_one_or_none()
+    
+    # Get recent history (last 10 snapshots)
+    result = await db.execute(
+        select(FitnessHistory)
+        .where(FitnessHistory.user_id == user.id)
+        .order_by(FitnessHistory.computed_at.desc())
+        .limit(10)
+    )
+    history = result.scalars().all()
+    
+    if current is None:
+        return {
+            "current": None,
+            "history": [],
+        }
+    
+    return {
+        "current": {
+            "computed_at": current.computed_at.isoformat(),
+            "pp_watts": current.pp_watts,
+            "w_prime_joules": current.w_prime_joules,
+            "cp_watts": current.cp_watts,
+        },
+        "history": [
+            {
+                "computed_at": h.computed_at.isoformat(),
+                "pp_watts": h.pp_watts,
+                "w_prime_joules": h.w_prime_joules,
+                "cp_watts": h.cp_watts,
+            }
+            for h in history
+        ],
+    }
 
 
 app = create_app()
