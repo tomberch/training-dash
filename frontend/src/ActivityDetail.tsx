@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
-import { MapContainer, Polyline, TileLayer, useMap } from "react-leaflet";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { MapContainer, Polyline, TileLayer, useMap, Marker, CircleMarker } from "react-leaflet";
 import type { LatLngBounds } from "leaflet";
 import L from "leaflet";
 import {
@@ -14,7 +14,8 @@ import {
 } from "recharts";
 import type { Activity, GeoJSONFeatureCollection, CompareResponse, SameRouteResponse, GapPoint } from "./api";
 import { ApiError, fetchActivity, fetchActivityRecords, fetchSameRouteActivities, fetchComparison } from "./api";
-import { formatDistance, formatTime } from "./format";
+import { formatDistance, formatTime, formatElevation, formatSpeed } from "./format";
+import type { UnitSystem } from "./format";
 import { resampleByDistance } from "./resampler";
 import type { FitRecord } from "./resampler";
 import { ErrorDisplay } from "./ErrorDisplay";
@@ -63,15 +64,19 @@ function buildColoredSegments(
   return segments;
 }
 
-// Component to fit map bounds to polyline
+// Component to fit map bounds to polyline - only runs once on initial load
 function FitBounds({ positions }: { positions: [number, number][] }) {
   const map = useMap();
+  const hasFitted = useRef(false);
+  
   useEffect(() => {
-    if (positions.length > 0) {
+    if (positions.length > 0 && !hasFitted.current) {
       const bounds: LatLngBounds = L.latLngBounds(positions.map(p => L.latLng(p[0], p[1])));
       map.fitBounds(bounds, { padding: [20, 20] });
+      hasFitted.current = true;
     }
   }, [map, positions]);
+  
   return null;
 }
 
@@ -93,6 +98,7 @@ const CHARTS: ChartConfig[] = [
 interface Props {
   activityId: number;
   onBack: () => void;
+  unitSystem?: UnitSystem;
 }
 
 function geojsonToRecords(geojson: GeoJSONFeatureCollection): FitRecord[] {
@@ -109,7 +115,7 @@ function geojsonToTimestamps(geojson: GeoJSONFeatureCollection): number[] {
   return geojson.features.map((f) => new Date(f.properties.timestamp).getTime() / 1000);
 }
 
-export function ActivityDetail({ activityId, onBack }: Props) {
+export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Props) {
   const [activity, setActivity] = useState<Activity | null>(null);
   const [geojson, setGeojson] = useState<GeoJSONFeatureCollection | null>(null);
   const [error, setError] = useState<Error | ApiError | null>(null);
@@ -122,6 +128,7 @@ export function ActivityDetail({ activityId, onBack }: Props) {
   const [sameRoute, setSameRoute] = useState<SameRouteResponse | null>(null);
   const [compareOtherId, setCompareOtherId] = useState<number | null>(null);
   const [comparison, setComparison] = useState<CompareResponse | null>(null);
+  const [hoveredPosition, setHoveredPosition] = useState<[number, number] | null>(null);
 
   useEffect(() => {
     setComparison(null);
@@ -152,7 +159,52 @@ export function ActivityDetail({ activityId, onBack }: Props) {
   const records = useMemo(() => (geojson ? geojsonToRecords(geojson) : []), [geojson]);
   const timestamps = useMemo(() => (geojson ? geojsonToTimestamps(geojson) : []), [geojson]);
   const posByDist = useMemo(() => (geojson ? positionsByDistance(geojson.features) : []), [geojson]);
-  const firstTs = timestamps.length > 0 ? timestamps[0] : 0;
+  const firstTs = useMemo(() => timestamps.length > 0 ? timestamps[0] : 0, [timestamps]);
+
+  // Create a lookup for positions by elapsed time
+  const posByElapsed = useMemo(() => {
+    if (!geojson || timestamps.length === 0) return [];
+    const first = timestamps[0];
+    return geojson.features
+      .filter((f) => f.geometry !== null && f.geometry.coordinates.length >= 2)
+      .map((f) => ({
+        elapsed: new Date(f.properties.timestamp).getTime() / 1000 - first,
+        pos: [f.geometry!.coordinates[1], f.geometry!.coordinates[0]] as [number, number],
+      }));
+  }, [geojson, timestamps]);
+
+  // Find nearest position for a given elapsed time or distance
+  const findPositionByElapsed = (elapsed: number): [number, number] | null => {
+    if (posByElapsed.length === 0) return null;
+    let closest = posByElapsed[0];
+    let minDiff = Math.abs(closest.elapsed - elapsed);
+    for (const p of posByElapsed) {
+      const diff = Math.abs(p.elapsed - elapsed);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closest = p;
+      }
+    }
+    return closest.pos;
+  };
+
+  const findPositionByDistance = (distance_m: number): [number, number] | null => {
+    if (posByDist.length === 0) return null;
+    let closest = posByDist[0];
+    let minDiff = Math.abs(closest.distance_m - distance_m);
+    for (const p of posByDist) {
+      const diff = Math.abs(p.distance_m - distance_m);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closest = p;
+      }
+    }
+    return closest.pos;
+  };
+
+  const handleChartLeave = () => {
+    setHoveredPosition(null);
+  };
 
   if (error) {
     return (
@@ -199,6 +251,81 @@ export function ActivityDetail({ activityId, onBack }: Props) {
     altitude_m: number | null;
   }
 
+  function formatElapsedTime(seconds: number): string {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+    if (h > 0) {
+      return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    }
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  }
+
+  function formatDistanceAxis(meters: number): string {
+    if (meters >= 1000) {
+      const km = meters / 1000;
+      return km % 1 === 0 ? `${km.toFixed(0)} km` : `${km.toFixed(1)} km`;
+    }
+    return `${meters.toFixed(0)} m`;
+  }
+
+  // Heckbert's "nice numbers" algorithm from Graphics Gems
+  // Returns a "nice" number approximately equal to range
+  // If round is true, round to nearest nice number, otherwise ceiling
+  function niceNum(range: number, round: boolean): number {
+    const exponent = Math.floor(Math.log10(range));
+    const fraction = range / Math.pow(10, exponent);
+    let niceFraction: number;
+
+    if (round) {
+      if (fraction < 1.5) niceFraction = 1;
+      else if (fraction < 3) niceFraction = 2;
+      else if (fraction < 7) niceFraction = 5;
+      else niceFraction = 10;
+    } else {
+      if (fraction <= 1) niceFraction = 1;
+      else if (fraction <= 2) niceFraction = 2;
+      else if (fraction <= 5) niceFraction = 5;
+      else niceFraction = 10;
+    }
+
+    return niceFraction * Math.pow(10, exponent);
+  }
+
+  // Generate nice tick values using Heckbert's algorithm
+  function getNiceTicks(min: number, max: number, maxTicks: number = 8): number[] {
+    if (max === min) return [min];
+    
+    const range = niceNum(max - min, false);
+    const tickSpacing = niceNum(range / (maxTicks - 1), true);
+    const niceLowerBound = Math.floor(min / tickSpacing) * tickSpacing;
+    const niceUpperBound = Math.ceil(max / tickSpacing) * tickSpacing;
+    
+    const ticks: number[] = [];
+    for (let tick = niceLowerBound; tick <= niceUpperBound + tickSpacing * 0.5; tick += tickSpacing) {
+      // Round to avoid floating point issues
+      const roundedTick = Math.round(tick * 1e10) / 1e10;
+      if (roundedTick >= min - tickSpacing * 0.1 && roundedTick <= max + tickSpacing * 0.1) {
+        ticks.push(roundedTick);
+      }
+    }
+    return ticks;
+  }
+
+  // For time, use nice intervals that make sense (30s, 1m, 2m, 5m, 10m, etc.)
+  function getNiceTimeTicks(maxSeconds: number, maxTicks: number = 10): number[] {
+    // Nice time intervals in seconds - more granular options
+    const niceIntervals = [10, 15, 30, 60, 120, 180, 300, 600, 900, 1200, 1800, 3600];
+    const idealInterval = maxSeconds / maxTicks;
+    const interval = niceIntervals.find(i => i >= idealInterval) || niceIntervals[niceIntervals.length - 1];
+    
+    const ticks: number[] = [];
+    for (let t = 0; t <= maxSeconds; t += interval) {
+      ticks.push(t);
+    }
+    return ticks;
+  }
+
   function getChartData(chart: ChartConfig) {
     const mode = axisModes[chart.key];
     if (mode === "distance") {
@@ -211,11 +338,13 @@ export function ActivityDetail({ activityId, onBack }: Props) {
         power_w: r.power_w,
         altitude_m: r.altitude_m,
       }));
+      const maxDistance = Math.max(...data.map(d => d.distance_m));
       return {
         data,
         xKey: "distance_m" as const,
-        xLabel: "Distance (m)",
-        tickFormatter: (v: number) => formatDistance(v),
+        xLabel: "Distance",
+        tickFormatter: formatDistanceAxis,
+        ticks: getNiceTicks(0, maxDistance, 10),
       };
     }
     const data: ChartDataPoint[] = timestamps.map((ts, i) => ({
@@ -226,11 +355,13 @@ export function ActivityDetail({ activityId, onBack }: Props) {
       power_w: records[i].power_w,
       altitude_m: records[i].altitude_m,
     }));
+    const maxTime = Math.max(...data.map(d => d.elapsed));
     return {
       data,
       xKey: "elapsed" as const,
-      xLabel: "Time (s)",
-      tickFormatter: (v: number) => `${v.toFixed(0)}`,
+      xLabel: "Time",
+      tickFormatter: formatElapsedTime,
+      ticks: getNiceTimeTicks(maxTime, 10),
     };
   }
 
@@ -264,10 +395,10 @@ export function ActivityDetail({ activityId, onBack }: Props) {
         {/* Stats Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 mb-6">
           <StatTile label="Date" value={new Date(activity.started_at).toLocaleDateString()} />
-          <StatTile label="Distance" value={formatDistance(activity.total_distance_m)} />
+          <StatTile label="Distance" value={formatDistance(activity.total_distance_m, unitSystem)} />
           <StatTile label="Moving Time" value={formatTime(activity.moving_time_s)} />
-          <StatTile label="Elevation" value={`${activity.elevation_gain_m.toFixed(0)} m`} />
-          <StatTile label="Avg Speed" value={`${activity.avg_speed_mps.toFixed(1)} m/s`} />
+          <StatTile label="Elevation" value={formatElevation(activity.elevation_gain_m, unitSystem)} />
+          <StatTile label="Avg Speed" value={formatSpeed(activity.avg_speed_mps, unitSystem)} />
           {activity.avg_hr_bpm && <StatTile label="Avg HR" value={`${activity.avg_hr_bpm} bpm`} />}
           {activity.avg_power_w && <StatTile label="Avg Power" value={`${activity.avg_power_w} W`} />}
         </div>
@@ -286,7 +417,7 @@ export function ActivityDetail({ activityId, onBack }: Props) {
               <option value="">Select a ride...</option>
               {sameRoute.activities.map((a) => (
                 <option key={a.id} value={a.id}>
-                  {new Date(a.started_at).toLocaleDateString()} — {formatDistance(a.total_distance_m)}
+                  {new Date(a.started_at).toLocaleDateString()} — {formatDistance(a.total_distance_m, unitSystem)}
                 </option>
               ))}
             </select>
@@ -305,10 +436,10 @@ export function ActivityDetail({ activityId, onBack }: Props) {
             <MapContainer
               center={center}
               zoom={13}
-              className="h-80 md:h-96"
+              style={{ height: "400px", width: "100%" }}
             >
               <TileLayer
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                url="/tiles/{z}/{x}/{y}.png"
                 attribution='&copy; OpenStreetMap'
               />
               <FitBounds positions={positions} />
@@ -316,9 +447,46 @@ export function ActivityDetail({ activityId, onBack }: Props) {
                 ? coloredSegments.map((seg, i) => (
                     <Polyline key={i} positions={seg.positions} color={seg.color} weight={4} />
                   ))
-                : <Polyline positions={positions} color="#6366f1" weight={3} />}
+                : <Polyline positions={positions} color="#6366f1" weight={5} />}
               {otherPositions && (
                 <Polyline positions={otherPositions} color="#f59e0b" weight={3} dashArray="5,5" />
+              )}
+              {/* Start marker */}
+              <Marker
+                position={positions[0]}
+                icon={L.divIcon({
+                  className: "",
+                  html: `<div style="background:#10b981;width:24px;height:24px;border-radius:50%;border:3px solid white;box-shadow:0 2px 4px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="white"><polygon points="8,5 19,12 8,19"/></svg>
+                  </div>`,
+                  iconSize: [24, 24],
+                  iconAnchor: [12, 12],
+                })}
+              />
+              {/* End marker */}
+              <Marker
+                position={positions[positions.length - 1]}
+                icon={L.divIcon({
+                  className: "",
+                  html: `<div style="background:#ef4444;width:24px;height:24px;border-radius:50%;border:3px solid white;box-shadow:0 2px 4px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="white"><rect x="6" y="6" width="12" height="12"/></svg>
+                  </div>`,
+                  iconSize: [24, 24],
+                  iconAnchor: [12, 12],
+                })}
+              />
+              {/* Hover position marker */}
+              {hoveredPosition && (
+                <CircleMarker
+                  center={hoveredPosition}
+                  radius={8}
+                  pathOptions={{
+                    color: "#ffffff",
+                    weight: 3,
+                    fillColor: "#f59e0b",
+                    fillOpacity: 1,
+                  }}
+                />
               )}
             </MapContainer>
           </div>
@@ -332,7 +500,7 @@ export function ActivityDetail({ activityId, onBack }: Props) {
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                 <XAxis
                   dataKey="distance_m"
-                  tickFormatter={(v) => formatDistance(v)}
+                  tickFormatter={(v) => formatDistance(v, unitSystem)}
                   tick={{ fontSize: 12, fill: "#6b7280" }}
                   axisLine={{ stroke: "#d1d5db" }}
                   tickLine={{ stroke: "#d1d5db" }}
@@ -367,9 +535,21 @@ export function ActivityDetail({ activityId, onBack }: Props) {
 
         {/* Data Charts */}
         {CHARTS.map((chart) => {
-          const { data, xKey, tickFormatter } = getChartData(chart);
+          const { data, xKey, tickFormatter, ticks } = getChartData(chart);
           const hasData = data.some((d) => d[chart.dataKey as keyof typeof d] !== null);
           if (!hasData) return null;
+          
+          // Calculate Y-axis domain with margin
+          const values = data
+            .map((d) => d[chart.dataKey as keyof typeof d] as number | null)
+            .filter((v): v is number => v !== null);
+          const minVal = Math.min(...values);
+          const maxVal = Math.max(...values);
+          const range = maxVal - minVal;
+          const margin = range * 0.1 || 5; // 10% margin, minimum 5
+          const yMin = Math.max(0, Math.floor(minVal - margin));
+          const yMax = Math.ceil(maxVal + margin);
+          
           return (
             <ChartCard
               key={chart.key}
@@ -388,27 +568,56 @@ export function ActivityDetail({ activityId, onBack }: Props) {
               }
             >
               <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={data}>
+                <LineChart 
+                  data={data}
+                  onMouseLeave={handleChartLeave}
+                >
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                   <XAxis
                     dataKey={xKey}
+                    type="number"
+                    domain={['dataMin', 'dataMax']}
                     tickFormatter={tickFormatter}
-                    tick={{ fontSize: 12, fill: "#6b7280" }}
+                    ticks={ticks}
+                    interval={0}
+                    tick={{ fontSize: 10, fill: "#6b7280" }}
                     axisLine={{ stroke: "#d1d5db" }}
                     tickLine={{ stroke: "#d1d5db" }}
                   />
                   <YAxis
+                    domain={[yMin, yMax]}
                     tick={{ fontSize: 12, fill: "#6b7280" }}
                     axisLine={{ stroke: "#d1d5db" }}
                     tickLine={{ stroke: "#d1d5db" }}
                     label={{ value: chart.unit, angle: -90, position: "insideLeft", fontSize: 12, fill: "#6b7280" }}
                   />
                   <Tooltip
-                    contentStyle={{
-                      backgroundColor: "white",
-                      border: "1px solid #e5e7eb",
-                      borderRadius: "8px",
-                      fontSize: "12px",
+                    content={({ active, payload }) => {
+                      // Update map marker when tooltip is active
+                      if (active && payload?.[0]?.payload) {
+                        const p = payload[0].payload;
+                        const mode = axisModes[chart.key];
+                        const pos = mode === "distance"
+                          ? findPositionByDistance(p.distance_m)
+                          : findPositionByElapsed(p.elapsed);
+                        if (pos) {
+                          setTimeout(() => setHoveredPosition(pos), 0);
+                        }
+                      }
+                      // Render default-style tooltip
+                      if (!active || !payload?.length) return null;
+                      const value = payload[0].value;
+                      return (
+                        <div style={{
+                          backgroundColor: "white",
+                          border: "1px solid #e5e7eb",
+                          borderRadius: "8px",
+                          padding: "8px 12px",
+                          fontSize: "12px",
+                        }}>
+                          {chart.label}: {typeof value === "number" ? value.toFixed(2) : value}
+                        </div>
+                      );
                     }}
                   />
                   <Line
