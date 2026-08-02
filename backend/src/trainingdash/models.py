@@ -84,6 +84,9 @@ class Activity(Base):
     wbal_min_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
     # Breakthrough detection
     is_breakthrough: Mapped[bool] = mapped_column(default=False)
+    # Activity title
+    title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    title_source: Mapped[str] = mapped_column(String(20), server_default="auto", nullable=False)
     # Routing
     route_id: Mapped[int | None] = mapped_column(
         ForeignKey("routes.id"), nullable=True
@@ -210,6 +213,7 @@ class ThresholdHistory(Base):
     ftp_watts: Mapped[int] = mapped_column(Integer, nullable=False)
     lthr_bpm: Mapped[int] = mapped_column(Integer, nullable=False)
     hrmax_bpm: Mapped[int] = mapped_column(Integer, nullable=False)
+    is_auto_calculated: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
 
 

@@ -351,6 +351,9 @@ async def ingest_fit(
         await db.commit()
         await db.refresh(activity)
 
+    # Generate activity title from GPS data
+    await _generate_activity_title(db, activity, parsed["records"])
+
     return activity
 
 
@@ -619,6 +622,35 @@ async def _extract_activity_peaks(
     await db.commit()
 
 
+async def _generate_activity_title(
+    db: AsyncSession,
+    activity: Activity,
+    records: list[dict],
+) -> None:
+    """
+    Generate and store a title for the activity based on GPS data.
+    
+    Uses reverse geocoding to identify start, end, and key waypoints,
+    then generates a descriptive title like "Roundtrip Bern via Thun".
+    """
+    try:
+        from trainingdash.title_generator import generate_activity_title
+        
+        title = await generate_activity_title(records, activity.started_at)
+        
+        if title:
+            activity.title = title
+            activity.title_source = "auto"
+            await db.commit()
+            await db.refresh(activity)
+            
+    except Exception as e:
+        # Title generation is non-critical - log and continue
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Failed to generate title for activity {activity.id}: {e}")
+
+
 
 
 async def _detect_breakthrough_and_update_fitness(
@@ -816,7 +848,7 @@ async def finalize_batch_import(
 ) -> None:
     """
     Finalize a batch import: detect breakthroughs, update fitness model once,
-    and create a single summary notification instead of per-activity notifications.
+    auto-create threshold if needed, backfill metrics, and create summary notification.
     
     Called after ingesting multiple activities in batch_mode=True.
     """
@@ -869,9 +901,152 @@ async def finalize_batch_import(
     
     await db.commit()
     
-    # If any breakthroughs, update fitness model once
+    # If any breakthroughs (i.e., we have meaningful power data), update fitness model
     if breakthroughs_detected > 0:
         await _update_fitness_model_batch(db, user_id, activity_count)
+    
+    # Auto-create threshold for historical activities if needed
+    await _auto_create_threshold_if_needed(db, user_id, activities, peaks_by_activity)
+    
+    # Backfill metrics for activities that are missing them
+    await backfill_activity_metrics(db, user_id)
+
+
+async def _auto_create_threshold_if_needed(
+    db: AsyncSession,
+    user_id: int,
+    activities: list[Activity],
+    peaks_by_activity: dict[int, dict[int, int]],
+) -> None:
+    """
+    Auto-create a threshold from CP model if historical activities lack coverage.
+    
+    This ensures activities imported before any manual threshold was set
+    still get their metrics calculated.
+    """
+    from trainingdash.thresholds import compute_power_zones, compute_hr_zones
+    
+    if not activities:
+        return
+    
+    # Find earliest activity date
+    earliest_date = min(a.started_at.date() for a in activities)
+    
+    # Check if there's already a threshold covering the earliest activity
+    result = await db.execute(
+        select(ThresholdHistory)
+        .where(
+            ThresholdHistory.user_id == user_id,
+            ThresholdHistory.effective_date <= earliest_date,
+        )
+        .limit(1)
+    )
+    existing_threshold = result.scalar_one_or_none()
+    
+    if existing_threshold is not None:
+        # Already have coverage for historical activities
+        return
+    
+    # Check if there's any threshold at all (user may have set one for "today")
+    result = await db.execute(
+        select(ThresholdHistory)
+        .where(ThresholdHistory.user_id == user_id)
+        .order_by(ThresholdHistory.effective_date.asc())
+        .limit(1)
+    )
+    any_threshold = result.scalar_one_or_none()
+    
+    # Build peak powers list for CP model
+    peak_powers = list(peaks_by_activity.values())
+    if not peak_powers:
+        return
+    
+    activity_dates = [a.started_at for a in activities if a.id in peaks_by_activity]
+    
+    # Fit CP model
+    model = fit_cp_model(peak_powers, activity_dates)
+    if model is None:
+        return
+    
+    cp_watts = model["cp_watts"]
+    
+    # Estimate LTHR and HRmax from activities if possible, otherwise use defaults
+    lthr_bpm, hrmax_bpm = _estimate_hr_thresholds(activities)
+    
+    # If user has a manual threshold, copy HR values from it
+    if any_threshold is not None and not any_threshold.is_auto_calculated:
+        lthr_bpm = any_threshold.lthr_bpm
+        hrmax_bpm = any_threshold.hrmax_bpm
+    
+    # Create auto-calculated threshold for historical activities
+    auto_threshold = ThresholdHistory(
+        user_id=user_id,
+        effective_date=earliest_date,
+        ftp_watts=cp_watts,
+        lthr_bpm=lthr_bpm,
+        hrmax_bpm=hrmax_bpm,
+        is_auto_calculated=True,
+    )
+    db.add(auto_threshold)
+    await db.commit()
+    
+    # Create zones if none exist
+    result = await db.execute(
+        select(PowerZone).where(PowerZone.user_id == user_id).limit(1)
+    )
+    if result.scalar_one_or_none() is None:
+        # Create power zones
+        for zone_data in compute_power_zones(cp_watts):
+            zone = PowerZone(
+                user_id=user_id,
+                zone_number=zone_data["zone_number"],
+                name=zone_data["name"],
+                min_watts=zone_data["min_watts"],
+                max_watts=zone_data["max_watts"],
+                is_custom=False,
+            )
+            db.add(zone)
+        
+        # Create HR zones
+        for zone_data in compute_hr_zones(lthr_bpm):
+            zone = HrZone(
+                user_id=user_id,
+                zone_number=zone_data["zone_number"],
+                name=zone_data["name"],
+                min_bpm=zone_data["min_bpm"],
+                max_bpm=zone_data["max_bpm"],
+                is_custom=False,
+            )
+            db.add(zone)
+        
+        await db.commit()
+
+
+def _estimate_hr_thresholds(activities: list[Activity]) -> tuple[int, int]:
+    """
+    Estimate LTHR and HRmax from activity data.
+    
+    Returns (lthr_bpm, hrmax_bpm) with reasonable defaults if no HR data.
+    """
+    max_hr_seen = 0
+    avg_hrs = []
+    
+    for a in activities:
+        if a.max_hr_bpm is not None and a.max_hr_bpm > max_hr_seen:
+            max_hr_seen = a.max_hr_bpm
+        if a.avg_hr_bpm is not None and a.avg_hr_bpm > 0:
+            avg_hrs.append(a.avg_hr_bpm)
+    
+    if max_hr_seen > 0:
+        hrmax = max_hr_seen
+        # LTHR is typically 93% of HRmax
+        lthr = int(hrmax * 0.93)
+    else:
+        # Default values (180 HRmax, 167 LTHR for ~40 year old)
+        hrmax = 180
+        lthr = 167
+    
+    return lthr, hrmax
 
 
 async def _update_fitness_model_batch(
@@ -1134,6 +1309,9 @@ async def ingest_xert_activity(
         await db.commit()
         await db.refresh(activity)
     
+    # Generate activity title from GPS data
+    await _generate_activity_title(db, activity, records)
+    
     return activity
 
 
@@ -1191,3 +1369,166 @@ def _convert_xert_session_data(detail: Any) -> list[dict]:
         })
     
     return records
+
+
+
+
+async def backfill_activity_metrics(
+    db: AsyncSession,
+    user_id: int,
+    activity_ids: list[int] | None = None,
+) -> int:
+    """
+    Backfill training metrics for activities that are missing them.
+    
+    This is used after creating an auto-calculated threshold to compute
+    metrics for historical activities that were imported before any
+    threshold existed.
+    
+    Args:
+        db: Database session
+        user_id: User ID to backfill metrics for
+        activity_ids: Optional list of specific activity IDs to process.
+                      If None, processes all activities missing metrics.
+    
+    Returns:
+        Number of activities updated
+    """
+    # Find activities missing metrics (NP is the indicator - if NP is null but has power, needs backfill)
+    if activity_ids:
+        result = await db.execute(
+            select(Activity)
+            .where(
+                Activity.user_id == user_id,
+                Activity.id.in_(activity_ids),
+                Activity.np_power_w.is_(None),
+                Activity.avg_power_w.isnot(None),  # Has power data
+            )
+            .order_by(Activity.started_at)
+        )
+    else:
+        result = await db.execute(
+            select(Activity)
+            .where(
+                Activity.user_id == user_id,
+                Activity.np_power_w.is_(None),
+                Activity.avg_power_w.isnot(None),  # Has power data
+            )
+            .order_by(Activity.started_at)
+        )
+    
+    activities = result.scalars().all()
+    
+    if not activities:
+        return 0
+    
+    # Pre-fetch all thresholds for this user (ordered by effective_date desc)
+    thresholds_result = await db.execute(
+        select(ThresholdHistory)
+        .where(ThresholdHistory.user_id == user_id)
+        .order_by(ThresholdHistory.effective_date.desc())
+    )
+    thresholds = thresholds_result.scalars().all()
+    
+    if not thresholds:
+        return 0
+    
+    # Pre-fetch power zones
+    power_zones_result = await db.execute(
+        select(PowerZone)
+        .where(PowerZone.user_id == user_id)
+        .order_by(PowerZone.zone_number)
+    )
+    power_zones = power_zones_result.scalars().all()
+    power_zones_list = [
+        {"zone_number": z.zone_number, "min_watts": z.min_watts, "max_watts": z.max_watts}
+        for z in power_zones
+    ] if power_zones else []
+    
+    # Pre-fetch HR zones
+    hr_zones_result = await db.execute(
+        select(HrZone)
+        .where(HrZone.user_id == user_id)
+        .order_by(HrZone.zone_number)
+    )
+    hr_zones = hr_zones_result.scalars().all()
+    hr_zones_list = [
+        {"zone_number": z.zone_number, "min_bpm": z.min_bpm, "max_bpm": z.max_bpm}
+        for z in hr_zones
+    ] if hr_zones else []
+    
+    updated_count = 0
+    
+    for activity in activities:
+        # Find applicable threshold (most recent with effective_date <= activity date)
+        activity_date = activity.started_at.date()
+        threshold = None
+        for t in thresholds:
+            if t.effective_date <= activity_date:
+                threshold = t
+                break
+        
+        if threshold is None:
+            continue
+        
+        # Load records for this activity
+        records_result = await db.execute(
+            select(Record)
+            .where(Record.activity_id == activity.id)
+            .order_by(Record.timestamp)
+        )
+        records = records_result.scalars().all()
+        
+        if not records:
+            continue
+        
+        # Extract power and HR arrays
+        power_array = [r.power_w for r in records]
+        hr_array = [r.hr_bpm for r in records]
+        
+        has_power = any(p is not None and p > 0 for p in power_array)
+        has_hr = any(h is not None and h > 0 for h in hr_array)
+        
+        if has_power:
+            # Compute NP
+            np_watts = compute_normalized_power(power_array)
+            if np_watts is not None:
+                activity.np_power_w = int(np_watts)
+                
+                # Compute IF and TSS
+                if_value = compute_intensity_factor(np_watts, threshold.ftp_watts)
+                if if_value is not None:
+                    activity.intensity_factor = if_value
+                    
+                    duration_s = activity.moving_time_s or activity.elapsed_time_s
+                    tss = compute_tss(duration_s, np_watts, if_value, threshold.ftp_watts)
+                    if tss is not None:
+                        activity.tss = tss
+                        activity.training_load = tss
+            
+            # Compute power zone times
+            if power_zones_list:
+                zone_times = compute_zone_times(power_array, power_zones_list)
+                if zone_times:
+                    activity.power_zone_times = json.dumps(zone_times)
+            
+            # Compute W'bal
+            w_prime_joules = threshold.ftp_watts * 60
+            cp_watts = int(threshold.ftp_watts * 0.95)
+            wbal_result = compute_wbal_series(power_array, cp_watts, w_prime_joules)
+            if wbal_result["min_wbal"] is not None:
+                activity.wbal_min_joules = wbal_result["min_wbal"]
+                activity.wbal_min_pct = wbal_result["min_wbal_pct"]
+        
+        if has_hr and hr_zones_list:
+            zone_times = compute_zone_times(
+                hr_array, hr_zones_list,
+                value_key_min="min_bpm", value_key_max="max_bpm"
+            )
+            if zone_times:
+                activity.hr_zone_times = json.dumps(zone_times)
+        
+        updated_count += 1
+    
+    await db.commit()
+    return updated_count
