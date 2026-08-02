@@ -151,6 +151,16 @@ export async function login(
   return res.json();
 }
 
+export async function logout(): Promise<void> {
+  const res = await fetch(`${API_BASE}/logout`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!res.ok) {
+    throw new ApiError("Logout failed", res.status);
+  }
+}
+
 export async function uploadFit(file: File): Promise<{ id?: number; job_id?: string; source_ref?: string }> {
   const formData = new FormData();
   formData.append("file", file);
@@ -196,6 +206,39 @@ export interface LoginResponse {
   user_id: number;
   username: string;
   is_admin?: boolean;
+}
+
+export interface User {
+  id: number;
+  username: string;
+  is_admin: boolean;
+  unit_system: "metric" | "imperial";
+}
+
+export async function fetchMe(): Promise<User> {
+  return apiFetch<User>("/me");
+}
+
+export async function updatePreferences(prefs: { unit_system?: string }): Promise<User> {
+  const res = await fetch(`${API_BASE}/me`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(prefs),
+  });
+  if (!res.ok) {
+    let detail = "Failed to update preferences";
+    let errorId: string | undefined;
+    try {
+      const body = await res.json();
+      detail = body.detail || detail;
+      errorId = body.error_id;
+    } catch {
+      // ignore
+    }
+    throw new ApiError(detail, res.status, errorId);
+  }
+  return res.json();
 }
 
 export async function fetchAdminUsers(): Promise<AdminUser[]> {
@@ -264,3 +307,152 @@ export async function triggerUserSync(userId: number): Promise<{ job_id: string 
   }
   return res.json();
 }
+
+// User Xert credentials API
+
+export interface XertCredentialsStatus {
+  configured: boolean;
+  xert_email: string | null;
+  sync_since: string | null;
+}
+
+export async function fetchMyXertCredentials(): Promise<XertCredentialsStatus> {
+  return apiFetch<XertCredentialsStatus>("/me/xert-credentials");
+}
+
+export async function saveMyXertCredentials(
+  xert_email: string,
+  xert_password: string,
+  sync_since?: string
+): Promise<void> {
+  const body: Record<string, string> = { xert_email, xert_password };
+  if (sync_since) body.sync_since = sync_since;
+  
+  const res = await fetch(`${API_BASE}/me/xert-credentials`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    let detail = "Failed to save Xert credentials";
+    let errorId: string | undefined;
+    try {
+      const body = await res.json();
+      detail = body.detail || detail;
+      errorId = body.error_id;
+    } catch {
+      // ignore
+    }
+    throw new ApiError(detail, res.status, errorId);
+  }
+}
+
+export async function deleteMyXertCredentials(): Promise<void> {
+  const res = await fetch(`${API_BASE}/me/xert-credentials`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+  if (!res.ok) {
+    let detail = "Failed to disconnect Xert";
+    let errorId: string | undefined;
+    try {
+      const body = await res.json();
+      detail = body.detail || detail;
+      errorId = body.error_id;
+    } catch {
+      // ignore
+    }
+    throw new ApiError(detail, res.status, errorId);
+  }
+}
+
+// User Garmin credentials API
+
+export interface GarminCredentialsStatus {
+  configured: boolean;
+  garmin_email: string | null;
+  sync_since: string | null;
+}
+
+export interface GarminSaveResponse {
+  success?: boolean;
+  garmin_email?: string;
+  mfa_required?: boolean;
+}
+
+export async function fetchMyGarminCredentials(): Promise<GarminCredentialsStatus> {
+  return apiFetch<GarminCredentialsStatus>("/me/garmin-credentials");
+}
+
+export async function saveMyGarminCredentials(
+  garmin_email: string,
+  garmin_password: string,
+  sync_since?: string
+): Promise<GarminSaveResponse> {
+  const body: Record<string, string> = { garmin_email, garmin_password };
+  if (sync_since) body.sync_since = sync_since;
+  
+  const res = await fetch(`${API_BASE}/me/garmin-credentials`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    let detail = "Failed to save Garmin credentials";
+    let errorId: string | undefined;
+    try {
+      const respBody = await res.json();
+      detail = respBody.detail || detail;
+      errorId = respBody.error_id;
+    } catch {
+      // ignore
+    }
+    throw new ApiError(detail, res.status, errorId);
+  }
+  return res.json();
+}
+
+export async function completeGarminMfa(mfa_code: string): Promise<GarminSaveResponse> {
+  const res = await fetch(`${API_BASE}/me/garmin-credentials/mfa`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ mfa_code }),
+  });
+  if (!res.ok) {
+    let detail = "Failed to complete MFA";
+    let errorId: string | undefined;
+    try {
+      const body = await res.json();
+      detail = body.detail || detail;
+      errorId = body.error_id;
+    } catch {
+      // ignore
+    }
+    throw new ApiError(detail, res.status, errorId);
+  }
+  return res.json();
+}
+
+export async function deleteMyGarminCredentials(): Promise<void> {
+  const res = await fetch(`${API_BASE}/me/garmin-credentials`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+  if (!res.ok) {
+    let detail = "Failed to disconnect Garmin";
+    let errorId: string | undefined;
+    try {
+      const body = await res.json();
+      detail = body.detail || detail;
+      errorId = body.error_id;
+    } catch {
+      // ignore
+    }
+    throw new ApiError(detail, res.status, errorId);
+  }
+}
+
+
