@@ -304,6 +304,14 @@ class XertClient:
             response.raise_for_status()
             data = response.json()
             
+            # Debug: log first few session_data points
+            raw_session = data.get("session_data", [])
+            if raw_session:
+                print(f"DEBUG Xert session_data sample (first 2 points): {raw_session[:2]}")
+                print(f"DEBUG Xert session_data total points: {len(raw_session)}")
+            else:
+                print(f"DEBUG Xert returned no session_data for activity {activity.id}")
+            
             if not data.get("success"):
                 raise XertAPIError("Xert API returned success=false for activity detail")
             
@@ -324,8 +332,18 @@ class XertClient:
             # Parse session_data samples
             session_data = []
             for point in data.get("session_data", []):
+                # Handle both 'unix_time' and 'ts' keys (Xert API inconsistency)
+                unix_time = point.get("unix_time")
+                if unix_time is None:
+                    unix_time = point.get("ts", 0)
+                    # 'ts' is in seconds, convert to milliseconds for consistency
+                    if unix_time and unix_time > 1000000000000:
+                        pass  # already in ms
+                    else:
+                        unix_time = unix_time * 1000 if unix_time else 0
+                
                 session_data.append(XertSessionDataPoint(
-                    unix_time=int(point.get("unix_time", 0)),
+                    unix_time=int(unix_time),
                     power=point.get("power"),
                     hr=point.get("hr"),
                     cad=point.get("cad"),
