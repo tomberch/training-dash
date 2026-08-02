@@ -595,3 +595,87 @@ export async function dismissNotification(id: number): Promise<void> {
     throw new ApiError("Failed to dismiss notification", res.status);
   }
 }
+
+
+// Zones types
+export interface PowerZone {
+  zone_number: number;
+  name: string;
+  min_watts: number;
+  max_watts: number | null;
+  is_custom: boolean;
+}
+
+export interface HrZone {
+  zone_number: number;
+  name: string;
+  min_bpm: number;
+  max_bpm: number | null;
+  is_custom: boolean;
+}
+
+export interface ZonesResponse {
+  power_zones: PowerZone[];
+  hr_zones: HrZone[];
+}
+
+export async function fetchZones(): Promise<ZonesResponse> {
+  return apiFetch<ZonesResponse>("/me/zones");
+}
+
+export interface ZoneUpdate {
+  zone_number: number;
+  name?: string;
+  min_value?: number;
+  max_value?: number;
+}
+
+export interface UpdateZonesRequest {
+  power_zones?: ZoneUpdate[];
+  hr_zones?: ZoneUpdate[];
+  reset_to_defaults?: boolean;
+}
+
+export async function updateZones(request: UpdateZonesRequest): Promise<ZonesResponse> {
+  const res = await fetch(`${API_BASE}/me/zones`, {
+    method: "PUT",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!res.ok) {
+    let detail = "Failed to update zones";
+    try {
+      const body = await res.json();
+      detail = body.detail || detail;
+    } catch {}
+    throw new ApiError(detail, res.status);
+  }
+  return res.json();
+}
+
+// Create threshold
+export interface CreateThresholdRequest {
+  effective_date?: string;
+  ftp_watts: number;
+  lthr_bpm: number;
+  hrmax_bpm: number;
+}
+
+export async function createThreshold(request: CreateThresholdRequest): Promise<ThresholdEntry> {
+  const res = await fetch(`${API_BASE}/me/thresholds`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!res.ok) {
+    let detail = "Failed to create threshold";
+    try {
+      const body = await res.json();
+      detail = body.detail || detail;
+    } catch {}
+    throw new ApiError(detail, res.status);
+  }
+  return res.json();
+}

@@ -8,9 +8,20 @@ import {
   saveMyGarminCredentials,
   completeGarminMfa,
   deleteMyGarminCredentials,
+  fetchThresholds,
+  createThreshold,
+  fetchZones,
+  updateZones,
   ApiError,
 } from "./api";
-import type { User, XertCredentialsStatus, GarminCredentialsStatus } from "./api";
+import type { 
+  User, 
+  XertCredentialsStatus, 
+  GarminCredentialsStatus,
+  ThresholdEntry,
+  PowerZone,
+  HrZone,
+} from "./api";
 
 function EyeIcon({ className }: { className?: string }) {
   return (
@@ -89,6 +100,8 @@ export function Settings({ user, onBack, onUserUpdate }: SettingsProps) {
         
         <div className="space-y-6">
           <PreferencesSection user={user} onUserUpdate={onUserUpdate} />
+          <ThresholdsSection />
+          <ZonesSection />
           <IntegrationsSection />
         </div>
       </div>
@@ -175,6 +188,480 @@ function PreferencesSection({ user, onUserUpdate }: { user: User; onUserUpdate: 
               : "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800"
           }`}
         >
+          {feedback.message}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ThresholdsSection() {
+  const [thresholds, setThresholds] = useState<ThresholdEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [formData, setFormData] = useState({
+    effective_date: new Date().toISOString().split("T")[0],
+    ftp_watts: "",
+    lthr_bpm: "",
+    hrmax_bpm: "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  useEffect(() => {
+    fetchThresholds()
+      .then(setThresholds)
+      .catch(() => setThresholds([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const currentThreshold = thresholds.length > 0 ? thresholds[0] : null;
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setFeedback(null);
+    try {
+      const newThreshold = await createThreshold({
+        effective_date: formData.effective_date,
+        ftp_watts: parseInt(formData.ftp_watts),
+        lthr_bpm: parseInt(formData.lthr_bpm),
+        hrmax_bpm: parseInt(formData.hrmax_bpm),
+      });
+      setThresholds([newThreshold, ...thresholds]);
+      setShowForm(false);
+      setFormData({
+        effective_date: new Date().toISOString().split("T")[0],
+        ftp_watts: "",
+        lthr_bpm: "",
+        hrmax_bpm: "",
+      });
+      setFeedback({ type: "success", message: "Threshold saved" });
+      setTimeout(() => setFeedback(null), 3000);
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Failed to save threshold";
+      setFeedback({ type: "error", message });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <section className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+        <div className="animate-pulse">
+          <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mb-4"></div>
+          <div className="h-20 bg-gray-200 dark:bg-gray-700 rounded"></div>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Thresholds</h2>
+        <button
+          onClick={() => setShowForm(!showForm)}
+          className="px-3 py-1.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+        >
+          {showForm ? "Cancel" : "+ Add"}
+        </button>
+      </div>
+
+      {/* Current values */}
+      {currentThreshold && (
+        <div className="grid grid-cols-3 gap-4 mb-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+          <div>
+            <div className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">FTP</div>
+            <div className="text-xl font-bold text-gray-900 dark:text-white">{currentThreshold.ftp_watts}W</div>
+          </div>
+          <div>
+            <div className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">LTHR</div>
+            <div className="text-xl font-bold text-gray-900 dark:text-white">{currentThreshold.lthr_bpm} bpm</div>
+          </div>
+          <div>
+            <div className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">HRmax</div>
+            <div className="text-xl font-bold text-gray-900 dark:text-white">{currentThreshold.max_hr_bpm} bpm</div>
+          </div>
+        </div>
+      )}
+
+      {/* Add form */}
+      {showForm && (
+        <form onSubmit={handleSubmit} className="mb-4 p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Effective Date</label>
+              <input
+                type="date"
+                value={formData.effective_date}
+                onChange={(e) => setFormData({ ...formData, effective_date: e.target.value })}
+                className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">FTP (watts)</label>
+              <input
+                type="number"
+                value={formData.ftp_watts}
+                onChange={(e) => setFormData({ ...formData, ftp_watts: e.target.value })}
+                placeholder="e.g. 250"
+                min="50"
+                max="600"
+                required
+                className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">LTHR (bpm)</label>
+              <input
+                type="number"
+                value={formData.lthr_bpm}
+                onChange={(e) => setFormData({ ...formData, lthr_bpm: e.target.value })}
+                placeholder="e.g. 165"
+                min="80"
+                max="220"
+                required
+                className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">HRmax (bpm)</label>
+              <input
+                type="number"
+                value={formData.hrmax_bpm}
+                onChange={(e) => setFormData({ ...formData, hrmax_bpm: e.target.value })}
+                placeholder="e.g. 185"
+                min="100"
+                max="250"
+                required
+                className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              />
+            </div>
+          </div>
+          <button
+            type="submit"
+            disabled={saving}
+            className="w-full px-3 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors disabled:opacity-50"
+          >
+            {saving ? "Saving..." : "Save Threshold"}
+          </button>
+        </form>
+      )}
+
+      {/* History table */}
+      {thresholds.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide border-b border-gray-200 dark:border-gray-700">
+                <th className="pb-2">Date</th>
+                <th className="pb-2 text-right">FTP</th>
+                <th className="pb-2 text-right">LTHR</th>
+                <th className="pb-2 text-right">HRmax</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+              {thresholds.map((t, i) => (
+                <tr key={i} className={i === 0 ? "text-gray-900 dark:text-white font-medium" : "text-gray-600 dark:text-gray-400"}>
+                  <td className="py-2">{new Date(t.effective_date).toLocaleDateString()}</td>
+                  <td className="py-2 text-right">{t.ftp_watts}W</td>
+                  <td className="py-2 text-right">{t.lthr_bpm} bpm</td>
+                  <td className="py-2 text-right">{t.max_hr_bpm} bpm</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {thresholds.length === 0 && !showForm && (
+        <p className="text-sm text-gray-500 dark:text-gray-400">No thresholds configured. Add your first threshold to enable zone calculations.</p>
+      )}
+
+      {feedback && (
+        <div className={`mt-4 p-3 rounded-lg text-sm ${
+          feedback.type === "success"
+            ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800"
+            : "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800"
+        }`}>
+          {feedback.message}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ZonesSection() {
+  const [powerZones, setPowerZones] = useState<PowerZone[]>([]);
+  const [hrZones, setHrZones] = useState<HrZone[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [editMode, setEditMode] = useState(false);
+  const [editedPowerZones, setEditedPowerZones] = useState<PowerZone[]>([]);
+  const [editedHrZones, setEditedHrZones] = useState<HrZone[]>([]);
+
+  useEffect(() => {
+    fetchZones()
+      .then(({ power_zones, hr_zones }) => {
+        setPowerZones(power_zones);
+        setHrZones(hr_zones);
+      })
+      .catch(() => {
+        setPowerZones([]);
+        setHrZones([]);
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  function startEdit() {
+    setEditedPowerZones([...powerZones]);
+    setEditedHrZones([...hrZones]);
+    setEditMode(true);
+  }
+
+  function cancelEdit() {
+    setEditMode(false);
+    setFeedback(null);
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    setFeedback(null);
+    try {
+      const result = await updateZones({
+        power_zones: editedPowerZones.map(z => ({
+          zone_number: z.zone_number,
+          min_value: z.min_watts,
+          max_value: z.max_watts ?? undefined,
+        })),
+        hr_zones: editedHrZones.map(z => ({
+          zone_number: z.zone_number,
+          min_value: z.min_bpm,
+          max_value: z.max_bpm ?? undefined,
+        })),
+      });
+      setPowerZones(result.power_zones);
+      setHrZones(result.hr_zones);
+      setEditMode(false);
+      setFeedback({ type: "success", message: "Zones saved" });
+      setTimeout(() => setFeedback(null), 3000);
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Failed to save zones";
+      setFeedback({ type: "error", message });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleReset() {
+    if (!confirm("Reset all zones to defaults based on current thresholds?")) return;
+    setSaving(true);
+    setFeedback(null);
+    try {
+      const result = await updateZones({ reset_to_defaults: true });
+      setPowerZones(result.power_zones);
+      setHrZones(result.hr_zones);
+      setEditMode(false);
+      setFeedback({ type: "success", message: "Zones reset to defaults" });
+      setTimeout(() => setFeedback(null), 3000);
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Failed to reset zones";
+      setFeedback({ type: "error", message });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function updatePowerZone(index: number, field: "min_watts" | "max_watts", value: string) {
+    const updated = [...editedPowerZones];
+    const numVal = parseInt(value) || 0;
+    if (field === "max_watts") {
+      updated[index] = { ...updated[index], [field]: value === "" ? null : numVal };
+    } else {
+      updated[index] = { ...updated[index], [field]: numVal };
+    }
+    setEditedPowerZones(updated);
+  }
+
+  function updateHrZone(index: number, field: "min_bpm" | "max_bpm", value: string) {
+    const updated = [...editedHrZones];
+    const numVal = parseInt(value) || 0;
+    if (field === "max_bpm") {
+      updated[index] = { ...updated[index], [field]: value === "" ? null : numVal };
+    } else {
+      updated[index] = { ...updated[index], [field]: numVal };
+    }
+    setEditedHrZones(updated);
+  }
+
+  if (loading) {
+    return (
+      <section className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+        <div className="animate-pulse">
+          <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mb-4"></div>
+          <div className="h-32 bg-gray-200 dark:bg-gray-700 rounded"></div>
+        </div>
+      </section>
+    );
+  }
+
+  const displayPowerZones = editMode ? editedPowerZones : powerZones;
+  const displayHrZones = editMode ? editedHrZones : hrZones;
+
+  return (
+    <section className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Training Zones</h2>
+        <div className="flex gap-2">
+          {editMode ? (
+            <>
+              <button
+                onClick={cancelEdit}
+                disabled={saving}
+                className="px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="px-3 py-1.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {saving ? "Saving..." : "Save"}
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={handleReset}
+                disabled={saving || powerZones.length === 0}
+                className="px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50"
+              >
+                Reset
+              </button>
+              <button
+                onClick={startEdit}
+                disabled={powerZones.length === 0}
+                className="px-3 py-1.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors disabled:opacity-50"
+              >
+                Edit
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {powerZones.length === 0 && hrZones.length === 0 ? (
+        <p className="text-sm text-gray-500 dark:text-gray-400">Add thresholds first to generate training zones.</p>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Power Zones */}
+          <div>
+            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Power Zones</h3>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide border-b border-gray-200 dark:border-gray-700">
+                  <th className="pb-2 w-8">Zone</th>
+                  <th className="pb-2">Name</th>
+                  <th className="pb-2 text-right">Min</th>
+                  <th className="pb-2 text-right">Max</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                {displayPowerZones.map((z, i) => (
+                  <tr key={z.zone_number}>
+                    <td className="py-2 font-medium text-gray-900 dark:text-white">Z{z.zone_number}</td>
+                    <td className="py-2 text-gray-600 dark:text-gray-400">{z.name}</td>
+                    <td className="py-2 text-right">
+                      {editMode ? (
+                        <input
+                          type="number"
+                          value={z.min_watts}
+                          onChange={(e) => updatePowerZone(i, "min_watts", e.target.value)}
+                          className="w-16 px-1 py-0.5 text-right text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        />
+                      ) : (
+                        <span className="text-gray-900 dark:text-white">{z.min_watts}W</span>
+                      )}
+                    </td>
+                    <td className="py-2 text-right">
+                      {editMode ? (
+                        <input
+                          type="number"
+                          value={z.max_watts ?? ""}
+                          onChange={(e) => updatePowerZone(i, "max_watts", e.target.value)}
+                          placeholder="∞"
+                          className="w-16 px-1 py-0.5 text-right text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        />
+                      ) : (
+                        <span className="text-gray-900 dark:text-white">{z.max_watts ? `${z.max_watts}W` : "∞"}</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* HR Zones */}
+          <div>
+            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Heart Rate Zones</h3>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide border-b border-gray-200 dark:border-gray-700">
+                  <th className="pb-2 w-8">Zone</th>
+                  <th className="pb-2">Name</th>
+                  <th className="pb-2 text-right">Min</th>
+                  <th className="pb-2 text-right">Max</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                {displayHrZones.map((z, i) => (
+                  <tr key={z.zone_number}>
+                    <td className="py-2 font-medium text-gray-900 dark:text-white">Z{z.zone_number}</td>
+                    <td className="py-2 text-gray-600 dark:text-gray-400">{z.name}</td>
+                    <td className="py-2 text-right">
+                      {editMode ? (
+                        <input
+                          type="number"
+                          value={z.min_bpm}
+                          onChange={(e) => updateHrZone(i, "min_bpm", e.target.value)}
+                          className="w-16 px-1 py-0.5 text-right text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        />
+                      ) : (
+                        <span className="text-gray-900 dark:text-white">{z.min_bpm} bpm</span>
+                      )}
+                    </td>
+                    <td className="py-2 text-right">
+                      {editMode ? (
+                        <input
+                          type="number"
+                          value={z.max_bpm ?? ""}
+                          onChange={(e) => updateHrZone(i, "max_bpm", e.target.value)}
+                          placeholder="∞"
+                          className="w-16 px-1 py-0.5 text-right text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        />
+                      ) : (
+                        <span className="text-gray-900 dark:text-white">{z.max_bpm ? `${z.max_bpm} bpm` : "∞"}</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {feedback && (
+        <div className={`mt-4 p-3 rounded-lg text-sm ${
+          feedback.type === "success"
+            ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800"
+            : "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800"
+        }`}>
           {feedback.message}
         </div>
       )}
