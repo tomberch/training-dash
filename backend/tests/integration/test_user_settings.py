@@ -176,3 +176,114 @@ class TestUserXertCredentials:
 
         response = await app_client.delete("/me/xert-credentials")
         assert response.status_code == 401
+
+
+
+class TestUserProfile:
+    """Tests for user profile fields: date_of_birth and weight_kg."""
+
+    @pytest.mark.asyncio
+    async def test_get_me_returns_profile_fields(self, auth_client):
+        """GET /me returns date_of_birth and weight_kg (initially null)."""
+        response = await auth_client.get("/me")
+        assert response.status_code == 200
+        data = response.json()
+        assert "date_of_birth" in data
+        assert "weight_kg" in data
+        # Initially null for seed_user
+        assert data["date_of_birth"] is None
+        assert data["weight_kg"] is None
+
+    @pytest.mark.asyncio
+    async def test_update_date_of_birth(self, auth_client):
+        """PATCH /me can update date_of_birth."""
+        response = await auth_client.patch("/me", json={"date_of_birth": "1990-05-15"})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["date_of_birth"] == "1990-05-15"
+
+    @pytest.mark.asyncio
+    async def test_update_weight_kg(self, auth_client):
+        """PATCH /me can update weight_kg."""
+        response = await auth_client.patch("/me", json={"weight_kg": 75.5})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["weight_kg"] == 75.5
+
+    @pytest.mark.asyncio
+    async def test_update_both_profile_fields(self, auth_client):
+        """PATCH /me can update both date_of_birth and weight_kg together."""
+        response = await auth_client.patch(
+            "/me", json={"date_of_birth": "1985-12-01", "weight_kg": 82.0}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["date_of_birth"] == "1985-12-01"
+        assert data["weight_kg"] == 82.0
+
+    @pytest.mark.asyncio
+    async def test_date_of_birth_rejects_future_date(self, auth_client):
+        """PATCH /me rejects date_of_birth in the future."""
+        future_date = (date.today() + timedelta(days=1)).isoformat()
+        response = await auth_client.patch("/me", json={"date_of_birth": future_date})
+        assert response.status_code == 400
+        assert "future" in response.json()["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_date_of_birth_rejects_age_under_10(self, auth_client):
+        """PATCH /me rejects date_of_birth representing age < 10."""
+        young_date = (date.today() - timedelta(days=365 * 5)).isoformat()  # ~5 years old
+        response = await auth_client.patch("/me", json={"date_of_birth": young_date})
+        assert response.status_code == 400
+        assert "10" in response.json()["detail"] and "100" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_date_of_birth_rejects_age_over_100(self, auth_client):
+        """PATCH /me rejects date_of_birth representing age > 100."""
+        old_date = (date.today() - timedelta(days=365 * 110)).isoformat()  # ~110 years old
+        response = await auth_client.patch("/me", json={"date_of_birth": old_date})
+        assert response.status_code == 400
+        assert "10" in response.json()["detail"] and "100" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_weight_kg_rejects_zero(self, auth_client):
+        """PATCH /me rejects weight_kg of 0."""
+        response = await auth_client.patch("/me", json={"weight_kg": 0})
+        assert response.status_code == 400
+        assert "positive" in response.json()["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_weight_kg_rejects_negative(self, auth_client):
+        """PATCH /me rejects negative weight_kg."""
+        response = await auth_client.patch("/me", json={"weight_kg": -70})
+        assert response.status_code == 400
+        assert "positive" in response.json()["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_weight_kg_rejects_unrealistic_value(self, auth_client):
+        """PATCH /me rejects weight_kg > 500."""
+        response = await auth_client.patch("/me", json={"weight_kg": 600})
+        assert response.status_code == 400
+        assert "500" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_profile_fields_persist(self, auth_client):
+        """Profile fields persist across requests."""
+        # Set values
+        response = await auth_client.patch(
+            "/me", json={"date_of_birth": "1992-03-20", "weight_kg": 68.5}
+        )
+        assert response.status_code == 200
+
+        # Verify they persist
+        response = await auth_client.get("/me")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["date_of_birth"] == "1992-03-20"
+        assert data["weight_kg"] == 68.5
+
+    @pytest.mark.asyncio
+    async def test_profile_update_requires_auth(self, app_client):
+        """PATCH /me requires authentication."""
+        response = await app_client.patch("/me", json={"weight_kg": 70})
+        assert response.status_code == 401

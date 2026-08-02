@@ -120,6 +120,8 @@ def _user_response(user: User) -> dict:
         "username": user.username,
         "is_admin": user.is_admin,
         "unit_system": user.unit_system,
+        "date_of_birth": user.date_of_birth.isoformat() if user.date_of_birth else None,
+        "weight_kg": float(user.weight_kg) if user.weight_kg else None,
     }
 
 
@@ -130,6 +132,8 @@ async def get_me(user: CurrentUser):
 
 class UpdateMeRequest(BaseModel):
     unit_system: str | None = None
+    date_of_birth: date | None = None
+    weight_kg: float | None = None
 
 
 async def update_me(db: DbSession, user: CurrentUser, request: UpdateMeRequest):
@@ -138,6 +142,22 @@ async def update_me(db: DbSession, user: CurrentUser, request: UpdateMeRequest):
         if request.unit_system not in ("metric", "imperial"):
             raise HTTPException(status_code=400, detail="unit_system must be 'metric' or 'imperial'")
         user.unit_system = request.unit_system
+    
+    if request.date_of_birth is not None:
+        today = date.today()
+        age = (today - request.date_of_birth).days // 365
+        if request.date_of_birth > today:
+            raise HTTPException(status_code=400, detail="date_of_birth cannot be in the future")
+        if age < 10 or age > 100:
+            raise HTTPException(status_code=400, detail="date_of_birth must represent an age between 10 and 100")
+        user.date_of_birth = request.date_of_birth
+    
+    if request.weight_kg is not None:
+        if request.weight_kg <= 0:
+            raise HTTPException(status_code=400, detail="weight_kg must be positive")
+        if request.weight_kg > 500:
+            raise HTTPException(status_code=400, detail="weight_kg must be realistic (max 500)")
+        user.weight_kg = request.weight_kg
     
     await db.commit()
     await db.refresh(user)

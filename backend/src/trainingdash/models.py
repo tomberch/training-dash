@@ -1,12 +1,15 @@
-from datetime import datetime
+from datetime import datetime, date
+from decimal import Decimal
 
 from geoalchemy2 import Geography
 from sqlalchemy import (
     BigInteger,
+    Date,
     Float,
     ForeignKey,
     Integer,
     LargeBinary,
+    Numeric,
     String,
     Text,
     text,
@@ -24,6 +27,8 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     is_admin: Mapped[bool] = mapped_column(default=False)
     unit_system: Mapped[str] = mapped_column(String(10), default="metric", nullable=False)
+    date_of_birth: Mapped[date | None] = mapped_column(Date, nullable=True)
+    weight_kg: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
 
 
