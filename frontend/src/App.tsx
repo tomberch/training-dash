@@ -1,33 +1,89 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ActivityList, Login } from "./ActivityList";
 import { ActivityDetail } from "./ActivityDetail";
 import { RecordsView } from "./RecordsView";
 import { AdminView } from "./AdminView";
+import { Header } from "./Header";
+import { Settings } from "./Settings";
+import { fetchMe } from "./api";
+import type { User } from "./api";
 import "./App.css";
 
-type View = { type: "list" } | { type: "detail"; id: number } | { type: "records" } | { type: "admin" };
+type View = { type: "list" } | { type: "detail"; id: number } | { type: "records" } | { type: "admin" } | { type: "settings" };
 
 export default function App() {
-  const [loggedIn, setLoggedIn] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
   const [view, setView] = useState<View>({ type: "list" });
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  if (!loggedIn) {
-    return <Login onLogin={(admin) => { setLoggedIn(true); setIsAdmin(admin); }} />;
+  // Check if user is logged in on mount
+  useEffect(() => {
+    fetchMe()
+      .then(setUser)
+      .catch(() => setUser(null))
+      .finally(() => setLoading(false));
+  }, []);
+
+  function handleLogin(_isAdmin: boolean) {
+    // Refetch user to get full user data
+    fetchMe().then(setUser);
+  }
+
+  function handleLogout() {
+    setUser(null);
+    setView({ type: "list" });
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="text-gray-500 dark:text-gray-400">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Login onLogin={handleLogin} />;
+  }
+
+  if (view.type === "settings") {
+    return (
+      <Settings
+        user={user}
+        onBack={() => setView({ type: "list" })}
+        onUserUpdate={setUser}
+      />
+    );
   }
 
   if (view.type === "detail") {
     return (
-      <ActivityDetail
-        activityId={view.id}
-        onBack={() => setView({ type: "list" })}
-      />
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        <Header
+          username={user.username}
+          onLogout={handleLogout}
+          onSettings={() => setView({ type: "settings" })}
+          onUploadComplete={() => setRefreshKey((k) => k + 1)}
+        />
+        <ActivityDetail
+          activityId={view.id}
+          onBack={() => setView({ type: "list" })}
+          unitSystem={user.unit_system}
+        />
+      </div>
     );
   }
 
   if (view.type === "records") {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        <Header
+          username={user.username}
+          onLogout={handleLogout}
+          onSettings={() => setView({ type: "settings" })}
+          onUploadComplete={() => setRefreshKey((k) => k + 1)}
+        />
         <div className="max-w-6xl mx-auto px-4 py-6">
           <button
             onClick={() => setView({ type: "list" })}
@@ -35,20 +91,40 @@ export default function App() {
           >
             &larr; Back
           </button>
-          <RecordsView />
+          <RecordsView unitSystem={user.unit_system} />
         </div>
       </div>
     );
   }
 
   if (view.type === "admin") {
-    return <AdminView onBack={() => setView({ type: "list" })} />;
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        <Header
+          username={user.username}
+          onLogout={handleLogout}
+          onSettings={() => setView({ type: "settings" })}
+          showUpload={false}
+        />
+        <AdminView onBack={() => setView({ type: "list" })} />
+      </div>
+    );
   }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <Header
+        username={user.username}
+        onLogout={handleLogout}
+        onSettings={() => setView({ type: "settings" })}
+        onUploadComplete={() => setRefreshKey((k) => k + 1)}
+      />
       <div className="max-w-6xl mx-auto px-4 py-6">
-        <ActivityList onSelect={(id) => setView({ type: "detail", id })} />
+        <ActivityList
+          key={refreshKey}
+          onSelect={(id) => setView({ type: "detail", id })}
+          unitSystem={user.unit_system}
+        />
         <div className="mt-6 flex gap-3">
           <button
             onClick={() => setView({ type: "records" })}
@@ -56,7 +132,7 @@ export default function App() {
           >
             Personal Records
           </button>
-          {isAdmin && (
+          {user.is_admin && (
             <button
               onClick={() => setView({ type: "admin" })}
               data-testid="admin-link"
