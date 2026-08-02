@@ -7,7 +7,7 @@ from sqlalchemy import select
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "tests" / "fixtures"))
 from generate_fit import make_test_fit  # noqa: E402
 from trainingdash.models import Activity, User, Route  # noqa: E402
-from trainingdash.auth import hash_password  # noqa: E402
+from tests.integration.fixtures import CACHED_HASH_PASS  # noqa: E402
 
 
 class TestRecords:
@@ -85,7 +85,7 @@ class TestRecords:
         )
         db_session.add(activity_a)
 
-        user_b = User(username="userb", password_hash=hash_password("passb"))
+        user_b = User(username="userb", password_hash=CACHED_HASH_PASS)
         db_session.add(user_b)
         await db_session.commit()
         await db_session.refresh(user_b)
@@ -165,7 +165,7 @@ class TestRecords:
         )
 
         # User B uploads a ride on a different route
-        user_b = User(username="userb", password_hash=hash_password("passb"))
+        user_b = User(username="userb", password_hash=CACHED_HASH_PASS)
         db_session.add(user_b)
         await db_session.commit()
         await db_session.refresh(user_b)

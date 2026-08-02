@@ -2,7 +2,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from trainingdash.auth import hash_password
+from tests.integration.fixtures import CACHED_HASH_PASS
 from trainingdash.models import User
 
 
@@ -32,7 +32,7 @@ class TestAdminEndpoints:
         self, auth_client, app_client, db_session
     ):
         # Create a user directly
-        user = User(username="resetme", password_hash=hash_password("oldpass"))
+        user = User(username="resetme", password_hash=CACHED_HASH_PASS)
         db_session.add(user)
         await db_session.commit()
         await db_session.refresh(user)
@@ -46,7 +46,7 @@ class TestAdminEndpoints:
 
         # Old password no longer works
         old_login = await app_client.post(
-            "/api/login", json={"username": "resetme", "password": "oldpass"}
+            "/api/login", json={"username": "resetme", "password": "pass"}
         )
         assert old_login.status_code == 401
 
@@ -59,7 +59,7 @@ class TestAdminEndpoints:
     @pytest.mark.asyncio
     async def test_non_admin_cannot_access_admin_routes(self, app_client, db_session):
         # Create a non-admin user
-        user = User(username="regularuser", password_hash=hash_password("pass"), is_admin=False)
+        user = User(username="regularuser", password_hash=CACHED_HASH_PASS, is_admin=False)
         db_session.add(user)
         await db_session.commit()
 
@@ -81,9 +81,10 @@ class TestAdminEndpoints:
     @pytest.mark.asyncio
     async def test_admin_list_users_returns_all_users(self, auth_client, db_session):
         # Create additional users
-        user2 = User(username="user2", password_hash=hash_password("pass2"))
-        user3 = User(username="user3", password_hash=hash_password("pass3"))
+        user2 = User(username="user2", password_hash=CACHED_HASH_PASS)
+        user3 = User(username="user3", password_hash=CACHED_HASH_PASS)
         db_session.add_all([user2, user3])
+        await db_session.commit()
         await db_session.commit()
 
         response = await auth_client.get("/api/admin/users")

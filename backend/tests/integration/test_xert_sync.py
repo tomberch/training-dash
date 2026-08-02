@@ -15,9 +15,9 @@ from dotenv import load_dotenv
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from trainingdash.auth import hash_password
 from trainingdash.models import Activity, User, XertCredentials
 from trainingdash.xert import XertActivity, XertActivityDetail, XertSessionDataPoint, XertAPIError
+from tests.integration.fixtures import CACHED_HASH_TESTPASS, CACHED_HASH_PASS
 
 # Load .env.test if it exists (for local Xert API testing)
 _env_test_path = Path(__file__).parent.parent.parent / ".env.test"
@@ -122,7 +122,7 @@ async def user_with_xert_creds(db_session, encryption_key_env):
     
     user = User(
         username="xertuser",
-        password_hash=hash_password("testpass"),
+        password_hash=CACHED_HASH_TESTPASS,
         is_admin=False,
     )
     db_session.add(user)
@@ -332,7 +332,7 @@ class TestSyncXertJob:
         """sync_xert_job should return error if user has no credentials."""
         user = User(
             username="nocreds",
-            password_hash=hash_password("testpass"),
+            password_hash=CACHED_HASH_TESTPASS,
         )
         db_session.add(user)
         await db_session.commit()
@@ -438,9 +438,9 @@ class TestNightlySyncAllXert:
         from trainingdash.crypto import encrypt
         
         # Create multiple users, some with credentials
-        user1 = User(username="user1", password_hash=hash_password("pass"))
-        user2 = User(username="user2", password_hash=hash_password("pass"))
-        user3 = User(username="user3", password_hash=hash_password("pass"))  # no creds
+        user1 = User(username="user1", password_hash=CACHED_HASH_PASS)
+        user2 = User(username="user2", password_hash=CACHED_HASH_PASS)
+        user3 = User(username="user3", password_hash=CACHED_HASH_PASS)  # no creds
         db_session.add_all([user1, user2, user3])
         await db_session.commit()
         await db_session.refresh(user1)
@@ -492,7 +492,7 @@ class TestNightlySyncAllXert:
     async def test_nightly_sync_no_users_with_creds(self, db_engine, db_session):
         """nightly_sync_all_xert should handle no users with credentials."""
         # Create user without credentials
-        user = User(username="nocreds", password_hash=hash_password("pass"))
+        user = User(username="nocreds", password_hash=CACHED_HASH_PASS)
         db_session.add(user)
         await db_session.commit()
         

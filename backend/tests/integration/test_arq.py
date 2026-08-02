@@ -7,25 +7,21 @@ import pytest
 import pytest_asyncio
 from arq import create_pool
 from arq.worker import Worker
-from sqlalchemy import select
+from sqlalchemy import select, text
 from testcontainers.redis import RedisContainer
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "tests" / "fixtures"))
 from generate_fit import make_test_fit  # noqa: E402
-from trainingdash.models import Activity, Record  # noqa: E402
-from trainingdash.auth import hash_password  # noqa: E402
+from trainingdash.models import Activity, Record, User  # noqa: E402
 from trainingdash.db import Base  # noqa: E402
 from trainingdash.app import create_app  # noqa: E402
 
-import bcrypt
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
-from sqlalchemy import text
-from testcontainers.postgres import PostgresContainer
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="module")
 def redis_container():
     with RedisContainer("redis:7-alpine") as redis:
         host = redis.get_container_host_ip()
@@ -34,7 +30,11 @@ def redis_container():
 
 
 @pytest_asyncio.fixture
-async def arq_engine(redis_container, pg_container):
+async def arq_engine(redis_container, db_engine_session, pg_container):
+    """
+    ARQ-specific engine setup that reuses the session-scoped postgres from conftest.
+    Sets up Redis and global config but uses TRUNCATE instead of DROP/CREATE.
+    """
     redis_host, redis_port = redis_container
     os.environ["REDIS_HOST"] = redis_host
     os.environ["REDIS_PORT"] = str(redis_port)
@@ -42,27 +42,31 @@ async def arq_engine(redis_container, pg_container):
     url = pg_container.get_connection_url()
     os.environ["DATABASE_URL"] = url
 
-    # Also update trainingdash.config.settings to use the testcontainer URL
+    # Update trainingdash.config.settings to use the testcontainer URL
     import trainingdash.config as configmod
     configmod.settings = configmod.Settings.from_env()
 
-    # Update the global engine to use the testcontainer
+    # Update the global engine to use the same testcontainer engine
     import trainingdash.db as dbmod
-    dbmod.engine = create_async_engine(url, poolclass=NullPool)
-    dbmod.async_session = async_sessionmaker(dbmod.engine, expire_on_commit=False)
-    async with dbmod.engine.begin() as conn:
-        await conn.execute(text("DROP SCHEMA public CASCADE"))
-        await conn.execute(text("CREATE SCHEMA public"))
-        await conn.execute(text("CREATE EXTENSION postgis"))
-        await conn.run_sync(Base.metadata.create_all)
+    dbmod.engine = db_engine_session
+    dbmod.async_session = async_sessionmaker(db_engine_session, expire_on_commit=False)
 
-    engine = dbmod.engine
-    yield engine
-    async with engine.begin() as conn:
-        await conn.execute(text("DROP SCHEMA public CASCADE"))
-        await conn.execute(text("CREATE SCHEMA public"))
-        await conn.execute(text("CREATE EXTENSION postgis"))
-    await engine.dispose()
+    # TRUNCATE tables instead of DROP/CREATE for faster cleanup
+    async with db_engine_session.begin() as conn:
+        tables = list(Base.metadata.tables.keys())
+        if tables:
+            table_list = ", ".join(f'"{t}"' for t in tables)
+            await conn.execute(text(f"TRUNCATE {table_list} RESTART IDENTITY CASCADE"))
+
+    yield db_engine_session
+
+    # Cleanup: TRUNCATE again, don't DROP schema
+    async with db_engine_session.begin() as conn:
+        tables = list(Base.metadata.tables.keys())
+        if tables:
+            table_list = ", ".join(f'"{t}"' for t in tables)
+            await conn.execute(text(f"TRUNCATE {table_list} RESTART IDENTITY CASCADE"))
+
     os.environ.pop("REDIS_HOST", None)
     os.environ.pop("REDIS_PORT", None)
 
@@ -77,10 +81,10 @@ async def arq_session(arq_engine):
 
 @pytest_asyncio.fixture
 async def arq_user(arq_engine):
-    from trainingdash.models import User
+    from tests.integration.fixtures import CACHED_HASH_TESTPASS
     session_factory = async_sessionmaker(arq_engine, expire_on_commit=False)
     async with session_factory() as session:
-        user = User(username="testuser", password_hash=hash_password("testpass"), is_admin=True)
+        user = User(username="testuser", password_hash=CACHED_HASH_TESTPASS, is_admin=True)
         session.add(user)
         await session.commit()
         await session.refresh(user)
