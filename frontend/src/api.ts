@@ -527,3 +527,37 @@ export interface ThresholdEntry {
 export async function fetchThresholds(): Promise<ThresholdEntry[]> {
   return apiFetch<ThresholdEntry[]>("/me/thresholds");
 }
+
+
+// Power curve types
+export interface PowerCurvePoint {
+  duration_seconds: number;
+  watts: number;
+  achieved_date: string;
+  days_ago: number;
+}
+
+export async function fetchPowerCurve(start?: string, end?: string): Promise<PowerCurvePoint[]> {
+  const params = new URLSearchParams();
+  if (start) params.set("start", start);
+  if (end) params.set("end", end);
+  const query = params.toString();
+  return apiFetch<PowerCurvePoint[]>(`/power-curve${query ? `?${query}` : ""}`);
+}
+
+// Fitness model types
+export interface FitnessSnapshot {
+  computed_at: string;
+  pp_watts: number;
+  w_prime_joules: number;
+  cp_watts: number;
+}
+
+export interface FitnessResponse {
+  current: FitnessSnapshot | null;
+  history: FitnessSnapshot[];
+}
+
+export async function fetchFitness(): Promise<FitnessResponse> {
+  return apiFetch<FitnessResponse>("/fitness");
+}
