@@ -101,6 +101,8 @@ def create_app() -> FastAPI:
     app.put("/me/zones")(update_my_zones)
     # Fitness model
     app.get("/fitness")(get_fitness)
+    # Performance Management Chart
+    app.get("/pmc")(get_pmc)
     return app
 
 
@@ -1340,6 +1342,51 @@ async def get_fitness(db: DbSession, user: CurrentUser):
             for h in history
         ],
     }
+
+
+async def get_pmc(
+    db: DbSession,
+    user: CurrentUser,
+    start: date | None = Query(None, description="Start date (YYYY-MM-DD)"),
+    end: date | None = Query(None, description="End date (YYYY-MM-DD)"),
+):
+    """
+    Get Performance Management Chart data.
+    
+    Returns daily CTL (Chronic Training Load), ATL (Acute Training Load),
+    and TSB (Training Stress Balance) values for the requested date range.
+    
+    CTL: 42-day exponentially weighted moving average of TSS (fitness)
+    ATL: 7-day exponentially weighted moving average of TSS (fatigue)
+    TSB: CTL - ATL (form indicator, positive = fresh, negative = tired)
+    """
+    from trainingdash.pmc import compute_pmc, aggregate_daily_tss
+    
+    # Default to last 12 weeks if not specified
+    if end is None:
+        end = date.today()
+    if start is None:
+        start = end - timedelta(weeks=12)
+    
+    # Get all activities with TSS for this user
+    result = await db.execute(
+        select(Activity)
+        .where(Activity.user_id == user.id)
+        .order_by(Activity.started_at)
+    )
+    activities = result.scalars().all()
+    
+    # Aggregate TSS by date
+    activity_data = [
+        {"started_at": a.started_at, "tss": a.tss}
+        for a in activities
+    ]
+    daily_tss = aggregate_daily_tss(activity_data)
+    
+    # Compute PMC
+    pmc_data = compute_pmc(daily_tss, start, end)
+    
+    return pmc_data
 
 
 app = create_app()
