@@ -103,6 +103,8 @@ def create_app() -> FastAPI:
     app.get("/fitness")(get_fitness)
     # Performance Management Chart
     app.get("/pmc")(get_pmc)
+    # Power curve
+    app.get("/power-curve")(get_power_curve)
     return app
 
 
@@ -1387,6 +1389,65 @@ async def get_pmc(
     pmc_data = compute_pmc(daily_tss, start, end)
     
     return pmc_data
+
+
+async def get_power_curve(
+    db: DbSession,
+    user: CurrentUser,
+    start: date | None = Query(None, description="Start date (YYYY-MM-DD)"),
+    end: date | None = Query(None, description="End date (YYYY-MM-DD)"),
+):
+    """
+    Get power curve data (best power at each duration).
+    
+    Returns the user's best power at each of the 14 standard durations,
+    along with the date achieved and days since that PR was set.
+    
+    Use date range params to compare periods (e.g., last 90 days vs all time).
+    """
+    from sqlalchemy import and_
+    
+    # Build query for peaks
+    query = (
+        select(ActivityPeakPower, Activity.started_at)
+        .join(Activity, ActivityPeakPower.activity_id == Activity.id)
+        .where(Activity.user_id == user.id)
+    )
+    
+    # Apply date filters if specified
+    if start is not None:
+        query = query.where(Activity.started_at >= datetime.combine(start, datetime.min.time()))
+    if end is not None:
+        query = query.where(Activity.started_at <= datetime.combine(end, datetime.max.time()))
+    
+    result = await db.execute(query)
+    rows = result.all()
+    
+    # Find best at each duration
+    best_by_duration: dict[int, tuple[int, date]] = {}  # duration -> (watts, achieved_date)
+    
+    for peak, started_at in rows:
+        duration = peak.duration_seconds
+        watts = peak.watts
+        achieved_date = started_at.date() if hasattr(started_at, 'date') else started_at
+        
+        if duration not in best_by_duration or watts > best_by_duration[duration][0]:
+            best_by_duration[duration] = (watts, achieved_date)
+    
+    # Build response with days_ago
+    today = date.today()
+    curve = []
+    for duration in sorted(best_by_duration.keys()):
+        watts, achieved_date = best_by_duration[duration]
+        days_ago = (today - achieved_date).days
+        curve.append({
+            "duration_seconds": duration,
+            "watts": watts,
+            "achieved_date": achieved_date.isoformat(),
+            "days_ago": days_ago,
+        })
+    
+    return curve
 
 
 app = create_app()
