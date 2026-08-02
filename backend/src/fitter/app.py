@@ -1,17 +1,20 @@
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta, date
 from typing import Any
 
 from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete
 from sqlalchemy.orm import selectinload
 
 from fitter.auth import AdminUser, CurrentUser, DbSession, LoginRequest, create_session_cookie, hash_password, verify_password
 from fitter.db import Base, async_session, engine
-from fitter.models import Activity, Lap, Record, User, XertCredentials
+from fitter.models import Activity, Lap, Record, User, XertCredentials, GarminCredentials
+from fitter.xert import get_xert_client, XertAPIError
+from fitter.garmin import get_garmin_client, GarminAPIError, GarminMFARequired
+from fitter.crypto import encrypt, decrypt, EncryptionError
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +64,9 @@ def create_app() -> FastAPI:
         )
     
     app.post("/login")(login)
+    app.post("/logout")(logout)
+    app.get("/me")(get_me)
+    app.patch("/me")(update_me)
     app.get("/activities")(list_activities)
     app.get("/activities/{activity_id}")(get_activity)
     app.get("/activities/{activity_id}/records")(get_activity_records)
@@ -77,6 +83,15 @@ def create_app() -> FastAPI:
     app.get("/admin/users/{user_id}/xert-credentials")(admin_get_xert_credentials)
     app.put("/admin/users/{user_id}/xert-credentials")(admin_set_xert_credentials)
     app.delete("/admin/users/{user_id}/xert-credentials")(admin_delete_xert_credentials)
+    # User Xert credentials (self-service)
+    app.get("/me/xert-credentials")(get_my_xert_credentials)
+    app.put("/me/xert-credentials")(put_my_xert_credentials)
+    app.delete("/me/xert-credentials")(delete_my_xert_credentials)
+    # User Garmin credentials (self-service)
+    app.get("/me/garmin-credentials")(get_my_garmin_credentials)
+    app.put("/me/garmin-credentials")(put_my_garmin_credentials)
+    app.post("/me/garmin-credentials/mfa")(complete_garmin_mfa)
+    app.delete("/me/garmin-credentials")(delete_my_garmin_credentials)
     return app
 
 
@@ -89,6 +104,273 @@ async def login(db: DbSession, request: LoginRequest):
     response = JSONResponse({"user_id": user.id, "username": user.username, "is_admin": user.is_admin})
     response.set_cookie("session", cookie, httponly=True, samesite="lax")
     return response
+
+
+async def logout(user: CurrentUser):
+    """Log out the current user by clearing the session cookie."""
+    response = JSONResponse({"success": True})
+    response.delete_cookie("session")
+    return response
+
+
+def _user_response(user: User) -> dict:
+    """Return a dict of user info for API responses."""
+    return {
+        "id": user.id,
+        "username": user.username,
+        "is_admin": user.is_admin,
+        "unit_system": user.unit_system,
+    }
+
+
+async def get_me(user: CurrentUser):
+    """Get the current user's info."""
+    return _user_response(user)
+
+
+class UpdateMeRequest(BaseModel):
+    unit_system: str | None = None
+
+
+async def update_me(db: DbSession, user: CurrentUser, request: UpdateMeRequest):
+    """Update the current user's preferences."""
+    if request.unit_system is not None:
+        if request.unit_system not in ("metric", "imperial"):
+            raise HTTPException(status_code=400, detail="unit_system must be 'metric' or 'imperial'")
+        user.unit_system = request.unit_system
+    
+    await db.commit()
+    await db.refresh(user)
+    
+    return _user_response(user)
+
+
+# User Xert credentials (self-service)
+
+async def get_my_xert_credentials(db: DbSession, user: CurrentUser):
+    """Get the current user's Xert credentials status. Never returns the password."""
+    result = await db.execute(
+        select(XertCredentials).where(XertCredentials.user_id == user.id)
+    )
+    creds = result.scalar_one_or_none()
+    if creds is None:
+        return {"configured": False, "xert_email": None, "sync_since": None}
+    return {
+        "configured": True,
+        "xert_email": creds.xert_email,
+        "sync_since": (creds.sync_since.date() if hasattr(creds.sync_since, 'date') else creds.sync_since).isoformat() if creds.sync_since else None,
+    }
+
+
+class MyXertCredentialsRequest(BaseModel):
+    xert_email: str
+    xert_password: str
+    sync_since: date | None = None
+
+
+async def put_my_xert_credentials(db: DbSession, user: CurrentUser, request: MyXertCredentialsRequest):
+    """Set or update the current user's Xert credentials. Validates via login attempt."""
+    # Validate credentials by attempting to log in
+    client = get_xert_client()
+    try:
+        await client.login(request.xert_email, request.xert_password)
+    except XertAPIError:
+        raise HTTPException(status_code=400, detail="Invalid Xert credentials")
+    finally:
+        await client.close()
+    
+    # Encrypt the password
+    try:
+        encrypted_password = encrypt(request.xert_password)
+    except EncryptionError as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    
+    # Determine sync_since: use provided date or default to 90 days ago
+    if request.sync_since is not None:
+        sync_since_dt = datetime.combine(request.sync_since, datetime.min.time())
+    else:
+        sync_since_dt = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=90)
+    
+    # Upsert credentials
+    result = await db.execute(
+        select(XertCredentials).where(XertCredentials.user_id == user.id)
+    )
+    creds = result.scalar_one_or_none()
+    
+    if creds is None:
+        creds = XertCredentials(
+            user_id=user.id,
+            xert_email=request.xert_email,
+            encrypted_password=encrypted_password,
+            sync_since=sync_since_dt,
+        )
+        db.add(creds)
+    else:
+        creds.xert_email = request.xert_email
+        creds.encrypted_password = encrypted_password
+        creds.sync_since = sync_since_dt
+    
+    await db.commit()
+    return {"success": True, "xert_email": request.xert_email}
+
+
+async def delete_my_xert_credentials(db: DbSession, user: CurrentUser):
+    """Delete the current user's Xert credentials (disconnect Xert)."""
+    result = await db.execute(
+        select(XertCredentials).where(XertCredentials.user_id == user.id)
+    )
+    creds = result.scalar_one_or_none()
+    if creds is not None:
+        await db.delete(creds)
+        await db.commit()
+    return {"success": True}
+
+
+# User Garmin credentials (self-service)
+
+# In-memory storage for pending MFA sessions (keyed by user_id)
+# In production, this could be stored in Redis with TTL
+_pending_garmin_mfa: dict[int, dict] = {}
+
+
+async def get_my_garmin_credentials(db: DbSession, user: CurrentUser):
+    """Get the current user's Garmin credentials status. Never returns the password."""
+    result = await db.execute(
+        select(GarminCredentials).where(GarminCredentials.user_id == user.id)
+    )
+    creds = result.scalar_one_or_none()
+    if creds is None:
+        return {"configured": False, "garmin_email": None, "sync_since": None}
+    return {
+        "configured": True,
+        "garmin_email": creds.garmin_email,
+        "sync_since": (creds.sync_since.date() if hasattr(creds.sync_since, 'date') else creds.sync_since).isoformat() if creds.sync_since else None,
+    }
+
+
+class MyGarminCredentialsRequest(BaseModel):
+    garmin_email: str
+    garmin_password: str
+    sync_since: date | None = None
+
+
+async def put_my_garmin_credentials(db: DbSession, user: CurrentUser, request: MyGarminCredentialsRequest):
+    """
+    Set or update the current user's Garmin credentials.
+    
+    Returns:
+        - {"success": true, "garmin_email": ...} if login succeeded without MFA
+        - {"mfa_required": true} if MFA is needed (call POST /me/garmin-credentials/mfa next)
+    """
+    client = get_garmin_client()
+    try:
+        client.login(request.garmin_email, request.garmin_password)
+    except GarminMFARequired:
+        # Store pending credentials for MFA completion
+        _pending_garmin_mfa[user.id] = {
+            "email": request.garmin_email,
+            "password": request.garmin_password,
+            "sync_since": request.sync_since,
+        }
+        return {"mfa_required": True}
+    except GarminAPIError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    
+    # Login succeeded without MFA - save credentials
+    return await _save_garmin_credentials(
+        db, user, request.garmin_email, request.garmin_password, request.sync_since
+    )
+
+
+class GarminMFARequest(BaseModel):
+    mfa_code: str
+
+
+async def complete_garmin_mfa(db: DbSession, user: CurrentUser, request: GarminMFARequest):
+    """Complete Garmin MFA authentication and save credentials."""
+    pending = _pending_garmin_mfa.get(user.id)
+    if pending is None:
+        raise HTTPException(status_code=400, detail="No pending MFA session")
+    
+    client = get_garmin_client()
+    try:
+        # Re-attempt login - this will trigger MFA callback
+        client.login(pending["email"], pending["password"])
+    except GarminMFARequired:
+        # Now complete with MFA code
+        try:
+            client.complete_mfa(request.mfa_code)
+        except GarminAPIError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    except GarminAPIError as e:
+        # Clean up pending session on failure
+        _pending_garmin_mfa.pop(user.id, None)
+        raise HTTPException(status_code=400, detail=str(e))
+    
+    # MFA succeeded - save credentials and clean up
+    email = pending["email"]
+    password = pending["password"]
+    sync_since = pending.get("sync_since")
+    _pending_garmin_mfa.pop(user.id, None)
+    
+    return await _save_garmin_credentials(db, user, email, password, sync_since)
+
+
+async def _save_garmin_credentials(
+    db: DbSession,
+    user: CurrentUser,
+    email: str,
+    password: str,
+    sync_since: date | None,
+) -> dict:
+    """Helper to encrypt and save Garmin credentials."""
+    try:
+        encrypted_password = encrypt(password)
+    except EncryptionError as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    
+    # Determine sync_since: use provided date or default to 90 days ago
+    if sync_since is not None:
+        sync_since_dt = datetime.combine(sync_since, datetime.min.time())
+    else:
+        sync_since_dt = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=90)
+    
+    # Upsert credentials
+    result = await db.execute(
+        select(GarminCredentials).where(GarminCredentials.user_id == user.id)
+    )
+    creds = result.scalar_one_or_none()
+    
+    if creds is None:
+        creds = GarminCredentials(
+            user_id=user.id,
+            garmin_email=email,
+            encrypted_password=encrypted_password,
+            sync_since=sync_since_dt,
+        )
+        db.add(creds)
+    else:
+        creds.garmin_email = email
+        creds.encrypted_password = encrypted_password
+        creds.sync_since = sync_since_dt
+    
+    await db.commit()
+    return {"success": True, "garmin_email": email}
+
+
+async def delete_my_garmin_credentials(db: DbSession, user: CurrentUser):
+    """Delete the current user's Garmin credentials (disconnect Garmin)."""
+    # Clean up any pending MFA session
+    _pending_garmin_mfa.pop(user.id, None)
+    
+    result = await db.execute(
+        select(GarminCredentials).where(GarminCredentials.user_id == user.id)
+    )
+    creds = result.scalar_one_or_none()
+    if creds is not None:
+        await db.delete(creds)
+        await db.commit()
+    return {"success": True}
 
 
 def _activity_summary(a: Activity) -> dict[str, Any]:
@@ -402,15 +684,34 @@ async def admin_reset_password(db: DbSession, admin: AdminUser, user_id: int, re
 
 
 async def admin_trigger_sync(db: DbSession, admin: AdminUser, user_id: int):
-    """Trigger Xert sync for a user (admin only)."""
+    """Trigger sync for a user (admin only). Triggers both Xert and Garmin if configured."""
     await _get_user_or_404(db, user_id)
     
-    from fitter.jobs import enqueue_sync_xert_job
-    job_id = await enqueue_sync_xert_job(user_id)
-    if job_id is None:
-        # Redis not available, return immediately (no-op)
-        return {"success": True, "job_id": None, "message": "Sync not available (Redis not configured)"}
-    return {"success": True, "job_id": job_id}
+    from fitter.jobs import enqueue_sync_xert_job, enqueue_sync_garmin_job
+    
+    job_ids = {}
+    
+    # Check if user has Xert credentials and trigger sync
+    xert_result = await db.execute(
+        select(XertCredentials).where(XertCredentials.user_id == user_id)
+    )
+    if xert_result.scalar_one_or_none() is not None:
+        job_id = await enqueue_sync_xert_job(user_id)
+        if job_id:
+            job_ids["xert"] = job_id
+    
+    # Check if user has Garmin credentials and trigger sync
+    garmin_result = await db.execute(
+        select(GarminCredentials).where(GarminCredentials.user_id == user_id)
+    )
+    if garmin_result.scalar_one_or_none() is not None:
+        job_id = await enqueue_sync_garmin_job(user_id)
+        if job_id:
+            job_ids["garmin"] = job_id
+    
+    if not job_ids:
+        return {"success": True, "job_ids": None, "message": "No integrations configured or Redis not available"}
+    return {"success": True, "job_ids": job_ids}
 
 
 class XertCredentialsRequest(BaseModel):
