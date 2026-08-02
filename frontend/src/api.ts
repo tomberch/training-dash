@@ -137,6 +137,25 @@ export async function fetchActivityRecords(
   return apiFetch<GeoJSONFeatureCollection>(`/activities/${id}/records`);
 }
 
+export interface WbalPoint {
+  elapsed_s: number;
+  distance_m: number;
+  wbal_joules: number;
+  wbal_pct: number;
+}
+
+export interface WbalResponse {
+  wbal_series: WbalPoint[];
+  w_prime_joules: number | null;
+  ftp_watts: number | null;
+  wbal_min_joules: number | null;
+  wbal_min_pct: number | null;
+}
+
+export async function fetchActivityWbal(id: number): Promise<WbalResponse> {
+  return apiFetch<WbalResponse>(`/activities/${id}/wbal`);
+}
+
 export async function fetchRecords(): Promise<RecordsResponse> {
   return apiFetch<RecordsResponse>("/records");
 }

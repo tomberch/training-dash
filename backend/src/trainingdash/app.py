@@ -71,6 +71,7 @@ def create_app() -> FastAPI:
     app.get("/activities")(list_activities)
     app.get("/activities/{activity_id}")(get_activity)
     app.get("/activities/{activity_id}/records")(get_activity_records)
+    app.get("/activities/{activity_id}/wbal")(get_activity_wbal)
     app.get("/activities/{activity_id}/same-route")(get_same_route_activities)
     app.get("/activities/{activity_id}/compare")(compare_activities)
     app.get("/records")(get_records)
@@ -983,6 +984,65 @@ async def get_activity_records(db: DbSession, user: CurrentUser, activity_id: in
     ])
     geojson["activity_id"] = activity_id
     return geojson
+
+
+async def get_activity_wbal(db: DbSession, user: CurrentUser, activity_id: int):
+    """Get W'bal time series for an activity."""
+    activity = await _get_owned_activity(db, user, activity_id)
+    
+    # Get threshold effective at activity date
+    activity_date = activity.started_at.date()
+    result = await db.execute(
+        select(ThresholdHistory)
+        .where(
+            ThresholdHistory.user_id == user.id,
+            ThresholdHistory.effective_date <= activity_date,
+        )
+        .order_by(ThresholdHistory.effective_date.desc())
+        .limit(1)
+    )
+    threshold = result.scalar_one_or_none()
+    
+    if threshold is None:
+        return {"wbal_series": [], "w_prime_joules": None, "ftp_watts": None}
+    
+    ftp = threshold.ftp_watts
+    w_prime = ftp * 60  # Estimate W' as FTP * 60 joules
+    
+    # Get records with power data
+    result = await db.execute(
+        select(Record)
+        .where(Record.activity_id == activity_id)
+        .order_by(Record.timestamp)
+    )
+    records = result.scalars().all()
+    
+    # Compute W'bal series using differential equation model
+    from trainingdash.wbal import compute_wbal_series
+    
+    power_values = [r.power_w for r in records]
+    first_ts = records[0].timestamp if records else None
+    
+    wbal_series = compute_wbal_series(power_values, ftp, w_prime)
+    
+    # Build response with timestamps
+    series = []
+    for i, (record, wbal) in enumerate(zip(records, wbal_series)):
+        elapsed_s = (record.timestamp - first_ts).total_seconds() if first_ts else 0
+        series.append({
+            "elapsed_s": elapsed_s,
+            "distance_m": record.distance_m or 0,
+            "wbal_joules": wbal,
+            "wbal_pct": (wbal / w_prime * 100) if w_prime > 0 else 0,
+        })
+    
+    return {
+        "wbal_series": series,
+        "w_prime_joules": w_prime,
+        "ftp_watts": ftp,
+        "wbal_min_joules": activity.wbal_min_joules,
+        "wbal_min_pct": activity.wbal_min_pct,
+    }
 
 
 async def upload_activity(db: DbSession, user: CurrentUser, file: UploadFile = File(...)):
