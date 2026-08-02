@@ -122,13 +122,13 @@ class TestArqIngest:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             # Login
-            resp = await client.post("/login", json={"username": "testuser", "password": "testpass"})
+            resp = await client.post("/api/login", json={"username": "testuser", "password": "testpass"})
             assert resp.status_code == 200
 
             # Upload — should return 202
             fit_data = make_test_fit(num_records=50)
             resp = await client.post(
-                "/upload",
+                "/api/upload",
                 files={"file": ("test.fit", fit_data, "application/octet-stream")},
             )
             assert resp.status_code == 202
@@ -168,13 +168,13 @@ class TestArqIngest:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             # Login
-            resp = await client.post("/login", json={"username": "testuser", "password": "testpass"})
+            resp = await client.post("/api/login", json={"username": "testuser", "password": "testpass"})
             assert resp.status_code == 200
 
             # Upload — job is enqueued but we don't run the worker yet
             fit_data = make_test_fit(num_records=30)
             resp = await client.post(
-                "/upload",
+                "/api/upload",
                 files={"file": ("restart_test.fit", fit_data, "application/octet-stream")},
             )
             assert resp.status_code == 202

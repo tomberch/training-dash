@@ -17,7 +17,7 @@ class TestPowerCurveEndpoint:
     @pytest.mark.asyncio
     async def test_power_curve_empty_without_activities(self, auth_client):
         """GET /power-curve returns empty array when no activities."""
-        response = await auth_client.get("/power-curve")
+        response = await auth_client.get("/api/power-curve")
         assert response.status_code == 200
         data = response.json()
         
@@ -30,11 +30,11 @@ class TestPowerCurveEndpoint:
         # Upload a FIT file with power data
         fit_data = make_test_fit(num_records=120)  # 2 minutes
         await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         
-        response = await auth_client.get("/power-curve")
+        response = await auth_client.get("/api/power-curve")
         assert response.status_code == 200
         data = response.json()
         
@@ -53,11 +53,11 @@ class TestPowerCurveEndpoint:
         """Power curve is sorted by duration."""
         fit_data = make_test_fit(num_records=120)
         await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         
-        response = await auth_client.get("/power-curve")
+        response = await auth_client.get("/api/power-curve")
         data = response.json()
         
         durations = [p["duration_seconds"] for p in data]
@@ -69,18 +69,18 @@ class TestPowerCurveEndpoint:
         # Upload a FIT file (test FIT date is 2024-03-15)
         fit_data = make_test_fit(num_records=120)
         await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         
         # Query with range that includes the activity
-        response = await auth_client.get("/power-curve?start=2024-01-01&end=2024-12-31")
+        response = await auth_client.get("/api/power-curve?start=2024-01-01&end=2024-12-31")
         assert response.status_code == 200
         data = response.json()
         assert len(data) >= 6
         
         # Query with range that excludes the activity
-        response = await auth_client.get("/power-curve?start=2025-01-01&end=2025-12-31")
+        response = await auth_client.get("/api/power-curve?start=2025-01-01&end=2025-12-31")
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 0
@@ -91,11 +91,11 @@ class TestPowerCurveEndpoint:
         # Upload a FIT file (test FIT date is 2024-03-15)
         fit_data = make_test_fit(num_records=120)
         await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         
-        response = await auth_client.get("/power-curve")
+        response = await auth_client.get("/api/power-curve")
         data = response.json()
         
         # All peaks should be from 2024-03-15
@@ -108,11 +108,11 @@ class TestPowerCurveEndpoint:
         # Upload a FIT file from 2024-03-15
         fit_data = make_test_fit(num_records=120)
         await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         
-        response = await auth_client.get("/power-curve")
+        response = await auth_client.get("/api/power-curve")
         data = response.json()
         
         # Activity from 2024 should have positive days_ago
@@ -125,19 +125,19 @@ class TestPowerCurveEndpoint:
         # Upload first activity
         fit_data1 = make_test_fit(num_records=120)
         await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("first.fit", fit_data1, "application/octet-stream")},
         )
         
         # Upload second activity with same power pattern
         fit_data2 = make_test_fit(num_records=120)
         await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("second.fit", fit_data2, "application/octet-stream")},
         )
         
         # Get curve - should have same values (picks best, which is same)
-        response = await auth_client.get("/power-curve")
+        response = await auth_client.get("/api/power-curve")
         data = response.json()
         
         # Both activities have same power, so we should have data
@@ -150,7 +150,7 @@ class TestPowerCurveEndpoint:
     @pytest.mark.asyncio
     async def test_power_curve_requires_auth(self, app_client):
         """GET /power-curve requires authentication."""
-        response = await app_client.get("/power-curve")
+        response = await app_client.get("/api/power-curve")
         assert response.status_code == 401
 
     @pytest.mark.asyncio
@@ -158,11 +158,11 @@ class TestPowerCurveEndpoint:
         """All power values are positive."""
         fit_data = make_test_fit(num_records=120)
         await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         
-        response = await auth_client.get("/power-curve")
+        response = await auth_client.get("/api/power-curve")
         data = response.json()
         
         for point in data:
@@ -173,11 +173,11 @@ class TestPowerCurveEndpoint:
         """Generally, shorter durations have higher power."""
         fit_data = make_test_fit(num_records=300)  # 5 minutes
         await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         
-        response = await auth_client.get("/power-curve")
+        response = await auth_client.get("/api/power-curve")
         data = response.json()
         
         # Find 1s and 300s peaks

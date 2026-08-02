@@ -16,7 +16,7 @@ class TestNotificationsEndpoint:
     @pytest.mark.asyncio
     async def test_notifications_empty_initially(self, auth_client):
         """GET /me/notifications returns empty array when no notifications."""
-        response = await auth_client.get("/me/notifications")
+        response = await auth_client.get("/api/me/notifications")
         assert response.status_code == 200
         data = response.json()
         
@@ -37,7 +37,7 @@ class TestNotificationsEndpoint:
         db_session.add(notification)
         await db_session.commit()
         
-        response = await auth_client.get("/me/notifications")
+        response = await auth_client.get("/api/me/notifications")
         assert response.status_code == 200
         data = response.json()
         
@@ -65,7 +65,7 @@ class TestNotificationsEndpoint:
             db_session.add(notification)
         await db_session.commit()
         
-        response = await auth_client.get("/me/notifications")
+        response = await auth_client.get("/api/me/notifications")
         data = response.json()
         
         # Only pending should be returned
@@ -75,7 +75,7 @@ class TestNotificationsEndpoint:
     @pytest.mark.asyncio
     async def test_notifications_requires_auth(self, app_client):
         """GET /me/notifications requires authentication."""
-        response = await app_client.get("/me/notifications")
+        response = await app_client.get("/api/me/notifications")
         assert response.status_code == 401
 
 
@@ -95,7 +95,7 @@ class TestAcceptNotification:
         await db_session.commit()
         await db_session.refresh(notification)
         
-        response = await auth_client.post(f"/me/notifications/{notification.id}/accept")
+        response = await auth_client.post(f"/api/me/notifications/{notification.id}/accept")
         assert response.status_code == 200
         assert response.json()["success"] is True
         
@@ -131,7 +131,7 @@ class TestAcceptNotification:
         await db_session.refresh(notification)
         
         # Accept the notification
-        response = await auth_client.post(f"/me/notifications/{notification.id}/accept")
+        response = await auth_client.post(f"/api/me/notifications/{notification.id}/accept")
         assert response.status_code == 200
         
         # Verify new threshold was created
@@ -150,7 +150,7 @@ class TestAcceptNotification:
     @pytest.mark.asyncio
     async def test_accept_not_found(self, auth_client):
         """Accept returns 404 for non-existent notification."""
-        response = await auth_client.post("/me/notifications/99999/accept")
+        response = await auth_client.post("/api/me/notifications/99999/accept")
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -166,7 +166,7 @@ class TestAcceptNotification:
         await db_session.commit()
         await db_session.refresh(notification)
         
-        response = await auth_client.post(f"/me/notifications/{notification.id}/accept")
+        response = await auth_client.post(f"/api/me/notifications/{notification.id}/accept")
         assert response.status_code == 400
 
 
@@ -186,7 +186,7 @@ class TestDismissNotification:
         await db_session.commit()
         await db_session.refresh(notification)
         
-        response = await auth_client.post(f"/me/notifications/{notification.id}/dismiss")
+        response = await auth_client.post(f"/api/me/notifications/{notification.id}/dismiss")
         assert response.status_code == 200
         assert response.json()["success"] is True
         
@@ -197,7 +197,7 @@ class TestDismissNotification:
     @pytest.mark.asyncio
     async def test_dismiss_not_found(self, auth_client):
         """Dismiss returns 404 for non-existent notification."""
-        response = await auth_client.post("/me/notifications/99999/dismiss")
+        response = await auth_client.post("/api/me/notifications/99999/dismiss")
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -213,7 +213,7 @@ class TestDismissNotification:
         await db_session.commit()
         await db_session.refresh(notification)
         
-        response = await auth_client.post(f"/me/notifications/{notification.id}/dismiss")
+        response = await auth_client.post(f"/api/me/notifications/{notification.id}/dismiss")
         assert response.status_code == 400
 
 
@@ -225,7 +225,7 @@ class TestFTPAutoDetection:
         """Notification created when fitness model CP diverges from FTP."""
         # Create a threshold with low FTP (to ensure divergence)
         await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={
                 "effective_date": "2024-01-01",
                 "ftp_watts": 150,  # Low FTP, test fit power is 200-279
@@ -237,12 +237,12 @@ class TestFTPAutoDetection:
         # Upload FIT file (this triggers breakthrough -> fitness model update)
         fit_data = make_test_fit(num_records=300)  # 5 min for good CP estimate
         await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         
         # Check for notification
-        response = await auth_client.get("/me/notifications")
+        response = await auth_client.get("/api/me/notifications")
         data = response.json()
         
         # Should have FTP suggestion notification
@@ -263,7 +263,7 @@ class TestFTPAutoDetection:
         # Test FIT power is 200-279, averaging around 240
         # CP estimate will be around 228-240 depending on model
         await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={
                 "effective_date": "2024-01-01",
                 "ftp_watts": 240,  # Close to expected CP
@@ -275,12 +275,12 @@ class TestFTPAutoDetection:
         # Upload FIT file
         fit_data = make_test_fit(num_records=300)
         await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         
         # Check for notification - should have none or different type
-        response = await auth_client.get("/me/notifications")
+        response = await auth_client.get("/api/me/notifications")
         data = response.json()
         
         ftp_notifications = [n for n in data if n["type"] == "ftp_suggestion"]

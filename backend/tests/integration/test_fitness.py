@@ -19,7 +19,7 @@ class TestBreakthroughDetection:
         # Upload first FIT file
         fit_data = make_test_fit(num_records=120)
         response = await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         assert response.status_code == 200
@@ -38,14 +38,14 @@ class TestBreakthroughDetection:
         # Upload first FIT file (sets initial PRs)
         fit_data1 = make_test_fit(num_records=120)
         await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("first.fit", fit_data1, "application/octet-stream")},
         )
         
         # Upload second FIT with same power pattern (no new PRs)
         fit_data2 = make_test_fit(num_records=120)
         response = await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("second.fit", fit_data2, "application/octet-stream")},
         )
         activity_id = response.json()["id"]
@@ -63,12 +63,12 @@ class TestBreakthroughDetection:
         # Upload a FIT file
         fit_data = make_test_fit(num_records=120)
         await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         
         # Get activity list
-        response = await auth_client.get("/activities")
+        response = await auth_client.get("/api/activities")
         assert response.status_code == 200
         activities = response.json()
         
@@ -81,13 +81,13 @@ class TestBreakthroughDetection:
         # Upload a FIT file
         fit_data = make_test_fit(num_records=120)
         upload_resp = await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         activity_id = upload_resp.json()["id"]
         
         # Get activity detail
-        response = await auth_client.get(f"/activities/{activity_id}")
+        response = await auth_client.get(f"/api/activities/{activity_id}")
         assert response.status_code == 200
         data = response.json()
         
@@ -101,7 +101,7 @@ class TestFitnessModel:
     @pytest.mark.asyncio
     async def test_fitness_empty_without_activities(self, auth_client):
         """GET /fitness returns empty when no activities."""
-        response = await auth_client.get("/fitness")
+        response = await auth_client.get("/api/fitness")
         assert response.status_code == 200
         data = response.json()
         
@@ -114,12 +114,12 @@ class TestFitnessModel:
         # Upload a FIT file (breakthrough)
         fit_data = make_test_fit(num_records=120)
         await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         
         # Check fitness was computed
-        response = await auth_client.get("/fitness")
+        response = await auth_client.get("/api/fitness")
         assert response.status_code == 200
         data = response.json()
         
@@ -140,11 +140,11 @@ class TestFitnessModel:
         # Upload a FIT file
         fit_data = make_test_fit(num_records=120)
         await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         
-        response = await auth_client.get("/fitness")
+        response = await auth_client.get("/api/fitness")
         data = response.json()
         
         assert len(data["history"]) >= 1
@@ -156,11 +156,11 @@ class TestFitnessModel:
         # Upload FIT with power ranging 200-279W (200 + i % 80)
         fit_data = make_test_fit(num_records=300)  # 5 minutes of data
         await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         
-        response = await auth_client.get("/fitness")
+        response = await auth_client.get("/api/fitness")
         data = response.json()
         
         # PP should be highest peak (around 279W for test data)
@@ -175,7 +175,7 @@ class TestFitnessModel:
     @pytest.mark.asyncio
     async def test_fitness_requires_auth(self, app_client):
         """GET /fitness requires authentication."""
-        response = await app_client.get("/fitness")
+        response = await app_client.get("/api/fitness")
         assert response.status_code == 401
 
 

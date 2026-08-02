@@ -15,10 +15,10 @@ class TestRecords:
     async def test_records_returns_lifetime_prs(self, auth_client):
         fit_data = make_test_fit(num_records=100, start_lat=47.3769, start_lon=8.5417)
         await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("ride1.fit", fit_data, "application/octet-stream")},
         )
-        response = await auth_client.get("/records")
+        response = await auth_client.get("/api/records")
         assert response.status_code == 200
         data = response.json()
         lp = data["lifetime_prs"]
@@ -56,7 +56,7 @@ class TestRecords:
             db_session.add(activity)
         await db_session.commit()
 
-        response = await auth_client.get("/records")
+        response = await auth_client.get("/api/records")
         lp = response.json()["lifetime_prs"]
         assert lp["fastest_5000_m"] is not None
         expected_5k = 5000 / (10000 / 1200)
@@ -105,7 +105,7 @@ class TestRecords:
         db_session.add(activity_b)
         await db_session.commit()
 
-        response = await auth_client.get("/records")
+        response = await auth_client.get("/api/records")
         lp = response.json()["lifetime_prs"]
         assert lp["longest_distance_m"]["value"] == 10000
         assert lp["longest_moving_time_s"]["value"] == 1800
@@ -116,7 +116,7 @@ class TestRecords:
 
     @pytest.mark.asyncio
     async def test_records_empty(self, auth_client):
-        response = await auth_client.get("/records")
+        response = await auth_client.get("/api/records")
         assert response.status_code == 200
         data = response.json()
         assert data["lifetime_prs"]["longest_distance_m"] is None
@@ -131,11 +131,11 @@ class TestRecords:
         # Upload two rides on the same route
         fit_data = make_test_fit(num_records=100, start_lat=47.3769, start_lon=8.5417)
         resp1 = await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("ride1.fit", fit_data, "application/octet-stream")},
         )
         resp2 = await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("ride2.fit", fit_data, "application/octet-stream")},
         )
         id1 = resp1.json()["id"]
@@ -147,7 +147,7 @@ class TestRecords:
         activity2.elapsed_time_s = 60  # faster
         await db_session.commit()
 
-        response = await auth_client.get("/records")
+        response = await auth_client.get("/api/records")
         data = response.json()
         route_prs = data["route_prs"]
         assert len(route_prs) == 1
@@ -160,7 +160,7 @@ class TestRecords:
         # User A uploads a ride
         fit_data = make_test_fit(num_records=100, start_lat=47.3769, start_lon=8.5417)
         await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("ride_a.fit", fit_data, "application/octet-stream")},
         )
 
@@ -174,7 +174,7 @@ class TestRecords:
         from trainingdash.ingest import ingest_fit
         await ingest_fit(db_session, user_b.id, fit_b, "upload", "ride_b.fit")
 
-        response = await auth_client.get("/records")
+        response = await auth_client.get("/api/records")
         data = response.json()
         route_prs = data["route_prs"]
         # User A should only see their own route, not user B's

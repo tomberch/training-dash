@@ -11,7 +11,7 @@ class TestAdminEndpoints:
     async def test_admin_creates_user_and_new_user_can_login(self, auth_client, app_client):
         # Admin creates a new user
         response = await auth_client.post(
-            "/admin/users",
+            "/api/admin/users",
             json={"username": "newuser", "password": "newpass123"},
         )
         assert response.status_code == 200
@@ -22,7 +22,7 @@ class TestAdminEndpoints:
 
         # New user can log in
         login_response = await app_client.post(
-            "/login", json={"username": "newuser", "password": "newpass123"}
+            "/api/login", json={"username": "newuser", "password": "newpass123"}
         )
         assert login_response.status_code == 200
         assert login_response.json()["username"] == "newuser"
@@ -39,20 +39,20 @@ class TestAdminEndpoints:
 
         # Admin resets password
         response = await auth_client.post(
-            f"/admin/users/{user.id}/reset-password",
+            f"/api/admin/users/{user.id}/reset-password",
             json={"password": "newpass456"},
         )
         assert response.status_code == 200
 
         # Old password no longer works
         old_login = await app_client.post(
-            "/login", json={"username": "resetme", "password": "oldpass"}
+            "/api/login", json={"username": "resetme", "password": "oldpass"}
         )
         assert old_login.status_code == 401
 
         # New password works
         new_login = await app_client.post(
-            "/login", json={"username": "resetme", "password": "newpass456"}
+            "/api/login", json={"username": "resetme", "password": "newpass456"}
         )
         assert new_login.status_code == 200
 
@@ -65,16 +65,16 @@ class TestAdminEndpoints:
 
         # Login as non-admin
         login_response = await app_client.post(
-            "/login", json={"username": "regularuser", "password": "pass"}
+            "/api/login", json={"username": "regularuser", "password": "pass"}
         )
         assert login_response.status_code == 200
 
         # Try to access admin endpoints
-        list_response = await app_client.get("/admin/users")
+        list_response = await app_client.get("/api/admin/users")
         assert list_response.status_code == 403
 
         create_response = await app_client.post(
-            "/admin/users", json={"username": "hacker", "password": "hack"}
+            "/api/admin/users", json={"username": "hacker", "password": "hack"}
         )
         assert create_response.status_code == 403
 
@@ -86,7 +86,7 @@ class TestAdminEndpoints:
         db_session.add_all([user2, user3])
         await db_session.commit()
 
-        response = await auth_client.get("/admin/users")
+        response = await auth_client.get("/api/admin/users")
         assert response.status_code == 200
         users = response.json()
         usernames = [u["username"] for u in users]
@@ -98,13 +98,13 @@ class TestAdminEndpoints:
     async def test_admin_cannot_create_duplicate_username(self, auth_client):
         # Create first user
         response1 = await auth_client.post(
-            "/admin/users", json={"username": "dupuser", "password": "pass1"}
+            "/api/admin/users", json={"username": "dupuser", "password": "pass1"}
         )
         assert response1.status_code == 200
 
         # Try to create duplicate
         response2 = await auth_client.post(
-            "/admin/users", json={"username": "dupuser", "password": "pass2"}
+            "/api/admin/users", json={"username": "dupuser", "password": "pass2"}
         )
         assert response2.status_code == 400
         assert "already exists" in response2.json()["detail"]
@@ -112,7 +112,7 @@ class TestAdminEndpoints:
     @pytest.mark.asyncio
     async def test_admin_reset_password_user_not_found(self, auth_client):
         response = await auth_client.post(
-            "/admin/users/99999/reset-password",
+            "/api/admin/users/99999/reset-password",
             json={"password": "newpass"},
         )
         assert response.status_code == 404
@@ -120,7 +120,7 @@ class TestAdminEndpoints:
     @pytest.mark.asyncio
     async def test_admin_trigger_sync_returns_success(self, auth_client, seed_user):
         # Trigger sync (stub job)
-        response = await auth_client.post(f"/admin/users/{seed_user.id}/sync")
+        response = await auth_client.post(f"/api/admin/users/{seed_user.id}/sync")
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
@@ -129,7 +129,7 @@ class TestAdminEndpoints:
 
     @pytest.mark.asyncio
     async def test_admin_trigger_sync_user_not_found(self, auth_client):
-        response = await auth_client.post("/admin/users/99999/sync")
+        response = await auth_client.post("/api/admin/users/99999/sync")
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -150,5 +150,5 @@ class TestAdminEndpoints:
         # Use a fresh client with no cookies
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as fresh_client:
-            response = await fresh_client.get("/admin/users")
+            response = await fresh_client.get("/api/admin/users")
             assert response.status_code == 401

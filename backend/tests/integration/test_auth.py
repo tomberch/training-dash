@@ -5,7 +5,7 @@ class TestAuth:
     @pytest.mark.asyncio
     async def test_login_with_admin_provisioned_credentials_returns_session(self, app_client, seed_user):
         response = await app_client.post(
-            "/login", json={"username": "testuser", "password": "testpass"}
+            "/api/login", json={"username": "testuser", "password": "testpass"}
         )
         assert response.status_code == 200
         assert response.json()["username"] == "testuser"
@@ -14,42 +14,42 @@ class TestAuth:
     @pytest.mark.asyncio
     async def test_login_with_wrong_password_rejected(self, app_client, seed_user):
         response = await app_client.post(
-            "/login", json={"username": "testuser", "password": "wrongpass"}
+            "/api/login", json={"username": "testuser", "password": "wrongpass"}
         )
         assert response.status_code == 401
 
     @pytest.mark.asyncio
     async def test_login_with_missing_field_returns_422(self, app_client, seed_user):
-        response = await app_client.post("/login", json={"username": "testuser"})
+        response = await app_client.post("/api/login", json={"username": "testuser"})
         assert response.status_code == 422
 
     @pytest.mark.asyncio
     async def test_get_activities_requires_authentication(self, app_client):
-        response = await app_client.get("/activities")
+        response = await app_client.get("/api/activities")
         assert response.status_code == 401
 
     @pytest.mark.asyncio
     async def test_logout_clears_session_cookie(self, auth_client):
         # First verify we're authenticated
-        response = await auth_client.get("/activities")
+        response = await auth_client.get("/api/activities")
         assert response.status_code == 200
 
         # Logout
-        response = await auth_client.post("/logout")
+        response = await auth_client.post("/api/logout")
         assert response.status_code == 200
 
         # Subsequent requests should be unauthorized
-        response = await auth_client.get("/activities")
+        response = await auth_client.get("/api/activities")
         assert response.status_code == 401
 
     @pytest.mark.asyncio
     async def test_logout_requires_auth(self, app_client):
-        response = await app_client.post("/logout")
+        response = await app_client.post("/api/logout")
         assert response.status_code == 401
 
     @pytest.mark.asyncio
     async def test_get_me_returns_user_info_with_unit_system(self, auth_client, seed_user):
-        response = await auth_client.get("/me")
+        response = await auth_client.get("/api/me")
         assert response.status_code == 200
         data = response.json()
         assert data["id"] == seed_user.id
@@ -59,28 +59,28 @@ class TestAuth:
 
     @pytest.mark.asyncio
     async def test_get_me_requires_auth(self, app_client):
-        response = await app_client.get("/me")
+        response = await app_client.get("/api/me")
         assert response.status_code == 401
 
     @pytest.mark.asyncio
     async def test_patch_me_updates_unit_system(self, auth_client):
-        response = await auth_client.patch("/me", json={"unit_system": "imperial"})
+        response = await auth_client.patch("/api/me", json={"unit_system": "imperial"})
         assert response.status_code == 200
         data = response.json()
         assert data["unit_system"] == "imperial"
 
         # Verify it persisted
-        response = await auth_client.get("/me")
+        response = await auth_client.get("/api/me")
         assert response.json()["unit_system"] == "imperial"
 
     @pytest.mark.asyncio
     async def test_patch_me_rejects_invalid_unit_system(self, auth_client):
-        response = await auth_client.patch("/me", json={"unit_system": "invalid"})
+        response = await auth_client.patch("/api/me", json={"unit_system": "invalid"})
         assert response.status_code == 400
 
     @pytest.mark.asyncio
     async def test_patch_me_requires_auth(self, app_client):
-        response = await app_client.patch("/me", json={"unit_system": "imperial"})
+        response = await app_client.patch("/api/me", json={"unit_system": "imperial"})
         assert response.status_code == 401
 
     @pytest.mark.asyncio
@@ -104,7 +104,7 @@ class TestAuth:
         db_session.add(activity_b)
         await db_session.commit()
 
-        response = await auth_client.get("/activities")
+        response = await auth_client.get("/api/activities")
         assert response.status_code == 200
         activities = response.json()
         assert all(a["id"] != activity_b.id for a in activities)

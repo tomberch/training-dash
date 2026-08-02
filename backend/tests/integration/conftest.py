@@ -82,7 +82,7 @@ async def app_client(db_engine, seed_user):
 @pytest_asyncio.fixture
 async def auth_client(app_client, seed_user):
     response = await app_client.post(
-        "/login", json={"username": "testuser", "password": "testpass"}
+        "/api/login", json={"username": "testuser", "password": "testpass"}
     )
     assert response.status_code == 200
     return app_client

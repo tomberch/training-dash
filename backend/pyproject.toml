@@ -47,5 +47,8 @@ testpaths = ["tests"]
 
 [dependency-groups]
 dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
     "python-dotenv>=1.2.2",
+    "testcontainers>=4.15.0",
 ]

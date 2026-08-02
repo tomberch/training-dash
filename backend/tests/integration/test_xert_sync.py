@@ -147,7 +147,7 @@ class TestXertCredentialsEndpoints:
     async def test_set_xert_credentials(self, auth_client, seed_user, encryption_key_env):
         """Admin can set Xert credentials for a user."""
         response = await auth_client.put(
-            f"/admin/users/{seed_user.id}/xert-credentials",
+            f"/api/admin/users/{seed_user.id}/xert-credentials",
             json={"xert_email": "test@xert.com", "xert_password": "secret123"},
         )
         assert response.status_code == 200
@@ -165,12 +165,12 @@ class TestXertCredentialsEndpoints:
         """Getting credentials shows email but never password."""
         # First set credentials
         await auth_client.put(
-            f"/admin/users/{seed_user.id}/xert-credentials",
+            f"/api/admin/users/{seed_user.id}/xert-credentials",
             json={"xert_email": "test@xert.com", "xert_password": "secret123"},
         )
         
         # Then get them
-        response = await auth_client.get(f"/admin/users/{seed_user.id}/xert-credentials")
+        response = await auth_client.get(f"/api/admin/users/{seed_user.id}/xert-credentials")
         assert response.status_code == 200
         data = response.json()
         assert data["configured"] is True
@@ -180,7 +180,7 @@ class TestXertCredentialsEndpoints:
     @pytest.mark.asyncio
     async def test_get_xert_credentials_not_configured(self, auth_client, seed_user):
         """Getting credentials for user without them returns configured=False."""
-        response = await auth_client.get(f"/admin/users/{seed_user.id}/xert-credentials")
+        response = await auth_client.get(f"/api/admin/users/{seed_user.id}/xert-credentials")
         assert response.status_code == 200
         data = response.json()
         assert data["configured"] is False
@@ -191,17 +191,17 @@ class TestXertCredentialsEndpoints:
         """Admin can delete Xert credentials."""
         # First set credentials
         await auth_client.put(
-            f"/admin/users/{seed_user.id}/xert-credentials",
+            f"/api/admin/users/{seed_user.id}/xert-credentials",
             json={"xert_email": "test@xert.com", "xert_password": "secret123"},
         )
         
         # Delete them
-        response = await auth_client.delete(f"/admin/users/{seed_user.id}/xert-credentials")
+        response = await auth_client.delete(f"/api/admin/users/{seed_user.id}/xert-credentials")
         assert response.status_code == 200
         assert response.json()["success"] is True
         
         # Verify they're gone
-        response = await auth_client.get(f"/admin/users/{seed_user.id}/xert-credentials")
+        response = await auth_client.get(f"/api/admin/users/{seed_user.id}/xert-credentials")
         assert response.json()["configured"] is False
 
     @pytest.mark.asyncio
@@ -209,19 +209,19 @@ class TestXertCredentialsEndpoints:
         """Setting credentials again updates them."""
         # Set initial credentials
         await auth_client.put(
-            f"/admin/users/{seed_user.id}/xert-credentials",
+            f"/api/admin/users/{seed_user.id}/xert-credentials",
             json={"xert_email": "old@xert.com", "xert_password": "oldpass"},
         )
         
         # Update credentials
         response = await auth_client.put(
-            f"/admin/users/{seed_user.id}/xert-credentials",
+            f"/api/admin/users/{seed_user.id}/xert-credentials",
             json={"xert_email": "new@xert.com", "xert_password": "newpass"},
         )
         assert response.status_code == 200
         
         # Verify update
-        response = await auth_client.get(f"/admin/users/{seed_user.id}/xert-credentials")
+        response = await auth_client.get(f"/api/admin/users/{seed_user.id}/xert-credentials")
         assert response.json()["xert_email"] == "new@xert.com"
 
 

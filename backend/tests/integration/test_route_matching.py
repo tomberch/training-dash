@@ -11,7 +11,7 @@ from trainingdash.models import Activity, Route  # noqa: E402
 
 async def upload_and_get_activity(auth_client, db_session, name, fit_data):
     resp = await auth_client.post(
-        "/upload",
+        "/api/upload",
         files={"file": (name, fit_data, "application/octet-stream")},
     )
     activity_id = resp.json()["id"]
@@ -55,11 +55,11 @@ class TestRouteMatching:
     async def test_matched_routes_increment_ride_count(self, auth_client, db_session):
         fit_data = make_test_fit(num_records=100, start_lat=47.3769, start_lon=8.5417)
         await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("ride1.fit", fit_data, "application/octet-stream")},
         )
         await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("ride2.fit", fit_data, "application/octet-stream")},
         )
 

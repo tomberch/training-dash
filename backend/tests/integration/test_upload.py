@@ -14,7 +14,7 @@ class TestUpload:
     async def test_upload_fit_returns_201_and_activity_id(self, auth_client):
         fit_data = make_test_fit(num_records=10)
         response = await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         assert response.status_code == 200
@@ -27,7 +27,7 @@ class TestUpload:
     async def test_uploaded_fit_writes_activity_summary_row(self, auth_client, db_session):
         fit_data = make_test_fit(num_records=10)
         response = await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         activity_id = response.json()["id"]
@@ -47,7 +47,7 @@ class TestUpload:
     ):
         fit_data = make_test_fit(num_records=5)
         response = await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         activity_id = response.json()["id"]
@@ -68,7 +68,7 @@ class TestUpload:
     async def test_uploaded_fit_writes_laps(self, auth_client, db_session):
         fit_data = make_test_fit(num_records=10)
         response = await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         activity_id = response.json()["id"]
@@ -86,7 +86,7 @@ class TestUpload:
     async def test_uploaded_fit_stores_raw_bytes(self, auth_client, db_session):
         fit_data = make_test_fit(num_records=5)
         response = await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         activity_id = response.json()["id"]
@@ -99,7 +99,7 @@ class TestUpload:
     async def test_upload_requires_auth(self, app_client):
         fit_data = make_test_fit(num_records=5)
         response = await app_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         assert response.status_code == 401
@@ -113,7 +113,7 @@ class TestActivityMetricsOnIngest:
         """Upload without thresholds configured does not compute training metrics."""
         fit_data = make_test_fit(num_records=60)  # 60 records for NP calculation
         response = await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         assert response.status_code == 200
@@ -135,7 +135,7 @@ class TestActivityMetricsOnIngest:
         """Upload with FTP threshold computes NP, IF, and TSS."""
         # Set up threshold with effective_date before test FIT (2024-03-15)
         await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={
                 "effective_date": "2024-01-01",
                 "ftp_watts": 250,
@@ -147,7 +147,7 @@ class TestActivityMetricsOnIngest:
         # Upload FIT with 60+ records (enough for 30s rolling avg)
         fit_data = make_test_fit(num_records=120)
         response = await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         assert response.status_code == 200
@@ -176,7 +176,7 @@ class TestActivityMetricsOnIngest:
         """Upload with power zones computes time in each zone."""
         # Set up threshold with effective_date before test FIT (2024-03-15)
         await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={
                 "effective_date": "2024-01-01",
                 "ftp_watts": 250,
@@ -186,7 +186,7 @@ class TestActivityMetricsOnIngest:
         )
         
         # Ensure zones exist by calling GET /me/zones
-        zones_resp = await auth_client.get("/me/zones")
+        zones_resp = await auth_client.get("/api/me/zones")
         assert zones_resp.status_code == 200
         zones_data = zones_resp.json()
         assert len(zones_data["power_zones"]) == 7  # Coggan 7-zone
@@ -194,7 +194,7 @@ class TestActivityMetricsOnIngest:
         # Upload FIT
         fit_data = make_test_fit(num_records=60)
         response = await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         assert response.status_code == 200
@@ -217,7 +217,7 @@ class TestActivityMetricsOnIngest:
         """Upload with HR zones computes time in each zone."""
         # Set up threshold with effective_date before test FIT (2024-03-15)
         await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={
                 "effective_date": "2024-01-01",
                 "ftp_watts": 250,
@@ -227,7 +227,7 @@ class TestActivityMetricsOnIngest:
         )
         
         # Ensure zones exist
-        zones_resp = await auth_client.get("/me/zones")
+        zones_resp = await auth_client.get("/api/me/zones")
         assert zones_resp.status_code == 200
         zones_data = zones_resp.json()
         assert len(zones_data["hr_zones"]) == 5  # Friel 5-zone
@@ -235,7 +235,7 @@ class TestActivityMetricsOnIngest:
         # Upload FIT
         fit_data = make_test_fit(num_records=60)
         response = await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         assert response.status_code == 200
@@ -257,7 +257,7 @@ class TestActivityMetricsOnIngest:
         """Upload with FTP computes W'bal minimum."""
         # Set up threshold with effective_date before test FIT (2024-03-15)
         await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={
                 "effective_date": "2024-01-01",
                 "ftp_watts": 250,
@@ -269,7 +269,7 @@ class TestActivityMetricsOnIngest:
         # Upload FIT with power data
         fit_data = make_test_fit(num_records=120)
         response = await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         assert response.status_code == 200
@@ -288,7 +288,7 @@ class TestActivityMetricsOnIngest:
         """GET /activities/{id} returns computed training metrics."""
         # Set up threshold with effective_date before test FIT (2024-03-15)
         await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={
                 "effective_date": "2024-01-01",
                 "ftp_watts": 250,
@@ -296,18 +296,18 @@ class TestActivityMetricsOnIngest:
                 "hrmax_bpm": 185
             }
         )
-        await auth_client.get("/me/zones")  # Trigger zone creation
+        await auth_client.get("/api/me/zones")  # Trigger zone creation
         
         # Upload FIT
         fit_data = make_test_fit(num_records=120)
         upload_resp = await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         activity_id = upload_resp.json()["id"]
         
         # Get activity detail
-        response = await auth_client.get(f"/activities/{activity_id}")
+        response = await auth_client.get(f"/api/activities/{activity_id}")
         assert response.status_code == 200
         data = response.json()
         
@@ -342,7 +342,7 @@ class TestPeakPowersOnIngest:
         # Upload FIT with 120 records (2 minutes of data)
         fit_data = make_test_fit(num_records=120)
         response = await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         assert response.status_code == 200
@@ -379,7 +379,7 @@ class TestPeakPowersOnIngest:
         # Upload FIT with only 30 records (30 seconds)
         fit_data = make_test_fit(num_records=30)
         response = await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         assert response.status_code == 200
@@ -409,13 +409,13 @@ class TestPeakPowersOnIngest:
         # Upload FIT with power data
         fit_data = make_test_fit(num_records=120)
         upload_resp = await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         activity_id = upload_resp.json()["id"]
         
         # Get activity detail
-        response = await auth_client.get(f"/activities/{activity_id}")
+        response = await auth_client.get(f"/api/activities/{activity_id}")
         assert response.status_code == 200
         data = response.json()
         
@@ -440,12 +440,12 @@ class TestPeakPowersOnIngest:
         # Upload FIT
         fit_data = make_test_fit(num_records=120)
         upload_resp = await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         activity_id = upload_resp.json()["id"]
         
-        response = await auth_client.get(f"/activities/{activity_id}")
+        response = await auth_client.get(f"/api/activities/{activity_id}")
         data = response.json()
         
         # 1-second peak should be >= 60-second peak (shorter duration = higher peak generally)

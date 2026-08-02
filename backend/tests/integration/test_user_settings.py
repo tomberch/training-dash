@@ -21,7 +21,7 @@ def encryption_key_env():
 class TestUserXertCredentials:
     @pytest.mark.asyncio
     async def test_get_xert_credentials_when_not_configured(self, auth_client):
-        response = await auth_client.get("/me/xert-credentials")
+        response = await auth_client.get("/api/me/xert-credentials")
         assert response.status_code == 200
         data = response.json()
         assert data["configured"] is False
@@ -46,7 +46,7 @@ class TestUserXertCredentials:
         db_session.add(creds)
         await db_session.commit()
 
-        response = await auth_client.get("/me/xert-credentials")
+        response = await auth_client.get("/api/me/xert-credentials")
         assert response.status_code == 200
         data = response.json()
         assert data["configured"] is True
@@ -62,14 +62,14 @@ class TestUserXertCredentials:
         from sqlalchemy import select
 
         # Mock the Xert client to simulate successful login
-        with patch("trainingdash.app.get_xert_client") as mock_get_client:
+        with patch("trainingdash.routers.user.get_xert_client") as mock_get_client:
             mock_client = AsyncMock()
             mock_client.login = AsyncMock()  # No exception = success
             mock_client.close = AsyncMock()
             mock_get_client.return_value = mock_client
 
             response = await auth_client.put(
-                "/me/xert-credentials",
+                "/api/me/xert-credentials",
                 json={"xert_email": "user@xert.com", "xert_password": "validpass"},
             )
             assert response.status_code == 200
@@ -89,14 +89,14 @@ class TestUserXertCredentials:
         from trainingdash.xert import XertAPIError
 
         # Mock the Xert client to simulate failed login
-        with patch("trainingdash.app.get_xert_client") as mock_get_client:
+        with patch("trainingdash.routers.user.get_xert_client") as mock_get_client:
             mock_client = AsyncMock()
             mock_client.login = AsyncMock(side_effect=XertAPIError("Invalid credentials"))
             mock_client.close = AsyncMock()
             mock_get_client.return_value = mock_client
 
             response = await auth_client.put(
-                "/me/xert-credentials",
+                "/api/me/xert-credentials",
                 json={"xert_email": "user@xert.com", "xert_password": "wrongpass"},
             )
             assert response.status_code == 400
@@ -107,14 +107,14 @@ class TestUserXertCredentials:
         from trainingdash.models import XertCredentials
         from sqlalchemy import select
 
-        with patch("trainingdash.app.get_xert_client") as mock_get_client:
+        with patch("trainingdash.routers.user.get_xert_client") as mock_get_client:
             mock_client = AsyncMock()
             mock_client.login = AsyncMock()
             mock_client.close = AsyncMock()
             mock_get_client.return_value = mock_client
 
             response = await auth_client.put(
-                "/me/xert-credentials",
+                "/api/me/xert-credentials",
                 json={
                     "xert_email": "user@xert.com",
                     "xert_password": "validpass",
@@ -148,7 +148,7 @@ class TestUserXertCredentials:
         await db_session.commit()
 
         # Delete them
-        response = await auth_client.delete("/me/xert-credentials")
+        response = await auth_client.delete("/api/me/xert-credentials")
         assert response.status_code == 200
 
         # Verify they're gone
@@ -160,21 +160,21 @@ class TestUserXertCredentials:
     @pytest.mark.asyncio
     async def test_delete_xert_credentials_idempotent(self, auth_client):
         # Delete when nothing exists should still return 200
-        response = await auth_client.delete("/me/xert-credentials")
+        response = await auth_client.delete("/api/me/xert-credentials")
         assert response.status_code == 200
 
     @pytest.mark.asyncio
     async def test_xert_credentials_endpoints_require_auth(self, app_client):
-        response = await app_client.get("/me/xert-credentials")
+        response = await app_client.get("/api/me/xert-credentials")
         assert response.status_code == 401
 
         response = await app_client.put(
-            "/me/xert-credentials",
+            "/api/me/xert-credentials",
             json={"xert_email": "a@b.com", "xert_password": "x"},
         )
         assert response.status_code == 401
 
-        response = await app_client.delete("/me/xert-credentials")
+        response = await app_client.delete("/api/me/xert-credentials")
         assert response.status_code == 401
 
 
@@ -185,7 +185,7 @@ class TestUserProfile:
     @pytest.mark.asyncio
     async def test_get_me_returns_profile_fields(self, auth_client):
         """GET /me returns date_of_birth and weight_kg (initially null)."""
-        response = await auth_client.get("/me")
+        response = await auth_client.get("/api/me")
         assert response.status_code == 200
         data = response.json()
         assert "date_of_birth" in data
@@ -197,7 +197,7 @@ class TestUserProfile:
     @pytest.mark.asyncio
     async def test_update_date_of_birth(self, auth_client):
         """PATCH /me can update date_of_birth."""
-        response = await auth_client.patch("/me", json={"date_of_birth": "1990-05-15"})
+        response = await auth_client.patch("/api/me", json={"date_of_birth": "1990-05-15"})
         assert response.status_code == 200
         data = response.json()
         assert data["date_of_birth"] == "1990-05-15"
@@ -205,7 +205,7 @@ class TestUserProfile:
     @pytest.mark.asyncio
     async def test_update_weight_kg(self, auth_client):
         """PATCH /me can update weight_kg."""
-        response = await auth_client.patch("/me", json={"weight_kg": 75.5})
+        response = await auth_client.patch("/api/me", json={"weight_kg": 75.5})
         assert response.status_code == 200
         data = response.json()
         assert data["weight_kg"] == 75.5
@@ -214,7 +214,7 @@ class TestUserProfile:
     async def test_update_both_profile_fields(self, auth_client):
         """PATCH /me can update both date_of_birth and weight_kg together."""
         response = await auth_client.patch(
-            "/me", json={"date_of_birth": "1985-12-01", "weight_kg": 82.0}
+            "/api/me", json={"date_of_birth": "1985-12-01", "weight_kg": 82.0}
         )
         assert response.status_code == 200
         data = response.json()
@@ -225,7 +225,7 @@ class TestUserProfile:
     async def test_date_of_birth_rejects_future_date(self, auth_client):
         """PATCH /me rejects date_of_birth in the future."""
         future_date = (date.today() + timedelta(days=1)).isoformat()
-        response = await auth_client.patch("/me", json={"date_of_birth": future_date})
+        response = await auth_client.patch("/api/me", json={"date_of_birth": future_date})
         assert response.status_code == 400
         assert "future" in response.json()["detail"].lower()
 
@@ -233,7 +233,7 @@ class TestUserProfile:
     async def test_date_of_birth_rejects_age_under_10(self, auth_client):
         """PATCH /me rejects date_of_birth representing age < 10."""
         young_date = (date.today() - timedelta(days=365 * 5)).isoformat()  # ~5 years old
-        response = await auth_client.patch("/me", json={"date_of_birth": young_date})
+        response = await auth_client.patch("/api/me", json={"date_of_birth": young_date})
         assert response.status_code == 400
         assert "10" in response.json()["detail"] and "100" in response.json()["detail"]
 
@@ -241,28 +241,28 @@ class TestUserProfile:
     async def test_date_of_birth_rejects_age_over_100(self, auth_client):
         """PATCH /me rejects date_of_birth representing age > 100."""
         old_date = (date.today() - timedelta(days=365 * 110)).isoformat()  # ~110 years old
-        response = await auth_client.patch("/me", json={"date_of_birth": old_date})
+        response = await auth_client.patch("/api/me", json={"date_of_birth": old_date})
         assert response.status_code == 400
         assert "10" in response.json()["detail"] and "100" in response.json()["detail"]
 
     @pytest.mark.asyncio
     async def test_weight_kg_rejects_zero(self, auth_client):
         """PATCH /me rejects weight_kg of 0."""
-        response = await auth_client.patch("/me", json={"weight_kg": 0})
+        response = await auth_client.patch("/api/me", json={"weight_kg": 0})
         assert response.status_code == 400
         assert "positive" in response.json()["detail"].lower()
 
     @pytest.mark.asyncio
     async def test_weight_kg_rejects_negative(self, auth_client):
         """PATCH /me rejects negative weight_kg."""
-        response = await auth_client.patch("/me", json={"weight_kg": -70})
+        response = await auth_client.patch("/api/me", json={"weight_kg": -70})
         assert response.status_code == 400
         assert "positive" in response.json()["detail"].lower()
 
     @pytest.mark.asyncio
     async def test_weight_kg_rejects_unrealistic_value(self, auth_client):
         """PATCH /me rejects weight_kg > 500."""
-        response = await auth_client.patch("/me", json={"weight_kg": 600})
+        response = await auth_client.patch("/api/me", json={"weight_kg": 600})
         assert response.status_code == 400
         assert "500" in response.json()["detail"]
 
@@ -271,12 +271,12 @@ class TestUserProfile:
         """Profile fields persist across requests."""
         # Set values
         response = await auth_client.patch(
-            "/me", json={"date_of_birth": "1992-03-20", "weight_kg": 68.5}
+            "/api/me", json={"date_of_birth": "1992-03-20", "weight_kg": 68.5}
         )
         assert response.status_code == 200
 
         # Verify they persist
-        response = await auth_client.get("/me")
+        response = await auth_client.get("/api/me")
         assert response.status_code == 200
         data = response.json()
         assert data["date_of_birth"] == "1992-03-20"
@@ -285,7 +285,7 @@ class TestUserProfile:
     @pytest.mark.asyncio
     async def test_profile_update_requires_auth(self, app_client):
         """PATCH /me requires authentication."""
-        response = await app_client.patch("/me", json={"weight_kg": 70})
+        response = await app_client.patch("/api/me", json={"weight_kg": 70})
         assert response.status_code == 401
 
 
@@ -296,7 +296,7 @@ class TestThresholdHistory:
     @pytest.mark.asyncio
     async def test_get_thresholds_empty_when_no_dob(self, auth_client):
         """GET /me/thresholds returns empty list when user has no DOB (no defaults created)."""
-        response = await auth_client.get("/me/thresholds")
+        response = await auth_client.get("/api/me/thresholds")
         assert response.status_code == 200
         assert response.json() == []
 
@@ -304,9 +304,9 @@ class TestThresholdHistory:
     async def test_get_thresholds_creates_defaults_when_dob_set(self, auth_client):
         """GET /me/thresholds auto-creates defaults when user has DOB."""
         # First set DOB
-        await auth_client.patch("/me", json={"date_of_birth": "1990-01-01"})
+        await auth_client.patch("/api/me", json={"date_of_birth": "1990-01-01"})
         
-        response = await auth_client.get("/me/thresholds")
+        response = await auth_client.get("/api/me/thresholds")
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 1
@@ -324,9 +324,9 @@ class TestThresholdHistory:
     async def test_get_thresholds_uses_weight_for_ftp_default(self, auth_client):
         """Default FTP is weight_kg * 2.5 when weight is set."""
         # Set DOB and weight
-        await auth_client.patch("/me", json={"date_of_birth": "1990-01-01", "weight_kg": 80})
+        await auth_client.patch("/api/me", json={"date_of_birth": "1990-01-01", "weight_kg": 80})
         
-        response = await auth_client.get("/me/thresholds")
+        response = await auth_client.get("/api/me/thresholds")
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 1
@@ -336,7 +336,7 @@ class TestThresholdHistory:
     async def test_create_threshold(self, auth_client):
         """POST /me/thresholds creates a new threshold entry."""
         response = await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={"ftp_watts": 280, "lthr_bpm": 165, "hrmax_bpm": 185}
         )
         assert response.status_code == 200
@@ -351,7 +351,7 @@ class TestThresholdHistory:
     async def test_create_threshold_with_effective_date(self, auth_client):
         """POST /me/thresholds accepts custom effective_date."""
         response = await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={
                 "effective_date": "2025-06-01",
                 "ftp_watts": 290,
@@ -369,19 +369,19 @@ class TestThresholdHistory:
         """GET /me/thresholds returns entries sorted by effective_date desc."""
         # Create multiple thresholds
         await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={"effective_date": "2025-01-01", "ftp_watts": 250, "lthr_bpm": 160, "hrmax_bpm": 180}
         )
         await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={"effective_date": "2025-06-01", "ftp_watts": 270, "lthr_bpm": 165, "hrmax_bpm": 185}
         )
         await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={"effective_date": "2025-03-01", "ftp_watts": 260, "lthr_bpm": 162, "hrmax_bpm": 182}
         )
         
-        response = await auth_client.get("/me/thresholds")
+        response = await auth_client.get("/api/me/thresholds")
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 3
@@ -394,7 +394,7 @@ class TestThresholdHistory:
     async def test_create_threshold_rejects_zero_ftp(self, auth_client):
         """POST /me/thresholds rejects ftp_watts <= 0."""
         response = await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={"ftp_watts": 0, "lthr_bpm": 160, "hrmax_bpm": 180}
         )
         assert response.status_code == 400
@@ -404,7 +404,7 @@ class TestThresholdHistory:
     async def test_create_threshold_rejects_unrealistic_ftp(self, auth_client):
         """POST /me/thresholds rejects ftp_watts > 2000."""
         response = await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={"ftp_watts": 2500, "lthr_bpm": 160, "hrmax_bpm": 180}
         )
         assert response.status_code == 400
@@ -414,7 +414,7 @@ class TestThresholdHistory:
     async def test_create_threshold_rejects_zero_lthr(self, auth_client):
         """POST /me/thresholds rejects lthr_bpm <= 0."""
         response = await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={"ftp_watts": 250, "lthr_bpm": 0, "hrmax_bpm": 180}
         )
         assert response.status_code == 400
@@ -424,7 +424,7 @@ class TestThresholdHistory:
     async def test_create_threshold_rejects_unrealistic_hrmax(self, auth_client):
         """POST /me/thresholds rejects hrmax_bpm > 250."""
         response = await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={"ftp_watts": 250, "lthr_bpm": 160, "hrmax_bpm": 300}
         )
         assert response.status_code == 400
@@ -434,7 +434,7 @@ class TestThresholdHistory:
     async def test_create_threshold_rejects_lthr_exceeding_hrmax(self, auth_client):
         """POST /me/thresholds rejects lthr_bpm > hrmax_bpm."""
         response = await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={"ftp_watts": 250, "lthr_bpm": 190, "hrmax_bpm": 180}
         )
         assert response.status_code == 400
@@ -443,11 +443,11 @@ class TestThresholdHistory:
     @pytest.mark.asyncio
     async def test_threshold_endpoints_require_auth(self, app_client):
         """Threshold endpoints require authentication."""
-        response = await app_client.get("/me/thresholds")
+        response = await app_client.get("/api/me/thresholds")
         assert response.status_code == 401
 
         response = await app_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={"ftp_watts": 250, "lthr_bpm": 160, "hrmax_bpm": 180}
         )
         assert response.status_code == 401
@@ -460,7 +460,7 @@ class TestZones:
     @pytest.mark.asyncio
     async def test_get_zones_empty_when_no_thresholds(self, auth_client):
         """GET /me/zones returns empty lists when user has no thresholds."""
-        response = await auth_client.get("/me/zones")
+        response = await auth_client.get("/api/me/zones")
         assert response.status_code == 200
         data = response.json()
         assert data["power_zones"] == []
@@ -470,11 +470,11 @@ class TestZones:
     async def test_get_zones_creates_defaults_from_thresholds(self, auth_client):
         """GET /me/zones auto-creates default zones when thresholds exist."""
         # First set DOB to trigger default thresholds
-        await auth_client.patch("/me", json={"date_of_birth": "1990-01-01"})
+        await auth_client.patch("/api/me", json={"date_of_birth": "1990-01-01"})
         # Fetch thresholds to trigger creation
-        await auth_client.get("/me/thresholds")
+        await auth_client.get("/api/me/thresholds")
         
-        response = await auth_client.get("/me/zones")
+        response = await auth_client.get("/api/me/zones")
         assert response.status_code == 200
         data = response.json()
         
@@ -495,11 +495,11 @@ class TestZones:
         """Power zones are calculated as percentages of FTP."""
         # Create explicit threshold with known FTP
         await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={"ftp_watts": 200, "lthr_bpm": 170, "hrmax_bpm": 185}
         )
         
-        response = await auth_client.get("/me/zones")
+        response = await auth_client.get("/api/me/zones")
         assert response.status_code == 200
         data = response.json()
         
@@ -519,11 +519,11 @@ class TestZones:
     async def test_hr_zones_calculated_from_lthr(self, auth_client):
         """HR zones are calculated as percentages of LTHR."""
         await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={"ftp_watts": 200, "lthr_bpm": 170, "hrmax_bpm": 185}
         )
         
-        response = await auth_client.get("/me/zones")
+        response = await auth_client.get("/api/me/zones")
         assert response.status_code == 200
         data = response.json()
         
@@ -540,14 +540,14 @@ class TestZones:
         """PUT /me/zones with zone updates marks zones as custom."""
         # Create thresholds and zones
         await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={"ftp_watts": 200, "lthr_bpm": 170, "hrmax_bpm": 185}
         )
-        await auth_client.get("/me/zones")  # Trigger zone creation
+        await auth_client.get("/api/me/zones")  # Trigger zone creation
         
         # Update a power zone
         response = await auth_client.put(
-            "/me/zones",
+            "/api/me/zones",
             json={
                 "power_zones": [
                     {"zone_number": 4, "name": "Sweet Spot", "min_value": 175, "max_value": 195}
@@ -569,20 +569,20 @@ class TestZones:
         """PUT /me/zones with reset_to_defaults recalculates from thresholds."""
         # Create thresholds and zones
         await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={"ftp_watts": 200, "lthr_bpm": 170, "hrmax_bpm": 185}
         )
-        await auth_client.get("/me/zones")
+        await auth_client.get("/api/me/zones")
         
         # Customize a zone
         await auth_client.put(
-            "/me/zones",
+            "/api/me/zones",
             json={"power_zones": [{"zone_number": 4, "name": "Custom Zone"}]}
         )
         
         # Reset to defaults
         response = await auth_client.put(
-            "/me/zones",
+            "/api/me/zones",
             json={"reset_to_defaults": True}
         )
         assert response.status_code == 200
@@ -598,21 +598,21 @@ class TestZones:
         """Creating a new threshold regenerates zones that aren't custom."""
         # Create initial thresholds and zones
         await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={"ftp_watts": 200, "lthr_bpm": 170, "hrmax_bpm": 185}
         )
-        response = await auth_client.get("/me/zones")
+        response = await auth_client.get("/api/me/zones")
         initial_zone4 = next(z for z in response.json()["power_zones"] if z["zone_number"] == 4)
         assert initial_zone4["max_watts"] == 210  # 105% of 200
         
         # Create new threshold with higher FTP
         await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={"ftp_watts": 250, "lthr_bpm": 175, "hrmax_bpm": 190}
         )
         
         # Zones should be regenerated
-        response = await auth_client.get("/me/zones")
+        response = await auth_client.get("/api/me/zones")
         new_zone4 = next(z for z in response.json()["power_zones"] if z["zone_number"] == 4)
         assert new_zone4["max_watts"] == 262  # 105% of 250
 
@@ -621,25 +621,25 @@ class TestZones:
         """Creating a new threshold preserves zones marked as custom."""
         # Create initial thresholds and zones
         await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={"ftp_watts": 200, "lthr_bpm": 170, "hrmax_bpm": 185}
         )
-        await auth_client.get("/me/zones")
+        await auth_client.get("/api/me/zones")
         
         # Customize a zone
         await auth_client.put(
-            "/me/zones",
+            "/api/me/zones",
             json={"power_zones": [{"zone_number": 4, "name": "My Custom Zone"}]}
         )
         
         # Create new threshold
         await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={"ftp_watts": 250, "lthr_bpm": 175, "hrmax_bpm": 190}
         )
         
         # Custom zone should be preserved
-        response = await auth_client.get("/me/zones")
+        response = await auth_client.get("/api/me/zones")
         zone4 = next(z for z in response.json()["power_zones"] if z["zone_number"] == 4)
         assert zone4["name"] == "My Custom Zone"
         assert zone4["is_custom"] is True
@@ -648,13 +648,13 @@ class TestZones:
     async def test_update_nonexistent_zone_returns_error(self, auth_client):
         """PUT /me/zones with invalid zone_number returns error."""
         await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={"ftp_watts": 200, "lthr_bpm": 170, "hrmax_bpm": 185}
         )
-        await auth_client.get("/me/zones")
+        await auth_client.get("/api/me/zones")
         
         response = await auth_client.put(
-            "/me/zones",
+            "/api/me/zones",
             json={"power_zones": [{"zone_number": 99, "name": "Invalid"}]}
         )
         assert response.status_code == 400
@@ -663,8 +663,8 @@ class TestZones:
     @pytest.mark.asyncio
     async def test_zones_endpoints_require_auth(self, app_client):
         """Zone endpoints require authentication."""
-        response = await app_client.get("/me/zones")
+        response = await app_client.get("/api/me/zones")
         assert response.status_code == 401
 
-        response = await app_client.put("/me/zones", json={"reset_to_defaults": True})
+        response = await app_client.put("/api/me/zones", json={"reset_to_defaults": True})
         assert response.status_code == 401

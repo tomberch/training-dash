@@ -15,10 +15,10 @@ class TestActivityEndpoints:
         for i in range(3):
             fit_data = make_test_fit(num_records=5)
             await auth_client.post(
-                "/upload",
+                "/api/upload",
                 files={"file": (f"test_{i}.fit", fit_data, "application/octet-stream")},
             )
-        response = await auth_client.get("/activities")
+        response = await auth_client.get("/api/activities")
         assert response.status_code == 200
         activities = response.json()
         assert len(activities) == 3
@@ -29,11 +29,11 @@ class TestActivityEndpoints:
     async def test_get_activity_returns_summary_fields(self, auth_client):
         fit_data = make_test_fit(num_records=10)
         upload_resp = await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         activity_id = upload_resp.json()["id"]
-        response = await auth_client.get(f"/activities/{activity_id}")
+        response = await auth_client.get(f"/api/activities/{activity_id}")
         assert response.status_code == 200
         data = response.json()
         assert data["id"] == activity_id
@@ -46,11 +46,11 @@ class TestActivityEndpoints:
     async def test_get_activity_records_returns_geojson_for_map(self, auth_client):
         fit_data = make_test_fit(num_records=5)
         upload_resp = await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         activity_id = upload_resp.json()["id"]
-        response = await auth_client.get(f"/activities/{activity_id}/records")
+        response = await auth_client.get(f"/api/activities/{activity_id}/records")
         assert response.status_code == 200
         data = response.json()
         assert data["type"] == "FeatureCollection"
@@ -67,7 +67,7 @@ class TestActivityEndpoints:
 
     @pytest.mark.asyncio
     async def test_get_activity_not_found(self, auth_client):
-        response = await auth_client.get("/activities/99999")
+        response = await auth_client.get("/api/activities/99999")
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -76,7 +76,7 @@ class TestActivityEndpoints:
     ):
         fit_data = make_test_fit(num_records=5, include_gps=False)
         response = await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("no_gps.fit", fit_data, "application/octet-stream")},
         )
         assert response.status_code == 200
@@ -94,11 +94,11 @@ class TestActivityEndpoints:
     async def test_no_gps_activity_summary_still_computed(self, auth_client):
         fit_data = make_test_fit(num_records=5, include_gps=False)
         upload_resp = await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("no_gps.fit", fit_data, "application/octet-stream")},
         )
         activity_id = upload_resp.json()["id"]
-        response = await auth_client.get(f"/activities/{activity_id}")
+        response = await auth_client.get(f"/api/activities/{activity_id}")
         assert response.status_code == 200
         data = response.json()
         assert data["total_distance_m"] == 40.0
@@ -106,7 +106,7 @@ class TestActivityEndpoints:
 
     @pytest.mark.asyncio
     async def test_empty_activity_list(self, auth_client):
-        response = await auth_client.get("/activities")
+        response = await auth_client.get("/api/activities")
         assert response.status_code == 200
         assert response.json() == []
 
@@ -114,11 +114,11 @@ class TestActivityEndpoints:
     async def test_records_have_distance_m_for_resampling(self, auth_client):
         fit_data = make_test_fit(num_records=10)
         upload_resp = await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         activity_id = upload_resp.json()["id"]
-        response = await auth_client.get(f"/activities/{activity_id}/records")
+        response = await auth_client.get(f"/api/activities/{activity_id}/records")
         data = response.json()
         features = data["features"]
         distances = [f["properties"]["distance_m"] for f in features]

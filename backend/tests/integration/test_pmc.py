@@ -17,7 +17,7 @@ class TestPMCEndpoint:
     @pytest.mark.asyncio
     async def test_pmc_empty_without_activities(self, auth_client):
         """GET /pmc returns zeros when no activities."""
-        response = await auth_client.get("/pmc")
+        response = await auth_client.get("/api/pmc")
         assert response.status_code == 200
         data = response.json()
         
@@ -39,7 +39,7 @@ class TestPMCEndpoint:
         end = date.today()
         
         response = await auth_client.get(
-            f"/pmc?start={start.isoformat()}&end={end.isoformat()}"
+            f"/api/pmc?start={start.isoformat()}&end={end.isoformat()}"
         )
         assert response.status_code == 200
         data = response.json()
@@ -54,7 +54,7 @@ class TestPMCEndpoint:
     @pytest.mark.asyncio
     async def test_pmc_includes_date_ctl_atl_tsb(self, auth_client):
         """PMC response includes all required fields."""
-        response = await auth_client.get("/pmc")
+        response = await auth_client.get("/api/pmc")
         assert response.status_code == 200
         data = response.json()
         
@@ -70,7 +70,7 @@ class TestPMCEndpoint:
         """PMC reflects TSS from activities."""
         # First set up threshold to enable TSS computation
         await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={
                 "effective_date": "2024-01-01",
                 "ftp_watts": 250,
@@ -82,13 +82,13 @@ class TestPMCEndpoint:
         # Upload a FIT file (will compute TSS)
         fit_data = make_test_fit(num_records=120)
         await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         
         # Get PMC - the activity date is 2024-03-15 (from test FIT)
         response = await auth_client.get(
-            "/pmc?start=2024-03-01&end=2024-03-31"
+            "/api/pmc?start=2024-03-01&end=2024-03-31"
         )
         assert response.status_code == 200
         data = response.json()
@@ -109,13 +109,13 @@ class TestPMCEndpoint:
     @pytest.mark.asyncio
     async def test_pmc_requires_auth(self, app_client):
         """GET /pmc requires authentication."""
-        response = await app_client.get("/pmc")
+        response = await app_client.get("/api/pmc")
         assert response.status_code == 401
 
     @pytest.mark.asyncio
     async def test_pmc_tsb_is_ctl_minus_atl(self, auth_client):
         """TSB equals CTL minus ATL."""
-        response = await auth_client.get("/pmc")
+        response = await auth_client.get("/api/pmc")
         assert response.status_code == 200
         data = response.json()
         

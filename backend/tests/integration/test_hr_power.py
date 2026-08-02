@@ -17,7 +17,7 @@ class TestHRDerivedPowerSetting:
     @pytest.mark.asyncio
     async def test_setting_defaults_to_false(self, auth_client):
         """HR-derived power is disabled by default."""
-        response = await auth_client.get("/me")
+        response = await auth_client.get("/api/me")
         assert response.status_code == 200
         data = response.json()
         
@@ -27,7 +27,7 @@ class TestHRDerivedPowerSetting:
     async def test_enable_hr_derived_power(self, auth_client):
         """User can enable HR-derived power."""
         response = await auth_client.patch(
-            "/me",
+            "/api/me",
             json={"hr_derived_power_enabled": True}
         )
         assert response.status_code == 200
@@ -39,11 +39,11 @@ class TestHRDerivedPowerSetting:
     async def test_disable_hr_derived_power(self, auth_client):
         """User can disable HR-derived power."""
         # First enable
-        await auth_client.patch("/me", json={"hr_derived_power_enabled": True})
+        await auth_client.patch("/api/me", json={"hr_derived_power_enabled": True})
         
         # Then disable
         response = await auth_client.patch(
-            "/me",
+            "/api/me",
             json={"hr_derived_power_enabled": False}
         )
         assert response.status_code == 200
@@ -58,7 +58,7 @@ class TestEFModelStatus:
     @pytest.mark.asyncio
     async def test_no_model_initially(self, auth_client):
         """No EF model exists initially."""
-        response = await auth_client.get("/me")
+        response = await auth_client.get("/api/me")
         data = response.json()
         
         assert "hr_power_model" in data
@@ -72,11 +72,11 @@ class TestEFModelStatus:
     async def test_model_status_after_rides(self, auth_client, db_session):
         """Model status shows after sufficient dual-sensor rides."""
         # Enable HR-derived power
-        await auth_client.patch("/me", json={"hr_derived_power_enabled": True})
+        await auth_client.patch("/api/me", json={"hr_derived_power_enabled": True})
         
         # Create threshold
         await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={
                 "effective_date": "2024-01-01",
                 "ftp_watts": 250,
@@ -89,12 +89,12 @@ class TestEFModelStatus:
         for i in range(5):
             fit_data = make_test_fit(num_records=300)
             await auth_client.post(
-                "/upload",
+                "/api/upload",
                 files={"file": ("test.fit", fit_data, "application/octet-stream")},
             )
         
         # Check model status
-        response = await auth_client.get("/me")
+        response = await auth_client.get("/api/me")
         data = response.json()
         model_status = data["hr_power_model"]
         
@@ -115,7 +115,7 @@ class TestDualSensorRideUpdatesModel:
         
         # Create threshold
         await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={
                 "effective_date": "2024-01-01",
                 "ftp_watts": 250,
@@ -128,7 +128,7 @@ class TestDualSensorRideUpdatesModel:
         for i in range(5):
             fit_data = make_test_fit(num_records=300)
             await auth_client.post(
-                "/upload",
+                "/api/upload",
                 files={"file": ("test.fit", fit_data, "application/octet-stream")},
             )
         
@@ -141,11 +141,11 @@ class TestDualSensorRideUpdatesModel:
     async def test_model_built_after_5_rides(self, auth_client, db_session):
         """EF model is built after 5 dual-sensor rides."""
         # Enable HR-derived power
-        await auth_client.patch("/me", json={"hr_derived_power_enabled": True})
+        await auth_client.patch("/api/me", json={"hr_derived_power_enabled": True})
         
         # Create threshold
         await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={
                 "effective_date": "2024-01-01",
                 "ftp_watts": 250,
@@ -158,7 +158,7 @@ class TestDualSensorRideUpdatesModel:
         for i in range(4):
             fit_data = make_test_fit(num_records=300)
             await auth_client.post(
-                "/upload",
+                "/api/upload",
                 files={"file": ("test.fit", fit_data, "application/octet-stream")},
             )
         
@@ -168,7 +168,7 @@ class TestDualSensorRideUpdatesModel:
         # Upload 5th ride
         fit_data = make_test_fit(num_records=300)
         await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         
@@ -182,11 +182,11 @@ class TestDualSensorRideUpdatesModel:
     async def test_dual_sensor_ride_marked_as_measured(self, auth_client, db_session):
         """Dual-sensor rides are marked with power_source='measured'."""
         # Enable HR-derived power
-        await auth_client.patch("/me", json={"hr_derived_power_enabled": True})
+        await auth_client.patch("/api/me", json={"hr_derived_power_enabled": True})
         
         # Create threshold
         await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={
                 "effective_date": "2024-01-01",
                 "ftp_watts": 250,
@@ -198,7 +198,7 @@ class TestDualSensorRideUpdatesModel:
         # Upload dual-sensor ride
         fit_data = make_test_fit(num_records=300)
         response = await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         activity_id = response.json()["id"]
@@ -218,11 +218,11 @@ class TestHROnlyRideEstimation:
     async def test_hr_only_ride_gets_estimated_power(self, auth_client, db_session):
         """HR-only rides get estimated power when model exists."""
         # Enable HR-derived power
-        await auth_client.patch("/me", json={"hr_derived_power_enabled": True})
+        await auth_client.patch("/api/me", json={"hr_derived_power_enabled": True})
         
         # Create threshold
         await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={
                 "effective_date": "2024-01-01",
                 "ftp_watts": 250,
@@ -235,7 +235,7 @@ class TestHROnlyRideEstimation:
         for i in range(5):
             fit_data = make_test_fit(num_records=300)
             await auth_client.post(
-                "/upload",
+                "/api/upload",
                 files={"file": ("test.fit", fit_data, "application/octet-stream")},
             )
         
@@ -252,7 +252,7 @@ class TestHROnlyRideEstimation:
         # when an HR-only activity exists
         
         # Get activities to verify model functionality is wired up
-        response = await auth_client.get("/me")
+        response = await auth_client.get("/api/me")
         data = response.json()
         assert data["hr_power_model"]["model_exists"] is True
         assert data["hr_power_model"]["ef_value"] > 0
@@ -265,11 +265,11 @@ class TestActivityDetailWithEstimatedPower:
     async def test_activity_includes_power_source(self, auth_client, db_session):
         """Activity detail includes power_source field."""
         # Enable HR-derived power
-        await auth_client.patch("/me", json={"hr_derived_power_enabled": True})
+        await auth_client.patch("/api/me", json={"hr_derived_power_enabled": True})
         
         # Create threshold
         await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={
                 "effective_date": "2024-01-01",
                 "ftp_watts": 250,
@@ -281,13 +281,13 @@ class TestActivityDetailWithEstimatedPower:
         # Upload activity
         fit_data = make_test_fit(num_records=300)
         response = await auth_client.post(
-            "/upload",
+            "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         activity_id = response.json()["id"]
         
         # Get activity detail
-        response = await auth_client.get(f"/activities/{activity_id}")
+        response = await auth_client.get(f"/api/activities/{activity_id}")
         data = response.json()
         
         # Should have power_source

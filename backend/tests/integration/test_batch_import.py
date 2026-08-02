@@ -20,7 +20,7 @@ class TestBatchModeIngest:
         """In batch mode, fitness model is not recalculated per-activity."""
         # Create threshold to enable fitness features
         await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={
                 "effective_date": "2024-01-01",
                 "ftp_watts": 150,  # Low FTP to trigger divergence
@@ -51,7 +51,7 @@ class TestBatchModeIngest:
         """Without batch mode, fitness model is recalculated per-activity."""
         # Create threshold
         await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={
                 "effective_date": "2024-01-01",
                 "ftp_watts": 150,
@@ -77,7 +77,7 @@ class TestBatchModeIngest:
         """Metrics (TSS, peaks) are still computed per-activity in batch mode."""
         # Create threshold
         await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={
                 "effective_date": "2024-01-01",
                 "ftp_watts": 250,
@@ -108,7 +108,7 @@ class TestFinalizeBatchImport:
         """Finalize creates exactly one fitness history entry."""
         # Create threshold
         await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={
                 "effective_date": "2024-01-01",
                 "ftp_watts": 150,
@@ -141,7 +141,7 @@ class TestFinalizeBatchImport:
         """Finalize creates a single summary notification, not per-activity."""
         # Create threshold with low FTP to trigger notification
         await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={
                 "effective_date": "2024-01-01",
                 "ftp_watts": 150,
@@ -180,7 +180,7 @@ class TestFinalizeBatchImport:
         """Finalize correctly marks breakthrough activities."""
         # Create threshold
         await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={
                 "effective_date": "2024-01-01",
                 "ftp_watts": 250,
@@ -213,7 +213,7 @@ class TestFinalizeBatchImport:
         # Create threshold close to expected CP
         # Test FIT generates power around 200-279, model CP tends to ~225
         await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={
                 "effective_date": "2024-01-01",
                 "ftp_watts": 225,  # Closer to typical CP from test data
@@ -256,7 +256,7 @@ class TestBulkImportEndToEnd:
         """Acceptance test: upload 15 activities, verify single notification."""
         # Create threshold with low FTP
         await auth_client.post(
-            "/me/thresholds",
+            "/api/me/thresholds",
             json={
                 "effective_date": "2024-01-01",
                 "ftp_watts": 150,

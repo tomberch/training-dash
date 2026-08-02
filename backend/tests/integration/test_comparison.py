@@ -11,7 +11,7 @@ from trainingdash.models import Activity, Record  # noqa: E402
 
 async def upload_fit(auth_client, name, fit_data):
     resp = await auth_client.post(
-        "/upload",
+        "/api/upload",
         files={"file": (name, fit_data, "application/octet-stream")},
     )
     return resp.json()["id"]
@@ -24,7 +24,7 @@ class TestCompare:
         id1 = await upload_fit(auth_client, "ride1.fit", fit_data)
         id2 = await upload_fit(auth_client, "ride2.fit", fit_data)
 
-        response = await auth_client.get(f"/activities/{id1}/compare?other={id2}")
+        response = await auth_client.get(f"/api/activities/{id1}/compare?other={id2}")
         assert response.status_code == 200
         data = response.json()
         assert data["comparable"] is True
@@ -54,7 +54,7 @@ class TestCompare:
             r.timestamp = base_ts + timedelta(seconds=i * 0.5)  # half the time → faster
         await db_session.commit()
 
-        response = await auth_client.get(f"/activities/{id_a}/compare?other={id_b}")
+        response = await auth_client.get(f"/api/activities/{id_a}/compare?other={id_b}")
         data = response.json()
         assert data["comparable"] is True
         gaps = [g["gap_s"] for g in data["gap_series"]]
@@ -80,7 +80,7 @@ class TestCompare:
             await db_session.delete(r)
         await db_session.commit()
 
-        response = await auth_client.get(f"/activities/{id_long}/compare?other={id_short}")
+        response = await auth_client.get(f"/api/activities/{id_long}/compare?other={id_short}")
         data = response.json()
         assert data["comparable"] is True
         # Short ride now has ~490m, long has 990m → truncate at ~490m
@@ -94,7 +94,7 @@ class TestCompare:
         id_a = await upload_fit(auth_client, "route_a.fit", fit_a)
         id_b = await upload_fit(auth_client, "route_b.fit", fit_b)
 
-        response = await auth_client.get(f"/activities/{id_a}/compare?other={id_b}")
+        response = await auth_client.get(f"/api/activities/{id_a}/compare?other={id_b}")
         data = response.json()
         assert data["comparable"] is False
         assert data["gap_series"] == []
@@ -106,7 +106,7 @@ class TestCompare:
         id2 = await upload_fit(auth_client, "ride2.fit", fit_data)
         id3 = await upload_fit(auth_client, "ride3.fit", fit_data)
 
-        response = await auth_client.get(f"/activities/{id1}/same-route")
+        response = await auth_client.get(f"/api/activities/{id1}/same-route")
         assert response.status_code == 200
         data = response.json()
         assert data["route_id"] is not None
