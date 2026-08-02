@@ -1,13 +1,25 @@
+# Build frontend
+FROM node:20-alpine AS frontend-builder
+WORKDIR /frontend
+COPY frontend/package*.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
+# Build backend
 FROM python:3.12-slim
 
 WORKDIR /app
 
 RUN pip install --no-cache-dir uv
 
-COPY pyproject.toml ./
-COPY src/ ./src/
-COPY alembic.ini ./
-COPY migrations/ ./migrations/
+COPY backend/pyproject.toml ./
+COPY backend/src/ ./src/
+COPY backend/alembic.ini ./
+COPY backend/migrations/ ./migrations/
+
+# Copy built frontend
+COPY --from=frontend-builder /frontend/dist ./static/
 
 RUN uv pip install --system --no-cache .
 

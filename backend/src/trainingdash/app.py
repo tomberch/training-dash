@@ -1,11 +1,14 @@
 import json
 import logging
+import os
 import uuid
 from datetime import datetime, timezone, timedelta, date
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy import select, func, delete
 from sqlalchemy.orm import selectinload
@@ -110,6 +113,31 @@ def create_app() -> FastAPI:
     app.get("/me/notifications")(get_notifications)
     app.post("/me/notifications/{notification_id}/accept")(accept_notification)
     app.post("/me/notifications/{notification_id}/dismiss")(dismiss_notification)
+    
+    # Serve frontend static files if the dist directory exists
+    static_dir = Path("/app/static")
+    if static_dir.exists():
+        # Serve favicon and other root static files
+        @app.get("/favicon.svg")
+        async def serve_favicon():
+            return FileResponse(static_dir / "favicon.svg")
+        
+        @app.get("/icons.svg")
+        async def serve_icons():
+            return FileResponse(static_dir / "icons.svg")
+        
+        # Serve static assets (JS, CSS, etc.)
+        app.mount("/assets", StaticFiles(directory=static_dir / "assets"), name="assets")
+        
+        # Catch-all route for SPA - must be registered last
+        @app.get("/{full_path:path}")
+        async def serve_spa(full_path: str):
+            # For any non-API route, serve index.html (SPA handles routing)
+            index_path = static_dir / "index.html"
+            if index_path.exists():
+                return FileResponse(index_path)
+            raise HTTPException(status_code=404, detail="Not found")
+    
     return app
 
 
