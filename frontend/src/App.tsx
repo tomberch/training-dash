@@ -1,21 +1,128 @@
 import { useState, useEffect } from "react";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams } from "react-router-dom";
 import { ActivityList, Login } from "./ActivityList";
 import { ActivityDetail } from "./ActivityDetail";
 import { RecordsView } from "./RecordsView";
 import { AdminView } from "./AdminView";
 import { Header } from "./Header";
 import { Settings } from "./Settings";
+import { Sidebar } from "./Sidebar";
+import { Dashboard } from "./pages/Dashboard";
+import { PMCView } from "./pages/PMCView";
+import { PowerCurveView } from "./pages/PowerCurveView";
 import { fetchMe } from "./api";
 import type { User } from "./api";
 import "./App.css";
 
-type View = { type: "list" } | { type: "detail"; id: number } | { type: "records" } | { type: "admin" } | { type: "settings" };
+// Layout wrapper with sidebar
+function AppLayout({ user, onLogout, onUserUpdate }: { 
+  user: User; 
+  onLogout: () => void;
+  onUserUpdate: (user: User) => void;
+}) {
+  const [refreshKey, setRefreshKey] = useState(0);
+  const navigate = useNavigate();
+
+  return (
+    <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
+      <Sidebar isAdmin={user.is_admin} />
+      <div className="flex-1 flex flex-col min-w-0">
+        <Header
+          username={user.username}
+          onLogout={onLogout}
+          onSettings={() => navigate("/settings")}
+          onUploadComplete={() => setRefreshKey((k) => k + 1)}
+        />
+        <main className="flex-1 overflow-auto">
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route 
+              path="/activities" 
+              element={
+                <div className="max-w-6xl mx-auto px-4 py-6">
+                  <ActivityList
+                    key={refreshKey}
+                    onSelect={(id) => navigate(`/activities/${id}`)}
+                    unitSystem={user.unit_system}
+                  />
+                </div>
+              } 
+            />
+            <Route 
+              path="/activities/:id" 
+              element={<ActivityDetailWrapper unitSystem={user.unit_system} />} 
+            />
+            <Route path="/pmc" element={<PMCView />} />
+            <Route path="/power-curve" element={<PowerCurveView />} />
+            <Route 
+              path="/records" 
+              element={
+                <div className="max-w-6xl mx-auto px-4 py-6">
+                  <RecordsView unitSystem={user.unit_system} />
+                </div>
+              } 
+            />
+            <Route 
+              path="/settings" 
+              element={
+                <SettingsWrapper 
+                  user={user} 
+                  onUserUpdate={onUserUpdate} 
+                />
+              } 
+            />
+            {user.is_admin && (
+              <Route path="/admin" element={<AdminViewWrapper />} />
+            )}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </main>
+      </div>
+    </div>
+  );
+}
+
+import type { UnitSystem } from "./format";
+
+// Wrapper components to handle navigation from within pages
+function ActivityDetailWrapper({ unitSystem }: { unitSystem: UnitSystem }) {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  
+  if (!id) return <Navigate to="/activities" replace />;
+  
+  return (
+    <ActivityDetail
+      activityId={parseInt(id, 10)}
+      onBack={() => navigate("/activities")}
+      unitSystem={unitSystem}
+    />
+  );
+}
+
+function SettingsWrapper({ user, onUserUpdate }: { user: User; onUserUpdate: (user: User) => void }) {
+  const navigate = useNavigate();
+  
+  return (
+    <Settings
+      user={user}
+      onBack={() => navigate(-1)}
+      onUserUpdate={onUserUpdate}
+    />
+  );
+}
+
+function AdminViewWrapper() {
+  const navigate = useNavigate();
+  
+  return (
+    <AdminView onBack={() => navigate("/")} />
+  );
+}
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<View>({ type: "list" });
-  const [refreshKey, setRefreshKey] = useState(0);
 
   // Check if user is logged in on mount
   useEffect(() => {
@@ -32,7 +139,6 @@ export default function App() {
 
   function handleLogout() {
     setUser(null);
-    setView({ type: "list" });
   }
 
   if (loading) {
@@ -47,102 +153,9 @@ export default function App() {
     return <Login onLogin={handleLogin} />;
   }
 
-  if (view.type === "settings") {
-    return (
-      <Settings
-        user={user}
-        onBack={() => setView({ type: "list" })}
-        onUserUpdate={setUser}
-      />
-    );
-  }
-
-  if (view.type === "detail") {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        <Header
-          username={user.username}
-          onLogout={handleLogout}
-          onSettings={() => setView({ type: "settings" })}
-          onUploadComplete={() => setRefreshKey((k) => k + 1)}
-        />
-        <ActivityDetail
-          activityId={view.id}
-          onBack={() => setView({ type: "list" })}
-          unitSystem={user.unit_system}
-        />
-      </div>
-    );
-  }
-
-  if (view.type === "records") {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        <Header
-          username={user.username}
-          onLogout={handleLogout}
-          onSettings={() => setView({ type: "settings" })}
-          onUploadComplete={() => setRefreshKey((k) => k + 1)}
-        />
-        <div className="max-w-6xl mx-auto px-4 py-6">
-          <button
-            onClick={() => setView({ type: "list" })}
-            className="mb-4 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-          >
-            &larr; Back
-          </button>
-          <RecordsView unitSystem={user.unit_system} />
-        </div>
-      </div>
-    );
-  }
-
-  if (view.type === "admin") {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        <Header
-          username={user.username}
-          onLogout={handleLogout}
-          onSettings={() => setView({ type: "settings" })}
-          showUpload={false}
-        />
-        <AdminView onBack={() => setView({ type: "list" })} />
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <Header
-        username={user.username}
-        onLogout={handleLogout}
-        onSettings={() => setView({ type: "settings" })}
-        onUploadComplete={() => setRefreshKey((k) => k + 1)}
-      />
-      <div className="max-w-6xl mx-auto px-4 py-6">
-        <ActivityList
-          key={refreshKey}
-          onSelect={(id) => setView({ type: "detail", id })}
-          unitSystem={user.unit_system}
-        />
-        <div className="mt-6 flex gap-3">
-          <button
-            onClick={() => setView({ type: "records" })}
-            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-          >
-            Personal Records
-          </button>
-          {user.is_admin && (
-            <button
-              onClick={() => setView({ type: "admin" })}
-              data-testid="admin-link"
-              className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors"
-            >
-              Admin
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
+    <BrowserRouter>
+      <AppLayout user={user} onLogout={handleLogout} onUserUpdate={setUser} />
+    </BrowserRouter>
   );
 }
