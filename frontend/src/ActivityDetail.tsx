@@ -14,7 +14,7 @@ import {
   ReferenceDot,
   ReferenceArea,
 } from "recharts";
-import type { Activity, GeoJSONFeatureCollection, CompareResponse, SameRouteResponse, GapPoint, WbalResponse } from "./api";
+import type { Activity, GeoJSONFeatureCollection, CompareResponse, SameRouteResponse, GapPoint, WbalResponse, PeakPower } from "./api";
 import { ApiError, fetchActivity, fetchActivityRecords, fetchActivityWbal, fetchSameRouteActivities, fetchComparison } from "./api";
 import { formatDistance, formatTime, formatElevation, formatSpeed } from "./format";
 import type { UnitSystem } from "./format";
@@ -415,6 +415,14 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
             Activity Details
           </h1>
+          {activity.is_breakthrough && (
+            <span className="inline-flex items-center gap-1 px-3 py-1 text-sm font-semibold text-amber-800 bg-amber-100 dark:text-amber-200 dark:bg-amber-900/50 rounded-full">
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+              </svg>
+              Breakthrough
+            </span>
+          )}
         </div>
 
         {/* Stats Grid - Row 1: Ride Basics */}
@@ -449,6 +457,11 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
             <StatTile label="Max HR" value={activity.max_hr_bpm ? `${activity.max_hr_bpm} bpm` : "—"} />
           </div>
         </div>
+
+        {/* Peak Powers */}
+        {activity.peaks && activity.peaks.length > 0 && (
+          <PeaksSection peaks={activity.peaks} />
+        )}
 
         {/* Zone Distribution Charts */}
         {(activity.power_zone_times || activity.hr_zone_times) && (
@@ -969,5 +982,81 @@ function WbalChart({
         </LineChart>
       </ResponsiveContainer>
     </ChartCard>
+  );
+}
+
+
+// Key durations to display (in seconds)
+const KEY_DURATIONS = [5, 30, 60, 300, 1200, 3600, 7200];
+
+function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+  return `${Math.floor(seconds / 3600)}h`;
+}
+
+function PeaksSection({ peaks }: { peaks: PeakPower[] }) {
+  const [showAll, setShowAll] = useState(false);
+  
+  // Filter to key durations for compact view
+  const keyPeaks = peaks.filter(p => KEY_DURATIONS.includes(p.duration_seconds));
+  const displayPeaks = showAll ? peaks : keyPeaks;
+  
+  if (displayPeaks.length === 0) return null;
+
+  return (
+    <div className="mb-6">
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Peak Powers</h2>
+        {peaks.length > keyPeaks.length && (
+          <button
+            onClick={() => setShowAll(!showAll)}
+            className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+          >
+            {showAll ? "Show key durations" : `Show all ${peaks.length} durations`}
+          </button>
+        )}
+      </div>
+      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+        {displayPeaks.map((peak) => (
+          <div
+            key={peak.duration_seconds}
+            className={`p-3 rounded-lg border ${
+              peak.is_pr
+                ? "bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700"
+                : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"
+            }`}
+          >
+            <div className="text-xs text-gray-500 dark:text-gray-400 mb-1 flex items-center gap-1">
+              {formatDuration(peak.duration_seconds)}
+              {peak.is_pr && (
+                <span className="text-amber-600 dark:text-amber-400" title="Personal Record!">
+                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                  </svg>
+                </span>
+              )}
+            </div>
+            <div className={`text-lg font-semibold ${
+              peak.is_pr 
+                ? "text-amber-700 dark:text-amber-300" 
+                : "text-gray-900 dark:text-white"
+            }`}>
+              {peak.watts}W
+            </div>
+            {peak.pct_of_pr != null && !peak.is_pr && (
+              <div className="text-xs text-gray-500 dark:text-gray-400">
+                {peak.pct_of_pr.toFixed(0)}% of PR
+              </div>
+            )}
+            {peak.is_pr && (
+              <div className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                PR!
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

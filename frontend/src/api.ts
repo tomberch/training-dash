@@ -1,3 +1,11 @@
+export interface PeakPower {
+  duration_seconds: number;
+  watts: number;
+  all_time_pr: number | null;
+  pct_of_pr: number | null;
+  is_pr: boolean;
+}
+
 export interface Activity {
   id: number;
   started_at: string;
@@ -22,6 +30,9 @@ export interface Activity {
   // Power source for HR-derived power
   power_source: "measured" | "hr_derived" | null;
   power_confidence: number | null;
+  // Peaks and breakthrough
+  peaks: PeakPower[];
+  is_breakthrough: boolean;
 }
 
 export interface GeoJSONFeature {

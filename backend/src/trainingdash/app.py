@@ -909,6 +909,8 @@ def _activity_detail(a: Activity) -> dict[str, Any]:
         # W'bal
         "wbal_min_joules": a.wbal_min_joules,
         "wbal_min_pct": a.wbal_min_pct,
+        # Breakthrough
+        "is_breakthrough": a.is_breakthrough,
     })
     return result
 
@@ -958,15 +960,37 @@ async def get_activity(db: DbSession, user: CurrentUser, activity_id: int):
     activity = await _get_owned_activity(db, user, activity_id)
     result = _activity_detail(activity)
     
-    # Fetch peak powers
+    # Fetch peak powers for this activity
     peaks_result = await db.execute(
         select(ActivityPeakPower)
         .where(ActivityPeakPower.activity_id == activity_id)
         .order_by(ActivityPeakPower.duration_seconds)
     )
     peaks = peaks_result.scalars().all()
+    
+    # Fetch all-time PRs for this user at each duration
+    all_time_prs: dict[int, int] = {}
+    for p in peaks:
+        pr_result = await db.execute(
+            select(func.max(ActivityPeakPower.watts))
+            .join(Activity, ActivityPeakPower.activity_id == Activity.id)
+            .where(
+                Activity.user_id == user.id,
+                ActivityPeakPower.duration_seconds == p.duration_seconds,
+            )
+        )
+        max_watts = pr_result.scalar()
+        if max_watts:
+            all_time_prs[p.duration_seconds] = max_watts
+    
     result["peaks"] = [
-        {"duration_seconds": p.duration_seconds, "watts": p.watts}
+        {
+            "duration_seconds": p.duration_seconds, 
+            "watts": p.watts,
+            "all_time_pr": all_time_prs.get(p.duration_seconds),
+            "pct_of_pr": round(p.watts / all_time_prs[p.duration_seconds] * 100, 1) if all_time_prs.get(p.duration_seconds) else None,
+            "is_pr": p.watts == all_time_prs.get(p.duration_seconds),
+        }
         for p in peaks
     ]
     

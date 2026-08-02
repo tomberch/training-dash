@@ -34,6 +34,9 @@ const baseActivity = {
   wbal_min_pct: null,
   power_source: null,
   power_confidence: null,
+  // Peaks and breakthrough
+  peaks: [],
+  is_breakthrough: false,
 };
 
 describe("ActivityList", () => {
