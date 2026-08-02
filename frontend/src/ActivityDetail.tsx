@@ -15,7 +15,7 @@ import {
   ReferenceArea,
 } from "recharts";
 import type { Activity, GeoJSONFeatureCollection, CompareResponse, SameRouteResponse, GapPoint, WbalResponse, PeakPower } from "./api";
-import { ApiError, fetchActivity, fetchActivityRecords, fetchActivityWbal, fetchSameRouteActivities, fetchComparison } from "./api";
+import { ApiError, fetchActivity, fetchActivityRecords, fetchActivityWbal, fetchSameRouteActivities, fetchComparison, updateActivityTitle } from "./api";
 import { formatDistance, formatTime, formatElevation, formatSpeed } from "./format";
 import type { UnitSystem } from "./format";
 import { resampleByDistance } from "./resampler";
@@ -151,6 +151,8 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
   const [comparison, setComparison] = useState<CompareResponse | null>(null);
   const [wbalData, setWbalData] = useState<WbalResponse | null>(null);
   const [hoveredPosition, setHoveredPosition] = useState<[number, number] | null>(null);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editedTitle, setEditedTitle] = useState("");
 
   useEffect(() => {
     setComparison(null);
@@ -412,9 +414,73 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
           >
             &larr; Back
           </button>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Activity Details
-          </h1>
+          <div className="flex-1">
+            {isEditingTitle ? (
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={editedTitle}
+                  onChange={(e) => setEditedTitle(e.target.value)}
+                  className="flex-1 px-3 py-2 text-lg font-bold text-gray-900 dark:text-white bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      updateActivityTitle(activityId, editedTitle)
+                        .then((updated) => {
+                          setActivity({ ...activity!, title: updated.title, title_source: updated.title_source });
+                          setIsEditingTitle(false);
+                        })
+                        .catch((e) => setError(e));
+                    } else if (e.key === "Escape") {
+                      setIsEditingTitle(false);
+                    }
+                  }}
+                />
+                <button
+                  onClick={() => {
+                    updateActivityTitle(activityId, editedTitle)
+                      .then((updated) => {
+                        setActivity({ ...activity!, title: updated.title, title_source: updated.title_source });
+                        setIsEditingTitle(false);
+                      })
+                      .catch((e) => setError(e));
+                  }}
+                  className="px-3 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
+                >
+                  Save
+                </button>
+                <button
+                  onClick={() => setIsEditingTitle(false)}
+                  className="px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {activity.title || new Date(activity.started_at).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                </h1>
+                <button
+                  onClick={() => {
+                    setEditedTitle(activity.title || "");
+                    setIsEditingTitle(true);
+                  }}
+                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                  title="Edit title"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                </button>
+                {activity.title && (
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    {new Date(activity.started_at).toLocaleDateString()}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
           {activity.is_breakthrough && (
             <span className="inline-flex items-center gap-1 px-3 py-1 text-sm font-semibold text-amber-800 bg-amber-100 dark:text-amber-200 dark:bg-amber-900/50 rounded-full">
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">

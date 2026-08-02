@@ -13,6 +13,8 @@ import { fetchActivities } from "./api";
 const mockFetchActivities = vi.mocked(fetchActivities);
 
 const baseActivity = {
+  title: null as string | null,
+  title_source: "auto" as const,
   started_at: "2024-03-15T10:00:00",
   total_distance_m: 40000,
   moving_time_s: 3600,

@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 from sqlalchemy import select, func
 
 from trainingdash.auth import CurrentUser, DbSession
@@ -13,6 +14,11 @@ from trainingdash.routers.serializers import (
 )
 
 router = APIRouter(prefix="/api", tags=["activities"])
+
+
+class ActivityUpdateRequest(BaseModel):
+    """Request body for updating an activity."""
+    title: str | None = None
 
 
 async def _get_owned_activity(
@@ -87,6 +93,23 @@ async def get_activity(db: DbSession, user: CurrentUser, activity_id: int):
     return result
 
 
+@router.patch("/activities/{activity_id}")
+async def update_activity(
+    db: DbSession, user: CurrentUser, activity_id: int, request: ActivityUpdateRequest
+):
+    """Update an activity (currently only title)."""
+    activity = await _get_owned_activity(db, user, activity_id)
+    
+    if request.title is not None:
+        activity.title = request.title
+        activity.title_source = "manual"
+    
+    await db.commit()
+    await db.refresh(activity)
+    
+    return activity_summary(activity)
+
+
 @router.get("/activities/{activity_id}/records")
 async def get_activity_records(db: DbSession, user: CurrentUser, activity_id: int):
     """Get GPS and sensor records for an activity as GeoJSON."""
@@ -151,11 +174,11 @@ async def get_activity_wbal(db: DbSession, user: CurrentUser, activity_id: int):
     power_values = [r.power_w for r in records]
     first_ts = records[0].timestamp if records else None
 
-    wbal_series = compute_wbal_series(power_values, ftp, w_prime)
+    wbal_result = compute_wbal_series(power_values, ftp, w_prime)
 
     # Build response with timestamps
     series = []
-    for i, (record, wbal) in enumerate(zip(records, wbal_series)):
+    for i, (record, wbal) in enumerate(zip(records, wbal_result["series"])):
         elapsed_s = (record.timestamp - first_ts).total_seconds() if first_ts else 0
         series.append(
             {

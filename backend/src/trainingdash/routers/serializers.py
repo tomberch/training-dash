@@ -73,6 +73,8 @@ def activity_summary(a: Activity) -> dict[str, Any]:
     """Return basic activity info for list views."""
     return {
         "id": a.id,
+        "title": a.title,
+        "title_source": a.title_source,
         "started_at": a.started_at.isoformat(),
         "total_distance_m": a.total_distance_m,
         "moving_time_s": a.moving_time_s,

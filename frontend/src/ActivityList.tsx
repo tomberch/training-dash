@@ -39,7 +39,7 @@ export function ActivityList({
             <thead className="bg-gray-50 dark:bg-gray-900/50">
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Date
+                  Activity
                 </th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Distance
@@ -59,8 +59,15 @@ export function ActivityList({
                   onClick={() => onSelect(a.id)}
                   className="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition-colors"
                 >
-                  <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
-                    {formatDate(a.started_at)}
+                  <td className="px-4 py-3">
+                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                      {a.title || formatDate(a.started_at)}
+                    </div>
+                    {a.title && (
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {formatDate(a.started_at)}
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 text-right tabular-nums">
                     {formatDistance(a.total_distance_m, unitSystem)}
