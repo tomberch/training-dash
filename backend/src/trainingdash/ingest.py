@@ -7,7 +7,7 @@ from geoalchemy2.functions import ST_SetSRID, ST_MakePoint
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from trainingdash.models import Activity, Lap, Record, ThresholdHistory, PowerZone, HrZone, ActivityPeakPower, FitnessHistory
+from trainingdash.models import Activity, Lap, Record, ThresholdHistory, PowerZone, HrZone, ActivityPeakPower, FitnessHistory, Notification
 from trainingdash.metrics import (
     compute_normalized_power,
     compute_intensity_factor,
@@ -607,4 +607,74 @@ async def _update_fitness_model(
         cp_watts=model["cp_watts"],
     )
     db.add(fitness)
+    await db.commit()
+    
+    # Check if CP diverges from current FTP and create notification
+    await _check_ftp_notification(db, user_id, model["cp_watts"])
+
+
+
+async def _check_ftp_notification(
+    db: AsyncSession,
+    user_id: int,
+    cp_watts: int,
+) -> None:
+    """
+    Check if CP diverges from current FTP by >5% and create notification.
+    """
+    # Get current threshold
+    result = await db.execute(
+        select(ThresholdHistory)
+        .where(ThresholdHistory.user_id == user_id)
+        .order_by(ThresholdHistory.effective_date.desc())
+        .limit(1)
+    )
+    threshold = result.scalar_one_or_none()
+    
+    if threshold is None:
+        return
+    
+    current_ftp = threshold.ftp_watts
+    
+    # Check for >5% divergence
+    ratio = cp_watts / current_ftp
+    if 0.95 <= ratio <= 1.05:
+        # Within 5%, no notification needed
+        return
+    
+    # Check if there's already a pending FTP notification
+    result = await db.execute(
+        select(Notification)
+        .where(
+            Notification.user_id == user_id,
+            Notification.type == "ftp_suggestion",
+            Notification.status == "pending",
+        )
+    )
+    existing = result.scalar_one_or_none()
+    
+    if existing is not None:
+        # Update existing notification with new suggestion
+        existing.message = f"Your fitness model suggests updating your FTP from {current_ftp}W to {cp_watts}W"
+        existing.payload = json.dumps({
+            "current_ftp": current_ftp,
+            "suggested_ftp": cp_watts,
+            "divergence_pct": round((ratio - 1) * 100, 1),
+        })
+        await db.commit()
+        return
+    
+    # Create new notification
+    notification = Notification(
+        user_id=user_id,
+        type="ftp_suggestion",
+        message=f"Your fitness model suggests updating your FTP from {current_ftp}W to {cp_watts}W",
+        payload=json.dumps({
+            "current_ftp": current_ftp,
+            "suggested_ftp": cp_watts,
+            "divergence_pct": round((ratio - 1) * 100, 1),
+        }),
+        status="pending",
+    )
+    db.add(notification)
     await db.commit()

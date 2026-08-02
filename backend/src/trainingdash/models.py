@@ -134,6 +134,21 @@ class FitnessHistory(Base):
     cp_watts: Mapped[int] = mapped_column(Integer, nullable=False)
 
 
+class Notification(Base):
+    """User notifications (FTP suggestions, etc.)."""
+    __tablename__ = "notifications"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    type: Mapped[str] = mapped_column(String(50), nullable=False)  # e.g., "ftp_suggestion"
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    payload: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON payload
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")  # pending/accepted/dismissed
+    created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
+
+
 class XertCredentials(Base):
     __tablename__ = "xert_credentials"
 

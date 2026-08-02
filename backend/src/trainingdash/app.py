@@ -12,7 +12,7 @@ from sqlalchemy.orm import selectinload
 
 from trainingdash.auth import AdminUser, CurrentUser, DbSession, LoginRequest, create_session_cookie, hash_password, verify_password
 from trainingdash.db import Base, async_session, engine
-from trainingdash.models import Activity, Lap, Record, User, XertCredentials, GarminCredentials, ThresholdHistory, PowerZone, HrZone, ActivityPeakPower, FitnessHistory
+from trainingdash.models import Activity, Lap, Record, User, XertCredentials, GarminCredentials, ThresholdHistory, PowerZone, HrZone, ActivityPeakPower, FitnessHistory, Notification
 from trainingdash.xert import get_xert_client, XertAPIError
 from trainingdash.garmin import get_garmin_client, GarminAPIError, GarminMFARequired
 from trainingdash.crypto import encrypt, decrypt, EncryptionError
@@ -105,6 +105,10 @@ def create_app() -> FastAPI:
     app.get("/pmc")(get_pmc)
     # Power curve
     app.get("/power-curve")(get_power_curve)
+    # Notifications
+    app.get("/me/notifications")(get_notifications)
+    app.post("/me/notifications/{notification_id}/accept")(accept_notification)
+    app.post("/me/notifications/{notification_id}/dismiss")(dismiss_notification)
     return app
 
 
@@ -1448,6 +1452,102 @@ async def get_power_curve(
         })
     
     return curve
+
+
+async def get_notifications(db: DbSession, user: CurrentUser):
+    """Get pending notifications for the current user."""
+    result = await db.execute(
+        select(Notification)
+        .where(
+            Notification.user_id == user.id,
+            Notification.status == "pending",
+        )
+        .order_by(Notification.created_at.desc())
+    )
+    notifications = result.scalars().all()
+    
+    return [
+        {
+            "id": n.id,
+            "type": n.type,
+            "message": n.message,
+            "payload": json.loads(n.payload) if n.payload else None,
+            "created_at": n.created_at.isoformat(),
+        }
+        for n in notifications
+    ]
+
+
+async def accept_notification(db: DbSession, user: CurrentUser, notification_id: int):
+    """Accept a notification (e.g., apply FTP suggestion)."""
+    result = await db.execute(
+        select(Notification)
+        .where(
+            Notification.id == notification_id,
+            Notification.user_id == user.id,
+        )
+    )
+    notification = result.scalar_one_or_none()
+    
+    if notification is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
+    
+    if notification.status != "pending":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Notification already processed")
+    
+    # Handle FTP suggestion
+    if notification.type == "ftp_suggestion" and notification.payload:
+        payload = json.loads(notification.payload)
+        suggested_ftp = payload.get("suggested_ftp")
+        
+        if suggested_ftp:
+            # Get current threshold to copy LTHR and HRmax
+            result = await db.execute(
+                select(ThresholdHistory)
+                .where(ThresholdHistory.user_id == user.id)
+                .order_by(ThresholdHistory.effective_date.desc())
+                .limit(1)
+            )
+            current = result.scalar_one_or_none()
+            
+            # Create new threshold with suggested FTP
+            new_threshold = ThresholdHistory(
+                user_id=user.id,
+                effective_date=date.today(),
+                ftp_watts=suggested_ftp,
+                lthr_bpm=current.lthr_bpm if current else 165,
+                hrmax_bpm=current.hrmax_bpm if current else 185,
+            )
+            db.add(new_threshold)
+    
+    # Mark notification as accepted
+    notification.status = "accepted"
+    await db.commit()
+    
+    return {"success": True}
+
+
+async def dismiss_notification(db: DbSession, user: CurrentUser, notification_id: int):
+    """Dismiss a notification."""
+    result = await db.execute(
+        select(Notification)
+        .where(
+            Notification.id == notification_id,
+            Notification.user_id == user.id,
+        )
+    )
+    notification = result.scalar_one_or_none()
+    
+    if notification is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
+    
+    if notification.status != "pending":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Notification already processed")
+    
+    notification.status = "dismissed"
+    await db.commit()
+    
+    return {"success": True}
 
 
 app = create_app()
