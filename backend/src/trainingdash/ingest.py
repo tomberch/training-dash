@@ -626,13 +626,26 @@ async def _generate_activity_title(
     db: AsyncSession,
     activity: Activity,
     records: list[dict],
+    skip_if_rate_limited: bool = False,
 ) -> None:
     """
     Generate and store a title for the activity based on GPS data.
     
     Uses reverse geocoding to identify start, end, and key waypoints,
     then generates a descriptive title like "Roundtrip Bern via Thun".
+    
+    Args:
+        db: Database session
+        activity: Activity to generate title for
+        records: GPS records with lat, lon, distance_m
+        skip_if_rate_limited: If True, skip title generation to avoid 
+            slowing down bulk imports. Titles can be generated later.
     """
+    if skip_if_rate_limited:
+        # For bulk imports, skip title generation to avoid rate limit delays
+        # Titles will show as date until manually edited or regenerated
+        return
+        
     try:
         from trainingdash.title_generator import generate_activity_title
         
@@ -1309,8 +1322,8 @@ async def ingest_xert_activity(
         await db.commit()
         await db.refresh(activity)
     
-    # Generate activity title from GPS data
-    await _generate_activity_title(db, activity, records)
+    # Generate activity title from GPS data (skip in batch mode to avoid rate limit delays)
+    await _generate_activity_title(db, activity, records, skip_if_rate_limited=batch_mode)
     
     return activity
 
