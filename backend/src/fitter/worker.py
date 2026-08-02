@@ -82,6 +82,37 @@ async def _create_activity_from_xert(
     total_distance_m = detail.distance * 1000 if detail.distance else 0
     elapsed_time_s = int(detail.duration) if detail.duration else 0
     
+    # Calculate additional summary stats from session_data
+    hr_values = []
+    power_values = []
+    speed_values = []
+    altitudes = []
+    
+    for point in detail.session_data:
+        if point.hr is not None:
+            hr_values.append(point.hr)
+        if point.power is not None and point.power > 0:
+            power_values.append(point.power)
+        if point.spd is not None:
+            speed_values.append(point.spd / 1000.0)  # Convert to m/s
+        if point.alt is not None:
+            altitudes.append(point.alt)
+    
+    # Calculate averages and max values
+    avg_hr = int(sum(hr_values) / len(hr_values)) if hr_values else None
+    max_hr = max(hr_values) if hr_values else None
+    avg_power = int(sum(power_values) / len(power_values)) if power_values else None
+    avg_speed = sum(speed_values) / len(speed_values) if speed_values else None
+    max_speed = max(speed_values) if speed_values else None
+    
+    # Calculate elevation gain (sum of positive altitude changes)
+    elevation_gain = 0.0
+    if len(altitudes) >= 2:
+        for i in range(1, len(altitudes)):
+            diff = altitudes[i] - altitudes[i-1]
+            if diff > 0:
+                elevation_gain += diff
+    
     # Create Activity - use naive datetime (DB is TIMESTAMP WITHOUT TIME ZONE)
     started_at = detail.started_at
     if started_at.tzinfo is not None:
@@ -93,6 +124,12 @@ async def _create_activity_from_xert(
         total_distance_m=total_distance_m,
         moving_time_s=elapsed_time_s,  # Xert doesn't distinguish moving vs elapsed
         elapsed_time_s=elapsed_time_s,
+        elevation_gain_m=elevation_gain if elevation_gain > 0 else None,
+        avg_speed_mps=avg_speed,
+        avg_hr_bpm=avg_hr,
+        avg_power_w=avg_power,
+        max_speed_mps=max_speed,
+        max_hr_bpm=max_hr,
         source="xert",
         source_ref=source_ref,
         # Store XSS as training_load (Xert's equivalent to TSS)
@@ -143,7 +180,8 @@ async def sync_xert_job(ctx, user_id: int):
     
     - Decrypts stored Xert credentials
     - Logs in to Xert API (OAuth2 password grant)
-    - Fetches activity list for last 90 days
+    - For first sync: uses sync_since date from credentials (or 90 days if not set)
+    - For subsequent syncs: uses last 90 days
     - Fetches full activity details with session_data for new activities
     - Creates Activity/Record entries directly from session_data
     
@@ -184,14 +222,33 @@ async def sync_xert_job(ctx, user_id: int):
         )
         existing_refs = set(existing_result.scalars().all())
         
+        # Determine sync start date:
+        # - First sync (no existing Xert activities): use sync_since if set, otherwise 90 days
+        # - Subsequent syncs: use 90 days (to catch any new activities)
+        to_ts = int(time.time())
+        is_first_sync = len(existing_refs) == 0
+        
+        if is_first_sync and creds.sync_since is not None:
+            # First sync with explicit sync_since date
+            # Convert date to datetime at midnight for timestamp
+            from datetime import datetime as dt
+            sync_dt = dt.combine(creds.sync_since, dt.min.time())
+            from_ts = int(sync_dt.timestamp())
+            logger.info(f"sync_xert_job: First sync for user {user_id}, using sync_since {creds.sync_since}")
+        else:
+            # Subsequent sync or no sync_since set: default to 90 days
+            from_ts = to_ts - (90 * 24 * 60 * 60)
+            if is_first_sync:
+                logger.info(f"sync_xert_job: First sync for user {user_id}, no sync_since set, using 90 days")
+            else:
+                logger.info(f"sync_xert_job: Subsequent sync for user {user_id}, using 90 days")
+        
         # Connect to Xert
         client = get_xert_client()
         try:
             await client.login(creds.xert_email, xert_password)
             
-            # List activities for last 90 days
-            to_ts = int(time.time())
-            from_ts = to_ts - (90 * 24 * 60 * 60)
+            # List activities for the determined time range
             activities = await client.list_activities(from_timestamp=from_ts, to_timestamp=to_ts)
             
             # Filter to new activities
@@ -263,14 +320,175 @@ async def nightly_sync_all_xert(ctx):
     return {"success": True, "users_queued": len(user_ids)}
 
 
+async def sync_garmin_job(ctx, user_id: int):
+    """
+    Sync activities from Garmin Connect for a user.
+    
+    - Decrypts stored Garmin credentials
+    - Logs in to Garmin Connect (mobile SSO flow)
+    - For first sync: uses sync_since date from credentials (or 90 days if not set)
+    - For subsequent syncs: uses last 90 days
+    - Downloads original FIT files for new activities
+    - Uses duplicate detection to skip activities already imported from other sources
+    - Creates Activity/Record entries via ingest_fit()
+    
+    Note: Garmin provides original FIT files, so we can use the same ingest
+    pipeline as manual uploads.
+    """
+    from datetime import datetime as dt, timedelta
+    from sqlalchemy import select
+    from fitter.models import Activity, GarminCredentials
+    from fitter.crypto import decrypt, EncryptionError
+    from fitter.garmin import get_garmin_client, GarminAPIError, GarminMFARequired
+    from fitter.ingest import ingest_fit, is_duplicate_activity
+    
+    async with worker_db_session() as db:
+        # Get user's Garmin credentials
+        result = await db.execute(
+            select(GarminCredentials).where(GarminCredentials.user_id == user_id)
+        )
+        creds = result.scalar_one_or_none()
+        
+        if creds is None:
+            logger.warning(f"sync_garmin_job: No Garmin credentials for user {user_id}")
+            return {"success": False, "user_id": user_id, "error": "No Garmin credentials configured"}
+        
+        # Decrypt password
+        try:
+            garmin_password = decrypt(creds.encrypted_password)
+        except EncryptionError:
+            logger.error(f"sync_garmin_job: Failed to decrypt credentials for user {user_id}")
+            return {"success": False, "user_id": user_id, "error": "Failed to decrypt credentials"}
+        
+        # Get existing source_refs to skip already-imported activities from Garmin
+        existing_result = await db.execute(
+            select(Activity.source_ref).where(
+                Activity.user_id == user_id,
+                Activity.source == "garmin",
+            )
+        )
+        existing_refs = set(existing_result.scalars().all())
+        
+        # Determine sync date range
+        end_date = dt.now(timezone.utc).replace(tzinfo=None)
+        is_first_sync = len(existing_refs) == 0
+        
+        if is_first_sync and creds.sync_since is not None:
+            start_date = creds.sync_since
+            logger.info(f"sync_garmin_job: First sync for user {user_id}, using sync_since {creds.sync_since}")
+        else:
+            start_date = end_date - timedelta(days=90)
+            if is_first_sync:
+                logger.info(f"sync_garmin_job: First sync for user {user_id}, no sync_since set, using 90 days")
+            else:
+                logger.info(f"sync_garmin_job: Subsequent sync for user {user_id}, using 90 days")
+        
+        # Connect to Garmin
+        client = get_garmin_client()
+        try:
+            try:
+                client.login(creds.garmin_email, garmin_password)
+            except GarminMFARequired:
+                logger.error(f"sync_garmin_job: MFA required for user {user_id} - cannot proceed in background job")
+                return {"success": False, "user_id": user_id, "error": "MFA required - please re-authenticate in settings"}
+            
+            # List activities for the determined time range
+            activities = client.list_activities(start_date=start_date, end_date=end_date)
+            
+            # Filter to new activities (not already imported from Garmin)
+            new_activities = [a for a in activities if f"garmin:{a.id}" not in existing_refs]
+            
+            if not new_activities:
+                logger.info(f"sync_garmin_job: No new activities for user {user_id}")
+                return {"success": True, "user_id": user_id, "synced_activities": 0, "skipped_duplicates": 0}
+            
+            # Download FIT files and create activities
+            synced = 0
+            skipped_duplicates = 0
+            
+            for garmin_activity in new_activities:
+                try:
+                    source_ref = f"garmin:{garmin_activity.id}"
+                    
+                    # Check for duplicates from other sources (e.g., Xert, manual upload)
+                    is_dup = await is_duplicate_activity(
+                        db,
+                        user_id,
+                        garmin_activity.started_at,
+                        garmin_activity.distance_m,
+                        "garmin",
+                    )
+                    if is_dup:
+                        skipped_duplicates += 1
+                        logger.info(f"sync_garmin_job: Skipped duplicate {source_ref} for user {user_id}")
+                        continue
+                    
+                    # Download original FIT file
+                    fit_bytes = client.download_fit(garmin_activity.id)
+                    
+                    # Ingest using standard FIT pipeline
+                    activity = await ingest_fit(db, user_id, fit_bytes, "garmin", source_ref)
+                    
+                    if activity is not None:
+                        synced += 1
+                        logger.info(f"sync_garmin_job: Created activity {activity.id} from {source_ref} for user {user_id}")
+                    else:
+                        logger.warning(f"sync_garmin_job: Failed to ingest activity {garmin_activity.id}")
+                    
+                except GarminAPIError as e:
+                    logger.warning(f"sync_garmin_job: Failed to download activity {garmin_activity.id}: {e}")
+                    continue
+                except Exception as e:
+                    logger.exception(f"sync_garmin_job: Unexpected error processing activity {garmin_activity.id}")
+                    continue
+            
+            logger.info(f"sync_garmin_job: Synced {synced} activities, skipped {skipped_duplicates} duplicates for user {user_id}")
+            return {"success": True, "user_id": user_id, "synced_activities": synced, "skipped_duplicates": skipped_duplicates}
+            
+        except GarminAPIError as e:
+            logger.error(f"sync_garmin_job: Garmin API error for user {user_id}: {e}")
+            return {"success": False, "user_id": user_id, "error": str(e)}
+
+
+async def nightly_sync_all_garmin(ctx):
+    """
+    Nightly cron job: enqueue sync_garmin_job for every user with stored credentials.
+    Runs at 3 AM daily (1 hour after Xert sync).
+    """
+    from sqlalchemy import select
+    from fitter.models import GarminCredentials
+    
+    async with worker_db_session() as db:
+        result = await db.execute(select(GarminCredentials.user_id))
+        user_ids = result.scalars().all()
+    
+    if not user_ids:
+        logger.info("nightly_sync_all_garmin: No users with Garmin credentials")
+        return {"success": True, "users_queued": 0}
+    
+    pool = await create_redis_pool()
+    try:
+        for user_id in user_ids:
+            await pool.enqueue_job("sync_garmin_job", user_id=user_id)
+            logger.info(f"nightly_sync_all_garmin: Enqueued sync for user {user_id}")
+    finally:
+        await pool.aclose()
+    
+    logger.info(f"nightly_sync_all_garmin: Enqueued {len(user_ids)} sync jobs")
+    return {"success": True, "users_queued": len(user_ids)}
+
+
 class WorkerSettings:
-    functions = [ingest_job, match_route_job, sync_xert_job, nightly_sync_all_xert]
+    functions = [ingest_job, match_route_job, sync_xert_job, nightly_sync_all_xert, sync_garmin_job, nightly_sync_all_garmin]
     redis_settings = get_redis_settings()
     max_tries = 3
     retry_delay = 10  # seconds between retries
     job_timeout = 300  # 5 minutes max per job
     
-    # Cron schedule: run nightly_sync_all_xert at 2 AM daily
+    # Cron schedule:
+    # - nightly_sync_all_xert at 2 AM daily
+    # - nightly_sync_all_garmin at 3 AM daily (staggered 1 hour after Xert)
     cron_jobs = [
         cron(nightly_sync_all_xert, hour=2, minute=0, unique=True),
+        cron(nightly_sync_all_garmin, hour=3, minute=0, unique=True),
     ]
