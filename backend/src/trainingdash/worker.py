@@ -258,6 +258,11 @@ async def sync_xert_job(ctx, user_id: int):
                 logger.info(f"sync_xert_job: No new activities for user {user_id}")
                 return {"success": True, "user_id": user_id, "synced_activities": 0}
             
+            # Use batch mode if >10 activities to avoid notification spam
+            batch_mode = len(new_activities) > 10
+            if batch_mode:
+                logger.info(f"sync_xert_job: Using batch mode for {len(new_activities)} activities")
+            
             # Fetch details and create activities for each new one
             synced = 0
             
@@ -283,6 +288,12 @@ async def sync_xert_job(ctx, user_id: int):
                     continue
             
             logger.info(f"sync_xert_job: Synced {synced} activities for user {user_id}")
+            
+            # If batch mode was used, finalize with single fitness update and notification
+            if batch_mode and synced > 0:
+                from trainingdash.ingest import finalize_batch_import
+                await finalize_batch_import(db, user_id, synced)
+            
             return {"success": True, "user_id": user_id, "synced_activities": synced}
             
         except XertAPIError as e:
@@ -340,7 +351,7 @@ async def sync_garmin_job(ctx, user_id: int):
     from trainingdash.models import Activity, GarminCredentials
     from trainingdash.crypto import decrypt, EncryptionError
     from trainingdash.garmin import get_garmin_client, GarminAPIError, GarminMFARequired
-    from trainingdash.ingest import ingest_fit, is_duplicate_activity
+    from trainingdash.ingest import ingest_fit, is_duplicate_activity, finalize_batch_import
     
     async with worker_db_session() as db:
         # Get user's Garmin credentials
@@ -402,6 +413,11 @@ async def sync_garmin_job(ctx, user_id: int):
                 logger.info(f"sync_garmin_job: No new activities for user {user_id}")
                 return {"success": True, "user_id": user_id, "synced_activities": 0, "skipped_duplicates": 0}
             
+            # Use batch mode if >10 activities to avoid notification spam
+            batch_mode = len(new_activities) > 10
+            if batch_mode:
+                logger.info(f"sync_garmin_job: Using batch mode for {len(new_activities)} activities")
+            
             # Download FIT files and create activities
             synced = 0
             skipped_duplicates = 0
@@ -427,7 +443,7 @@ async def sync_garmin_job(ctx, user_id: int):
                     fit_bytes = client.download_fit(garmin_activity.id)
                     
                     # Ingest using standard FIT pipeline
-                    activity = await ingest_fit(db, user_id, fit_bytes, "garmin", source_ref)
+                    activity = await ingest_fit(db, user_id, fit_bytes, "garmin", source_ref, batch_mode=batch_mode)
                     
                     if activity is not None:
                         synced += 1
@@ -443,6 +459,11 @@ async def sync_garmin_job(ctx, user_id: int):
                     continue
             
             logger.info(f"sync_garmin_job: Synced {synced} activities, skipped {skipped_duplicates} duplicates for user {user_id}")
+            
+            # If batch mode was used, finalize with single fitness update and notification
+            if batch_mode and synced > 0:
+                await finalize_batch_import(db, user_id, synced)
+            
             return {"success": True, "user_id": user_id, "synced_activities": synced, "skipped_duplicates": skipped_duplicates}
             
         except GarminAPIError as e:
