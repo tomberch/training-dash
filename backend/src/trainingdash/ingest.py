@@ -7,7 +7,7 @@ from geoalchemy2.functions import ST_SetSRID, ST_MakePoint
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from trainingdash.models import Activity, Lap, Record, ThresholdHistory, PowerZone, HrZone, ActivityPeakPower, FitnessHistory, Notification
+from trainingdash.models import Activity, Lap, Record, ThresholdHistory, PowerZone, HrZone, ActivityPeakPower, FitnessHistory, Notification, User
 from trainingdash.metrics import (
     compute_normalized_power,
     compute_intensity_factor,
@@ -17,6 +17,7 @@ from trainingdash.metrics import (
 from trainingdash.wbal import compute_wbal_series
 from trainingdash.peaks import extract_peak_powers
 from trainingdash.fitness import detect_breakthrough, get_all_time_bests, fit_cp_model
+from trainingdash.hr_power import update_ef_model, estimate_power_from_hr
 
 logger = logging.getLogger(__name__)
 
@@ -329,6 +330,12 @@ async def ingest_fit(
     # Compute training metrics if user has thresholds
     await _compute_activity_metrics(db, activity, parsed["records"])
 
+    # Update HR-derived power model if this is a dual-sensor ride
+    await _update_hr_power_model(db, activity)
+
+    # For HR-only activities, try to estimate power
+    await _estimate_hr_derived_power(db, activity, parsed["records"])
+
     # Extract and store peak powers
     await _extract_activity_peaks(db, activity, parsed["records"])
 
@@ -457,6 +464,125 @@ async def _compute_activity_metrics(
     await db.commit()
     await db.refresh(activity)
 
+
+
+async def _update_hr_power_model(
+    db: AsyncSession,
+    activity: Activity,
+) -> None:
+    """
+    Update the user's EF model if this is a dual-sensor ride (has both power and HR).
+    """
+    # Check if this is a dual-sensor ride
+    if activity.np_power_w is None or activity.avg_hr_bpm is None:
+        return
+    
+    if activity.avg_hr_bpm <= 0:
+        return
+    
+    # Mark as measured power
+    activity.power_source = "measured"
+    await db.commit()
+    
+    # Update EF model
+    await update_ef_model(db, activity.user_id)
+
+
+async def _estimate_hr_derived_power(
+    db: AsyncSession,
+    activity: Activity,
+    records: list[dict],
+) -> None:
+    """
+    For HR-only activities, estimate power from HR using the EF model.
+    
+    Only applies if:
+    - Activity has no measured power
+    - Activity has HR data
+    - User has HR-derived power enabled
+    - EF model exists
+    """
+    # Skip if already has power
+    if activity.avg_power_w is not None:
+        return
+    
+    # Skip if no HR data
+    if activity.avg_hr_bpm is None or activity.avg_hr_bpm <= 0:
+        return
+    
+    # Check if user has HR-derived power enabled
+    result = await db.execute(
+        select(User).where(User.id == activity.user_id)
+    )
+    user = result.scalar_one_or_none()
+    
+    if user is None or not user.hr_derived_power_enabled:
+        return
+    
+    # Try to estimate power
+    estimated_power, confidence = await estimate_power_from_hr(
+        db, activity.user_id, activity.avg_hr_bpm
+    )
+    
+    if estimated_power is None:
+        return
+    
+    # Update activity with estimated power
+    activity.avg_power_w = estimated_power
+    activity.power_source = "hr_derived"
+    activity.power_confidence = confidence
+    
+    # Re-compute metrics with estimated power
+    await _recompute_metrics_with_estimated_power(db, activity, records, estimated_power)
+    
+    await db.commit()
+    await db.refresh(activity)
+
+
+async def _recompute_metrics_with_estimated_power(
+    db: AsyncSession,
+    activity: Activity,
+    records: list[dict],
+    estimated_power: int,
+) -> None:
+    """
+    Recompute NP, IF, TSS using estimated power for HR-only activities.
+    
+    For HR-derived power, we use a simplified approach:
+    - Assume power was constant at estimated_power
+    - This gives NP ≈ estimated_power (slightly lower due to variability assumption)
+    """
+    # Get threshold
+    activity_date = activity.started_at.date()
+    result = await db.execute(
+        select(ThresholdHistory)
+        .where(
+            ThresholdHistory.user_id == activity.user_id,
+            ThresholdHistory.effective_date <= activity_date,
+        )
+        .order_by(ThresholdHistory.effective_date.desc())
+        .limit(1)
+    )
+    threshold = result.scalar_one_or_none()
+    
+    if threshold is None:
+        return
+    
+    ftp = threshold.ftp_watts
+    
+    # For HR-derived power, estimate NP as slightly lower than avg power
+    # (accounts for assumed variability)
+    np_estimate = int(estimated_power * 0.95)
+    activity.np_power_w = np_estimate
+    
+    # Compute IF and TSS
+    if ftp > 0:
+        intensity_factor = compute_intensity_factor(np_estimate, ftp)
+        activity.intensity_factor = intensity_factor
+        
+        duration_seconds = activity.moving_time_s or activity.elapsed_time_s
+        tss = compute_tss(np_estimate, ftp, duration_seconds)
+        activity.tss = tss
 
 
 async def _extract_activity_peaks(

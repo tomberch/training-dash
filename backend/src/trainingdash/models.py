@@ -29,6 +29,7 @@ class User(Base):
     unit_system: Mapped[str] = mapped_column(String(10), default="metric", nullable=False)
     date_of_birth: Mapped[date | None] = mapped_column(Date, nullable=True)
     weight_kg: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
+    hr_derived_power_enabled: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
 
 
@@ -67,6 +68,8 @@ class Activity(Base):
     avg_hr_bpm: Mapped[int | None] = mapped_column(Integer, nullable=True)
     avg_power_w: Mapped[int | None] = mapped_column(Integer, nullable=True)
     np_power_w: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    power_source: Mapped[str | None] = mapped_column(String(20), nullable=True)  # "measured" or "hr_derived"
+    power_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)  # 0.0-1.0 for hr_derived
     max_speed_mps: Mapped[float] = mapped_column(Float, nullable=False, default=0)
     max_hr_bpm: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Training metrics
@@ -147,6 +150,20 @@ class Notification(Base):
     payload: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON payload
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")  # pending/accepted/dismissed
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
+
+
+class EFModel(Base):
+    """Efficiency Factor model for HR-derived power estimation."""
+    __tablename__ = "ef_models"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False
+    )
+    ef_value: Mapped[float] = mapped_column(Numeric(6, 4), nullable=False)  # NP/HR ratio
+    computed_at: Mapped[datetime] = mapped_column(nullable=False)
+    ride_count: Mapped[int] = mapped_column(Integer, nullable=False)  # Number of rides used
+    confidence: Mapped[float] = mapped_column(Numeric(4, 3), nullable=False)  # 0.0-1.0
 
 
 class XertCredentials(Base):

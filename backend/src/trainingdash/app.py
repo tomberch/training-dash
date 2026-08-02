@@ -139,18 +139,24 @@ def _user_response(user: User) -> dict:
         "unit_system": user.unit_system,
         "date_of_birth": user.date_of_birth.isoformat() if user.date_of_birth else None,
         "weight_kg": float(user.weight_kg) if user.weight_kg else None,
+        "hr_derived_power_enabled": user.hr_derived_power_enabled,
     }
 
 
-async def get_me(user: CurrentUser):
-    """Get the current user's info."""
-    return _user_response(user)
+async def get_me(db: DbSession, user: CurrentUser):
+    """Get the current user's info including HR-derived power status."""
+    from trainingdash.hr_power import get_ef_model_status
+    
+    response = _user_response(user)
+    response["hr_power_model"] = await get_ef_model_status(db, user.id)
+    return response
 
 
 class UpdateMeRequest(BaseModel):
     unit_system: str | None = None
     date_of_birth: date | None = None
     weight_kg: float | None = None
+    hr_derived_power_enabled: bool | None = None
 
 
 async def update_me(db: DbSession, user: CurrentUser, request: UpdateMeRequest):
@@ -175,6 +181,9 @@ async def update_me(db: DbSession, user: CurrentUser, request: UpdateMeRequest):
         if request.weight_kg > 500:
             raise HTTPException(status_code=400, detail="weight_kg must be realistic (max 500)")
         user.weight_kg = request.weight_kg
+    
+    if request.hr_derived_power_enabled is not None:
+        user.hr_derived_power_enabled = request.hr_derived_power_enabled
     
     await db.commit()
     await db.refresh(user)
@@ -890,6 +899,9 @@ def _activity_detail(a: Activity) -> dict[str, Any]:
         "intensity_factor": a.intensity_factor,
         "tss": a.tss,
         "training_load": a.training_load,
+        # Power source
+        "power_source": a.power_source,
+        "power_confidence": a.power_confidence,
         # Zone times (parse JSON if present)
         "power_zone_times": json.loads(a.power_zone_times) if a.power_zone_times else None,
         "hr_zone_times": json.loads(a.hr_zone_times) if a.hr_zone_times else None,
