@@ -997,3 +997,197 @@ async def _check_ftp_notification_batch(
     )
     db.add(notification)
     await db.commit()
+
+
+
+async def ingest_xert_activity(
+    db: AsyncSession,
+    user_id: int,
+    detail: Any,  # XertActivityDetail
+    source_ref: str,
+    batch_mode: bool = False,
+) -> Activity | None:
+    """
+    Ingest an activity from Xert session_data, routing through the same
+    metric pipeline as FIT file ingestion.
+    
+    This replaces the old _create_activity_from_xert() that was in worker.py
+    and didn't compute NP, IF, TSS, zone times, peaks, or breakthrough detection.
+    
+    Args:
+        db: Database session
+        user_id: User ID to attribute the activity to
+        detail: XertActivityDetail with session_data
+        source_ref: Source reference (e.g., "xert:12345")
+        batch_mode: If True, skip per-activity fitness updates (for bulk imports)
+    
+    Returns:
+        Created Activity or None if ingestion failed
+    """
+    from geoalchemy2.functions import ST_SetSRID, ST_MakePoint
+    
+    if not detail.session_data:
+        logger.warning(f"ingest_xert_activity: No session_data for {source_ref}")
+        return None
+    
+    # Convert Xert session_data to our records format
+    records = _convert_xert_session_data(detail)
+    
+    # Calculate summary stats from session_data
+    total_distance_m = detail.distance * 1000 if detail.distance else 0
+    elapsed_time_s = int(detail.duration) if detail.duration else 0
+    
+    # Extract arrays for averages/max
+    hr_values = [r["hr_bpm"] for r in records if r["hr_bpm"] is not None]
+    power_values = [r["power_w"] for r in records if r["power_w"] is not None and r["power_w"] > 0]
+    speed_values = [r["speed_mps"] for r in records if r["speed_mps"] is not None]
+    altitudes = [r["altitude_m"] for r in records if r["altitude_m"] is not None]
+    
+    # Calculate averages and max values
+    avg_hr = int(sum(hr_values) / len(hr_values)) if hr_values else None
+    max_hr = max(hr_values) if hr_values else None
+    avg_power = int(sum(power_values) / len(power_values)) if power_values else None
+    avg_speed = sum(speed_values) / len(speed_values) if speed_values else None
+    max_speed = max(speed_values) if speed_values else None
+    
+    # Calculate elevation gain (sum of positive altitude changes)
+    elevation_gain = 0.0
+    if len(altitudes) >= 2:
+        for i in range(1, len(altitudes)):
+            diff = altitudes[i] - altitudes[i-1]
+            if diff > 0:
+                elevation_gain += diff
+    
+    # Normalize started_at to naive UTC
+    started_at = detail.started_at
+    if started_at.tzinfo is not None:
+        started_at = started_at.replace(tzinfo=None)
+    
+    # Create Activity
+    activity = Activity(
+        user_id=user_id,
+        started_at=started_at,
+        total_distance_m=total_distance_m,
+        moving_time_s=elapsed_time_s,  # Xert doesn't distinguish moving vs elapsed
+        elapsed_time_s=elapsed_time_s,
+        elevation_gain_m=elevation_gain if elevation_gain > 0 else None,
+        avg_speed_mps=avg_speed,
+        avg_hr_bpm=avg_hr,
+        avg_power_w=avg_power,
+        max_speed_mps=max_speed,
+        max_hr_bpm=max_hr,
+        source="xert",
+        source_ref=source_ref,
+        # Store XSS as training_load initially (may be overwritten by TSS computation)
+        training_load=detail.xss,
+    )
+    db.add(activity)
+    await db.flush()
+    
+    # Create Records
+    for r in records:
+        geom = None
+        if r["lat"] is not None and r["lon"] is not None:
+            geom = ST_SetSRID(ST_MakePoint(r["lon"], r["lat"]), 4326)
+        
+        record = Record(
+            activity_id=activity.id,
+            timestamp=r["timestamp"],
+            lat=r["lat"],
+            lon=r["lon"],
+            distance_m=r["distance_m"],
+            hr_bpm=r["hr_bpm"],
+            power_w=r["power_w"],
+            speed_mps=r["speed_mps"],
+            altitude_m=r["altitude_m"],
+            cadence_rpm=r["cadence_rpm"],
+            geom=geom,
+        )
+        db.add(record)
+    
+    await db.commit()
+    await db.refresh(activity)
+    
+    # Now run the same metric pipeline as ingest_fit()
+    
+    # Compute training metrics (NP, IF, TSS, zone times, W'bal)
+    await _compute_activity_metrics(db, activity, records)
+    
+    # Update HR-derived power model if this is a dual-sensor ride
+    await _update_hr_power_model(db, activity)
+    
+    # For HR-only activities, try to estimate power
+    await _estimate_hr_derived_power(db, activity, records)
+    
+    # Extract and store peak powers
+    await _extract_activity_peaks(db, activity, records)
+    
+    # Detect breakthroughs and update fitness model (skip in batch mode)
+    if not batch_mode:
+        await _detect_breakthrough_and_update_fitness(db, activity)
+    
+    # Route matching
+    from trainingdash.route_matching import find_or_create_route_id
+    route_id = await find_or_create_route_id(db, activity, records)
+    if route_id is not None:
+        activity.route_id = route_id
+        await db.commit()
+        await db.refresh(activity)
+    
+    return activity
+
+
+def _convert_xert_session_data(detail: Any) -> list[dict]:
+    """
+    Convert Xert session_data to the records format used by our metric pipeline.
+    
+    Xert session_data format:
+    - unix_time: milliseconds since epoch
+    - lat, lng: coordinates (nullable)
+    - dist: cumulative distance in meters
+    - hr: heart rate
+    - power: power in watts
+    - spd: speed in m/s * 1000 (needs conversion)
+    - alt: altitude in meters
+    - cad: cadence
+    
+    Our records format:
+    - timestamp: datetime
+    - lat, lon: coordinates
+    - distance_m: cumulative distance
+    - hr_bpm, power_w, speed_mps, altitude_m, cadence_rpm
+    """
+    from datetime import timedelta
+    
+    if not detail.session_data:
+        return []
+    
+    # Get started_at for timestamp calculation
+    started_at = detail.started_at
+    if started_at.tzinfo is not None:
+        started_at = started_at.replace(tzinfo=None)
+    
+    first_time = detail.session_data[0].unix_time if detail.session_data else 0
+    records = []
+    
+    for point in detail.session_data:
+        # Calculate timestamp from unix_time offset
+        elapsed_secs = (point.unix_time - first_time) / 1000.0 if first_time else 0
+        timestamp = started_at + timedelta(seconds=elapsed_secs)
+        
+        # Speed: Xert stores as m/s * 1000, convert to m/s
+        speed_mps = point.spd / 1000.0 if point.spd is not None else None
+        
+        records.append({
+            "timestamp": timestamp,
+            "lat": point.lat,
+            "lon": point.lng,
+            "distance_m": point.dist if point.dist is not None else 0,
+            "hr_bpm": point.hr,
+            "power_w": int(point.power) if point.power is not None else None,
+            "speed_mps": speed_mps,
+            "altitude_m": point.alt,
+            "cadence_rpm": int(point.cad) if point.cad is not None else None,
+        })
+    
+    return records
