@@ -498,3 +498,32 @@ export async function deleteMyGarminCredentials(): Promise<void> {
 }
 
 
+
+
+// PMC (Performance Management Chart) types
+export interface PMCPoint {
+  date: string;
+  ctl: number;
+  atl: number;
+  tsb: number;
+}
+
+export async function fetchPMC(start?: string, end?: string): Promise<PMCPoint[]> {
+  const params = new URLSearchParams();
+  if (start) params.set("start", start);
+  if (end) params.set("end", end);
+  const query = params.toString();
+  return apiFetch<PMCPoint[]>(`/pmc${query ? `?${query}` : ""}`);
+}
+
+// Threshold history for FTP markers
+export interface ThresholdEntry {
+  effective_date: string;
+  ftp_watts: number | null;
+  lthr_bpm: number | null;
+  max_hr_bpm: number | null;
+}
+
+export async function fetchThresholds(): Promise<ThresholdEntry[]> {
+  return apiFetch<ThresholdEntry[]>("/me/thresholds");
+}
