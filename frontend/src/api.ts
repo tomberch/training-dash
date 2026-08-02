@@ -10,6 +10,18 @@ export interface Activity {
   avg_power_w: number | null;
   max_speed_mps: number;
   max_hr_bpm: number | null;
+  // Training metrics
+  np_power_w: number | null;
+  intensity_factor: number | null;
+  tss: number | null;
+  training_load: number | null;
+  power_zone_times: Record<string, number> | null;
+  hr_zone_times: Record<string, number> | null;
+  wbal_min_joules: number | null;
+  wbal_min_pct: number | null;
+  // Power source for HR-derived power
+  power_source: "measured" | "hr_derived" | null;
+  power_confidence: number | null;
 }
 
 export interface GeoJSONFeature {

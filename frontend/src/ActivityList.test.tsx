@@ -23,6 +23,17 @@ const baseActivity = {
   avg_power_w: 240,
   max_speed_mps: 12.0,
   max_hr_bpm: 160,
+  // Training metrics
+  np_power_w: null,
+  intensity_factor: null,
+  tss: null,
+  training_load: null,
+  power_zone_times: null,
+  hr_zone_times: null,
+  wbal_min_joules: null,
+  wbal_min_pct: null,
+  power_source: null,
+  power_confidence: null,
 };
 
 describe("ActivityList", () => {

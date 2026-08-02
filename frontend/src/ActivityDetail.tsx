@@ -95,6 +95,25 @@ const CHARTS: ChartConfig[] = [
   { key: "elevation", label: "Elevation", unit: "m", color: "#10b981", dataKey: "altitude_m" },
 ];
 
+// Zone colors (matching typical training zone colors)
+const POWER_ZONE_COLORS: Record<string, string> = {
+  "1": "#9ca3af", // Recovery - gray
+  "2": "#3b82f6", // Endurance - blue
+  "3": "#22c55e", // Tempo - green
+  "4": "#eab308", // Threshold - yellow
+  "5": "#f97316", // VO2max - orange
+  "6": "#ef4444", // Anaerobic - red
+  "7": "#7c3aed", // Neuromuscular - purple
+};
+
+const HR_ZONE_COLORS: Record<string, string> = {
+  "1": "#9ca3af", // Recovery - gray
+  "2": "#3b82f6", // Aerobic - blue
+  "3": "#22c55e", // Tempo - green
+  "4": "#eab308", // Threshold - yellow
+  "5": "#ef4444", // VO2max - red
+};
+
 interface Props {
   activityId: number;
   onBack: () => void;
@@ -392,16 +411,58 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
           </h1>
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 mb-6">
-          <StatTile label="Date" value={new Date(activity.started_at).toLocaleDateString()} />
-          <StatTile label="Distance" value={formatDistance(activity.total_distance_m, unitSystem)} />
-          <StatTile label="Moving Time" value={formatTime(activity.moving_time_s)} />
-          <StatTile label="Elevation" value={formatElevation(activity.elevation_gain_m, unitSystem)} />
-          <StatTile label="Avg Speed" value={formatSpeed(activity.avg_speed_mps, unitSystem)} />
-          {activity.avg_hr_bpm && <StatTile label="Avg HR" value={`${activity.avg_hr_bpm} bpm`} />}
-          {activity.avg_power_w && <StatTile label="Avg Power" value={`${activity.avg_power_w} W`} />}
+        {/* Stats Grid - Row 1: Ride Basics */}
+        <div className="mb-3">
+          <h2 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Ride Basics</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <StatTile label="Date" value={new Date(activity.started_at).toLocaleDateString()} />
+            <StatTile label="Distance" value={formatDistance(activity.total_distance_m, unitSystem)} />
+            <StatTile label="Duration" value={formatTime(activity.moving_time_s)} />
+            <StatTile label="Elevation" value={formatElevation(activity.elevation_gain_m, unitSystem)} />
+            <StatTile label="Avg Speed" value={formatSpeed(activity.avg_speed_mps, unitSystem)} />
+            <StatTile label="Avg HR" value={activity.avg_hr_bpm ? `${activity.avg_hr_bpm} bpm` : "—"} />
+          </div>
         </div>
+
+        {/* Stats Grid - Row 2: Training Metrics */}
+        <div className="mb-6">
+          <h2 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Training Metrics</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <StatTile 
+              label="Avg Power" 
+              value={activity.avg_power_w ? `${activity.avg_power_w} W` : "—"} 
+              subtitle={activity.power_source === "hr_derived" ? "HR-derived" : undefined}
+            />
+            <StatTile label="NP" value={activity.np_power_w ? `${activity.np_power_w} W` : "—"} />
+            <StatTile label="IF" value={activity.intensity_factor ? activity.intensity_factor.toFixed(2) : "—"} />
+            <StatTile label="TSS" value={activity.tss ? Math.round(activity.tss).toString() : "—"} />
+            <StatTile 
+              label="W'bal Min" 
+              value={activity.wbal_min_pct != null ? `${Math.round(activity.wbal_min_pct)}%` : "—"} 
+            />
+            <StatTile label="Max HR" value={activity.max_hr_bpm ? `${activity.max_hr_bpm} bpm` : "—"} />
+          </div>
+        </div>
+
+        {/* Zone Distribution Charts */}
+        {(activity.power_zone_times || activity.hr_zone_times) && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            {activity.power_zone_times && (
+              <ZoneChart 
+                title="Power Zones" 
+                zoneTimes={activity.power_zone_times} 
+                zoneColors={POWER_ZONE_COLORS}
+              />
+            )}
+            {activity.hr_zone_times && (
+              <ZoneChart 
+                title="HR Zones" 
+                zoneTimes={activity.hr_zone_times} 
+                zoneColors={HR_ZONE_COLORS}
+              />
+            )}
+          </div>
+        )}
 
         {/* Compare selector */}
         {sameRoute && sameRoute.route_id !== null && sameRoute.activities.length > 0 && (
@@ -638,7 +699,7 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
   );
 }
 
-function StatTile({ label, value }: { label: string; value: string }) {
+function StatTile({ label, value, subtitle }: { label: string; value: string; subtitle?: string }) {
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 text-center">
       <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
@@ -647,6 +708,11 @@ function StatTile({ label, value }: { label: string; value: string }) {
       <div className="text-lg font-semibold text-gray-900 dark:text-white tabular-nums">
         {value}
       </div>
+      {subtitle && (
+        <div className="text-xs text-indigo-500 dark:text-indigo-400 mt-0.5">
+          {subtitle}
+        </div>
+      )}
     </div>
   );
 }
@@ -674,6 +740,81 @@ function ChartCard({
         {action}
       </div>
       <div className="p-4">{children}</div>
+    </div>
+  );
+}
+
+
+
+function ZoneChart({ 
+  title, 
+  zoneTimes, 
+  zoneColors 
+}: { 
+  title: string; 
+  zoneTimes: Record<string, number>; 
+  zoneColors: Record<string, string>;
+}) {
+  // Convert zone times to array and calculate percentages
+  const zones = Object.entries(zoneTimes)
+    .map(([zone, seconds]) => ({
+      zone,
+      seconds,
+      label: `Z${zone}`,
+    }))
+    .sort((a, b) => parseInt(a.zone) - parseInt(b.zone));
+
+  const totalSeconds = zones.reduce((sum, z) => sum + z.seconds, 0);
+  
+  if (totalSeconds === 0) return null;
+
+  const formatZoneTime = (seconds: number): string => {
+    const minutes = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    if (minutes >= 60) {
+      const hours = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      return `${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+    return `${minutes}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+      <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">{title}</h3>
+      <div className="space-y-2">
+        {zones.map(({ zone, seconds, label }) => {
+          const percentage = (seconds / totalSeconds) * 100;
+          const color = zoneColors[zone] || "#6b7280";
+          
+          return (
+            <div key={zone} className="flex items-center gap-3">
+              <div className="w-8 text-xs font-medium text-gray-600 dark:text-gray-400">
+                {label}
+              </div>
+              <div className="flex-1 h-6 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-300"
+                  style={{ 
+                    width: `${Math.max(percentage, 1)}%`,
+                    backgroundColor: color,
+                  }}
+                />
+              </div>
+              <div className="w-16 text-xs text-right text-gray-600 dark:text-gray-400 tabular-nums">
+                {formatZoneTime(seconds)}
+              </div>
+              <div className="w-12 text-xs text-right text-gray-500 dark:text-gray-500 tabular-nums">
+                {percentage.toFixed(0)}%
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 flex justify-between text-xs text-gray-500 dark:text-gray-400">
+        <span>Total</span>
+        <span className="tabular-nums">{formatZoneTime(totalSeconds)}</span>
+      </div>
     </div>
   );
 }
