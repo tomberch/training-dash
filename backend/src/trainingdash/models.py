@@ -126,6 +126,21 @@ class GarminCredentials(Base):
     )
 
 
+class ThresholdHistory(Base):
+    """Tracks FTP, LTHR, and HRmax over time with effective dates."""
+    __tablename__ = "threshold_history"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    effective_date: Mapped[date] = mapped_column(Date, nullable=False)
+    ftp_watts: Mapped[int] = mapped_column(Integer, nullable=False)
+    lthr_bpm: Mapped[int] = mapped_column(Integer, nullable=False)
+    hrmax_bpm: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
+
+
 class Record(Base):
     __tablename__ = "records"
 

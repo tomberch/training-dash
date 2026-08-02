@@ -11,7 +11,7 @@ from sqlalchemy.orm import selectinload
 
 from trainingdash.auth import AdminUser, CurrentUser, DbSession, LoginRequest, create_session_cookie, hash_password, verify_password
 from trainingdash.db import Base, async_session, engine
-from trainingdash.models import Activity, Lap, Record, User, XertCredentials, GarminCredentials
+from trainingdash.models import Activity, Lap, Record, User, XertCredentials, GarminCredentials, ThresholdHistory
 from trainingdash.xert import get_xert_client, XertAPIError
 from trainingdash.garmin import get_garmin_client, GarminAPIError, GarminMFARequired
 from trainingdash.crypto import encrypt, decrypt, EncryptionError
@@ -92,6 +92,9 @@ def create_app() -> FastAPI:
     app.put("/me/garmin-credentials")(put_my_garmin_credentials)
     app.post("/me/garmin-credentials/mfa")(complete_garmin_mfa)
     app.delete("/me/garmin-credentials")(delete_my_garmin_credentials)
+    # User thresholds (FTP, LTHR, HRmax)
+    app.get("/me/thresholds")(get_my_thresholds)
+    app.post("/me/thresholds")(create_threshold)
     return app
 
 
@@ -391,6 +394,146 @@ async def delete_my_garmin_credentials(db: DbSession, user: CurrentUser):
         await db.delete(creds)
         await db.commit()
     return {"success": True}
+
+
+# Threshold management (FTP, LTHR, HRmax)
+
+def compute_default_thresholds(dob: date, weight_kg: float | None) -> dict:
+    """
+    Compute default threshold values based on age and weight.
+    
+    - HRmax: Tanaka formula (208 - 0.7 × age)
+    - LTHR: 93% of HRmax
+    - FTP: weight × 2.5 (or 200W if no weight)
+    """
+    today = date.today()
+    age = (today - dob).days // 365
+    
+    hrmax = int(208 - 0.7 * age)
+    lthr = int(hrmax * 0.93)
+    
+    if weight_kg is not None and weight_kg > 0:
+        ftp = int(float(weight_kg) * 2.5)
+    else:
+        ftp = 200
+    
+    return {"ftp_watts": ftp, "lthr_bpm": lthr, "hrmax_bpm": hrmax}
+
+
+async def get_threshold_for_date(db: DbSession, user_id: int, target_date: date) -> ThresholdHistory | None:
+    """
+    Get the threshold values effective on a given date.
+    Returns the most recent threshold entry with effective_date <= target_date.
+    """
+    result = await db.execute(
+        select(ThresholdHistory)
+        .where(
+            ThresholdHistory.user_id == user_id,
+            ThresholdHistory.effective_date <= target_date,
+        )
+        .order_by(ThresholdHistory.effective_date.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def ensure_default_thresholds(db: DbSession, user: User) -> ThresholdHistory | None:
+    """
+    Ensure user has at least one threshold entry. Creates defaults if none exist.
+    Requires user to have date_of_birth set.
+    Returns the created/existing threshold or None if DOB not set.
+    """
+    if user.date_of_birth is None:
+        return None
+    
+    # Check if any thresholds exist
+    result = await db.execute(
+        select(ThresholdHistory)
+        .where(ThresholdHistory.user_id == user.id)
+        .limit(1)
+    )
+    if result.scalar_one_or_none() is not None:
+        return None  # Already has thresholds
+    
+    # Create default thresholds
+    defaults = compute_default_thresholds(user.date_of_birth, float(user.weight_kg) if user.weight_kg else None)
+    threshold = ThresholdHistory(
+        user_id=user.id,
+        effective_date=date.today(),
+        ftp_watts=defaults["ftp_watts"],
+        lthr_bpm=defaults["lthr_bpm"],
+        hrmax_bpm=defaults["hrmax_bpm"],
+    )
+    db.add(threshold)
+    await db.commit()
+    await db.refresh(threshold)
+    return threshold
+
+
+def _threshold_response(t: ThresholdHistory) -> dict:
+    """Return a dict of threshold info for API responses."""
+    return {
+        "id": t.id,
+        "effective_date": t.effective_date.isoformat(),
+        "ftp_watts": t.ftp_watts,
+        "lthr_bpm": t.lthr_bpm,
+        "hrmax_bpm": t.hrmax_bpm,
+    }
+
+
+async def get_my_thresholds(db: DbSession, user: CurrentUser):
+    """Get the current user's threshold history, most recent first."""
+    # Ensure defaults exist if user has DOB
+    await ensure_default_thresholds(db, user)
+    
+    result = await db.execute(
+        select(ThresholdHistory)
+        .where(ThresholdHistory.user_id == user.id)
+        .order_by(ThresholdHistory.effective_date.desc())
+    )
+    thresholds = result.scalars().all()
+    return [_threshold_response(t) for t in thresholds]
+
+
+class CreateThresholdRequest(BaseModel):
+    effective_date: date | None = None
+    ftp_watts: int
+    lthr_bpm: int
+    hrmax_bpm: int
+
+
+async def create_threshold(db: DbSession, user: CurrentUser, request: CreateThresholdRequest):
+    """Create a new threshold entry for the current user."""
+    # Validation
+    if request.ftp_watts <= 0:
+        raise HTTPException(status_code=400, detail="ftp_watts must be positive")
+    if request.ftp_watts > 2000:
+        raise HTTPException(status_code=400, detail="ftp_watts must be realistic (max 2000)")
+    if request.lthr_bpm <= 0:
+        raise HTTPException(status_code=400, detail="lthr_bpm must be positive")
+    if request.lthr_bpm > 250:
+        raise HTTPException(status_code=400, detail="lthr_bpm must be realistic (max 250)")
+    if request.hrmax_bpm <= 0:
+        raise HTTPException(status_code=400, detail="hrmax_bpm must be positive")
+    if request.hrmax_bpm > 250:
+        raise HTTPException(status_code=400, detail="hrmax_bpm must be realistic (max 250)")
+    if request.lthr_bpm > request.hrmax_bpm:
+        raise HTTPException(status_code=400, detail="lthr_bpm cannot exceed hrmax_bpm")
+    
+    effective = request.effective_date or date.today()
+    
+    threshold = ThresholdHistory(
+        user_id=user.id,
+        effective_date=effective,
+        ftp_watts=request.ftp_watts,
+        lthr_bpm=request.lthr_bpm,
+        hrmax_bpm=request.hrmax_bpm,
+    )
+    db.add(threshold)
+    await db.commit()
+    await db.refresh(threshold)
+    
+    return _threshold_response(threshold)
 
 
 def _activity_summary(a: Activity) -> dict[str, Any]:

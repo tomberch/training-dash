@@ -287,3 +287,167 @@ class TestUserProfile:
         """PATCH /me requires authentication."""
         response = await app_client.patch("/me", json={"weight_kg": 70})
         assert response.status_code == 401
+
+
+
+class TestThresholdHistory:
+    """Tests for threshold management (FTP, LTHR, HRmax)."""
+
+    @pytest.mark.asyncio
+    async def test_get_thresholds_empty_when_no_dob(self, auth_client):
+        """GET /me/thresholds returns empty list when user has no DOB (no defaults created)."""
+        response = await auth_client.get("/me/thresholds")
+        assert response.status_code == 200
+        assert response.json() == []
+
+    @pytest.mark.asyncio
+    async def test_get_thresholds_creates_defaults_when_dob_set(self, auth_client):
+        """GET /me/thresholds auto-creates defaults when user has DOB."""
+        # First set DOB
+        await auth_client.patch("/me", json={"date_of_birth": "1990-01-01"})
+        
+        response = await auth_client.get("/me/thresholds")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        
+        # Check defaults match Tanaka formula: HRmax = 208 - 0.7 * age
+        # Age ~36 (in 2026), HRmax ~183, LTHR ~170
+        threshold = data[0]
+        assert "id" in threshold
+        assert "effective_date" in threshold
+        assert threshold["ftp_watts"] == 200  # Default when no weight
+        assert 160 <= threshold["hrmax_bpm"] <= 190  # Age-based range
+        assert threshold["lthr_bpm"] < threshold["hrmax_bpm"]
+
+    @pytest.mark.asyncio
+    async def test_get_thresholds_uses_weight_for_ftp_default(self, auth_client):
+        """Default FTP is weight_kg * 2.5 when weight is set."""
+        # Set DOB and weight
+        await auth_client.patch("/me", json={"date_of_birth": "1990-01-01", "weight_kg": 80})
+        
+        response = await auth_client.get("/me/thresholds")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["ftp_watts"] == 200  # 80 * 2.5 = 200
+
+    @pytest.mark.asyncio
+    async def test_create_threshold(self, auth_client):
+        """POST /me/thresholds creates a new threshold entry."""
+        response = await auth_client.post(
+            "/me/thresholds",
+            json={"ftp_watts": 280, "lthr_bpm": 165, "hrmax_bpm": 185}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["ftp_watts"] == 280
+        assert data["lthr_bpm"] == 165
+        assert data["hrmax_bpm"] == 185
+        assert "effective_date" in data
+        assert "id" in data
+
+    @pytest.mark.asyncio
+    async def test_create_threshold_with_effective_date(self, auth_client):
+        """POST /me/thresholds accepts custom effective_date."""
+        response = await auth_client.post(
+            "/me/thresholds",
+            json={
+                "effective_date": "2025-06-01",
+                "ftp_watts": 290,
+                "lthr_bpm": 168,
+                "hrmax_bpm": 188
+            }
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["effective_date"] == "2025-06-01"
+        assert data["ftp_watts"] == 290
+
+    @pytest.mark.asyncio
+    async def test_get_thresholds_returns_most_recent_first(self, auth_client):
+        """GET /me/thresholds returns entries sorted by effective_date desc."""
+        # Create multiple thresholds
+        await auth_client.post(
+            "/me/thresholds",
+            json={"effective_date": "2025-01-01", "ftp_watts": 250, "lthr_bpm": 160, "hrmax_bpm": 180}
+        )
+        await auth_client.post(
+            "/me/thresholds",
+            json={"effective_date": "2025-06-01", "ftp_watts": 270, "lthr_bpm": 165, "hrmax_bpm": 185}
+        )
+        await auth_client.post(
+            "/me/thresholds",
+            json={"effective_date": "2025-03-01", "ftp_watts": 260, "lthr_bpm": 162, "hrmax_bpm": 182}
+        )
+        
+        response = await auth_client.get("/me/thresholds")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 3
+        # Should be sorted desc by effective_date
+        assert data[0]["effective_date"] == "2025-06-01"
+        assert data[1]["effective_date"] == "2025-03-01"
+        assert data[2]["effective_date"] == "2025-01-01"
+
+    @pytest.mark.asyncio
+    async def test_create_threshold_rejects_zero_ftp(self, auth_client):
+        """POST /me/thresholds rejects ftp_watts <= 0."""
+        response = await auth_client.post(
+            "/me/thresholds",
+            json={"ftp_watts": 0, "lthr_bpm": 160, "hrmax_bpm": 180}
+        )
+        assert response.status_code == 400
+        assert "ftp_watts" in response.json()["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_create_threshold_rejects_unrealistic_ftp(self, auth_client):
+        """POST /me/thresholds rejects ftp_watts > 2000."""
+        response = await auth_client.post(
+            "/me/thresholds",
+            json={"ftp_watts": 2500, "lthr_bpm": 160, "hrmax_bpm": 180}
+        )
+        assert response.status_code == 400
+        assert "2000" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_create_threshold_rejects_zero_lthr(self, auth_client):
+        """POST /me/thresholds rejects lthr_bpm <= 0."""
+        response = await auth_client.post(
+            "/me/thresholds",
+            json={"ftp_watts": 250, "lthr_bpm": 0, "hrmax_bpm": 180}
+        )
+        assert response.status_code == 400
+        assert "lthr_bpm" in response.json()["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_create_threshold_rejects_unrealistic_hrmax(self, auth_client):
+        """POST /me/thresholds rejects hrmax_bpm > 250."""
+        response = await auth_client.post(
+            "/me/thresholds",
+            json={"ftp_watts": 250, "lthr_bpm": 160, "hrmax_bpm": 300}
+        )
+        assert response.status_code == 400
+        assert "250" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_create_threshold_rejects_lthr_exceeding_hrmax(self, auth_client):
+        """POST /me/thresholds rejects lthr_bpm > hrmax_bpm."""
+        response = await auth_client.post(
+            "/me/thresholds",
+            json={"ftp_watts": 250, "lthr_bpm": 190, "hrmax_bpm": 180}
+        )
+        assert response.status_code == 400
+        assert "exceed" in response.json()["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_threshold_endpoints_require_auth(self, app_client):
+        """Threshold endpoints require authentication."""
+        response = await app_client.get("/me/thresholds")
+        assert response.status_code == 401
+
+        response = await app_client.post(
+            "/me/thresholds",
+            json={"ftp_watts": 250, "lthr_bpm": 160, "hrmax_bpm": 180}
+        )
+        assert response.status_code == 401
