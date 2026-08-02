@@ -7,7 +7,7 @@ from geoalchemy2.functions import ST_SetSRID, ST_MakePoint
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from trainingdash.models import Activity, Lap, Record, ThresholdHistory, PowerZone, HrZone
+from trainingdash.models import Activity, Lap, Record, ThresholdHistory, PowerZone, HrZone, ActivityPeakPower
 from trainingdash.metrics import (
     compute_normalized_power,
     compute_intensity_factor,
@@ -15,6 +15,7 @@ from trainingdash.metrics import (
     compute_zone_times,
 )
 from trainingdash.wbal import compute_wbal_series
+from trainingdash.peaks import extract_peak_powers
 
 logger = logging.getLogger(__name__)
 
@@ -326,6 +327,9 @@ async def ingest_fit(
     # Compute training metrics if user has thresholds
     await _compute_activity_metrics(db, activity, parsed["records"])
 
+    # Extract and store peak powers
+    await _extract_activity_peaks(db, activity, parsed["records"])
+
     # Route matching
     from trainingdash.route_matching import find_or_create_route_id
     route_id = await find_or_create_route_id(db, activity, parsed["records"])
@@ -446,3 +450,38 @@ async def _compute_activity_metrics(
     
     await db.commit()
     await db.refresh(activity)
+
+
+
+async def _extract_activity_peaks(
+    db: AsyncSession,
+    activity: Activity,
+    records: list[dict],
+) -> None:
+    """
+    Extract peak powers at standard durations and store in ActivityPeakPower table.
+    
+    Only stores peaks for durations where the ride was long enough.
+    """
+    # Extract power array from records
+    power_array = [r.get("power_w") for r in records]
+    
+    # Check if we have any power data
+    has_power = any(p is not None and p > 0 for p in power_array)
+    if not has_power:
+        return
+    
+    # Extract peaks at all standard durations
+    peaks = extract_peak_powers(power_array)
+    
+    # Store each peak (only if ride was long enough for that duration)
+    for duration_seconds, watts in peaks.items():
+        if watts is not None:
+            peak = ActivityPeakPower(
+                activity_id=activity.id,
+                duration_seconds=duration_seconds,
+                watts=watts,
+            )
+            db.add(peak)
+    
+    await db.commit()

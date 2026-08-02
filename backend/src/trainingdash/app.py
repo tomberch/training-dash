@@ -12,7 +12,7 @@ from sqlalchemy.orm import selectinload
 
 from trainingdash.auth import AdminUser, CurrentUser, DbSession, LoginRequest, create_session_cookie, hash_password, verify_password
 from trainingdash.db import Base, async_session, engine
-from trainingdash.models import Activity, Lap, Record, User, XertCredentials, GarminCredentials, ThresholdHistory, PowerZone, HrZone
+from trainingdash.models import Activity, Lap, Record, User, XertCredentials, GarminCredentials, ThresholdHistory, PowerZone, HrZone, ActivityPeakPower
 from trainingdash.xert import get_xert_client, XertAPIError
 from trainingdash.garmin import get_garmin_client, GarminAPIError, GarminMFARequired
 from trainingdash.crypto import encrypt, decrypt, EncryptionError
@@ -932,7 +932,21 @@ async def list_activities(db: DbSession, user: CurrentUser):
 
 async def get_activity(db: DbSession, user: CurrentUser, activity_id: int):
     activity = await _get_owned_activity(db, user, activity_id)
-    return _activity_detail(activity)
+    result = _activity_detail(activity)
+    
+    # Fetch peak powers
+    peaks_result = await db.execute(
+        select(ActivityPeakPower)
+        .where(ActivityPeakPower.activity_id == activity_id)
+        .order_by(ActivityPeakPower.duration_seconds)
+    )
+    peaks = peaks_result.scalars().all()
+    result["peaks"] = [
+        {"duration_seconds": p.duration_seconds, "watts": p.watts}
+        for p in peaks
+    ]
+    
+    return result
 
 
 async def get_activity_records(db: DbSession, user: CurrentUser, activity_id: int):

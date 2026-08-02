@@ -327,3 +327,130 @@ class TestActivityMetricsOnIngest:
         assert data["tss"] is not None
         assert isinstance(data["power_zone_times"], dict)
         assert isinstance(data["hr_zone_times"], dict)
+
+
+
+
+class TestPeakPowersOnIngest:
+    """Tests for peak power extraction during ingest (#19)."""
+
+    @pytest.mark.asyncio
+    async def test_upload_extracts_peak_powers(self, auth_client, db_session):
+        """Upload with power data extracts peaks at standard durations."""
+        from trainingdash.models import ActivityPeakPower
+        
+        # Upload FIT with 120 records (2 minutes of data)
+        fit_data = make_test_fit(num_records=120)
+        response = await auth_client.post(
+            "/upload",
+            files={"file": ("test.fit", fit_data, "application/octet-stream")},
+        )
+        assert response.status_code == 200
+        activity_id = response.json()["id"]
+        
+        # Query peaks from database
+        result = await db_session.execute(
+            select(ActivityPeakPower)
+            .where(ActivityPeakPower.activity_id == activity_id)
+            .order_by(ActivityPeakPower.duration_seconds)
+        )
+        peaks = result.scalars().all()
+        
+        # Should have peaks for durations <= 120 seconds (1, 5, 10, 30, 60, 120)
+        assert len(peaks) >= 6
+        
+        # Check durations are as expected
+        durations = [p.duration_seconds for p in peaks]
+        assert 1 in durations
+        assert 5 in durations
+        assert 10 in durations
+        assert 30 in durations
+        assert 60 in durations
+        
+        # All watts should be positive
+        for peak in peaks:
+            assert peak.watts > 0
+
+    @pytest.mark.asyncio
+    async def test_upload_only_stores_peaks_for_valid_durations(self, auth_client, db_session):
+        """Peaks only stored for durations where ride was long enough."""
+        from trainingdash.models import ActivityPeakPower
+        
+        # Upload FIT with only 30 records (30 seconds)
+        fit_data = make_test_fit(num_records=30)
+        response = await auth_client.post(
+            "/upload",
+            files={"file": ("test.fit", fit_data, "application/octet-stream")},
+        )
+        assert response.status_code == 200
+        activity_id = response.json()["id"]
+        
+        # Query peaks
+        result = await db_session.execute(
+            select(ActivityPeakPower)
+            .where(ActivityPeakPower.activity_id == activity_id)
+            .order_by(ActivityPeakPower.duration_seconds)
+        )
+        peaks = result.scalars().all()
+        
+        # Should only have peaks for durations <= 30 seconds
+        durations = [p.duration_seconds for p in peaks]
+        assert 1 in durations
+        assert 5 in durations
+        assert 10 in durations
+        assert 30 in durations
+        # Should NOT have 60, 120, etc.
+        assert 60 not in durations
+        assert 120 not in durations
+
+    @pytest.mark.asyncio
+    async def test_get_activity_returns_peaks_array(self, auth_client):
+        """GET /activities/{id} includes peaks array."""
+        # Upload FIT with power data
+        fit_data = make_test_fit(num_records=120)
+        upload_resp = await auth_client.post(
+            "/upload",
+            files={"file": ("test.fit", fit_data, "application/octet-stream")},
+        )
+        activity_id = upload_resp.json()["id"]
+        
+        # Get activity detail
+        response = await auth_client.get(f"/activities/{activity_id}")
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Should include peaks array
+        assert "peaks" in data
+        assert isinstance(data["peaks"], list)
+        assert len(data["peaks"]) >= 6
+        
+        # Each peak should have duration_seconds and watts
+        for peak in data["peaks"]:
+            assert "duration_seconds" in peak
+            assert "watts" in peak
+            assert peak["watts"] > 0
+        
+        # Peaks should be ordered by duration
+        durations = [p["duration_seconds"] for p in data["peaks"]]
+        assert durations == sorted(durations)
+
+    @pytest.mark.asyncio
+    async def test_peak_values_are_reasonable(self, auth_client):
+        """Peak power values decrease as duration increases (generally)."""
+        # Upload FIT
+        fit_data = make_test_fit(num_records=120)
+        upload_resp = await auth_client.post(
+            "/upload",
+            files={"file": ("test.fit", fit_data, "application/octet-stream")},
+        )
+        activity_id = upload_resp.json()["id"]
+        
+        response = await auth_client.get(f"/activities/{activity_id}")
+        data = response.json()
+        
+        # 1-second peak should be >= 60-second peak (shorter duration = higher peak generally)
+        peaks_by_duration = {p["duration_seconds"]: p["watts"] for p in data["peaks"]}
+        
+        if 1 in peaks_by_duration and 60 in peaks_by_duration:
+            # With test FIT's power pattern (200 + i % 80), the 1s peak should be high
+            assert peaks_by_duration[1] >= peaks_by_duration[60]

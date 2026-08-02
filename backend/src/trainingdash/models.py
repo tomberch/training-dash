@@ -103,6 +103,18 @@ class Lap(Base):
     max_hr_bpm: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
+class ActivityPeakPower(Base):
+    """Peak power values at standard durations for an activity."""
+    __tablename__ = "activity_peak_powers"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    activity_id: Mapped[int] = mapped_column(
+        ForeignKey("activities.id", ondelete="CASCADE"), nullable=False
+    )
+    duration_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
+    watts: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
 class XertCredentials(Base):
     __tablename__ = "xert_credentials"
 
