@@ -23,6 +23,7 @@ dependencies = [
     "curl-cffi>=0.7",
     "alembic>=1.13",
     "psycopg2-binary>=2.9",
+    "scipy>=1.14",
 ]
 
 [project.optional-dependencies]
