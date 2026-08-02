@@ -17,6 +17,7 @@ export default defineConfig({
       '/pmc': 'http://localhost:8000',
       '/power-curve': 'http://localhost:8000',
       '/fitness': 'http://localhost:8000',
+      '/tiles': 'http://localhost:8000',
     },
   },
   test: {

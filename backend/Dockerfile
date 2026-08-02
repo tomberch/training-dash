@@ -23,6 +23,9 @@ COPY --from=frontend-builder /frontend/dist ./static/
 
 RUN uv pip install --system --no-cache .
 
+# Create tile cache directory
+RUN mkdir -p /app/tile-cache
+
 EXPOSE 8000
 
 CMD ["uvicorn", "trainingdash.app:app", "--host", "0.0.0.0", "--port", "8000"]

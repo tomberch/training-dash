@@ -28,6 +28,8 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: "6379"
       TRAININGDASH_ENCRYPTION_KEY: D1prO+2rx2zmauRYJc8yKA2rbW0ABdAo5uf8ZJMoXSQ=
+    volumes:
+      - tilecache:/app/tile-cache
     depends_on:
       db:
         condition: service_healthy
@@ -59,3 +61,4 @@ services:
 
 volumes:
   pgdata:
+  tilecache:

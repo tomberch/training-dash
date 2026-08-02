@@ -114,6 +114,9 @@ def create_app() -> FastAPI:
     app.post("/me/notifications/{notification_id}/accept")(accept_notification)
     app.post("/me/notifications/{notification_id}/dismiss")(dismiss_notification)
     
+    # Map tile proxy with caching
+    app.get("/tiles/{z}/{x}/{y}.png")(get_map_tile)
+    
     # Serve frontend static files if the dist directory exists
     static_dir = Path("/app/static")
     if static_dir.exists():
@@ -1672,6 +1675,78 @@ async def dismiss_notification(db: DbSession, user: CurrentUser, notification_id
     await db.commit()
     
     return {"success": True}
+
+
+# Map tile caching configuration
+TILE_CACHE_DIR = Path(os.environ.get("TILE_CACHE_DIR", "/app/tile-cache"))
+TILE_CACHE_MAX_AGE_DAYS = 30
+TILE_USER_AGENT = "TrainingDash fitness app (personal use)"
+
+
+async def get_map_tile(z: int, x: int, y: int):
+    """
+    Proxy and cache OpenStreetMap tiles.
+    
+    Tiles are cached to disk for 30 days to reduce load on OSM servers
+    and improve performance.
+    """
+    import httpx
+    
+    # Validate zoom level (OSM supports 0-19)
+    if z < 0 or z > 19:
+        raise HTTPException(status_code=400, detail="Invalid zoom level")
+    
+    # Validate tile coordinates
+    max_coord = 2 ** z - 1
+    if x < 0 or x > max_coord or y < 0 or y > max_coord:
+        raise HTTPException(status_code=400, detail="Invalid tile coordinates")
+    
+    # Create cache directory structure
+    cache_path = TILE_CACHE_DIR / str(z) / str(x) / f"{y}.png"
+    
+    # Check cache
+    if cache_path.exists():
+        # Check if cache is still valid
+        mtime = datetime.fromtimestamp(cache_path.stat().st_mtime)
+        age = datetime.now() - mtime
+        if age.days < TILE_CACHE_MAX_AGE_DAYS:
+            return FileResponse(
+                cache_path,
+                media_type="image/png",
+                headers={
+                    "Cache-Control": f"public, max-age={TILE_CACHE_MAX_AGE_DAYS * 86400}",
+                    "X-Cache": "HIT",
+                }
+            )
+    
+    # Fetch from OSM
+    osm_url = f"https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                osm_url,
+                headers={"User-Agent": TILE_USER_AGENT},
+                timeout=10.0,
+            )
+            response.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=e.response.status_code, detail="Tile fetch failed")
+    except httpx.RequestError:
+        raise HTTPException(status_code=502, detail="Could not reach tile server")
+    
+    # Save to cache
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    cache_path.write_bytes(response.content)
+    
+    return FileResponse(
+        cache_path,
+        media_type="image/png",
+        headers={
+            "Cache-Control": f"public, max-age={TILE_CACHE_MAX_AGE_DAYS * 86400}",
+            "X-Cache": "MISS",
+        }
+    )
 
 
 app = create_app()
