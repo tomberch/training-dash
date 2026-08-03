@@ -671,6 +671,49 @@ export async function updateAdminSetting(key: string, value: boolean | string): 
 }
 
 // ============================================================================
+// Nuke API
+// ============================================================================
+
+export interface NukePreview {
+  user: AdminUser;
+  activities: {
+    activities: number;
+    records: number;
+    laps: number;
+    peaks: number;
+    routes: number;
+    fitness_history: number;
+    notifications: number;
+  };
+  integrations: {
+    garmin: number;
+    xert: number;
+  };
+  account: {
+    thresholds: number;
+    power_zones: number;
+    hr_zones: number;
+    ef_model: number;
+  };
+}
+
+export async function fetchNukePreview(userId: number): Promise<NukePreview> {
+  return apiGet<NukePreview>(`/admin/users/${userId}/nuke-preview`);
+}
+
+export async function nukeActivities(userId: number, confirmEmail: string): Promise<{ success: boolean; deleted: string }> {
+  return apiPost(`/admin/users/${userId}/nuke/activities`, { confirm_email: confirmEmail }, "Failed to nuke activities");
+}
+
+export async function nukeIntegrations(userId: number, confirmEmail: string): Promise<{ success: boolean; deleted: string }> {
+  return apiPost(`/admin/users/${userId}/nuke/integrations`, { confirm_email: confirmEmail }, "Failed to nuke integrations");
+}
+
+export async function nukeAccount(userId: number, confirmEmail: string): Promise<{ success: boolean; deleted: string }> {
+  return apiPost(`/admin/users/${userId}/nuke/account`, { confirm_email: confirmEmail }, "Failed to nuke account");
+}
+
+// ============================================================================
 // Analytics API
 // ============================================================================
 

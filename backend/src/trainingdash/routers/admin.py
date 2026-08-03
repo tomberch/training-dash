@@ -1,12 +1,29 @@
-"""Admin endpoints: user management, credential management, sync triggers."""
+"""Admin endpoints: user management, credential management, sync triggers, nuke operations."""
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, func, delete
 
 from trainingdash.auth import AdminUser, DbSession, hash_password
 from trainingdash.crypto import encrypt, EncryptionError
-from trainingdash.models import AppSettings, GarminCredentials, User, XertCredentials
+from trainingdash.models import (
+    Activity,
+    ActivityPeakPower,
+    AppSettings,
+    AuditLog,
+    EFModel,
+    FitnessHistory,
+    GarminCredentials,
+    HrZone,
+    Lap,
+    Notification,
+    PowerZone,
+    Record,
+    Route,
+    ThresholdHistory,
+    User,
+    XertCredentials,
+)
 from trainingdash.routers.serializers import user_summary
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -273,3 +290,253 @@ async def admin_update_setting(
 
     await db.commit()
     return {"key": key, "value": request.value}
+
+
+
+# --- Nuke operations ---
+
+
+@router.get("/users/{user_id}/nuke-preview")
+async def admin_nuke_preview(db: DbSession, admin: AdminUser, user_id: int):
+    """Get counts of what would be deleted for each nuke action."""
+    user = await _get_user_or_404(db, user_id)
+    
+    # Prevent admin from nuking themselves
+    if user.id == admin.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot nuke your own account",
+        )
+    
+    # Count activities and related data
+    activities_count = (await db.execute(
+        select(func.count()).select_from(Activity).where(Activity.user_id == user_id)
+    )).scalar() or 0
+    
+    records_count = (await db.execute(
+        select(func.count()).select_from(Record)
+        .join(Activity, Record.activity_id == Activity.id)
+        .where(Activity.user_id == user_id)
+    )).scalar() or 0
+    
+    laps_count = (await db.execute(
+        select(func.count()).select_from(Lap)
+        .join(Activity, Lap.activity_id == Activity.id)
+        .where(Activity.user_id == user_id)
+    )).scalar() or 0
+    
+    peaks_count = (await db.execute(
+        select(func.count()).select_from(ActivityPeakPower)
+        .join(Activity, ActivityPeakPower.activity_id == Activity.id)
+        .where(Activity.user_id == user_id)
+    )).scalar() or 0
+    
+    routes_count = (await db.execute(
+        select(func.count()).select_from(Route).where(Route.user_id == user_id)
+    )).scalar() or 0
+    
+    fitness_history_count = (await db.execute(
+        select(func.count()).select_from(FitnessHistory).where(FitnessHistory.user_id == user_id)
+    )).scalar() or 0
+    
+    notifications_count = (await db.execute(
+        select(func.count()).select_from(Notification).where(Notification.user_id == user_id)
+    )).scalar() or 0
+    
+    # Count credentials
+    has_garmin = (await db.execute(
+        select(func.count()).select_from(GarminCredentials).where(GarminCredentials.user_id == user_id)
+    )).scalar() or 0
+    
+    has_xert = (await db.execute(
+        select(func.count()).select_from(XertCredentials).where(XertCredentials.user_id == user_id)
+    )).scalar() or 0
+    
+    # Count fitness settings
+    thresholds_count = (await db.execute(
+        select(func.count()).select_from(ThresholdHistory).where(ThresholdHistory.user_id == user_id)
+    )).scalar() or 0
+    
+    power_zones_count = (await db.execute(
+        select(func.count()).select_from(PowerZone).where(PowerZone.user_id == user_id)
+    )).scalar() or 0
+    
+    hr_zones_count = (await db.execute(
+        select(func.count()).select_from(HrZone).where(HrZone.user_id == user_id)
+    )).scalar() or 0
+    
+    ef_model_count = (await db.execute(
+        select(func.count()).select_from(EFModel).where(EFModel.user_id == user_id)
+    )).scalar() or 0
+    
+    return {
+        "user": user_summary(user),
+        "activities": {
+            "activities": activities_count,
+            "records": records_count,
+            "laps": laps_count,
+            "peaks": peaks_count,
+            "routes": routes_count,
+            "fitness_history": fitness_history_count,
+            "notifications": notifications_count,
+        },
+        "integrations": {
+            "garmin": has_garmin,
+            "xert": has_xert,
+        },
+        "account": {
+            "thresholds": thresholds_count,
+            "power_zones": power_zones_count,
+            "hr_zones": hr_zones_count,
+            "ef_model": ef_model_count,
+        },
+    }
+
+
+class NukeRequest(BaseModel):
+    confirm_email: str
+
+
+async def _log_nuke_action(
+    db: DbSession, 
+    admin: AdminUser, 
+    action: str, 
+    target_user: User, 
+    summary: str
+) -> None:
+    """Record a nuke action in the audit log."""
+    log_entry = AuditLog(
+        admin_id=admin.id,
+        action=action,
+        target_user_id=target_user.id,
+        target_user_email=target_user.email,
+        summary=summary,
+    )
+    db.add(log_entry)
+
+
+@router.post("/users/{user_id}/nuke/activities")
+async def admin_nuke_activities(
+    db: DbSession, admin: AdminUser, user_id: int, request: NukeRequest
+):
+    """Delete all activities and related data for a user (keeps account and credentials)."""
+    user = await _get_user_or_404(db, user_id)
+    
+    # Safety checks
+    if user.id == admin.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot nuke your own account",
+        )
+    if request.confirm_email.lower() != user.email.lower():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Confirmation email does not match",
+        )
+    
+    # Get counts for audit log
+    activities_count = (await db.execute(
+        select(func.count()).select_from(Activity).where(Activity.user_id == user_id)
+    )).scalar() or 0
+    records_count = (await db.execute(
+        select(func.count()).select_from(Record)
+        .join(Activity, Record.activity_id == Activity.id)
+        .where(Activity.user_id == user_id)
+    )).scalar() or 0
+    routes_count = (await db.execute(
+        select(func.count()).select_from(Route).where(Route.user_id == user_id)
+    )).scalar() or 0
+    
+    # Delete in order (children first due to FK constraints)
+    # Records, Laps, Peaks are CASCADE deleted with Activity
+    await db.execute(delete(Route).where(Route.user_id == user_id))
+    await db.execute(delete(FitnessHistory).where(FitnessHistory.user_id == user_id))
+    await db.execute(delete(Notification).where(Notification.user_id == user_id))
+    await db.execute(delete(EFModel).where(EFModel.user_id == user_id))
+    await db.execute(delete(Activity).where(Activity.user_id == user_id))
+    
+    # Log the action
+    summary = f"{activities_count} activities, {records_count} records, {routes_count} routes"
+    await _log_nuke_action(db, admin, "nuke_activities", user, summary)
+    
+    await db.commit()
+    return {"success": True, "deleted": summary}
+
+
+@router.post("/users/{user_id}/nuke/integrations")
+async def admin_nuke_integrations(
+    db: DbSession, admin: AdminUser, user_id: int, request: NukeRequest
+):
+    """Delete all integration credentials for a user."""
+    user = await _get_user_or_404(db, user_id)
+    
+    # Safety checks
+    if user.id == admin.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot nuke your own account",
+        )
+    if request.confirm_email.lower() != user.email.lower():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Confirmation email does not match",
+        )
+    
+    # Count for audit log
+    garmin_count = (await db.execute(
+        select(func.count()).select_from(GarminCredentials).where(GarminCredentials.user_id == user_id)
+    )).scalar() or 0
+    xert_count = (await db.execute(
+        select(func.count()).select_from(XertCredentials).where(XertCredentials.user_id == user_id)
+    )).scalar() or 0
+    
+    # Delete credentials
+    await db.execute(delete(GarminCredentials).where(GarminCredentials.user_id == user_id))
+    await db.execute(delete(XertCredentials).where(XertCredentials.user_id == user_id))
+    
+    # Log the action
+    parts = []
+    if garmin_count:
+        parts.append("Garmin credentials")
+    if xert_count:
+        parts.append("Xert credentials")
+    summary = ", ".join(parts) if parts else "no credentials"
+    await _log_nuke_action(db, admin, "nuke_integrations", user, summary)
+    
+    await db.commit()
+    return {"success": True, "deleted": summary}
+
+
+@router.post("/users/{user_id}/nuke/account")
+async def admin_nuke_account(
+    db: DbSession, admin: AdminUser, user_id: int, request: NukeRequest
+):
+    """Delete a user account and all associated data."""
+    user = await _get_user_or_404(db, user_id)
+    
+    # Safety checks
+    if user.id == admin.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot nuke your own account",
+        )
+    if request.confirm_email.lower() != user.email.lower():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Confirmation email does not match",
+        )
+    
+    # Get counts for audit log
+    activities_count = (await db.execute(
+        select(func.count()).select_from(Activity).where(Activity.user_id == user_id)
+    )).scalar() or 0
+    
+    # Log BEFORE deleting user (so we have the email)
+    summary = f"user account, {activities_count} activities, all associated data"
+    await _log_nuke_action(db, admin, "nuke_account", user, summary)
+    
+    # Delete user (CASCADE will handle most related data)
+    await db.execute(delete(User).where(User.id == user_id))
+    
+    await db.commit()
+    return {"success": True, "deleted": summary}

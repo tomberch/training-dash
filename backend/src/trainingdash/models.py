@@ -179,6 +179,21 @@ class Notification(Base):
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
 
 
+class AuditLog(Base):
+    """Record of destructive admin actions (nuke operations)."""
+    __tablename__ = "audit_log"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    admin_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    action: Mapped[str] = mapped_column(String(50), nullable=False)  # nuke_activities, nuke_integrations, nuke_account
+    target_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Not FK, user may be deleted
+    target_user_email: Mapped[str] = mapped_column(String(255), nullable=False)  # Preserved even if user deleted
+    summary: Mapped[str] = mapped_column(Text, nullable=False)  # e.g., "347 activities, 52847 records"
+    created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
+
+
 class EFModel(Base):
     """Efficiency Factor model for HR-derived power estimation."""
     __tablename__ = "ef_models"

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import type { AdminUser, AdminSettings } from "./api";
+import type { AdminUser, AdminSettings, NukePreview } from "./api";
 import { 
   ApiError, 
   fetchAdminUsers, 
@@ -11,6 +11,10 @@ import {
   triggerUserSync,
   fetchAdminSettings,
   updateAdminSetting,
+  fetchNukePreview,
+  nukeActivities,
+  nukeIntegrations,
+  nukeAccount,
 } from "./api";
 import { ErrorDisplay } from "./ErrorDisplay";
 
@@ -41,6 +45,9 @@ export function AdminView({ onBack }: { onBack: () => void }) {
 
   // Approval loading state
   const [approvingUserId, setApprovingUserId] = useState<number | null>(null);
+
+  // Nuke modal state
+  const [nukeUser, setNukeUser] = useState<AdminUser | null>(null);
 
   useEffect(() => {
     loadData();
@@ -404,6 +411,13 @@ export function AdminView({ onBack }: { onBack: () => void }) {
                               {syncStatus.message}
                             </span>
                           )}
+                          <button
+                            onClick={() => setNukeUser(user)}
+                            data-testid={`nuke-btn-${user.id}`}
+                            className="px-3 py-1 text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
+                          >
+                            Nuke
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -413,6 +427,252 @@ export function AdminView({ onBack }: { onBack: () => void }) {
             </div>
           )}
         </section>
+      </div>
+
+      {/* Nuke Modal */}
+      {nukeUser && (
+        <NukeModal
+          user={nukeUser}
+          onClose={() => setNukeUser(null)}
+          onComplete={() => {
+            setNukeUser(null);
+            loadData();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+type NukeAction = "activities" | "integrations" | "account";
+
+function NukeModal({
+  user,
+  onClose,
+  onComplete,
+}: {
+  user: AdminUser;
+  onClose: () => void;
+  onComplete: () => void;
+}) {
+  const [preview, setPreview] = useState<NukePreview | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [action, setAction] = useState<NukeAction>("activities");
+  const [confirmEmail, setConfirmEmail] = useState("");
+  const [nuking, setNuking] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadPreview();
+  }, [user.id]);
+
+  async function loadPreview() {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchNukePreview(user.id);
+      setPreview(data);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Failed to load preview");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleNuke() {
+    if (confirmEmail.toLowerCase() !== user.email.toLowerCase()) {
+      setError("Email does not match");
+      return;
+    }
+
+    setNuking(true);
+    setError(null);
+    try {
+      let res;
+      switch (action) {
+        case "activities":
+          res = await nukeActivities(user.id, confirmEmail);
+          break;
+        case "integrations":
+          res = await nukeIntegrations(user.id, confirmEmail);
+          break;
+        case "account":
+          res = await nukeAccount(user.id, confirmEmail);
+          break;
+      }
+      setResult(res.deleted);
+      setTimeout(() => {
+        onComplete();
+      }, 2000);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Nuke failed");
+    } finally {
+      setNuking(false);
+    }
+  }
+
+  function getActionSummary(): string {
+    if (!preview) return "";
+    switch (action) {
+      case "activities": {
+        const a = preview.activities;
+        const parts = [];
+        if (a.activities) parts.push(`${a.activities} activities`);
+        if (a.records) parts.push(`${a.records} records`);
+        if (a.laps) parts.push(`${a.laps} laps`);
+        if (a.peaks) parts.push(`${a.peaks} peaks`);
+        if (a.routes) parts.push(`${a.routes} routes`);
+        if (a.fitness_history) parts.push(`${a.fitness_history} fitness history entries`);
+        if (a.notifications) parts.push(`${a.notifications} notifications`);
+        return parts.length ? parts.join(", ") : "No activity data to delete";
+      }
+      case "integrations": {
+        const i = preview.integrations;
+        const parts = [];
+        if (i.garmin) parts.push("Garmin credentials");
+        if (i.xert) parts.push("Xert credentials");
+        return parts.length ? parts.join(", ") : "No integrations configured";
+      }
+      case "account": {
+        return `User account and all associated data (${preview.activities.activities} activities)`;
+      }
+    }
+  }
+
+  const isConfirmValid = confirmEmail.toLowerCase() === user.email.toLowerCase();
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+              <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Nuke User Data</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400">{user.email}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 space-y-6">
+          {loading ? (
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">Loading preview...</div>
+          ) : error && !result ? (
+            <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400">
+              {error}
+            </div>
+          ) : result ? (
+            <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg text-green-700 dark:text-green-400">
+              <p className="font-medium">Nuke complete!</p>
+              <p className="text-sm mt-1">Deleted: {result}</p>
+            </div>
+          ) : (
+            <>
+              {/* Action selector */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  What do you want to delete?
+                </label>
+                <div className="space-y-2">
+                  <label className="flex items-start gap-3 p-3 border border-gray-200 dark:border-gray-700 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                    <input
+                      type="radio"
+                      name="action"
+                      value="activities"
+                      checked={action === "activities"}
+                      onChange={() => setAction("activities")}
+                      className="mt-1"
+                    />
+                    <div>
+                      <p className="font-medium text-gray-900 dark:text-white">Reset Activities</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Delete activities, records, routes, fitness history. Keep account and credentials.
+                      </p>
+                    </div>
+                  </label>
+                  <label className="flex items-start gap-3 p-3 border border-gray-200 dark:border-gray-700 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                    <input
+                      type="radio"
+                      name="action"
+                      value="integrations"
+                      checked={action === "integrations"}
+                      onChange={() => setAction("integrations")}
+                      className="mt-1"
+                    />
+                    <div>
+                      <p className="font-medium text-gray-900 dark:text-white">Disconnect Integrations</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Delete Garmin and Xert credentials only. Keep all activity data.
+                      </p>
+                    </div>
+                  </label>
+                  <label className="flex items-start gap-3 p-3 border border-red-200 dark:border-red-800 rounded-lg cursor-pointer hover:bg-red-50 dark:hover:bg-red-900/20">
+                    <input
+                      type="radio"
+                      name="action"
+                      value="account"
+                      checked={action === "account"}
+                      onChange={() => setAction("account")}
+                      className="mt-1"
+                    />
+                    <div>
+                      <p className="font-medium text-red-700 dark:text-red-400">Delete User Account</p>
+                      <p className="text-sm text-red-600 dark:text-red-500">
+                        Permanently delete the user and all associated data.
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* Preview */}
+              <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">This will delete:</p>
+                <p className="text-sm text-gray-900 dark:text-white">{getActionSummary()}</p>
+              </div>
+
+              {/* Confirmation */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Type <span className="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded">{user.email}</span> to confirm
+                </label>
+                <input
+                  type="text"
+                  value={confirmEmail}
+                  onChange={(e) => setConfirmEmail(e.target.value)}
+                  placeholder="Enter email to confirm"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                />
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+          >
+            {result ? "Close" : "Cancel"}
+          </button>
+          {!result && (
+            <button
+              onClick={handleNuke}
+              disabled={!isConfirmValid || nuking || loading}
+              className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {nuking ? "Nuking..." : "Nuke"}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -1,5 +1,19 @@
 # TrainingDash — Domain Glossary
 
+## Nuke
+
+An admin-only destructive action that permanently deletes a user's data. Three variants exist:
+
+- **Reset Activities** — deletes activities, records, laps, peaks, routes, fitness history, and notifications. Preserves the user account, credentials, and threshold/zone settings.
+- **Disconnect Integrations** — deletes Garmin and Xert credentials only. Preserves all other data.
+- **Delete User** — deletes the user account and all associated data.
+
+All nuke actions are hard deletes (no soft delete or trash can). A safety mechanism requires the admin to type the target user's email after seeing a count preview. Each nuke is recorded in the Audit Log.
+
+## Audit Log
+
+A record of destructive admin actions. Stores who performed the action, what action was taken, which user was affected, a summary of what was deleted, and when. Does not store the actual deleted data — only metadata about the operation.
+
 ## User
 
 A person with an account in the system. Users are provisioned by an Admin; there is no self-serve signup. Each User owns their own Activities, Records, and Routes — data is isolated per user.
