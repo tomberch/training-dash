@@ -8,7 +8,7 @@ import {
   ResponsiveContainer,
   ReferenceArea,
 } from "recharts";
-import type { Activity, PMCPoint, PowerCurvePoint, Notification } from "../api";
+import type { Activity, PMCPoint, PowerCurvePoint, Notification, GeoJSONFeatureCollection } from "../api";
 import { 
   fetchActivities, 
   fetchPMC, 
@@ -16,7 +16,9 @@ import {
   fetchNotifications,
   acceptNotification,
   dismissNotification,
+  fetchActivityRecords,
 } from "../api";
+import { MiniMap } from "../components/MiniMap";
 
 // TSB zone definitions (same as PMC view)
 const TSB_ZONES = [
@@ -48,6 +50,7 @@ export function Dashboard() {
   const [pmcData, setPmcData] = useState<PMCPoint[]>([]);
   const [powerCurve, setPowerCurve] = useState<PowerCurvePoint[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [featuredActivityGps, setFeaturedActivityGps] = useState<GeoJSONFeatureCollection | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -68,6 +71,13 @@ export function Dashboard() {
         setPowerCurve(curve);
         setNotifications(notifs);
         setLoading(false);
+        
+        // Fetch GPS data for featured activity (first one)
+        if (acts.length > 0) {
+          fetchActivityRecords(acts[0].id)
+            .then(setFeaturedActivityGps)
+            .catch(() => setFeaturedActivityGps(null));
+        }
       })
       .catch(() => setLoading(false));
   }, []);
@@ -385,6 +395,10 @@ export function Dashboard() {
             onClick={() => navigate(`/activities/${featuredActivity.id}`)}
           >
             <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">Latest Activity</h2>
+            
+            {/* Mini-map */}
+            <MiniMap geojson={featuredActivityGps} className="h-32 mb-3" />
+            
             <div className="flex items-start justify-between">
               <div>
                 <div className="text-lg font-semibold text-gray-900 dark:text-white">
