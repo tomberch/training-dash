@@ -47,6 +47,9 @@ packages = ["src/trainingdash"]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 addopts = ["--durations=10"]
+markers = [
+    "slow: marks tests as slow (>5s) - deselect with '-m \"not slow\"'",
+]
 
 [tool.coverage.run]
 # Use Python 3.12+ sys.monitoring for faster coverage (34% less CPU overhead)

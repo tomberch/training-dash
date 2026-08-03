@@ -121,7 +121,7 @@ async def user_with_xert_creds(db_session, encryption_key_env):
     from trainingdash.crypto import encrypt
     
     user = User(
-        username="xertuser",
+        email="xertuser@example.com",
         password_hash=CACHED_HASH_TESTPASS,
         is_admin=False,
     )
@@ -331,7 +331,7 @@ class TestSyncXertJob:
     async def test_sync_xert_no_credentials_returns_error(self, db_engine, db_session):
         """sync_xert_job should return error if user has no credentials."""
         user = User(
-            username="nocreds",
+            email="nocreds@example.com",
             password_hash=CACHED_HASH_TESTPASS,
         )
         db_session.add(user)
@@ -427,25 +427,30 @@ class TestSyncXertJob:
             assert activities[0].source_ref == "xert:success-activity"
 
 
-class TestNightlySyncAllXert:
-    """Tests for the nightly cron job."""
+class TestHourlySyncScheduler:
+    """Tests for the hourly sync scheduler cron job."""
 
     @pytest.mark.asyncio
-    async def test_nightly_sync_enqueues_for_all_users_with_creds(
+    async def test_hourly_sync_enqueues_for_users_with_matching_sync_hour(
         self, db_engine, db_session, encryption_key_env
     ):
-        """nightly_sync_all_xert should enqueue sync for all users with credentials."""
+        """hourly_sync_scheduler should enqueue sync for users whose sync_hour matches."""
+        from datetime import datetime, timezone
         from trainingdash.crypto import encrypt
         
-        # Create multiple users, some with credentials
-        user1 = User(username="user1", password_hash=CACHED_HASH_PASS)
-        user2 = User(username="user2", password_hash=CACHED_HASH_PASS)
-        user3 = User(username="user3", password_hash=CACHED_HASH_PASS)  # no creds
+        current_hour = datetime.now(timezone.utc).hour
+        
+        # Create users with different sync_hours
+        user1 = User(email="user1@example.com", password_hash=CACHED_HASH_PASS, sync_hour=current_hour)
+        user2 = User(email="user2@example.com", password_hash=CACHED_HASH_PASS, sync_hour=current_hour)
+        user3 = User(email="user3@example.com", password_hash=CACHED_HASH_PASS, sync_hour=(current_hour + 1) % 24)  # different hour
         db_session.add_all([user1, user2, user3])
         await db_session.commit()
         await db_session.refresh(user1)
         await db_session.refresh(user2)
+        await db_session.refresh(user3)
         
+        # Only user1 and user2 have Xert credentials
         creds1 = XertCredentials(
             user_id=user1.id,
             xert_email="user1@xert.com",
@@ -456,7 +461,13 @@ class TestNightlySyncAllXert:
             xert_email="user2@xert.com",
             encrypted_password=encrypt("pass2"),
         )
-        db_session.add_all([creds1, creds2])
+        # user3 also has creds but wrong sync_hour
+        creds3 = XertCredentials(
+            user_id=user3.id,
+            xert_email="user3@xert.com",
+            encrypted_password=encrypt("pass3"),
+        )
+        db_session.add_all([creds1, creds2, creds3])
         await db_session.commit()
         
         # Mock worker_db_session to use test database
@@ -473,26 +484,32 @@ class TestNightlySyncAllXert:
                 mock_arq = mock.AsyncMock()
                 mock_pool.return_value = mock_arq
                 
-                from trainingdash.worker import nightly_sync_all_xert
-                result = await nightly_sync_all_xert({})
+                from trainingdash.worker import hourly_sync_scheduler
+                result = await hourly_sync_scheduler({})
         
         assert result["success"] is True
-        assert result["users_queued"] == 2
+        # Only users 1 and 2 match the current hour
+        assert result["xert_queued"] == 2
         
-        # Verify sync jobs were enqueued for both users
-        assert mock_arq.enqueue_job.call_count == 2
-        enqueued_user_ids = {
-            call.kwargs["user_id"]
-            for call in mock_arq.enqueue_job.call_args_list
-        }
+        # Verify sync jobs were enqueued for users 1 and 2 only
+        enqueued_user_ids = set()
+        for call in mock_arq.enqueue_job.call_args_list:
+            if call.args[0] == "sync_xert_job":
+                enqueued_user_ids.add(call.kwargs["user_id"])
         assert user1.id in enqueued_user_ids
         assert user2.id in enqueued_user_ids
+        assert user3.id not in enqueued_user_ids
 
     @pytest.mark.asyncio
-    async def test_nightly_sync_no_users_with_creds(self, db_engine, db_session):
-        """nightly_sync_all_xert should handle no users with credentials."""
-        # Create user without credentials
-        user = User(username="nocreds", password_hash=CACHED_HASH_PASS)
+    async def test_hourly_sync_no_users_for_current_hour(self, db_engine, db_session):
+        """hourly_sync_scheduler should handle no users matching current hour."""
+        from datetime import datetime, timezone
+        
+        current_hour = datetime.now(timezone.utc).hour
+        different_hour = (current_hour + 1) % 24
+        
+        # Create user with different sync_hour
+        user = User(email="nocreds@example.com", password_hash=CACHED_HASH_PASS, sync_hour=different_hour)
         db_session.add(user)
         await db_session.commit()
         
@@ -510,12 +527,12 @@ class TestNightlySyncAllXert:
                 mock_arq = mock.AsyncMock()
                 mock_pool.return_value = mock_arq
                 
-                from trainingdash.worker import nightly_sync_all_xert
-                result = await nightly_sync_all_xert({})
+                from trainingdash.worker import hourly_sync_scheduler
+                result = await hourly_sync_scheduler({})
         
         assert result["success"] is True
-        assert result["users_queued"] == 0
-        mock_arq.enqueue_job.assert_not_called()
+        assert result["xert_queued"] == 0
+        assert result["garmin_queued"] == 0
 
 
 @pytest.mark.skipif(

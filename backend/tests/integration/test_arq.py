@@ -84,7 +84,7 @@ async def arq_user(arq_engine):
     from tests.integration.fixtures import CACHED_HASH_TESTPASS
     session_factory = async_sessionmaker(arq_engine, expire_on_commit=False)
     async with session_factory() as session:
-        user = User(username="testuser", password_hash=CACHED_HASH_TESTPASS, is_admin=True)
+        user = User(email="testuser@example.com", password_hash=CACHED_HASH_TESTPASS, is_admin=True)
         session.add(user)
         await session.commit()
         await session.refresh(user)
@@ -126,7 +126,7 @@ class TestArqIngest:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             # Login
-            resp = await client.post("/api/login", json={"username": "testuser", "password": "testpass"})
+            resp = await client.post("/api/login", json={"email": "testuser@example.com", "password": "testpass"})
             assert resp.status_code == 200
 
             # Upload — should return 202
@@ -172,7 +172,7 @@ class TestArqIngest:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             # Login
-            resp = await client.post("/api/login", json={"username": "testuser", "password": "testpass"})
+            resp = await client.post("/api/login", json={"email": "testuser@example.com", "password": "testpass"})
             assert resp.status_code == 200
 
             # Upload — job is enqueued but we don't run the worker yet

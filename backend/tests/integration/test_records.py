@@ -85,7 +85,7 @@ class TestRecords:
         )
         db_session.add(activity_a)
 
-        user_b = User(username="userb", password_hash=CACHED_HASH_PASS)
+        user_b = User(email="userb@example.com", password_hash=CACHED_HASH_PASS)
         db_session.add(user_b)
         await db_session.commit()
         await db_session.refresh(user_b)
@@ -165,7 +165,7 @@ class TestRecords:
         )
 
         # User B uploads a ride on a different route
-        user_b = User(username="userb", password_hash=CACHED_HASH_PASS)
+        user_b = User(email="userb@example.com", password_hash=CACHED_HASH_PASS)
         db_session.add(user_b)
         await db_session.commit()
         await db_session.refresh(user_b)

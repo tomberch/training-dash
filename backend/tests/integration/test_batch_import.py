@@ -136,6 +136,7 @@ class TestFinalizeBatchImport:
         fitness_records = result.scalars().all()
         assert len(fitness_records) == 1
 
+    @pytest.mark.slow
     @pytest.mark.asyncio
     async def test_finalize_creates_single_summary_notification(self, auth_client, db_session):
         """Finalize creates a single summary notification, not per-activity."""
@@ -251,6 +252,7 @@ class TestFinalizeBatchImport:
 class TestBulkImportEndToEnd:
     """End-to-end tests for bulk import workflow."""
 
+    @pytest.mark.slow
     @pytest.mark.asyncio
     async def test_bulk_upload_15_activities_single_notification(self, auth_client, db_session):
         """Acceptance test: upload 15 activities, verify single notification."""

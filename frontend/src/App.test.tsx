@@ -43,9 +43,33 @@ vi.mock("./Settings", () => ({
   Settings: () => <div data-testid="settings-view">Settings</div>,
 }));
 
+vi.mock("./pages/Dashboard", () => ({
+  Dashboard: () => <div data-testid="dashboard">Dashboard</div>,
+}));
+
+vi.mock("./pages/PMCView", () => ({
+  PMCView: () => <div data-testid="pmc-view">PMC View</div>,
+}));
+
+vi.mock("./pages/PowerCurveView", () => ({
+  PowerCurveView: () => <div data-testid="power-curve-view">Power Curve View</div>,
+}));
+
+vi.mock("./Sidebar", async () => {
+  const { Link } = await import("react-router-dom");
+  return {
+    Sidebar: ({ isAdmin }: { isAdmin: boolean }) => (
+      <div data-testid="sidebar">
+        {isAdmin && <Link to="/admin" data-testid="admin-link">Admin</Link>}
+      </div>
+    ),
+  };
+});
+
 // Mock API
 vi.mock("./api", () => ({
   fetchMe: vi.fn(),
+  logout: vi.fn().mockResolvedValue(undefined),
 }));
 
 import { fetchMe } from "./api";
@@ -77,7 +101,7 @@ describe("App", () => {
     fireEvent.click(screen.getByTestId("login-admin"));
 
     await waitFor(() => {
-      expect(screen.getByTestId("activity-list")).toBeInTheDocument();
+      expect(screen.getByTestId("dashboard")).toBeInTheDocument();
     });
 
     expect(screen.getByTestId("admin-link")).toBeInTheDocument();
@@ -96,7 +120,7 @@ describe("App", () => {
     fireEvent.click(screen.getByTestId("login-user"));
 
     await waitFor(() => {
-      expect(screen.getByTestId("activity-list")).toBeInTheDocument();
+      expect(screen.getByTestId("dashboard")).toBeInTheDocument();
     });
 
     expect(screen.queryByTestId("admin-link")).not.toBeInTheDocument();

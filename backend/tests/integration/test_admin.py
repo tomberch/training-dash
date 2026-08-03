@@ -12,27 +12,27 @@ class TestAdminEndpoints:
         # Admin creates a new user
         response = await auth_client.post(
             "/api/admin/users",
-            json={"username": "newuser", "password": "newpass123"},
+            json={"email": "newuser@example.com", "password": "newpass123"},
         )
         assert response.status_code == 200
         data = response.json()
-        assert data["username"] == "newuser"
+        assert data["email"] == "newuser@example.com"
         assert data["is_admin"] is False
         assert "id" in data
 
         # New user can log in
         login_response = await app_client.post(
-            "/api/login", json={"username": "newuser", "password": "newpass123"}
+            "/api/login", json={"email": "newuser@example.com", "password": "newpass123"}
         )
         assert login_response.status_code == 200
-        assert login_response.json()["username"] == "newuser"
+        assert login_response.json()["email"] == "newuser@example.com"
 
     @pytest.mark.asyncio
     async def test_admin_resets_password_and_user_can_login_with_new_password(
         self, auth_client, app_client, db_session
     ):
         # Create a user directly
-        user = User(username="resetme", password_hash=CACHED_HASH_PASS)
+        user = User(email="resetme@example.com", password_hash=CACHED_HASH_PASS)
         db_session.add(user)
         await db_session.commit()
         await db_session.refresh(user)
@@ -46,26 +46,26 @@ class TestAdminEndpoints:
 
         # Old password no longer works
         old_login = await app_client.post(
-            "/api/login", json={"username": "resetme", "password": "pass"}
+            "/api/login", json={"email": "resetme@example.com", "password": "pass"}
         )
         assert old_login.status_code == 401
 
         # New password works
         new_login = await app_client.post(
-            "/api/login", json={"username": "resetme", "password": "newpass456"}
+            "/api/login", json={"email": "resetme@example.com", "password": "newpass456"}
         )
         assert new_login.status_code == 200
 
     @pytest.mark.asyncio
     async def test_non_admin_cannot_access_admin_routes(self, app_client, db_session):
         # Create a non-admin user
-        user = User(username="regularuser", password_hash=CACHED_HASH_PASS, is_admin=False)
+        user = User(email="regularuser@example.com", password_hash=CACHED_HASH_PASS, is_admin=False)
         db_session.add(user)
         await db_session.commit()
 
         # Login as non-admin
         login_response = await app_client.post(
-            "/api/login", json={"username": "regularuser", "password": "pass"}
+            "/api/login", json={"email": "regularuser@example.com", "password": "pass"}
         )
         assert login_response.status_code == 200
 
@@ -74,15 +74,15 @@ class TestAdminEndpoints:
         assert list_response.status_code == 403
 
         create_response = await app_client.post(
-            "/api/admin/users", json={"username": "hacker", "password": "hack"}
+            "/api/admin/users", json={"email": "hacker@example.com", "password": "hack"}
         )
         assert create_response.status_code == 403
 
     @pytest.mark.asyncio
     async def test_admin_list_users_returns_all_users(self, auth_client, db_session):
         # Create additional users
-        user2 = User(username="user2", password_hash=CACHED_HASH_PASS)
-        user3 = User(username="user3", password_hash=CACHED_HASH_PASS)
+        user2 = User(email="user2@example.com", password_hash=CACHED_HASH_PASS)
+        user3 = User(email="user3@example.com", password_hash=CACHED_HASH_PASS)
         db_session.add_all([user2, user3])
         await db_session.commit()
         await db_session.commit()
@@ -90,22 +90,22 @@ class TestAdminEndpoints:
         response = await auth_client.get("/api/admin/users")
         assert response.status_code == 200
         users = response.json()
-        usernames = [u["username"] for u in users]
-        assert "testuser" in usernames  # seed admin
-        assert "user2" in usernames
-        assert "user3" in usernames
+        emails = [u["email"] for u in users]
+        assert "testuser@example.com" in emails  # seed admin
+        assert "user2@example.com" in emails
+        assert "user3@example.com" in emails
 
     @pytest.mark.asyncio
-    async def test_admin_cannot_create_duplicate_username(self, auth_client):
+    async def test_admin_cannot_create_duplicate_email(self, auth_client):
         # Create first user
         response1 = await auth_client.post(
-            "/api/admin/users", json={"username": "dupuser", "password": "pass1"}
+            "/api/admin/users", json={"email": "dupuser@example.com", "password": "pass1"}
         )
         assert response1.status_code == 200
 
         # Try to create duplicate
         response2 = await auth_client.post(
-            "/api/admin/users", json={"username": "dupuser", "password": "pass2"}
+            "/api/admin/users", json={"email": "dupuser@example.com", "password": "pass2"}
         )
         assert response2.status_code == 400
         assert "already exists" in response2.json()["detail"]

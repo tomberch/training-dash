@@ -5,22 +5,22 @@ class TestAuth:
     @pytest.mark.asyncio
     async def test_login_with_admin_provisioned_credentials_returns_session(self, app_client, seed_user):
         response = await app_client.post(
-            "/api/login", json={"username": "testuser", "password": "testpass"}
+            "/api/login", json={"email": "testuser@example.com", "password": "testpass"}
         )
         assert response.status_code == 200
-        assert response.json()["username"] == "testuser"
+        assert response.json()["email"] == "testuser@example.com"
         assert "session" in response.cookies
 
     @pytest.mark.asyncio
     async def test_login_with_wrong_password_rejected(self, app_client, seed_user):
         response = await app_client.post(
-            "/api/login", json={"username": "testuser", "password": "wrongpass"}
+            "/api/login", json={"email": "testuser@example.com", "password": "wrongpass"}
         )
         assert response.status_code == 401
 
     @pytest.mark.asyncio
     async def test_login_with_missing_field_returns_422(self, app_client, seed_user):
-        response = await app_client.post("/api/login", json={"username": "testuser"})
+        response = await app_client.post("/api/login", json={"email": "testuser@example.com"})
         assert response.status_code == 422
 
     @pytest.mark.asyncio
@@ -53,7 +53,7 @@ class TestAuth:
         assert response.status_code == 200
         data = response.json()
         assert data["id"] == seed_user.id
-        assert data["username"] == seed_user.username
+        assert data["email"] == seed_user.email
         assert data["is_admin"] == seed_user.is_admin
         assert data["unit_system"] == "metric"  # default
 
@@ -89,7 +89,7 @@ class TestAuth:
         from tests.integration.fixtures import CACHED_HASH_PASS
         from datetime import datetime
 
-        user_b = User(username="userb", password_hash=CACHED_HASH_PASS)
+        user_b = User(email="userb@example.com", password_hash=CACHED_HASH_PASS)
         db_session.add(user_b)
         await db_session.commit()
         await db_session.refresh(user_b)
