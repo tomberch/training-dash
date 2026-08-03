@@ -1,8 +1,10 @@
 /**
- * Lightweight SVG component for rendering GPS polylines.
+ * Lightweight SVG component for rendering GPS polylines with optional map background.
  * 
  * Unlike MiniMap which uses Leaflet tiles, this renders the route as a
  * pure SVG path - much faster for list views with many activities.
+ * 
+ * When showMapBackground is true, displays a static map tile from OpenStreetMap.
  */
 
 interface PolylineMapProps {
@@ -16,6 +18,8 @@ interface PolylineMapProps {
   strokeWidth?: number;
   /** Show start (green) and end (red) markers */
   showMarkers?: boolean;
+  /** Show static map background (default: true) */
+  showMapBackground?: boolean;
 }
 
 /**
@@ -70,9 +74,9 @@ function coordsToSvgPath(
   width: number,
   height: number,
   padding: number = 8
-): { path: string; startX: number; startY: number; endX: number; endY: number } {
+): { path: string; startX: number; startY: number; endX: number; endY: number; bounds: { minLat: number; maxLat: number; minLon: number; maxLon: number } } {
   if (coords.length < 2) {
-    return { path: "", startX: 0, startY: 0, endX: 0, endY: 0 };
+    return { path: "", startX: 0, startY: 0, endX: 0, endY: 0, bounds: { minLat: 0, maxLat: 0, minLon: 0, maxLon: 0 } };
   }
 
   // Find bounding box
@@ -140,7 +144,75 @@ function coordsToSvgPath(
     startY,
     endX,
     endY,
+    bounds: { minLat, maxLat, minLon, maxLon },
   };
+}
+
+/**
+ * Calculate the appropriate zoom level for OSM tiles to fit the bounding box.
+ */
+function calculateZoom(
+  minLat: number,
+  maxLat: number,
+  minLon: number,
+  maxLon: number,
+  mapWidth: number,
+  mapHeight: number
+): number {
+  const WORLD_DIM = { height: 256, width: 256 };
+  const ZOOM_MAX = 18;
+
+  function latRad(lat: number) {
+    const sin = Math.sin((lat * Math.PI) / 180);
+    const radX2 = Math.log((1 + sin) / (1 - sin)) / 2;
+    return Math.max(Math.min(radX2, Math.PI), -Math.PI) / 2;
+  }
+
+  function zoom(mapPx: number, worldPx: number, fraction: number) {
+    return Math.floor(Math.log(mapPx / worldPx / fraction) / Math.LN2);
+  }
+
+  const latFraction = (latRad(maxLat) - latRad(minLat)) / Math.PI;
+  const lonDiff = maxLon - minLon;
+  const lonFraction = (lonDiff < 0 ? lonDiff + 360 : lonDiff) / 360;
+
+  const latZoom = zoom(mapHeight, WORLD_DIM.height, latFraction);
+  const lonZoom = zoom(mapWidth, WORLD_DIM.width, lonFraction);
+
+  return Math.min(latZoom, lonZoom, ZOOM_MAX);
+}
+
+/**
+ * Get OSM static map URL for the given bounds.
+ * Uses the static map API pattern with center point and zoom.
+ */
+function getStaticMapUrl(
+  minLat: number,
+  maxLat: number,
+  minLon: number,
+  maxLon: number,
+  width: number,
+  height: number
+): string {
+  const centerLat = (minLat + maxLat) / 2;
+  const centerLon = (minLon + maxLon) / 2;
+  
+  // Add padding to bounds for better context
+  const latPadding = (maxLat - minLat) * 0.15;
+  const lonPadding = (maxLon - minLon) * 0.15;
+  
+  const paddedMinLat = minLat - latPadding;
+  const paddedMaxLat = maxLat + latPadding;
+  const paddedMinLon = minLon - lonPadding;
+  const paddedMaxLon = maxLon + lonPadding;
+  
+  const zoom = calculateZoom(paddedMinLat, paddedMaxLat, paddedMinLon, paddedMaxLon, width, height);
+  
+  // Use OpenStreetMap tile server with a simple static map approach
+  // This generates a URL that fetches the appropriate tile
+  // For simplicity, we'll use a tile-stitching service or a single tile
+  // Using staticmap.openstreetmap.de which is free for non-commercial use
+  return `https://staticmap.openstreetmap.de/staticmap.php?center=${centerLat.toFixed(6)},${centerLon.toFixed(6)}&zoom=${Math.max(8, zoom - 1)}&size=${width}x${height}&maptype=osmarenderer`;
 }
 
 export function PolylineMap({
@@ -149,6 +221,7 @@ export function PolylineMap({
   strokeColor = "#6366f1",
   strokeWidth = 2,
   showMarkers = true,
+  showMapBackground = true,
 }: PolylineMapProps) {
   // Decode polyline
   const coords = polyline ? decodePolyline(polyline) : [];
@@ -164,16 +237,47 @@ export function PolylineMap({
   // Use a standard size for the SVG viewBox
   const svgWidth = 150;
   const svgHeight = 100;
-  const { path, startX, startY, endX, endY } = coordsToSvgPath(coords, svgWidth, svgHeight);
+  const { path, startX, startY, endX, endY, bounds } = coordsToSvgPath(coords, svgWidth, svgHeight);
+  
+  // Generate static map URL if background is enabled
+  const mapUrl = showMapBackground 
+    ? getStaticMapUrl(bounds.minLat, bounds.maxLat, bounds.minLon, bounds.maxLon, 300, 200)
+    : null;
 
   return (
-    <div className={`bg-gray-100 dark:bg-gray-800 rounded overflow-hidden ${className}`}>
+    <div className={`relative rounded overflow-hidden ${className}`}>
+      {/* Static map background */}
+      {mapUrl && (
+        <img
+          src={mapUrl}
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover"
+          loading="lazy"
+          onError={(e) => {
+            // Hide image on error, fallback to gray background
+            (e.target as HTMLImageElement).style.display = 'none';
+          }}
+        />
+      )}
+      {/* Fallback/loading background */}
+      <div className={`absolute inset-0 ${mapUrl ? 'bg-gray-200/50 dark:bg-gray-700/50' : 'bg-gray-100 dark:bg-gray-800'}`} />
+      
+      {/* SVG overlay with route */}
       <svg
         viewBox={`0 0 ${svgWidth} ${svgHeight}`}
         preserveAspectRatio="xMidYMid meet"
-        className="w-full h-full"
+        className="relative w-full h-full"
       >
-        {/* Route path */}
+        {/* Route path with shadow for visibility on map */}
+        <path
+          d={path}
+          fill="none"
+          stroke="white"
+          strokeWidth={strokeWidth + 2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          opacity={0.8}
+        />
         <path
           d={path}
           fill="none"

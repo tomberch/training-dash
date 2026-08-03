@@ -200,9 +200,13 @@ export function ActivityTable({ unitSystem = "metric" }: { unitSystem?: UnitSyst
           <h1 className="text-xl font-bold text-gray-900 dark:text-white">Activity Table</h1>
           <button
             onClick={() => navigate("/activities")}
-            className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
+            className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
+            title="View as list"
           >
-            ← Back to list view
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+            </svg>
+            List view
           </button>
         </div>
         {pagination && (

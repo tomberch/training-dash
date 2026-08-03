@@ -107,14 +107,14 @@ export function AnalyzePage() {
   const [hoveredPosition, setHoveredPosition] = useState<[number, number] | null>(null);
   
   // Overlay control state
-  const [visibleSeries, setVisibleSeries] = useState<Set<string>>(new Set(["power"]));
+  const [visibleSeries, setVisibleSeries] = useState<Set<string>>(new Set());
   const [smoothing, setSmoothing] = useState<SmoothingLevel>("raw");
   const [showZoneThresholds, setShowZoneThresholds] = useState(false);
-  const [showLapMarkers, setShowLapMarkers] = useState(true);
   const [zoomDomain, setZoomDomain] = useState<{ start: number; end: number } | null>(null);
   
   const containerRef = useRef<HTMLDivElement>(null);
   const loadedFromUrl = useRef(false);
+  const initialSeriesSet = useRef(false);
 
   // Resizable map with separate localStorage key for Analyze page
   const {
@@ -160,6 +160,7 @@ export function AnalyzePage() {
     setGeojson(null);
     setHoveredPosition(null);
     setZoomDomain(null);
+    initialSeriesSet.current = false; // Reset so we auto-select first available series
     
     if (activity) {
       setSearchParams({ activity: activity.id.toString() });
@@ -331,6 +332,25 @@ export function AnalyzePage() {
     return available;
   }, [rawChartData]);
 
+  // Auto-select first available series when data loads
+  useEffect(() => {
+    if (availableSeries.size > 0 && !initialSeriesSet.current) {
+      initialSeriesSet.current = true;
+      // Priority order: power, hr, speed, cadence, elevation
+      const priorityOrder = ["power", "hr", "speed", "cadence", "elevation"];
+      const firstAvailable = priorityOrder.find((key) => availableSeries.has(key));
+      if (firstAvailable) {
+        setVisibleSeries(new Set([firstAvailable]));
+      }
+    }
+  }, [availableSeries]);
+
+  // Check if zones are available (FTP for power, LTHR for HR)
+  const hasZonesAvailable = useMemo(() => {
+    return (ftpWatts !== null && availableSeries.has("power")) || 
+           (lthrBpm !== null && availableSeries.has("hr"));
+  }, [ftpWatts, lthrBpm, availableSeries]);
+
   // Check if any visible series has data
   const hasVisibleData = useMemo(() => {
     for (const key of visibleSeries) {
@@ -338,6 +358,37 @@ export function AnalyzePage() {
     }
     return false;
   }, [visibleSeries, availableSeries]);
+
+  // Compute stable Y-axis domains based on the full data range (not affected by smoothing)
+  const yAxisDomains = useMemo(() => {
+    const leftValues: number[] = [];
+    const rightValues: number[] = [];
+    
+    for (const point of rawChartData) {
+      // Left axis: power, hr, cadence
+      if (visibleSeries.has("power") && point.power_w !== null) leftValues.push(point.power_w);
+      if (visibleSeries.has("hr") && point.hr_bpm !== null) leftValues.push(point.hr_bpm);
+      if (visibleSeries.has("cadence") && point.cadence_rpm !== null) leftValues.push(point.cadence_rpm);
+      
+      // Right axis: speed, elevation
+      if (visibleSeries.has("speed") && point.speed_mps !== null) leftValues.push(point.speed_mps); // speed in km/h from rawChartData
+      if (visibleSeries.has("elevation") && point.altitude_m !== null) rightValues.push(point.altitude_m);
+    }
+    
+    const computeDomain = (values: number[]): [number, number] => {
+      if (values.length === 0) return [0, 100];
+      const min = Math.min(...values);
+      const max = Math.max(...values);
+      const range = max - min || 1;
+      const padding = range * 0.05;
+      return [Math.max(0, Math.floor(min - padding)), Math.ceil(max + padding)];
+    };
+    
+    return {
+      left: computeDomain(leftValues),
+      right: computeDomain(rightValues),
+    };
+  }, [rawChartData, visibleSeries]);
 
   return (
     <div ref={containerRef} className="h-full flex flex-col bg-gray-50 dark:bg-gray-900">
@@ -372,20 +423,17 @@ export function AnalyzePage() {
           {/* Row 2: Chart controls (only shown when activity is loaded) */}
           {selectedActivity && geojson && (
             <div className="flex flex-wrap items-center gap-4 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-              {/* Series toggles */}
+              {/* Series toggles - only show available series */}
               <div className="flex items-center gap-2">
                 <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Series:</span>
-                {SERIES_CONFIG.map((series) => (
+                {SERIES_CONFIG.filter((series) => availableSeries.has(series.key)).map((series) => (
                   <button
                     key={series.key}
                     onClick={() => toggleSeries(series.key)}
-                    disabled={!availableSeries.has(series.key)}
                     className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
                       visibleSeries.has(series.key)
                         ? "text-white"
-                        : availableSeries.has(series.key)
-                        ? "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600"
-                        : "bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed"
+                        : "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600"
                     }`}
                     style={visibleSeries.has(series.key) ? { backgroundColor: series.color } : undefined}
                   >
@@ -427,31 +475,25 @@ export function AnalyzePage() {
                 </button>
               </div>
 
-              <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
+              {/* Zone thresholds toggle - only show if zones are available */}
+              {hasZonesAvailable && (
+                <>
+                  <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
+                  <button
+                    onClick={() => setShowZoneThresholds(!showZoneThresholds)}
+                    className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                      showZoneThresholds
+                        ? "bg-indigo-600 text-white"
+                        : "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600"
+                    }`}
+                  >
+                    Zones
+                  </button>
+                </>
+              )}
 
-              {/* Zone thresholds toggle */}
-              <button
-                onClick={() => setShowZoneThresholds(!showZoneThresholds)}
-                className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
-                  showZoneThresholds
-                    ? "bg-indigo-600 text-white"
-                    : "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600"
-                }`}
-              >
-                Zones
-              </button>
-
-              {/* Lap markers toggle */}
-              <button
-                onClick={() => setShowLapMarkers(!showLapMarkers)}
-                className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
-                  showLapMarkers
-                    ? "bg-indigo-600 text-white"
-                    : "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600"
-                }`}
-              >
-                Laps
-              </button>
+              {/* Lap markers toggle - hidden for now since lap data isn't available */}
+              {/* Future: Show this when activity.laps is available */}
 
               {/* Zoom reset */}
               {zoomDomain && (
@@ -515,7 +557,8 @@ export function AnalyzePage() {
                       yAxisId="left"
                       stroke="#9ca3af"
                       fontSize={12}
-                      domain={["auto", "auto"]}
+                      domain={yAxisDomains.left}
+                      allowDataOverflow={false}
                       tickFormatter={(v) => Math.round(v).toString()}
                     />
                     
@@ -525,7 +568,8 @@ export function AnalyzePage() {
                       orientation="right"
                       stroke="#9ca3af"
                       fontSize={12}
-                      domain={["auto", "auto"]}
+                      domain={yAxisDomains.right}
+                      allowDataOverflow={false}
                       tickFormatter={(v) => Math.round(v).toString()}
                     />
                     
