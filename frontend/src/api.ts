@@ -39,6 +39,20 @@ export interface Activity {
   // Peaks and breakthrough
   peaks: PeakPower[];
   is_breakthrough: boolean;
+  // Map polyline for list view thumbnails
+  map_polyline: string | null;
+}
+
+export interface PaginationMeta {
+  total: number;
+  page: number;
+  per_page: number;
+  total_pages: number;
+}
+
+export interface PaginatedActivities {
+  activities: Activity[];
+  pagination: PaginationMeta;
 }
 
 export interface GeoJSONFeature {
@@ -387,8 +401,12 @@ async function apiDelete(path: string, errorMessage = "Request failed"): Promise
 // Activity API
 // ============================================================================
 
-export async function fetchActivities(): Promise<Activity[]> {
-  return apiGet<Activity[]>("/activities");
+export async function fetchActivities(page?: number, perPage?: number): Promise<PaginatedActivities> {
+  const params = new URLSearchParams();
+  if (page) params.set("page", page.toString());
+  if (perPage) params.set("per_page", perPage.toString());
+  const query = params.toString();
+  return apiGet<PaginatedActivities>(`/activities${query ? `?${query}` : ""}`);
 }
 
 export async function fetchActivity(id: number): Promise<Activity> {
