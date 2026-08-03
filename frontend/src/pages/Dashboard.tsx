@@ -289,7 +289,7 @@ export function Dashboard() {
           </div>
           
           {pmcData.length > 0 ? (
-            <div className="h-24 overflow-hidden">
+            <div className="h-40">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={pmcData} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
                   {TSB_ZONES.map((zone) => (
@@ -310,7 +310,7 @@ export function Dashboard() {
               </ResponsiveContainer>
             </div>
           ) : (
-            <div className="h-24 flex items-center justify-center text-gray-400 text-sm">
+            <div className="h-40 flex items-center justify-center text-gray-400 text-sm">
               No data available
             </div>
           )}
