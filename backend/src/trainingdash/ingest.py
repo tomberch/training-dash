@@ -19,6 +19,7 @@ from trainingdash.wbal import compute_wbal_series
 from trainingdash.peaks import extract_peak_powers
 from trainingdash.fitness import detect_breakthrough, get_all_time_bests, fit_cp_model
 from trainingdash.hr_power import update_ef_model, estimate_power_from_hr
+from trainingdash.activity_pipeline import ActivityPipeline
 
 logger = logging.getLogger(__name__)
 
@@ -291,6 +292,25 @@ async def ingest_fit(
     source_ref: str,
     batch_mode: bool = False,
 ) -> Activity | None:
+    """
+    Ingest a FIT file and process through the activity pipeline.
+    
+    Steps:
+    1. Parse FIT file to extract records, laps, and summary data
+    2. Create Activity, Lap, and Record models
+    3. Run activity through the pipeline for metrics, peaks, routes, and titles
+    
+    Args:
+        db: Database session
+        user_id: User ID to attribute the activity to
+        fit_bytes: Raw FIT file bytes
+        source: Source identifier (e.g., "garmin", "xert")
+        source_ref: Unique reference from the source
+        batch_mode: If True, skip per-activity fitness updates and geocoding
+    
+    Returns:
+        Created Activity or None if parsing failed
+    """
     try:
         parsed = parse_records(fit_bytes)
     except Exception:
@@ -351,32 +371,14 @@ async def ingest_fit(
     await db.commit()
     await db.refresh(activity)
 
-    # Compute training metrics if user has thresholds
-    await _compute_activity_metrics(db, activity, parsed["records"])
-
-    # Update HR-derived power model if this is a dual-sensor ride
-    await _update_hr_power_model(db, activity)
-
-    # For HR-only activities, try to estimate power
-    await _estimate_hr_derived_power(db, activity, parsed["records"])
-
-    # Extract and store peak powers
-    await _extract_activity_peaks(db, activity, parsed["records"])
-
-    # Detect breakthroughs and update fitness model (skip in batch mode)
-    if not batch_mode:
-        await _detect_breakthrough_and_update_fitness(db, activity)
-
-    # Route matching
-    from trainingdash.route_matching import find_or_create_route_id
-    route_id = await find_or_create_route_id(db, activity, parsed["records"])
-    if route_id is not None:
-        activity.route_id = route_id
-        await db.commit()
-        await db.refresh(activity)
-
-    # Generate activity title from GPS data (skip in batch mode to avoid rate limit issues)
-    await _generate_activity_title(db, activity, parsed["records"], skip_if_rate_limited=batch_mode)
+    # Run activity through the pipeline
+    pipeline = ActivityPipeline(
+        db=db,
+        activity=activity,
+        records=parsed["records"],
+        batch_mode=batch_mode,
+    )
+    await pipeline.run()
 
     return activity
 
@@ -1245,11 +1247,7 @@ async def ingest_xert_activity(
     batch_mode: bool = False,
 ) -> Activity | None:
     """
-    Ingest an activity from Xert session_data, routing through the same
-    metric pipeline as FIT file ingestion.
-    
-    This replaces the old _create_activity_from_xert() that was in worker.py
-    and didn't compute NP, IF, TSS, zone times, peaks, or breakthrough detection.
+    Ingest an activity from Xert session_data and process through the activity pipeline.
     
     Args:
         db: Database session
@@ -1346,34 +1344,14 @@ async def ingest_xert_activity(
     await db.commit()
     await db.refresh(activity)
     
-    # Now run the same metric pipeline as ingest_fit()
-    
-    # Compute training metrics (NP, IF, TSS, zone times, W'bal)
-    await _compute_activity_metrics(db, activity, records)
-    
-    # Update HR-derived power model if this is a dual-sensor ride
-    await _update_hr_power_model(db, activity)
-    
-    # For HR-only activities, try to estimate power
-    await _estimate_hr_derived_power(db, activity, records)
-    
-    # Extract and store peak powers
-    await _extract_activity_peaks(db, activity, records)
-    
-    # Detect breakthroughs and update fitness model (skip in batch mode)
-    if not batch_mode:
-        await _detect_breakthrough_and_update_fitness(db, activity)
-    
-    # Route matching
-    from trainingdash.route_matching import find_or_create_route_id
-    route_id = await find_or_create_route_id(db, activity, records)
-    if route_id is not None:
-        activity.route_id = route_id
-        await db.commit()
-        await db.refresh(activity)
-    
-    # Generate activity title from GPS data (skip in batch mode to avoid rate limit delays)
-    await _generate_activity_title(db, activity, records, skip_if_rate_limited=batch_mode)
+    # Run activity through the pipeline
+    pipeline = ActivityPipeline(
+        db=db,
+        activity=activity,
+        records=records,
+        batch_mode=batch_mode,
+    )
+    await pipeline.run()
     
     return activity
 
