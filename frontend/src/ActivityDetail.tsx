@@ -1,4 +1,3 @@
-import { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
   LineChart,
@@ -12,30 +11,18 @@ import {
   ReferenceDot,
   ReferenceArea,
 } from "recharts";
-import type { Activity, GeoJSONFeatureCollection, SameRouteResponse, WbalResponse, ThresholdEntry } from "./api";
-import { ApiError, fetchActivity, fetchActivityRecords, fetchActivityWbal, fetchSameRouteActivities, updateActivityTitle, generateActivityTitle, fetchThresholds } from "./api";
+import type { WbalResponse, WbalPoint } from "./api";
 import { formatDistance, formatTime, formatElevation, formatSpeed } from "./format";
 import type { UnitSystem } from "./format";
 import { resampleByDistance } from "./resampler";
-import type { FitRecord } from "./resampler";
 import { ErrorDisplay } from "./ErrorDisplay";
 import { ResizableMap } from "./components/ResizableMap";
 import { useResizableMap } from "./hooks/useResizableMap";
+import { useActivityDetail } from "./hooks/useActivityDetail";
 import { ChartExpandModal } from "./components/ChartExpandModal";
 import { ActivityPowerCurve } from "./components/ActivityPowerCurve";
 import { ChartErrorBoundary } from "./components/ErrorBoundary";
 import { POWER_ZONE_COLORS, HR_ZONE_COLORS } from "./constants";
-
-type AxisMode = "time" | "distance";
-
-function positionsByDistance(gpsFeatures: GeoJSONFeatureCollection["features"]): { distance_m: number; pos: [number, number] }[] {
-  return gpsFeatures
-    .filter((f) => f.geometry !== null && f.geometry.coordinates.length >= 2)
-    .map((f) => ({
-      distance_m: f.properties.distance_m,
-      pos: [f.geometry!.coordinates[1], f.geometry!.coordinates[0]] as [number, number],
-    }));
-}
 
 interface ChartConfig {
   key: string;
@@ -58,38 +45,38 @@ interface Props {
   unitSystem?: UnitSystem;
 }
 
-function geojsonToRecords(geojson: GeoJSONFeatureCollection): FitRecord[] {
-  return geojson.features.map((f) => ({
-    distance_m: f.properties.distance_m,
-    hr_bpm: f.properties.hr_bpm,
-    power_w: f.properties.power_w,
-    speed_mps: f.properties.speed_mps,
-    altitude_m: f.properties.altitude_m,
-  }));
-}
-
-function geojsonToTimestamps(geojson: GeoJSONFeatureCollection): number[] {
-  return geojson.features.map((f) => new Date(f.properties.timestamp).getTime() / 1000);
-}
-
 export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Props) {
-  const [activity, setActivity] = useState<Activity | null>(null);
-  const [geojson, setGeojson] = useState<GeoJSONFeatureCollection | null>(null);
-  const [error, setError] = useState<Error | ApiError | null>(null);
-  const [axisModes, setAxisModes] = useState<{ [key: string]: AxisMode }>({
-    speed: "time",
-    hr: "time",
-    power: "time",
-    elevation: "time",
-  });
-  const [sameRoute, setSameRoute] = useState<SameRouteResponse | null>(null);
-  const [wbalData, setWbalData] = useState<WbalResponse | null>(null);
-  const [hoveredPosition, setHoveredPosition] = useState<[number, number] | null>(null);
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [editedTitle, setEditedTitle] = useState("");
-  const [isGeneratingTitle, setIsGeneratingTitle] = useState(false);
-  const [expandedChart, setExpandedChart] = useState<string | null>(null);
-  const [thresholds, setThresholds] = useState<ThresholdEntry[]>([]);
+  // Use the custom hook for all activity data management
+  const {
+    loading,
+    error,
+    setError,
+    activity,
+    geojson,
+    sameRoute,
+    wbalData,
+    records,
+    timestamps,
+    firstTs,
+    positions,
+    ftpWatts,
+    lthrBpm,
+    axisModes,
+    toggleAxis,
+    hoveredPosition,
+    setHoveredPosition,
+    findPositionByElapsed,
+    findPositionByDistance,
+    isEditingTitle,
+    setIsEditingTitle,
+    editedTitle,
+    setEditedTitle,
+    saveTitle,
+    isGeneratingTitle,
+    generateTitle,
+    expandedChart,
+    setExpandedChart,
+  } = useActivityDetail(activityId);
 
   // Responsive layout hooks for resizable map
   const {
@@ -106,84 +93,6 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
     maxWidthPercent: 60,
   });
 
-  useEffect(() => {
-    setWbalData(null);
-    Promise.all([
-      fetchActivity(activityId),
-      fetchActivityRecords(activityId),
-      fetchSameRouteActivities(activityId),
-      fetchActivityWbal(activityId),
-      fetchThresholds(),
-    ])
-      .then(([a, g, sr, wbal, th]) => {
-        setActivity(a);
-        setGeojson(g);
-        setSameRoute(sr);
-        setWbalData(wbal);
-        setThresholds(th);
-      })
-      .catch((e) => setError(e));
-  }, [activityId]);
-
-  const records = useMemo(() => (geojson ? geojsonToRecords(geojson) : []), [geojson]);
-  const timestamps = useMemo(() => (geojson ? geojsonToTimestamps(geojson) : []), [geojson]);
-  const posByDist = useMemo(() => (geojson ? positionsByDistance(geojson.features) : []), [geojson]);
-  const firstTs = useMemo(() => timestamps.length > 0 ? timestamps[0] : 0, [timestamps]);
-
-  // Get applicable threshold for the activity date (most recent threshold before or on activity date)
-  const applicableThreshold = useMemo(() => {
-    if (!activity || thresholds.length === 0) return null;
-    const activityDate = new Date(activity.started_at).toISOString().split("T")[0];
-    // Thresholds are sorted by effective_date descending
-    const applicable = thresholds.find((t) => t.effective_date <= activityDate);
-    return applicable ?? thresholds[thresholds.length - 1]; // fallback to oldest if none applicable
-  }, [activity, thresholds]);
-
-  // Get FTP from wbalData (preferred) or threshold
-  const ftpWatts = wbalData?.ftp_watts ?? applicableThreshold?.ftp_watts ?? null;
-  const lthrBpm = applicableThreshold?.lthr_bpm ?? null;
-
-  // Create a lookup for positions by elapsed time
-  const posByElapsed = useMemo(() => {
-    if (!geojson || timestamps.length === 0) return [];
-    const first = timestamps[0];
-    return geojson.features
-      .filter((f) => f.geometry !== null && f.geometry.coordinates.length >= 2)
-      .map((f) => ({
-        elapsed: new Date(f.properties.timestamp).getTime() / 1000 - first,
-        pos: [f.geometry!.coordinates[1], f.geometry!.coordinates[0]] as [number, number],
-      }));
-  }, [geojson, timestamps]);
-
-  // Find nearest position for a given elapsed time or distance
-  const findPositionByElapsed = (elapsed: number): [number, number] | null => {
-    if (posByElapsed.length === 0) return null;
-    let closest = posByElapsed[0];
-    let minDiff = Math.abs(closest.elapsed - elapsed);
-    for (const p of posByElapsed) {
-      const diff = Math.abs(p.elapsed - elapsed);
-      if (diff < minDiff) {
-        minDiff = diff;
-        closest = p;
-      }
-    }
-    return closest.pos;
-  };
-
-  const findPositionByDistance = (distance_m: number): [number, number] | null => {
-    if (posByDist.length === 0) return null;
-    let closest = posByDist[0];
-    let minDiff = Math.abs(closest.distance_m - distance_m);
-    for (const p of posByDist) {
-      const diff = Math.abs(p.distance_m - distance_m);
-      if (diff < minDiff) {
-        minDiff = diff;
-        closest = p;
-      }
-    }
-    return closest.pos;
-  };
-
   const handleChartLeave = () => {
     setHoveredPosition(null);
   };
@@ -198,27 +107,12 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
     );
   }
 
-  if (!activity || !geojson) {
+  if (loading || !activity || !geojson) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-gray-500 dark:text-gray-400">Loading...</div>
       </div>
     );
-  }
-
-  const gpsFeatures = geojson.features.filter(
-    (f) => f.geometry !== null && f.geometry.coordinates.length >= 2
-  );
-  const positions: [number, number][] = gpsFeatures.map((f) => [
-    f.geometry!.coordinates[1],
-    f.geometry!.coordinates[0],
-  ]);
-
-  function toggleAxis(chartKey: string) {
-    setAxisModes((prev) => ({
-      ...prev,
-      [chartKey]: prev[chartKey] === "time" ? "distance" : "time",
-    }));
   }
 
   interface ChartDataPoint {
@@ -360,12 +254,7 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
                   autoFocus
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
-                      updateActivityTitle(activityId, editedTitle)
-                        .then((updated) => {
-                          setActivity({ ...activity!, title: updated.title, title_source: updated.title_source });
-                          setIsEditingTitle(false);
-                        })
-                        .catch((e) => setError(e));
+                      saveTitle(editedTitle).catch((err) => setError(err));
                     } else if (e.key === "Escape") {
                       setIsEditingTitle(false);
                     }
@@ -373,12 +262,7 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
                 />
                 <button
                   onClick={() => {
-                    updateActivityTitle(activityId, editedTitle)
-                      .then((updated) => {
-                        setActivity({ ...activity!, title: updated.title, title_source: updated.title_source });
-                        setIsEditingTitle(false);
-                      })
-                      .catch((e) => setError(e));
+                    saveTitle(editedTitle).catch((err) => setError(err));
                   }}
                   className="px-3 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
                 >
@@ -400,13 +284,7 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
                   {activity.title_source === "pending" && (
                     <button
                       onClick={() => {
-                        setIsGeneratingTitle(true);
-                        generateActivityTitle(activityId)
-                          .then((updated) => {
-                            setActivity({ ...activity!, title: updated.title, title_source: updated.title_source });
-                          })
-                          .catch((e) => setError(e))
-                          .finally(() => setIsGeneratingTitle(false));
+                        generateTitle().catch((err) => setError(err));
                       }}
                       disabled={isGeneratingTitle}
                       className="p-1 text-indigo-500 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 disabled:opacity-50"
@@ -881,7 +759,7 @@ function WbalChart({
   if (!w_prime_joules || wbal_series.length === 0) return null;
 
   // Find minimum point
-  const minPoint = wbal_series.reduce((min, point) => 
+  const minPoint = wbal_series.reduce((min: WbalPoint, point: WbalPoint) => 
     point.wbal_pct < min.wbal_pct ? point : min
   , wbal_series[0]);
 
