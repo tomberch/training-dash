@@ -676,6 +676,7 @@ export async function updateAdminSetting(key: string, value: boolean | string): 
 
 export interface NukePreview {
   user: AdminUser;
+  is_self: boolean;
   activities: {
     activities: number;
     records: number;

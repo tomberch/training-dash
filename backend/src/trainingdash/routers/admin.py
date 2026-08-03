@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy import select, func, delete
+from sqlalchemy import select, func, delete, update
 
 from trainingdash.auth import AdminUser, DbSession, hash_password
 from trainingdash.crypto import encrypt, EncryptionError
@@ -301,17 +301,14 @@ async def admin_nuke_preview(db: DbSession, admin: AdminUser, user_id: int):
     """Get counts of what would be deleted for each nuke action."""
     user = await _get_user_or_404(db, user_id)
     
-    # Prevent admin from nuking themselves
-    if user.id == admin.id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot nuke your own account",
-        )
-    
     counts = await _get_user_data_counts(db, user_id)
+    
+    # Flag if this is self-nuke (only activities/integrations allowed)
+    is_self = user.id == admin.id
     
     return {
         "user": user_summary(user),
+        "is_self": is_self,
         "activities": {
             "activities": counts["activities"],
             "records": counts["records"],
@@ -338,9 +335,9 @@ class NukeRequest(BaseModel):
     confirm_email: str
 
 
-def _validate_nuke_request(user: User, admin: AdminUser, confirm_email: str) -> None:
-    """Validate nuke request: prevent self-nuke and verify email confirmation."""
-    if user.id == admin.id:
+def _validate_nuke_request(user: User, admin: AdminUser, confirm_email: str, allow_self: bool = False) -> None:
+    """Validate nuke request: optionally prevent self-nuke and verify email confirmation."""
+    if not allow_self and user.id == admin.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot nuke your own account",
@@ -453,18 +450,21 @@ async def admin_nuke_activities(
 ):
     """Delete all activities and related data for a user (keeps account, credentials, and fitness settings)."""
     user = await _get_user_or_404(db, user_id)
-    _validate_nuke_request(user, admin, request.confirm_email)
+    _validate_nuke_request(user, admin, request.confirm_email, allow_self=True)
     
     # Get counts for audit log
     counts = await _get_user_data_counts(db, user_id)
     
-    # Delete in order (children first due to FK constraints)
-    # Records, Laps, Peaks are CASCADE deleted with Activity
+    # Delete in order respecting FK constraints:
+    # 1. Clear activity.route_id (nullable FK to routes)
+    # 2. Delete routes (first_seen_activity_id FK will be satisfied since we delete all user activities)
+    # 3. Delete activities (CASCADE deletes Records, Laps, Peaks)
     # NOTE: EFModel is NOT deleted - it's a fitness setting that survives Reset Activities
+    await db.execute(update(Activity).where(Activity.user_id == user_id).values(route_id=None))
     await db.execute(delete(Route).where(Route.user_id == user_id))
+    await db.execute(delete(Activity).where(Activity.user_id == user_id))
     await db.execute(delete(FitnessHistory).where(FitnessHistory.user_id == user_id))
     await db.execute(delete(Notification).where(Notification.user_id == user_id))
-    await db.execute(delete(Activity).where(Activity.user_id == user_id))
     
     # Log the action
     summary = f"{counts['activities']} activities, {counts['records']} records, {counts['routes']} routes"
@@ -480,7 +480,7 @@ async def admin_nuke_integrations(
 ):
     """Delete all integration credentials for a user."""
     user = await _get_user_or_404(db, user_id)
-    _validate_nuke_request(user, admin, request.confirm_email)
+    _validate_nuke_request(user, admin, request.confirm_email, allow_self=True)
     
     # Get counts for audit log
     counts = await _get_user_data_counts(db, user_id)

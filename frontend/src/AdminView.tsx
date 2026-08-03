@@ -554,8 +554,13 @@ function NukeModal({
               </svg>
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Nuke User Data</h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400">{user.email}</p>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                {preview?.is_self ? "Reset My Data" : "Nuke User Data"}
+              </h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {user.email}
+                {preview?.is_self && " (your account)"}
+              </p>
             </div>
           </div>
         </div>
@@ -613,19 +618,26 @@ function NukeModal({
                       </p>
                     </div>
                   </label>
-                  <label className="flex items-start gap-3 p-3 border border-red-200 dark:border-red-800 rounded-lg cursor-pointer hover:bg-red-50 dark:hover:bg-red-900/20">
+                  <label className={`flex items-start gap-3 p-3 border rounded-lg ${
+                    preview?.is_self 
+                      ? "border-gray-200 dark:border-gray-700 opacity-50 cursor-not-allowed" 
+                      : "border-red-200 dark:border-red-800 cursor-pointer hover:bg-red-50 dark:hover:bg-red-900/20"
+                  }`}>
                     <input
                       type="radio"
                       name="action"
                       value="account"
                       checked={action === "account"}
                       onChange={() => setAction("account")}
+                      disabled={preview?.is_self}
                       className="mt-1"
                     />
                     <div>
-                      <p className="font-medium text-red-700 dark:text-red-400">Delete User Account</p>
-                      <p className="text-sm text-red-600 dark:text-red-500">
-                        Permanently delete the user and all associated data.
+                      <p className={`font-medium ${preview?.is_self ? "text-gray-400 dark:text-gray-500" : "text-red-700 dark:text-red-400"}`}>Delete User Account</p>
+                      <p className={`text-sm ${preview?.is_self ? "text-gray-400 dark:text-gray-500" : "text-red-600 dark:text-red-500"}`}>
+                        {preview?.is_self 
+                          ? "Cannot delete your own account." 
+                          : "Permanently delete the user and all associated data."}
                       </p>
                     </div>
                   </label>
