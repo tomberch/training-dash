@@ -1,7 +1,11 @@
 import os
 import socket
 import sys
+import tempfile
 from pathlib import Path
+
+# Set up test environment before importing app
+os.environ.setdefault("TRAININGDASH_UPLOADS_DIR", tempfile.mkdtemp(prefix="traindash-test-uploads-"))
 
 import pytest
 import pytest_asyncio

@@ -134,24 +134,21 @@ export function AnalyzePage() {
   // Load activity from URL param on mount
   useEffect(() => {
     if (activityIdParam && !loadedFromUrl.current) {
-      const id = parseInt(activityIdParam, 10);
-      if (!isNaN(id)) {
-        loadedFromUrl.current = true;
-        setLoading(true);
-        Promise.all([fetchActivity(id), fetchActivityRecords(id), fetchThresholds()])
-          .then(([activity, records, th]) => {
-            setSelectedActivity(activity);
-            setGeojson(records);
-            setThresholds(th);
-            setError(null);
-          })
-          .catch((e) => {
-            console.error("[AnalyzePage] Failed to load activity from URL:", e);
-            setError("Failed to load activity");
-            setSearchParams({});
-          })
-          .finally(() => setLoading(false));
-      }
+      loadedFromUrl.current = true;
+      setLoading(true);
+      Promise.all([fetchActivity(activityIdParam), fetchActivityRecords(activityIdParam), fetchThresholds()])
+        .then(([activity, records, th]) => {
+          setSelectedActivity(activity);
+          setGeojson(records);
+          setThresholds(th);
+          setError(null);
+        })
+        .catch((e) => {
+          console.error("[AnalyzePage] Failed to load activity from URL:", e);
+          setError("Failed to load activity");
+          setSearchParams({});
+        })
+        .finally(() => setLoading(false));
     }
   }, [activityIdParam, setSearchParams]);
 

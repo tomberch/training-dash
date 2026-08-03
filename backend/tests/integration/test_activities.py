@@ -20,7 +20,8 @@ class TestActivityEndpoints:
             )
         response = await auth_client.get("/api/activities")
         assert response.status_code == 200
-        activities = response.json()
+        data = response.json()
+        activities = data["activities"]
         assert len(activities) == 3
         dates = [a["started_at"] for a in activities]
         assert dates == sorted(dates, reverse=True)
@@ -67,20 +68,23 @@ class TestActivityEndpoints:
 
     @pytest.mark.asyncio
     async def test_get_activity_not_found(self, auth_client):
-        response = await auth_client.get("/api/activities/99999")
+        # Use a valid UUID format that doesn't exist
+        response = await auth_client.get("/api/activities/00000000-0000-0000-0000-000000000000")
         assert response.status_code == 404
 
     @pytest.mark.asyncio
     async def test_upload_no_gps_still_succeeds_and_records_have_null_geom(
         self, auth_client, db_session
     ):
+        from uuid import UUID as UUIDType
+        
         fit_data = make_test_fit(num_records=5, include_gps=False)
         response = await auth_client.post(
             "/api/upload",
             files={"file": ("no_gps.fit", fit_data, "application/octet-stream")},
         )
         assert response.status_code == 200
-        activity_id = response.json()["id"]
+        activity_id = UUIDType(response.json()["id"])
         result = await db_session.execute(
             select(Record).where(Record.activity_id == activity_id)
         )
@@ -108,7 +112,9 @@ class TestActivityEndpoints:
     async def test_empty_activity_list(self, auth_client):
         response = await auth_client.get("/api/activities")
         assert response.status_code == 200
-        assert response.json() == []
+        data = response.json()
+        assert data["activities"] == []
+        assert data["pagination"]["total"] == 0
 
     @pytest.mark.asyncio
     async def test_records_have_distance_m_for_resampling(self, auth_client):

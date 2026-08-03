@@ -106,5 +106,6 @@ class TestAuth:
 
         response = await auth_client.get("/api/activities")
         assert response.status_code == 200
-        activities = response.json()
-        assert all(a["id"] != activity_b.id for a in activities)
+        data = response.json()
+        activities = data["activities"]
+        assert all(a["id"] != str(activity_b.id) for a in activities)

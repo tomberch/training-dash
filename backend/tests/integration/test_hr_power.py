@@ -1,6 +1,7 @@
 """Integration tests for HR-derived power estimation (#25)."""
 import sys
 from pathlib import Path
+from uuid import UUID as UUIDType
 
 import pytest
 from sqlalchemy import select
@@ -201,7 +202,7 @@ class TestDualSensorRideUpdatesModel:
             "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
-        activity_id = response.json()["id"]
+        activity_id = UUIDType(response.json()["id"])
         
         # Check power_source
         result = await db_session.execute(

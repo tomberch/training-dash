@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+from uuid import UUID as UUIDType
 
 import pytest
 from sqlalchemy import select
@@ -20,7 +21,7 @@ class TestUpload:
         assert response.status_code == 200
         data = response.json()
         assert "id" in data
-        assert isinstance(data["id"], int)
+        assert isinstance(data["id"], str)  # UUID returned as string
         assert "started_at" in data
 
     @pytest.mark.asyncio
@@ -30,7 +31,7 @@ class TestUpload:
             "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
-        activity_id = response.json()["id"]
+        activity_id = UUIDType(response.json()["id"])
         result = await db_session.execute(select(Activity).where(Activity.id == activity_id))
         activity = result.scalar_one()
         assert activity.total_distance_m == 90.0
@@ -50,7 +51,7 @@ class TestUpload:
             "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
-        activity_id = response.json()["id"]
+        activity_id = UUIDType(response.json()["id"])
         result = await db_session.execute(
             select(Record).where(Record.activity_id == activity_id).order_by(Record.timestamp)
         )
@@ -71,7 +72,7 @@ class TestUpload:
             "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
-        activity_id = response.json()["id"]
+        activity_id = UUIDType(response.json()["id"])
         result = await db_session.execute(
             select(Lap).where(Lap.activity_id == activity_id).order_by(Lap.lap_index)
         )
@@ -89,7 +90,7 @@ class TestUpload:
             "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
-        activity_id = response.json()["id"]
+        activity_id = UUIDType(response.json()["id"])
         result = await db_session.execute(select(Activity).where(Activity.id == activity_id))
         activity = result.scalar_one()
         assert activity.raw_fit is not None
@@ -117,7 +118,7 @@ class TestActivityMetricsOnIngest:
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         assert response.status_code == 200
-        activity_id = response.json()["id"]
+        activity_id = UUIDType(response.json()["id"])
         
         result = await db_session.execute(select(Activity).where(Activity.id == activity_id))
         activity = result.scalar_one()
@@ -151,7 +152,7 @@ class TestActivityMetricsOnIngest:
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         assert response.status_code == 200
-        activity_id = response.json()["id"]
+        activity_id = UUIDType(response.json()["id"])
         
         result = await db_session.execute(select(Activity).where(Activity.id == activity_id))
         activity = result.scalar_one()
@@ -198,7 +199,7 @@ class TestActivityMetricsOnIngest:
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         assert response.status_code == 200
-        activity_id = response.json()["id"]
+        activity_id = UUIDType(response.json()["id"])
         
         result = await db_session.execute(select(Activity).where(Activity.id == activity_id))
         activity = result.scalar_one()
@@ -239,7 +240,7 @@ class TestActivityMetricsOnIngest:
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         assert response.status_code == 200
-        activity_id = response.json()["id"]
+        activity_id = UUIDType(response.json()["id"])
         
         result = await db_session.execute(select(Activity).where(Activity.id == activity_id))
         activity = result.scalar_one()
@@ -273,7 +274,7 @@ class TestActivityMetricsOnIngest:
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         assert response.status_code == 200
-        activity_id = response.json()["id"]
+        activity_id = UUIDType(response.json()["id"])
         
         result = await db_session.execute(select(Activity).where(Activity.id == activity_id))
         activity = result.scalar_one()
@@ -346,7 +347,7 @@ class TestPeakPowersOnIngest:
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         assert response.status_code == 200
-        activity_id = response.json()["id"]
+        activity_id = UUIDType(response.json()["id"])
         
         # Query peaks from database
         result = await db_session.execute(
@@ -383,7 +384,7 @@ class TestPeakPowersOnIngest:
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         assert response.status_code == 200
-        activity_id = response.json()["id"]
+        activity_id = UUIDType(response.json()["id"])
         
         # Query peaks
         result = await db_session.execute(

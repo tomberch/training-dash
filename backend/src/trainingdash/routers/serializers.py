@@ -78,7 +78,7 @@ def hr_zone_response(z: HrZone) -> dict:
 def activity_summary(a: Activity) -> dict[str, Any]:
     """Return basic activity info for list views."""
     return {
-        "id": a.id,
+        "id": str(a.id),
         "title": a.title,
         "title_source": a.title_source,
         "started_at": a.started_at.isoformat(),

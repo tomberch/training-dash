@@ -8,10 +8,10 @@ import type { UnitSystem } from "../format";
 const SEARCH_DEBOUNCE_MS = 150;
 
 interface ActivitySelectorProps {
-  selectedId: number | null;
+  selectedId: string | null;
   onSelect: (activity: Activity | null) => void;
-  excludeIds?: number[];
-  filterIds?: number[];  // If provided, only show activities with these IDs
+  excludeIds?: string[];
+  filterIds?: string[];  // If provided, only show activities with these IDs
   placeholder?: string;
   unitSystem?: UnitSystem;
   label?: string;

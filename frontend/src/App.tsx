@@ -104,7 +104,7 @@ function ActivityDetailWrapper({ unitSystem }: { unitSystem: UnitSystem }) {
   
   return (
     <ActivityDetail
-      activityId={parseInt(id, 10)}
+      activityId={id}
       onBack={() => navigate("/activities")}
       unitSystem={unitSystem}
     />

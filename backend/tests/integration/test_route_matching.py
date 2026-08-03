@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+from uuid import UUID as UUIDType
 
 import pytest
 from sqlalchemy import select
@@ -14,7 +15,7 @@ async def upload_and_get_activity(auth_client, db_session, name, fit_data):
         "/api/upload",
         files={"file": (name, fit_data, "application/octet-stream")},
     )
-    activity_id = resp.json()["id"]
+    activity_id = UUIDType(resp.json()["id"])
     result = await db_session.execute(select(Activity).where(Activity.id == activity_id))
     return result.scalar_one()
 

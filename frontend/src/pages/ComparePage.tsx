@@ -681,51 +681,45 @@ export function ComparePage() {
   // Load base activity from URL param on mount
   useEffect(() => {
     if (baseIdParam && !loadedBaseFromUrl.current) {
-      const id = parseInt(baseIdParam, 10);
-      if (!isNaN(id)) {
-        loadedBaseFromUrl.current = true;
-        setLoading(true);
-        Promise.all([fetchActivity(id), fetchActivityRecords(id), fetchSameRouteActivities(id)])
-          .then(([activity, geojson, sameRoute]) => {
-            setBaseActivity(activity);
-            setBaseGeojson(geojson);
-            setSameRouteData(sameRoute);
-          })
-          .catch((e) => {
-            console.error("[ComparePage] Failed to load base activity from URL:", e);
-          })
-          .finally(() => setLoading(false));
-      }
+      loadedBaseFromUrl.current = true;
+      setLoading(true);
+      Promise.all([fetchActivity(baseIdParam), fetchActivityRecords(baseIdParam), fetchSameRouteActivities(baseIdParam)])
+        .then(([activity, geojson, sameRoute]) => {
+          setBaseActivity(activity);
+          setBaseGeojson(geojson);
+          setSameRouteData(sameRoute);
+        })
+        .catch((e) => {
+          console.error("[ComparePage] Failed to load base activity from URL:", e);
+        })
+        .finally(() => setLoading(false));
     }
   }, [baseIdParam]);
 
   // Load compare activity from URL param on mount
   useEffect(() => {
     if (compareIdParam && !loadedCompareFromUrl.current && baseActivity) {
-      const id = parseInt(compareIdParam, 10);
-      if (!isNaN(id)) {
-        loadedCompareFromUrl.current = true;
-        Promise.all([
-          fetchActivity(id),
-          fetchActivityRecords(id),
-          fetchComparison(baseActivity.id, id),
-        ])
-          .then(([activity, geojson, comp]) => {
-            setCompareActivity(activity);
-            setCompareGeojson(geojson);
-            setComparison(comp);
-          })
-          .catch((e) => {
-            console.error("[ComparePage] Failed to load compare activity from URL:", e);
-          });
-      }
+      loadedCompareFromUrl.current = true;
+      Promise.all([
+        fetchActivity(compareIdParam),
+        fetchActivityRecords(compareIdParam),
+        fetchComparison(baseActivity.id, compareIdParam),
+      ])
+        .then(([activity, geojson, comp]) => {
+          setCompareActivity(activity);
+          setCompareGeojson(geojson);
+          setComparison(comp);
+        })
+        .catch((e) => {
+          console.error("[ComparePage] Failed to load compare activity from URL:", e);
+        });
     }
   }, [compareIdParam, baseActivity]);
 
   const updateSearchParams = (base: Activity | null, compare: Activity | null) => {
     const params: Record<string, string> = {};
-    if (base) params.base = base.id.toString();
-    if (compare) params.compare = compare.id.toString();
+    if (base) params.base = base.id;
+    if (compare) params.compare = compare.id;
     setSearchParams(params);
   };
 
@@ -1067,7 +1061,7 @@ export function ComparePage() {
             </div>
 
             {/* Gap Chart */}
-            {gapChartData.length > 0 && (
+            {comparison?.comparable && gapChartData.length > 0 && (
               <ChartErrorBoundary>
                 <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
                   <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">

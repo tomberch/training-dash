@@ -1,5 +1,7 @@
 """Activity endpoints: CRUD, records, wbal, comparisons, upload, jobs."""
 
+from uuid import UUID
+
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -35,7 +37,7 @@ class ActivityUpdateRequest(BaseModel):
 
 
 async def _get_owned_activity(
-    db: DbSession, user: CurrentUser, activity_id: int
+    db: DbSession, user: CurrentUser, activity_id: UUID
 ) -> Activity:
     """Fetch an activity owned by the current user or raise 404."""
     result = await db.execute(
@@ -94,7 +96,7 @@ async def list_activities(
 
 
 @router.get("/activities/{activity_id}")
-async def get_activity(db: DbSession, user: CurrentUser, activity_id: int):
+async def get_activity(db: DbSession, user: CurrentUser, activity_id: UUID):
     """Get full details for an activity including peak powers."""
     activity = await _get_owned_activity(db, user, activity_id)
     result = activity_detail(activity)
@@ -140,7 +142,7 @@ async def get_activity(db: DbSession, user: CurrentUser, activity_id: int):
 
 @router.patch("/activities/{activity_id}")
 async def update_activity(
-    db: DbSession, user: CurrentUser, activity_id: int, request: ActivityUpdateRequest
+    db: DbSession, user: CurrentUser, activity_id: UUID, request: ActivityUpdateRequest
 ):
     """Update an activity (currently only title)."""
     activity = await _get_owned_activity(db, user, activity_id)
@@ -157,7 +159,7 @@ async def update_activity(
 
 @router.post("/activities/{activity_id}/generate-title")
 async def generate_activity_title_endpoint(
-    db: DbSession, user: CurrentUser, activity_id: int
+    db: DbSession, user: CurrentUser, activity_id: UUID
 ):
     """Generate title for an activity using geocoding.
     
@@ -199,7 +201,7 @@ async def generate_activity_title_endpoint(
 
 
 @router.get("/activities/{activity_id}/records")
-async def get_activity_records(db: DbSession, user: CurrentUser, activity_id: int):
+async def get_activity_records(db: DbSession, user: CurrentUser, activity_id: UUID):
     """Get GPS and sensor records for an activity as GeoJSON."""
     await _get_owned_activity(db, user, activity_id)
     result = await db.execute(
@@ -220,12 +222,12 @@ async def get_activity_records(db: DbSession, user: CurrentUser, activity_id: in
             "cadence_rpm",
         ],
     )
-    geojson["activity_id"] = activity_id
+    geojson["activity_id"] = str(activity_id)
     return geojson
 
 
 @router.get("/activities/{activity_id}/wbal")
-async def get_activity_wbal(db: DbSession, user: CurrentUser, activity_id: int):
+async def get_activity_wbal(db: DbSession, user: CurrentUser, activity_id: UUID):
     """Get W'bal time series for an activity."""
     activity = await _get_owned_activity(db, user, activity_id)
 
@@ -286,14 +288,84 @@ async def get_activity_wbal(db: DbSession, user: CurrentUser, activity_id: int):
     }
 
 
+def _get_gps_points(records):
+    """Extract GPS points with distance from records."""
+    return [(r.lat, r.lon, r.distance_m) for r in records 
+            if r.lat is not None and r.lon is not None]
+
+
+def _haversine_distance_m(p1, p2):
+    """Calculate distance between two lat/lon points in meters."""
+    import math
+    lat1, lon1 = math.radians(p1[0]), math.radians(p1[1])
+    lat2, lon2 = math.radians(p2[0]), math.radians(p2[1])
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
+    c = 2 * math.asin(math.sqrt(a))
+    return 6371000 * c  # Earth radius in meters
+
+
+def _is_same_direction(gps_a: list, gps_b: list) -> bool:
+    """
+    Check if two GPS tracks are going in the same direction.
+    
+    Samples points from the first 20% of track A and finds their nearest
+    points in track B. If the matched distances in B are increasing,
+    they're going the same direction; if decreasing, opposite.
+    """
+    if len(gps_a) < 10 or len(gps_b) < 10:
+        return True  # Not enough data, assume same direction
+    
+    def find_nearest_point(target_lat, target_lon, points):
+        min_dist = float('inf')
+        nearest_distance_m = None
+        for lat, lon, dist_m in points:
+            d = _haversine_distance_m((target_lat, target_lon), (lat, lon))
+            if d < min_dist:
+                min_dist = d
+                nearest_distance_m = dist_m
+        return nearest_distance_m, min_dist
+    
+    # Sample points from the first 20% of track A
+    sample_count = max(5, len(gps_a) // 5)
+    sample_indices = [i * len(gps_a) // (sample_count * 5) for i in range(sample_count)]
+    
+    # For each sampled point from A, find nearest point in B
+    matched_distances_b = []
+    for idx in sample_indices:
+        lat_a, lon_a, dist_a = gps_a[idx]
+        nearest_dist_b, gps_dist = find_nearest_point(lat_a, lon_a, gps_b)
+        if nearest_dist_b is not None and gps_dist < 100:  # Within 100m
+            matched_distances_b.append((dist_a, nearest_dist_b))
+    
+    if len(matched_distances_b) < 3:
+        return True  # Not enough matched points, assume same direction
+    
+    # Check if distances in B are increasing (same direction) or decreasing (opposite)
+    increasing_count = 0
+    decreasing_count = 0
+    for i in range(1, len(matched_distances_b)):
+        _, prev_b = matched_distances_b[i - 1]
+        _, curr_b = matched_distances_b[i]
+        if curr_b > prev_b:
+            increasing_count += 1
+        elif curr_b < prev_b:
+            decreasing_count += 1
+    
+    return increasing_count >= decreasing_count
+
+
 @router.get("/activities/{activity_id}/same-route")
 async def get_same_route_activities(
-    db: DbSession, user: CurrentUser, activity_id: int
+    db: DbSession, user: CurrentUser, activity_id: UUID
 ):
-    """Get other activities on the same route."""
+    """Get other activities on the same route, filtered to same direction only."""
     activity = await _get_owned_activity(db, user, activity_id)
     if activity.route_id is None:
         return {"route_id": None, "activities": []}
+    
+    # Get all activities on the same route
     result = await db.execute(
         select(Activity)
         .where(
@@ -304,9 +376,43 @@ async def get_same_route_activities(
         .order_by(Activity.started_at.desc())
     )
     others = result.scalars().all()
+    
+    if not others:
+        return {"route_id": activity.route_id, "activities": []}
+    
+    # Get GPS records for the base activity
+    base_records_result = await db.execute(
+        select(Record)
+        .where(Record.activity_id == activity_id)
+        .order_by(Record.timestamp)
+    )
+    base_records = base_records_result.scalars().all()
+    base_gps = _get_gps_points(base_records)
+    
+    if len(base_gps) < 10:
+        # Not enough GPS data to determine direction, return all
+        return {
+            "route_id": activity.route_id,
+            "activities": [activity_summary(a) for a in others],
+        }
+    
+    # Filter to only same-direction activities
+    same_direction_activities = []
+    for other in others:
+        other_records_result = await db.execute(
+            select(Record)
+            .where(Record.activity_id == other.id)
+            .order_by(Record.timestamp)
+        )
+        other_records = other_records_result.scalars().all()
+        other_gps = _get_gps_points(other_records)
+        
+        if _is_same_direction(base_gps, other_gps):
+            same_direction_activities.append(other)
+    
     return {
         "route_id": activity.route_id,
-        "activities": [activity_summary(a) for a in others],
+        "activities": [activity_summary(a) for a in same_direction_activities],
     }
 
 
@@ -314,15 +420,15 @@ async def get_same_route_activities(
 async def compare_activities(
     db: DbSession,
     user: CurrentUser,
-    activity_id: int,
-    other_activity_id: int = Query(alias="other"),
+    activity_id: UUID,
+    other_activity_id: UUID = Query(alias="other"),
 ):
     """Compare two activities on the same route."""
     activity_a = await _get_owned_activity(db, user, activity_id)
     activity_b = await _get_owned_activity(db, user, other_activity_id)
 
     if activity_a.route_id is None or activity_a.route_id != activity_b.route_id:
-        return {"comparable": False, "gap_series": [], "other_geojson": None}
+        return {"comparable": False, "gap_series": [], "other_geojson": None, "reason": "different_routes"}
 
     records_a_result = await db.execute(
         select(Record)
@@ -336,6 +442,18 @@ async def compare_activities(
     )
     records_a = records_a_result.scalars().all()
     records_b = records_b_result.scalars().all()
+
+    # Verify same direction (should already be filtered, but double-check)
+    gps_a = _get_gps_points(records_a)
+    gps_b = _get_gps_points(records_b)
+    
+    if not _is_same_direction(gps_a, gps_b):
+        return {
+            "comparable": False, 
+            "gap_series": [], 
+            "other_geojson": None, 
+            "reason": "opposite_direction",
+        }
 
     first_ts_a = records_a[0].timestamp if records_a else None
     first_ts_b = records_b[0].timestamp if records_b else None
@@ -391,7 +509,7 @@ async def upload_activity(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to parse FIT file"
         )
-    return {"id": activity.id, "started_at": activity.started_at.isoformat()}
+    return {"id": str(activity.id), "started_at": activity.started_at.isoformat()}
 
 
 @router.get("/jobs/{job_id}")

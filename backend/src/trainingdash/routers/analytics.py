@@ -221,7 +221,7 @@ async def get_records(db: DbSession, user: CurrentUser):
         key = f"fastest_{target_m}_m"
         if fastest is not None:
             projected_time_s = target_m / fastest.avg_speed_mps
-            prs[key] = {"value": projected_time_s, "activity_id": fastest.id}
+            prs[key] = {"value": projected_time_s, "activity_id": str(fastest.id)}
         else:
             prs[key] = None
 
@@ -274,7 +274,7 @@ async def get_records(db: DbSession, user: CurrentUser):
                 "route_id": row.route_id,
                 "route_label": route_label,
                 "fastest_time_s": row.fastest_time,
-                "activity_id": pr_activity.id if pr_activity else None,
+                "activity_id": str(pr_activity.id) if pr_activity else None,
             }
         )
 

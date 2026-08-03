@@ -44,6 +44,25 @@ function formatDistance(meters: number): string {
   return `${(meters / 1000).toFixed(1)} km`;
 }
 
+function formatRelativeTime(dateString: string): string {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return `${diffDays} days ago`;
+  if (diffDays < 14) return "1 week ago";
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+  if (diffDays < 60) return "1 month ago";
+  return `${Math.floor(diffDays / 30)} months ago`;
+}
+
+function formatElevation(meters: number): string {
+  return `${Math.round(meters)} m`;
+}
+
 export function Dashboard() {
   const navigate = useNavigate();
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -87,11 +106,8 @@ export function Dashboard() {
     ? ((currentPMC.ctl - previousPMC.ctl) / (previousPMC.ctl || 1) * 100)
     : null;
 
-  // Featured activity (most recent)
-  const featuredActivity = activities.length > 0 ? activities[0] : null;
-
-  // Recent activities (next 4 after featured)
-  const recentActivities = activities.slice(1, 5);
+  // Recent activities (top 4 for card grid)
+  const recentActivities = activities.slice(0, 4);
 
   // Recent breakthrough activities (last 30 days)
   const recentBreakthroughs = useMemo(() => {
@@ -105,7 +121,7 @@ export function Dashboard() {
   // Notable PRs from records
   const notablePRs = useMemo(() => {
     if (!records) return [];
-    const prs: { label: string; value: string; activityId?: number }[] = [];
+    const prs: { label: string; value: string; activityId?: string }[] = [];
     const { lifetime_prs } = records;
     
     if (lifetime_prs.highest_sustained_power_w) {
@@ -420,113 +436,128 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Middle Row: Featured Activity + Recent Activities */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-        {/* Featured Activity */}
-        {featuredActivity ? (
-          <div 
-            className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 cursor-pointer hover:border-indigo-300 dark:hover:border-indigo-700 transition-colors"
-            onClick={() => navigate(`/activities/${featuredActivity.id}`)}
+      {/* Recent Activities - Card Grid */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Recent Activities</h2>
+          <button 
+            onClick={() => navigate("/activities")}
+            className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
           >
-            <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">Latest Activity</h2>
-            
-            {/* Polyline map */}
-            <PolylineMap polyline={featuredActivity.map_polyline} className="h-32 mb-3" showMarkers={true} />
-            
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="text-lg font-semibold text-gray-900 dark:text-white">
-                  {featuredActivity.title || new Date(featuredActivity.started_at).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}
+            View all
+          </button>
+        </div>
+        
+        {recentActivities.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {recentActivities.map(activity => (
+              <div 
+                key={activity.id}
+                className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden cursor-pointer hover:border-indigo-300 dark:hover:border-indigo-600 hover:shadow-md transition-all"
+                onClick={() => navigate(`/activities/${activity.id}`)}
+              >
+                {/* Map thumbnail */}
+                <div className="h-32 relative">
+                  <PolylineMap 
+                    polyline={activity.map_polyline} 
+                    className="w-full h-full" 
+                    showMarkers={true}
+                  />
+                  {/* Breakthrough badge overlay */}
+                  {activity.is_breakthrough && (
+                    <div className="absolute top-2 right-2">
+                      <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold text-amber-800 bg-amber-100 dark:text-amber-200 dark:bg-amber-900/80 rounded-full shadow">
+                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                        </svg>
+                        Breakthrough
+                      </span>
+                    </div>
+                  )}
+                  {/* Relative time badge */}
+                  <div className="absolute bottom-2 left-2">
+                    <span className="px-2 py-1 text-xs font-medium text-white bg-black/60 rounded-full">
+                      {formatRelativeTime(activity.started_at)}
+                    </span>
+                  </div>
                 </div>
-                <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                  {featuredActivity.title && new Date(featuredActivity.started_at).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
-                  {featuredActivity.title && " • "}
-                  {formatDistance(featuredActivity.total_distance_m)} • {formatDuration(featuredActivity.moving_time_s)}
+                
+                {/* Activity info */}
+                <div className="p-4">
+                  {/* Title */}
+                  <h3 className="text-base font-semibold text-gray-900 dark:text-white truncate mb-1">
+                    {activity.title || new Date(activity.started_at).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}
+                  </h3>
+                  
+                  {/* Date if title exists */}
+                  {activity.title && (
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                      {new Date(activity.started_at).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+                    </p>
+                  )}
+                  
+                  {/* Metrics grid */}
+                  <div className="grid grid-cols-4 gap-2 text-center">
+                    <div>
+                      <div className="text-sm font-semibold text-gray-900 dark:text-white tabular-nums">
+                        {formatDistance(activity.total_distance_m)}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">Distance</div>
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-gray-900 dark:text-white tabular-nums">
+                        {formatDuration(activity.moving_time_s)}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">Time</div>
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-gray-900 dark:text-white tabular-nums">
+                        {formatElevation(activity.elevation_gain_m)}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">Elevation</div>
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-gray-900 dark:text-white tabular-nums">
+                        {activity.tss ? Math.round(activity.tss) : "—"}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">TSS</div>
+                    </div>
+                  </div>
+                  
+                  {/* Secondary metrics row */}
+                  <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+                    <div className="flex items-center gap-4 text-sm">
+                      {activity.avg_power_w && (
+                        <span className="text-gray-600 dark:text-gray-400">
+                          <span className="font-medium text-gray-900 dark:text-white">{activity.avg_power_w}</span> W
+                        </span>
+                      )}
+                      {activity.avg_hr_bpm && (
+                        <span className="text-gray-600 dark:text-gray-400">
+                          <span className="font-medium text-gray-900 dark:text-white">{activity.avg_hr_bpm}</span> bpm
+                        </span>
+                      )}
+                      {activity.np_power_w && (
+                        <span className="text-gray-600 dark:text-gray-400">
+                          NP <span className="font-medium text-gray-900 dark:text-white">{activity.np_power_w}</span>
+                        </span>
+                      )}
+                    </div>
+                    {activity.intensity_factor && (
+                      <span className="text-xs px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
+                        IF {activity.intensity_factor.toFixed(2)}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
-              {featuredActivity.is_breakthrough && (
-                <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold text-amber-800 bg-amber-100 dark:text-amber-200 dark:bg-amber-900/50 rounded-full">
-                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                  </svg>
-                  Breakthrough
-                </span>
-              )}
-            </div>
-            <div className="grid grid-cols-3 gap-4 mt-4">
-              <div>
-                <div className="text-xs text-gray-500 dark:text-gray-400">Avg Power</div>
-                <div className="text-sm font-medium text-gray-900 dark:text-white">
-                  {featuredActivity.avg_power_w ? `${featuredActivity.avg_power_w} W` : "—"}
-                </div>
-              </div>
-              <div>
-                <div className="text-xs text-gray-500 dark:text-gray-400">TSS</div>
-                <div className="text-sm font-medium text-gray-900 dark:text-white">
-                  {featuredActivity.tss ? Math.round(featuredActivity.tss) : "—"}
-                </div>
-              </div>
-              <div>
-                <div className="text-xs text-gray-500 dark:text-gray-400">Avg HR</div>
-                <div className="text-sm font-medium text-gray-900 dark:text-white">
-                  {featuredActivity.avg_hr_bpm ? `${featuredActivity.avg_hr_bpm} bpm` : "—"}
-                </div>
-              </div>
-            </div>
+            ))}
           </div>
         ) : (
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-            <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">Latest Activity</h2>
-            <div className="text-center text-gray-400 py-8">No activities yet</div>
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 text-center">
+            <p className="text-gray-500 dark:text-gray-400">No activities yet. Upload a FIT file to get started.</p>
           </div>
         )}
-
-        {/* Recent Activities */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">Recent Activities</h2>
-            <button 
-              onClick={() => navigate("/activities")}
-              className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
-            >
-              View all
-            </button>
-          </div>
-          {recentActivities.length > 0 ? (
-            <div className="space-y-2">
-              {recentActivities.map(activity => (
-                <div 
-                  key={activity.id}
-                  className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
-                  onClick={() => navigate(`/activities/${activity.id}`)}
-                >
-                  {/* Small polyline thumbnail */}
-                  <div className="w-16 h-12 flex-shrink-0">
-                    <PolylineMap polyline={activity.map_polyline} className="w-full h-full" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                      {activity.title || new Date(activity.started_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      {activity.title && new Date(activity.started_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                      {activity.title && " • "}
-                      {formatDistance(activity.total_distance_m)}
-                    </div>
-                  </div>
-                  <div className="text-right text-sm flex-shrink-0">
-                    <div className="text-gray-900 dark:text-white">{formatDuration(activity.moving_time_s)}</div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      {activity.tss ? `${Math.round(activity.tss)} TSS` : ""}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center text-gray-400 py-4 text-sm">No recent activities</div>
-          )}
-        </div>
       </div>
 
       {/* What's Notable Section */}

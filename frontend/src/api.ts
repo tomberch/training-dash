@@ -11,7 +11,7 @@ export interface PeakPower {
 }
 
 export interface Activity {
-  id: number;
+  id: string;
   title: string | null;
   title_source: "auto" | "manual" | "pending";
   started_at: string;
@@ -71,13 +71,13 @@ export interface GeoJSONFeature {
 
 export interface GeoJSONFeatureCollection {
   type: "FeatureCollection";
-  activity_id: number;
+  activity_id: string;
   features: GeoJSONFeature[];
 }
 
 export interface PRValue {
   value: number;
-  activity_id?: number;
+  activity_id?: string;
 }
 
 export interface Records {
@@ -96,7 +96,7 @@ export interface RoutePR {
   route_id: number;
   route_label: string;
   fastest_time_s: number;
-  activity_id: number | null;
+  activity_id: string | null;
 }
 
 export interface RecordsResponse {
@@ -113,6 +113,8 @@ export interface CompareResponse {
   comparable: boolean;
   gap_series: GapPoint[];
   other_geojson: GeoJSONFeatureCollection | null;
+  reason?: "different_routes" | "opposite_direction" | "insufficient_gps" | "no_gps_match" | "missing_gps";
+  message?: string;
 }
 
 export interface SameRouteResponse {
@@ -137,7 +139,7 @@ export interface WbalResponse {
 
 export interface JobStatus {
   status: "pending" | "processing" | "complete" | "not_found" | "unknown";
-  result: { success: boolean; activity_id: number | null } | null;
+  result: { success: boolean; activity_id: string | null } | null;
 }
 
 export interface AdminUser {
@@ -409,37 +411,37 @@ export async function fetchActivities(page?: number, perPage?: number): Promise<
   return apiGet<PaginatedActivities>(`/activities${query ? `?${query}` : ""}`);
 }
 
-export async function fetchActivity(id: number): Promise<Activity> {
+export async function fetchActivity(id: string): Promise<Activity> {
   return apiGet<Activity>(`/activities/${id}`);
 }
 
-export async function fetchActivityRecords(id: number): Promise<GeoJSONFeatureCollection> {
+export async function fetchActivityRecords(id: string): Promise<GeoJSONFeatureCollection> {
   return apiGet<GeoJSONFeatureCollection>(`/activities/${id}/records`);
 }
 
-export async function fetchActivityWbal(id: number): Promise<WbalResponse> {
+export async function fetchActivityWbal(id: string): Promise<WbalResponse> {
   return apiGet<WbalResponse>(`/activities/${id}/wbal`);
 }
 
-export async function fetchSameRouteActivities(id: number): Promise<SameRouteResponse> {
+export async function fetchSameRouteActivities(id: string): Promise<SameRouteResponse> {
   return apiGet<SameRouteResponse>(`/activities/${id}/same-route`);
 }
 
-export async function updateActivityTitle(id: number, title: string): Promise<Activity> {
+export async function updateActivityTitle(id: string, title: string): Promise<Activity> {
   return apiPatch<Activity>(`/activities/${id}`, { title }, "Failed to update activity title");
 }
 
-export async function generateActivityTitle(id: number): Promise<Activity> {
+export async function generateActivityTitle(id: string): Promise<Activity> {
   return apiPost<Activity>(`/activities/${id}/generate-title`, {}, "Failed to generate activity title");
 }
 
-export async function fetchComparison(id: number, otherId: number): Promise<CompareResponse> {
+export async function fetchComparison(id: string, otherId: string): Promise<CompareResponse> {
   return apiGet<CompareResponse>(`/activities/${id}/compare?other=${otherId}`);
 }
 
 export async function uploadFit(
   file: File
-): Promise<{ id?: number; job_id?: string; source_ref?: string }> {
+): Promise<{ id?: string; job_id?: string; source_ref?: string }> {
   const formData = new FormData();
   formData.append("file", file);
   const res = await fetch(`${API_BASE}/upload`, {

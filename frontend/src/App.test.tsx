@@ -4,9 +4,9 @@ import App from "./App";
 
 // Mock all child components and API
 vi.mock("./ActivityList", () => ({
-  ActivityList: ({ onSelect }: { onSelect: (id: number) => void }) => (
+  ActivityList: ({ onSelect }: { onSelect: (id: string) => void }) => (
     <div data-testid="activity-list">
-      <button onClick={() => onSelect(1)}>Select Activity</button>
+      <button onClick={() => onSelect("test-uuid-1")}>Select Activity</button>
     </div>
   ),
   Login: ({ onLogin }: { onLogin: (isAdmin: boolean) => void }) => (

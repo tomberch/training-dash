@@ -57,8 +57,8 @@ describe("ActivityList", () => {
   it("renders rows from mocked API response", async () => {
     mockFetchActivities.mockResolvedValue({
       activities: [
-        { id: 1, ...baseActivity },
-        { id: 2, ...baseActivity, started_at: "2024-03-10T08:00:00", total_distance_m: 25000 },
+        { id: "uuid-1", ...baseActivity },
+        { id: "uuid-2", ...baseActivity, started_at: "2024-03-10T08:00:00", total_distance_m: 25000 },
       ],
       pagination: { page: 1, per_page: 20, total: 2, total_pages: 1 },
     });
@@ -87,7 +87,7 @@ describe("ActivityList", () => {
 
   it("calls onSelect with activity id when row is clicked", async () => {
     mockFetchActivities.mockResolvedValue({
-      activities: [{ id: 42, ...baseActivity }],
+      activities: [{ id: "uuid-42", ...baseActivity }],
       pagination: { page: 1, per_page: 20, total: 1, total_pages: 1 },
     });
 
@@ -100,6 +100,6 @@ describe("ActivityList", () => {
     });
 
     fireEvent.click(screen.getAllByText("40.0 km")[0]);
-    expect(onSelect).toHaveBeenCalledWith(42);
+    expect(onSelect).toHaveBeenCalledWith("uuid-42");
   });
 });

@@ -1,6 +1,7 @@
 """Integration tests for fitness model and breakthrough detection (#20)."""
 import sys
 from pathlib import Path
+from uuid import UUID as UUIDType
 
 import pytest
 from sqlalchemy import select
@@ -23,7 +24,7 @@ class TestBreakthroughDetection:
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         assert response.status_code == 200
-        activity_id = response.json()["id"]
+        activity_id = UUIDType(response.json()["id"])
         
         # Check activity is marked as breakthrough
         result = await db_session.execute(
@@ -48,7 +49,7 @@ class TestBreakthroughDetection:
             "/api/upload",
             files={"file": ("second.fit", fit_data2, "application/octet-stream")},
         )
-        activity_id = response.json()["id"]
+        activity_id = UUIDType(response.json()["id"])
         
         # Check second activity is NOT a breakthrough
         result = await db_session.execute(
@@ -70,7 +71,8 @@ class TestBreakthroughDetection:
         # Get activity list
         response = await auth_client.get("/api/activities")
         assert response.status_code == 200
-        activities = response.json()
+        data = response.json()
+        activities = data["activities"]
         
         assert len(activities) >= 1
         assert "is_breakthrough" in activities[0]

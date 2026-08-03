@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+from uuid import UUID as UUIDType
 
 import pytest
 from sqlalchemy import select
@@ -46,7 +47,7 @@ class TestCompare:
 
         # Make ride B faster by adjusting its records' timestamps to be closer together
         result_b = await db_session.execute(
-            select(Record).where(Record.activity_id == id_b).order_by(Record.timestamp)
+            select(Record).where(Record.activity_id == UUIDType(id_b)).order_by(Record.timestamp)
         )
         records_b = result_b.scalars().all()
         base_ts = records_b[0].timestamp
@@ -73,7 +74,7 @@ class TestCompare:
 
         # Delete last 50 records from id_short to make it shorter
         result = await db_session.execute(
-            select(Record).where(Record.activity_id == id_short).order_by(Record.timestamp)
+            select(Record).where(Record.activity_id == UUIDType(id_short)).order_by(Record.timestamp)
         )
         records = result.scalars().all()
         for r in records[50:]:

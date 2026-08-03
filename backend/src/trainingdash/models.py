@@ -1,5 +1,6 @@
 from datetime import datetime, date
 from decimal import Decimal
+from uuid import UUID, uuid4
 
 from geoalchemy2 import Geography
 from sqlalchemy import (
@@ -14,6 +15,7 @@ from sqlalchemy import (
     Text,
     text,
 )
+from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from trainingdash.db import Base
@@ -66,8 +68,8 @@ class Route(Base):
     simplified_polyline: Mapped[object] = mapped_column(
         Geography("LINESTRING", srid=4326, spatial_index=True), nullable=False
     )
-    first_seen_activity_id: Mapped[int] = mapped_column(
-        ForeignKey("activities.id"), nullable=False
+    first_seen_activity_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("activities.id"), nullable=False
     )
     ride_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
@@ -76,7 +78,9 @@ class Route(Base):
 class Activity(Base):
     __tablename__ = "activities"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
@@ -125,8 +129,8 @@ class Lap(Base):
     __tablename__ = "laps"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    activity_id: Mapped[int] = mapped_column(
-        ForeignKey("activities.id", ondelete="CASCADE"), nullable=False
+    activity_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("activities.id", ondelete="CASCADE"), nullable=False
     )
     lap_index: Mapped[int] = mapped_column(Integer, nullable=False)
     start_time: Mapped[datetime] = mapped_column(nullable=False)
@@ -142,8 +146,8 @@ class ActivityPeakPower(Base):
     __tablename__ = "activity_peak_powers"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    activity_id: Mapped[int] = mapped_column(
-        ForeignKey("activities.id", ondelete="CASCADE"), nullable=False
+    activity_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("activities.id", ondelete="CASCADE"), nullable=False
     )
     duration_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
     watts: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -292,8 +296,8 @@ class Record(Base):
     __tablename__ = "records"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    activity_id: Mapped[int] = mapped_column(
-        ForeignKey("activities.id", ondelete="CASCADE"), nullable=False
+    activity_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("activities.id", ondelete="CASCADE"), nullable=False
     )
     timestamp: Mapped[datetime] = mapped_column(nullable=False)
     lat: Mapped[float | None] = mapped_column(Float, nullable=True)

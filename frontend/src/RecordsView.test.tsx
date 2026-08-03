@@ -12,19 +12,19 @@ const mockFetchRecords = vi.mocked(fetchRecords);
 
 const fullResponse = {
   lifetime_prs: {
-    longest_distance_m: { value: 50000, activity_id: 1 },
-    longest_moving_time_s: { value: 5400, activity_id: 1 },
-    fastest_5000_m: { value: 600, activity_id: 1 },
-    fastest_10000_m: { value: 1200, activity_id: 2 },
-    fastest_40000_m: { value: 5400, activity_id: 3 },
-    max_speed_mps: { value: 15.0, activity_id: 1 },
-    max_hr_bpm: { value: 185, activity_id: 2 },
-    biggest_elevation_gain_m: { value: 1200, activity_id: 3 },
+    longest_distance_m: { value: 50000, activity_id: "uuid-1" },
+    longest_moving_time_s: { value: 5400, activity_id: "uuid-1" },
+    fastest_5000_m: { value: 600, activity_id: "uuid-1" },
+    fastest_10000_m: { value: 1200, activity_id: "uuid-2" },
+    fastest_40000_m: { value: 5400, activity_id: "uuid-3" },
+    max_speed_mps: { value: 15.0, activity_id: "uuid-1" },
+    max_hr_bpm: { value: 185, activity_id: "uuid-2" },
+    biggest_elevation_gain_m: { value: 1200, activity_id: "uuid-3" },
     highest_sustained_power_w: null,
   },
   route_prs: [
-    { route_id: 1, route_label: "2024-03-15", fastest_time_s: 3600, activity_id: 1 },
-    { route_id: 2, route_label: "2024-03-10", fastest_time_s: 5400, activity_id: 3 },
+    { route_id: 1, route_label: "2024-03-15", fastest_time_s: 3600, activity_id: "uuid-1" },
+    { route_id: 2, route_label: "2024-03-10", fastest_time_s: 5400, activity_id: "uuid-3" },
   ],
 };
 
@@ -62,7 +62,7 @@ describe("RecordsView", () => {
   it("omits route PRs section when no routes matched", async () => {
     mockFetchRecords.mockResolvedValue({
       lifetime_prs: {
-        longest_distance_m: { value: 50000, activity_id: 1 },
+        longest_distance_m: { value: 50000, activity_id: "uuid-1" },
         longest_moving_time_s: null,
         fastest_5000_m: null,
         fastest_10000_m: null,

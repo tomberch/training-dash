@@ -15,7 +15,7 @@ function ActivityRow({
   unitSystem 
 }: { 
   activity: Activity; 
-  onSelect: (id: number) => void; 
+  onSelect: (id: string) => void; 
   unitSystem: UnitSystem;
 }) {
   return (
@@ -197,7 +197,7 @@ export function ActivityList({
   onSelect,
   unitSystem = "metric",
 }: {
-  onSelect: (id: number) => void;
+  onSelect: (id: string) => void;
   unitSystem?: UnitSystem;
 }) {
   const navigate = useNavigate();

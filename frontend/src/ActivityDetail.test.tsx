@@ -7,7 +7,7 @@ vi.mock("./api", async (importOriginal) => {
   return {
     ...actual,
     fetchActivity: vi.fn().mockResolvedValue({
-      id: 1,
+      id: "test-uuid-1",
       started_at: "2024-03-15T10:00:00",
       total_distance_m: 40000,
       moving_time_s: 3600,
@@ -21,7 +21,7 @@ vi.mock("./api", async (importOriginal) => {
     }),
     fetchActivityRecords: vi.fn().mockResolvedValue({
       type: "FeatureCollection",
-      activity_id: 1,
+      activity_id: "test-uuid-1",
       features: [
         {
           type: "Feature",
@@ -55,7 +55,7 @@ vi.mock("./api", async (importOriginal) => {
       route_id: 1,
       activities: [
         {
-          id: 2,
+          id: "test-uuid-2",
           started_at: "2024-03-10T08:00:00",
           total_distance_m: 38000,
           moving_time_s: 3500,
@@ -76,6 +76,7 @@ vi.mock("./api", async (importOriginal) => {
       wbal_min_joules: null,
       wbal_min_pct: null,
     }),
+    fetchThresholds: vi.fn().mockResolvedValue([]),
     fetchComparison: vi.fn().mockResolvedValue({
       comparable: true,
       gap_series: [
@@ -103,7 +104,7 @@ describe("ActivityDetail", () => {
   });
 
   it("renders summary stat tiles from activity data", async () => {
-    render(<ActivityDetail activityId={1} onBack={() => {}} />);
+    render(<ActivityDetail activityId="test-uuid-1" onBack={() => {}} />);
     await waitFor(() => {
       expect(screen.getByText("40.0 km")).toBeInTheDocument();
       expect(screen.getByText("1h 0m")).toBeInTheDocument();
@@ -112,7 +113,7 @@ describe("ActivityDetail", () => {
   });
 
   it("renders all chart series headings", async () => {
-    render(<ActivityDetail activityId={1} onBack={() => {}} />);
+    render(<ActivityDetail activityId="test-uuid-1" onBack={() => {}} />);
     await waitFor(() => {
       expect(screen.getByText("Speed")).toBeInTheDocument();
       expect(screen.getByText("Heart Rate")).toBeInTheDocument();
@@ -122,7 +123,7 @@ describe("ActivityDetail", () => {
   });
 
   it("defaults to time axis for all charts", async () => {
-    render(<ActivityDetail activityId={1} onBack={() => {}} />);
+    render(<ActivityDetail activityId="test-uuid-1" onBack={() => {}} />);
     await waitFor(() => {
       // Toggle buttons now show just "Time" or "Distance"
       const buttons = screen.getAllByRole("button", { name: "Time" });
@@ -131,7 +132,7 @@ describe("ActivityDetail", () => {
   });
 
   it("toggles a chart to distance axis on button click", async () => {
-    render(<ActivityDetail activityId={1} onBack={() => {}} />);
+    render(<ActivityDetail activityId="test-uuid-1" onBack={() => {}} />);
     await waitFor(() => {
       expect(screen.getByText("Speed")).toBeInTheDocument();
     });
@@ -147,19 +148,19 @@ describe("ActivityDetail", () => {
   });
 
   it("renders comparison picker when same-route activities exist", async () => {
-    render(<ActivityDetail activityId={1} onBack={() => {}} />);
+    render(<ActivityDetail activityId="test-uuid-1" onBack={() => {}} />);
     await waitFor(() => {
       expect(screen.getByText(/Compare with another ride/)).toBeInTheDocument();
     });
   });
 
   it("renders time gap curve heading when comparison is active", async () => {
-    render(<ActivityDetail activityId={1} onBack={() => {}} />);
+    render(<ActivityDetail activityId="test-uuid-1" onBack={() => {}} />);
     await waitFor(() => {
       expect(screen.getByText(/Compare with another ride/)).toBeInTheDocument();
     });
     const select = screen.getByRole("combobox");
-    fireEvent.change(select, { target: { value: "2" } });
+    fireEvent.change(select, { target: { value: "test-uuid-2" } });
     await waitFor(() => {
       expect(screen.getByText("Time Gap")).toBeInTheDocument();
     });
@@ -173,12 +174,12 @@ describe("ActivityDetail", () => {
       other_geojson: null,
     });
 
-    render(<ActivityDetail activityId={1} onBack={() => {}} />);
+    render(<ActivityDetail activityId="test-uuid-1" onBack={() => {}} />);
     await waitFor(() => {
       expect(screen.getByText(/Compare with another ride/)).toBeInTheDocument();
     });
     const select = screen.getByRole("combobox");
-    fireEvent.change(select, { target: { value: "2" } });
+    fireEvent.change(select, { target: { value: "test-uuid-2" } });
     await waitFor(() => {
       expect(screen.getByText("These rides are not on the same route and cannot be compared.")).toBeInTheDocument();
     });
@@ -199,12 +200,12 @@ describe("ActivityDetail", () => {
       },
     });
 
-    render(<ActivityDetail activityId={1} onBack={() => {}} />);
+    render(<ActivityDetail activityId="test-uuid-1" onBack={() => {}} />);
     await waitFor(() => {
       expect(screen.getByText(/Compare with another ride/)).toBeInTheDocument();
     });
     const select = screen.getByRole("combobox");
-    fireEvent.change(select, { target: { value: "2" } });
+    fireEvent.change(select, { target: { value: "test-uuid-2" } });
     await waitFor(() => {
       expect(screen.getByText("Time Gap")).toBeInTheDocument();
     });

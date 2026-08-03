@@ -71,7 +71,7 @@ const HR_ZONE_COLORS: Record<string, string> = {
 };
 
 interface Props {
-  activityId: number;
+  activityId: string;
   onBack: () => void;
   unitSystem?: UnitSystem;
 }
