@@ -22,6 +22,7 @@ import { ResizableMap } from "./components/ResizableMap";
 import { useResizableMap } from "./hooks/useResizableMap";
 import { ChartExpandModal } from "./components/ChartExpandModal";
 import { ActivityPowerCurve } from "./components/ActivityPowerCurve";
+import { ChartErrorBoundary } from "./components/ErrorBoundary";
 
 type AxisMode = "time" | "distance";
 
@@ -584,25 +585,31 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
 
         {/* Peak Powers / Power Curve */}
         {activity.peaks && activity.peaks.length > 0 && (
-          <ActivityPowerCurve peaks={activity.peaks} />
+          <ChartErrorBoundary chartName="Power Curve" height={250}>
+            <ActivityPowerCurve peaks={activity.peaks} />
+          </ChartErrorBoundary>
         )}
 
         {/* Zone Distribution Charts */}
         {(activity.power_zone_times || activity.hr_zone_times) && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             {activity.power_zone_times && (
-              <ZoneChart 
-                title="Power Zones" 
-                zoneTimes={activity.power_zone_times} 
-                zoneColors={POWER_ZONE_COLORS}
-              />
+              <ChartErrorBoundary chartName="Power Zones" height={200}>
+                <ZoneChart 
+                  title="Power Zones" 
+                  zoneTimes={activity.power_zone_times} 
+                  zoneColors={POWER_ZONE_COLORS}
+                />
+              </ChartErrorBoundary>
             )}
             {activity.hr_zone_times && (
-              <ZoneChart 
-                title="HR Zones" 
-                zoneTimes={activity.hr_zone_times} 
-                zoneColors={HR_ZONE_COLORS}
-              />
+              <ChartErrorBoundary chartName="HR Zones" height={200}>
+                <ZoneChart 
+                  title="HR Zones" 
+                  zoneTimes={activity.hr_zone_times} 
+                  zoneColors={HR_ZONE_COLORS}
+                />
+              </ChartErrorBoundary>
             )}
           </div>
         )}
@@ -652,43 +659,45 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
 
         {/* Gap Chart (comparison mode) */}
         {comparison && comparison.comparable && gapSeries.length > 0 && (
-          <ChartCard title="Time Gap" subtitle="vs comparison ride">
-            <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={gapSeries}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis
-                  dataKey="distance_m"
-                  tickFormatter={(v) => formatDistance(v, unitSystem)}
-                  tick={{ fontSize: 12, fill: "#6b7280" }}
-                  axisLine={{ stroke: "#d1d5db" }}
-                  tickLine={{ stroke: "#d1d5db" }}
-                />
-                <YAxis
-                  tick={{ fontSize: 12, fill: "#6b7280" }}
-                  axisLine={{ stroke: "#d1d5db" }}
-                  tickLine={{ stroke: "#d1d5db" }}
-                  label={{ value: "Gap (s)", angle: -90, position: "insideLeft", fontSize: 12, fill: "#6b7280" }}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "white",
-                    border: "1px solid #e5e7eb",
-                    borderRadius: "8px",
-                    fontSize: "12px",
-                  }}
-                />
-                <ReferenceLine y={0} stroke="#9ca3af" strokeDasharray="3 3" />
-                <Line
-                  type="monotone"
-                  dataKey="gap_s"
-                  stroke="#6366f1"
-                  strokeWidth={2}
-                  dot={false}
-                  name="Time Gap"
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </ChartCard>
+          <ChartErrorBoundary chartName="Time Gap" height={200}>
+            <ChartCard title="Time Gap" subtitle="vs comparison ride">
+              <ResponsiveContainer width="100%" height={200}>
+                <LineChart data={gapSeries}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis
+                    dataKey="distance_m"
+                    tickFormatter={(v) => formatDistance(v, unitSystem)}
+                    tick={{ fontSize: 12, fill: "#6b7280" }}
+                    axisLine={{ stroke: "#d1d5db" }}
+                    tickLine={{ stroke: "#d1d5db" }}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 12, fill: "#6b7280" }}
+                    axisLine={{ stroke: "#d1d5db" }}
+                    tickLine={{ stroke: "#d1d5db" }}
+                    label={{ value: "Gap (s)", angle: -90, position: "insideLeft", fontSize: 12, fill: "#6b7280" }}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "white",
+                      border: "1px solid #e5e7eb",
+                      borderRadius: "8px",
+                      fontSize: "12px",
+                    }}
+                  />
+                  <ReferenceLine y={0} stroke="#9ca3af" strokeDasharray="3 3" />
+                  <Line
+                    type="monotone"
+                    dataKey="gap_s"
+                    stroke="#6366f1"
+                    strokeWidth={2}
+                    dot={false}
+                    name="Time Gap"
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </ChartCard>
+          </ChartErrorBoundary>
         )}
 
         {/* Data Charts */}
@@ -709,23 +718,23 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
           const yMax = Math.ceil(maxVal + margin);
           
           return (
-            <ChartCard
-              key={chart.key}
-              title={chart.label}
-              action={
-                <button
-                  onClick={() => toggleAxis(chart.key)}
-                  className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
-                    axisModes[chart.key] === "distance"
-                      ? "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300"
-                      : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
-                  }`}
-                >
-                  {axisModes[chart.key] === "distance" ? "Distance" : "Time"}
-                </button>
-              }
-              onExpand={() => setExpandedChart(chart.key)}
-            >
+            <ChartErrorBoundary key={chart.key} chartName={chart.label} height={200}>
+              <ChartCard
+                title={chart.label}
+                action={
+                  <button
+                    onClick={() => toggleAxis(chart.key)}
+                    className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+                      axisModes[chart.key] === "distance"
+                        ? "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300"
+                        : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
+                    }`}
+                  >
+                    {axisModes[chart.key] === "distance" ? "Distance" : "Time"}
+                  </button>
+                }
+                onExpand={() => setExpandedChart(chart.key)}
+              >
               <ResponsiveContainer width="100%" height={200}>
                 <LineChart 
                   data={data}
@@ -789,17 +798,20 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
                   />
                 </LineChart>
               </ResponsiveContainer>
-            </ChartCard>
+              </ChartCard>
+            </ChartErrorBoundary>
           );
         })}
 
         {/* W'bal Chart */}
         {wbalData && wbalData.wbal_series.length > 0 && (
-          <WbalChart 
-            wbalData={wbalData} 
-            findPositionByElapsed={findPositionByElapsed}
-            setHoveredPosition={setHoveredPosition}
-          />
+          <ChartErrorBoundary chartName="W'bal" height={200}>
+            <WbalChart 
+              wbalData={wbalData} 
+              findPositionByElapsed={findPositionByElapsed}
+              setHoveredPosition={setHoveredPosition}
+            />
+          </ChartErrorBoundary>
         )}
       </div>
 

@@ -1,8 +1,11 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import type { Activity } from "../api";
 import { useActivities } from "../hooks/useActivities";
 import { formatDistance, formatTime } from "../format";
 import type { UnitSystem } from "../format";
+
+/** Debounce delay for search input (ms) */
+const SEARCH_DEBOUNCE_MS = 150;
 
 interface ActivitySelectorProps {
   selectedId: number | null;
@@ -12,6 +15,20 @@ interface ActivitySelectorProps {
   unitSystem?: UnitSystem;
   label?: string;
   className?: string;
+}
+
+/** Loading skeleton for activity list items */
+function ActivitySkeleton() {
+  return (
+    <div className="px-4 py-2 animate-pulse">
+      <div className="flex items-center justify-between">
+        <div className="flex-1">
+          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mb-2" />
+          <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/2" />
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function ActivitySelector({
@@ -27,27 +44,40 @@ export function ActivitySelector({
   const { activities, loading, error } = useActivities();
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setIsOpen(false);
+        setHighlightedIndex(-1);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Filter activities based on search and exclusions
+  // Filter activities based on debounced search and exclusions
   const filteredActivities = useMemo(() => {
     return activities
       .filter((a) => !excludeIds.includes(a.id))
       .filter((a) => {
-        if (!search) return true;
-        const searchLower = search.toLowerCase();
+        if (!debouncedSearch) return true;
+        const searchLower = debouncedSearch.toLowerCase();
         const title = a.title || "Untitled";
         const date = new Date(a.started_at).toLocaleDateString();
         return (
@@ -55,7 +85,20 @@ export function ActivitySelector({
           date.includes(searchLower)
         );
       });
-  }, [activities, excludeIds, search]);
+  }, [activities, excludeIds, debouncedSearch]);
+
+  // Reset highlighted index when filtered activities change
+  useEffect(() => {
+    setHighlightedIndex(-1);
+  }, [filteredActivities.length]);
+
+  // Scroll highlighted item into view
+  useEffect(() => {
+    if (highlightedIndex >= 0 && listRef.current) {
+      const item = listRef.current.children[highlightedIndex] as HTMLElement;
+      item?.scrollIntoView({ block: "nearest" });
+    }
+  }, [highlightedIndex]);
 
   // Get selected activity
   const selectedActivity = useMemo(() => {
@@ -63,37 +106,80 @@ export function ActivitySelector({
   }, [activities, selectedId]);
 
   // Format activity display
-  const formatActivityDisplay = (activity: Activity) => {
+  const formatActivityDisplay = useCallback((activity: Activity) => {
     const title = activity.title || "Untitled";
     const date = new Date(activity.started_at).toLocaleDateString();
     const distance = formatDistance(activity.total_distance_m, unitSystem);
     const duration = formatTime(activity.moving_time_s);
     return { title, date, distance, duration };
-  };
+  }, [unitSystem]);
 
-  const handleSelect = (activity: Activity) => {
+  const handleSelect = useCallback((activity: Activity) => {
     onSelect(activity);
     setIsOpen(false);
     setSearch("");
-  };
+    setDebouncedSearch("");
+    setHighlightedIndex(-1);
+  }, [onSelect]);
 
-  const handleClear = (e: React.MouseEvent) => {
+  const handleClear = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     onSelect(null);
     setSearch("");
-  };
+    setDebouncedSearch("");
+  }, [onSelect]);
 
-  const handleInputClick = () => {
+  const handleInputClick = useCallback(() => {
     setIsOpen(true);
     setTimeout(() => inputRef.current?.focus(), 0);
-  };
+  }, []);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Escape") {
-      setIsOpen(false);
-      setSearch("");
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (!isOpen) {
+      // Open dropdown on arrow down or enter when closed
+      if (e.key === "ArrowDown" || e.key === "Enter") {
+        e.preventDefault();
+        setIsOpen(true);
+        return;
+      }
+      return;
     }
-  };
+
+    switch (e.key) {
+      case "Escape":
+        e.preventDefault();
+        setIsOpen(false);
+        setSearch("");
+        setDebouncedSearch("");
+        setHighlightedIndex(-1);
+        break;
+
+      case "ArrowDown":
+        e.preventDefault();
+        setHighlightedIndex((prev) => 
+          prev < filteredActivities.length - 1 ? prev + 1 : prev
+        );
+        break;
+
+      case "ArrowUp":
+        e.preventDefault();
+        setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : 0));
+        break;
+
+      case "Enter":
+        e.preventDefault();
+        if (highlightedIndex >= 0 && highlightedIndex < filteredActivities.length) {
+          handleSelect(filteredActivities[highlightedIndex]);
+        }
+        break;
+
+      case "Tab":
+        // Allow tab to close dropdown naturally
+        setIsOpen(false);
+        setHighlightedIndex(-1);
+        break;
+    }
+  }, [isOpen, filteredActivities, highlightedIndex, handleSelect]);
 
   return (
     <div ref={containerRef} className={`relative ${className}`}>
@@ -106,7 +192,13 @@ export function ActivitySelector({
       {/* Selected display / Input trigger */}
       <div
         onClick={handleInputClick}
-        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white cursor-pointer hover:border-indigo-400 dark:hover:border-indigo-500 transition-colors flex items-center justify-between min-h-[42px]"
+        onKeyDown={handleKeyDown}
+        tabIndex={0}
+        role="combobox"
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
+        aria-controls="activity-listbox"
+        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white cursor-pointer hover:border-indigo-400 dark:hover:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors flex items-center justify-between min-h-[42px]"
       >
         {isOpen ? (
           <input
@@ -117,6 +209,8 @@ export function ActivitySelector({
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
             className="flex-1 bg-transparent border-none outline-none text-sm"
+            aria-autocomplete="list"
+            aria-controls="activity-listbox"
             autoFocus
           />
         ) : selectedActivity ? (
@@ -131,6 +225,7 @@ export function ActivitySelector({
               onClick={handleClear}
               className="ml-2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
               aria-label="Clear selection"
+              type="button"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -151,10 +246,17 @@ export function ActivitySelector({
 
       {/* Dropdown */}
       {isOpen && (
-        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-80 overflow-auto">
+        <div 
+          className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-80 overflow-auto"
+          role="listbox"
+          id="activity-listbox"
+        >
           {loading ? (
-            <div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-              Loading activities...
+            // Loading skeletons
+            <div className="py-1">
+              <ActivitySkeleton />
+              <ActivitySkeleton />
+              <ActivitySkeleton />
             </div>
           ) : error ? (
             <div className="px-4 py-3 text-sm text-red-500 dark:text-red-400">
@@ -162,25 +264,40 @@ export function ActivitySelector({
             </div>
           ) : filteredActivities.length === 0 ? (
             <div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-              {search ? "No activities match your search" : "No activities available"}
+              {debouncedSearch ? "No activities match your search" : "No activities available"}
             </div>
           ) : (
-            <ul className="py-1">
-              {filteredActivities.map((activity) => {
+            <ul ref={listRef} className="py-1">
+              {filteredActivities.map((activity, index) => {
                 const { title, date, distance, duration } = formatActivityDisplay(activity);
                 const isSelected = activity.id === selectedId;
+                const isHighlighted = index === highlightedIndex;
                 
                 return (
-                  <li key={activity.id}>
+                  <li 
+                    key={activity.id}
+                    role="option"
+                    aria-selected={isSelected}
+                  >
                     <button
                       onClick={() => handleSelect(activity)}
-                      className={`w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${
-                        isSelected ? "bg-indigo-50 dark:bg-indigo-900/30" : ""
+                      onMouseEnter={() => setHighlightedIndex(index)}
+                      type="button"
+                      className={`w-full px-4 py-2 text-left transition-colors ${
+                        isHighlighted
+                          ? "bg-indigo-50 dark:bg-indigo-900/40"
+                          : isSelected
+                          ? "bg-indigo-50/50 dark:bg-indigo-900/20"
+                          : "hover:bg-gray-100 dark:hover:bg-gray-700"
                       }`}
                     >
                       <div className="flex items-center justify-between">
                         <div className="truncate">
-                          <span className={`font-medium ${isSelected ? "text-indigo-600 dark:text-indigo-400" : "text-gray-900 dark:text-white"}`}>
+                          <span className={`font-medium ${
+                            isSelected || isHighlighted 
+                              ? "text-indigo-600 dark:text-indigo-400" 
+                              : "text-gray-900 dark:text-white"
+                          }`}>
                             {title}
                           </span>
                           {activity.is_breakthrough && (
