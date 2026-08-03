@@ -162,7 +162,7 @@ def create_app() -> FastAPI:
         app.mount("/assets", StaticFiles(directory=static_dir / "assets"), name="assets")
 
     # Serve uploaded files (avatars, etc.)
-    uploads_dir = Path("/app/uploads")
+    uploads_dir = Path(os.environ.get("TRAININGDASH_UPLOADS_DIR", "/app/uploads"))
     uploads_dir.mkdir(parents=True, exist_ok=True)
     app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 

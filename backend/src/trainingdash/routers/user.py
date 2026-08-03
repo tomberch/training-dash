@@ -1,7 +1,9 @@
 """User endpoints: /me/*, thresholds, zones, integrations, notifications."""
 
 import json
+import os
 from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
@@ -711,9 +713,6 @@ async def dismiss_notification(
 @router.post("/me/avatar")
 async def upload_avatar(db: DbSession, user: CurrentUser, request: Request):
     """Upload a new avatar image for the current user."""
-    import os
-    from pathlib import Path
-    
     # Read the raw body (image bytes)
     content_type = request.headers.get("content-type", "")
     if not content_type.startswith("image/"):
@@ -733,12 +732,13 @@ async def upload_avatar(db: DbSession, user: CurrentUser, request: Request):
     ext = ext_map.get(content_type, ".jpg")
     
     # Ensure uploads directory exists
-    uploads_dir = Path("/app/uploads/avatars")
+    uploads_base = Path(os.environ.get("TRAININGDASH_UPLOADS_DIR", "/app/uploads"))
+    uploads_dir = uploads_base / "avatars"
     uploads_dir.mkdir(parents=True, exist_ok=True)
     
     # Delete old avatar if exists
     if user.avatar_path:
-        old_path = Path("/app") / user.avatar_path.lstrip("/")
+        old_path = uploads_base.parent / user.avatar_path.lstrip("/")
         if old_path.exists():
             old_path.unlink()
     
@@ -759,10 +759,9 @@ async def upload_avatar(db: DbSession, user: CurrentUser, request: Request):
 @router.delete("/me/avatar")
 async def delete_avatar(db: DbSession, user: CurrentUser):
     """Delete the current user's avatar."""
-    from pathlib import Path
-    
     if user.avatar_path:
-        filepath = Path("/app") / user.avatar_path.lstrip("/")
+        uploads_base = Path(os.environ.get("TRAININGDASH_UPLOADS_DIR", "/app/uploads"))
+        filepath = uploads_base.parent / user.avatar_path.lstrip("/")
         if filepath.exists():
             filepath.unlink()
         user.avatar_path = None
