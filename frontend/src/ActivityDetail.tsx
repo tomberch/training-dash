@@ -502,11 +502,24 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                   </svg>
                 </button>
-                {activity.title && (
-                  <span className="text-sm text-gray-500 dark:text-gray-400">
-                    {new Date(activity.started_at).toLocaleDateString()}
-                  </span>
-                )}
+              </div>
+              {/* Date/time subtitle */}
+              <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400 mt-1">
+                <span className="flex items-center gap-1.5">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  {new Date(activity.started_at).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {new Date(activity.started_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })}
+                  –
+                  {new Date(new Date(activity.started_at).getTime() + (activity.elapsed_time_s * 1000)).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })}
+                  <span className="text-gray-400 dark:text-gray-500">({formatTime(activity.elapsed_time_s)})</span>
+                </span>
               </div>
             )}
           </div>
@@ -523,10 +536,9 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
         {/* Stats Grid - Row 1: Ride Basics */}
         <div className="mb-3">
           <h2 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Ride Basics</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            <StatTile label="Date" value={new Date(activity.started_at).toLocaleDateString()} />
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             <StatTile label="Distance" value={formatDistance(activity.total_distance_m, unitSystem)} />
-            <StatTile label="Duration" value={formatTime(activity.moving_time_s)} />
+            <StatTile label="Moving Time" value={formatTime(activity.moving_time_s)} />
             <StatTile label="Elevation" value={formatElevation(activity.elevation_gain_m, unitSystem)} />
             <StatTile label="Avg Speed" value={formatSpeed(activity.avg_speed_mps, unitSystem)} />
             <StatTile label="Avg HR" value={activity.avg_hr_bpm ? `${activity.avg_hr_bpm} bpm` : "—"} />
