@@ -462,7 +462,7 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
                   {activity.title || new Date(activity.started_at).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                 </h1>
-                {activity.title_source === "pending" && !activity.title && (
+                {activity.title_source === "pending" && (
                   <button
                     onClick={() => {
                       setIsGeneratingTitle(true);
@@ -475,7 +475,7 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
                     }}
                     disabled={isGeneratingTitle}
                     className="p-1 text-indigo-500 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 disabled:opacity-50"
-                    title="Generate title from GPS"
+                    title="Generate location-based title from GPS"
                   >
                     {isGeneratingTitle ? (
                       <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">

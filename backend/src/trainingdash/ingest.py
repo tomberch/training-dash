@@ -351,8 +351,8 @@ async def ingest_fit(
         await db.commit()
         await db.refresh(activity)
 
-    # Generate activity title from GPS data
-    await _generate_activity_title(db, activity, parsed["records"])
+    # Generate activity title from GPS data (skip in batch mode to avoid rate limit issues)
+    await _generate_activity_title(db, activity, parsed["records"], skip_if_rate_limited=batch_mode)
 
     return activity
 
@@ -622,6 +622,28 @@ async def _extract_activity_peaks(
     await db.commit()
 
 
+def _time_of_day_title(started_at: datetime) -> str:
+    """
+    Generate a time-of-day based title like "Morning Ride", "Evening Ride".
+    
+    Time ranges:
+    - 05:00-11:59 → Morning Ride
+    - 12:00-16:59 → Afternoon Ride  
+    - 17:00-20:59 → Evening Ride
+    - 21:00-04:59 → Night Ride
+    """
+    hour = started_at.hour
+    
+    if 5 <= hour < 12:
+        return "Morning Ride"
+    elif 12 <= hour < 17:
+        return "Afternoon Ride"
+    elif 17 <= hour < 21:
+        return "Evening Ride"
+    else:
+        return "Night Ride"
+
+
 async def _generate_activity_title(
     db: AsyncSession,
     activity: Activity,
@@ -638,12 +660,13 @@ async def _generate_activity_title(
         db: Database session
         activity: Activity to generate title for
         records: GPS records with lat, lon, distance_m
-        skip_if_rate_limited: If True, skip title generation to avoid 
-            slowing down bulk imports. Titles can be generated later.
+        skip_if_rate_limited: If True, use time-of-day title instead of geocoding
+            to avoid rate limit issues during bulk imports.
     """
     if skip_if_rate_limited:
-        # For bulk imports, mark as pending so UI can show a "generate" button
-        # Titles will show as date until manually edited or regenerated
+        # For bulk imports, use time-of-day title (e.g., "Morning Ride")
+        # User can regenerate with geocoding later via the UI
+        activity.title = _time_of_day_title(activity.started_at)
         activity.title_source = "pending"
         await db.commit()
         return
