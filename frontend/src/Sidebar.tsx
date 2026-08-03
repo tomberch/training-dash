@@ -25,6 +25,22 @@ function ListIcon() {
   );
 }
 
+function LayersIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+    </svg>
+  );
+}
+
+function ArrowsLeftRightIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+    </svg>
+  );
+}
+
 function ChartIcon() {
   return (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -126,6 +142,29 @@ function NavItem({ to, icon, label, collapsed, onClick }: NavItemProps) {
   );
 }
 
+interface NavSectionProps {
+  title: string;
+  collapsed: boolean;
+  children: React.ReactNode;
+}
+
+function NavSection({ title, collapsed, children }: NavSectionProps) {
+  return (
+    <div className="space-y-1">
+      {collapsed ? (
+        <div className="border-t border-gray-200 dark:border-gray-700 my-2" />
+      ) : (
+        <div className="px-3 py-2">
+          <span className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+            {title}
+          </span>
+        </div>
+      )}
+      {children}
+    </div>
+  );
+}
+
 export function Sidebar({ isAdmin = false }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -144,18 +183,23 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
     localStorage.setItem(STORAGE_KEY, String(collapsed));
   }, [collapsed]);
 
-  const navItems = [
-    { to: "/", icon: <HomeIcon />, label: "Dashboard" },
+  // Navigation structure with sections
+  const dashboardItem = { to: "/", icon: <HomeIcon />, label: "Dashboard" };
+  
+  const activitiesSection = [
     { to: "/activities", icon: <ListIcon />, label: "Activities" },
+    { to: "/analyze", icon: <LayersIcon />, label: "Analyze" },
+    { to: "/compare", icon: <ArrowsLeftRightIcon />, label: "Compare" },
+  ];
+  
+  const insightsSection = [
     { to: "/pmc", icon: <ChartIcon />, label: "PMC" },
     { to: "/power-curve", icon: <BoltIcon />, label: "Power Curve" },
     { to: "/records", icon: <TrophyIcon />, label: "Records" },
-    { to: "/settings", icon: <CogIcon />, label: "Settings" },
   ];
-
-  if (isAdmin) {
-    navItems.push({ to: "/admin", icon: <AdminIcon />, label: "Admin" });
-  }
+  
+  const settingsItem = { to: "/settings", icon: <CogIcon />, label: "Settings" };
+  const adminItem = { to: "/admin", icon: <AdminIcon />, label: "Admin" };
 
   // Mobile hamburger button
   const MobileMenuButton = () => (
@@ -187,17 +231,65 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-        {navItems.map((item) => (
+      <nav className="flex-1 p-3 overflow-y-auto">
+        {/* Dashboard (standalone) */}
+        <div className="space-y-1">
           <NavItem
-            key={item.to}
-            to={item.to}
-            icon={item.icon}
-            label={item.label}
+            to={dashboardItem.to}
+            icon={dashboardItem.icon}
+            label={dashboardItem.label}
             collapsed={collapsed && !isMobile}
             onClick={isMobile ? () => setMobileOpen(false) : undefined}
           />
-        ))}
+        </div>
+
+        {/* Activities Section */}
+        <NavSection title="Activities" collapsed={collapsed && !isMobile}>
+          {activitiesSection.map((item) => (
+            <NavItem
+              key={item.to}
+              to={item.to}
+              icon={item.icon}
+              label={item.label}
+              collapsed={collapsed && !isMobile}
+              onClick={isMobile ? () => setMobileOpen(false) : undefined}
+            />
+          ))}
+        </NavSection>
+
+        {/* Insights Section */}
+        <NavSection title="Insights" collapsed={collapsed && !isMobile}>
+          {insightsSection.map((item) => (
+            <NavItem
+              key={item.to}
+              to={item.to}
+              icon={item.icon}
+              label={item.label}
+              collapsed={collapsed && !isMobile}
+              onClick={isMobile ? () => setMobileOpen(false) : undefined}
+            />
+          ))}
+        </NavSection>
+
+        {/* Settings (standalone at bottom of nav) */}
+        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 space-y-1">
+          <NavItem
+            to={settingsItem.to}
+            icon={settingsItem.icon}
+            label={settingsItem.label}
+            collapsed={collapsed && !isMobile}
+            onClick={isMobile ? () => setMobileOpen(false) : undefined}
+          />
+          {isAdmin && (
+            <NavItem
+              to={adminItem.to}
+              icon={adminItem.icon}
+              label={adminItem.label}
+              collapsed={collapsed && !isMobile}
+              onClick={isMobile ? () => setMobileOpen(false) : undefined}
+            />
+          )}
+        </div>
       </nav>
 
       {/* Collapse toggle (desktop only) */}

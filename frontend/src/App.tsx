@@ -11,6 +11,8 @@ import { Dashboard } from "./pages/Dashboard";
 import { PMCView } from "./pages/PMCView";
 import { PowerCurveView } from "./pages/PowerCurveView";
 import { ActivityTable } from "./pages/ActivityTable";
+import { AnalyzePage } from "./pages/AnalyzePage";
+import { ComparePage } from "./pages/ComparePage";
 import { fetchMe } from "./api";
 import type { User } from "./api";
 import "./App.css";
@@ -61,6 +63,8 @@ function AppLayout({ user, onLogout, onUserUpdate }: {
             />
             <Route path="/pmc" element={<PMCView />} />
             <Route path="/power-curve" element={<PowerCurveView />} />
+            <Route path="/analyze" element={<AnalyzePage />} />
+            <Route path="/compare" element={<ComparePage />} />
             <Route 
               path="/records" 
               element={

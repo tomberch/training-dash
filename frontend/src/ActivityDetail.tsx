@@ -1,7 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
-import { MapContainer, Polyline, TileLayer, useMap, Marker, CircleMarker } from "react-leaflet";
-import type { LatLngBounds } from "leaflet";
-import L from "leaflet";
+import { useState, useEffect, useMemo } from "react";
 import {
   LineChart,
   Line,
@@ -14,13 +11,17 @@ import {
   ReferenceDot,
   ReferenceArea,
 } from "recharts";
-import type { Activity, GeoJSONFeatureCollection, CompareResponse, SameRouteResponse, GapPoint, WbalResponse, PeakPower } from "./api";
-import { ApiError, fetchActivity, fetchActivityRecords, fetchActivityWbal, fetchSameRouteActivities, fetchComparison, updateActivityTitle, generateActivityTitle } from "./api";
+import type { Activity, GeoJSONFeatureCollection, CompareResponse, SameRouteResponse, GapPoint, WbalResponse, ThresholdEntry } from "./api";
+import { ApiError, fetchActivity, fetchActivityRecords, fetchActivityWbal, fetchSameRouteActivities, fetchComparison, updateActivityTitle, generateActivityTitle, fetchThresholds } from "./api";
 import { formatDistance, formatTime, formatElevation, formatSpeed } from "./format";
 import type { UnitSystem } from "./format";
 import { resampleByDistance } from "./resampler";
 import type { FitRecord } from "./resampler";
 import { ErrorDisplay } from "./ErrorDisplay";
+import { ResizableMap } from "./components/ResizableMap";
+import { useResizableMap } from "./hooks/useResizableMap";
+import { ChartExpandModal } from "./components/ChartExpandModal";
+import { ActivityPowerCurve } from "./components/ActivityPowerCurve";
 
 type AxisMode = "time" | "distance";
 
@@ -64,22 +65,6 @@ function buildColoredSegments(
   }
 
   return segments;
-}
-
-// Component to fit map bounds to polyline - only runs once on initial load
-function FitBounds({ positions }: { positions: [number, number][] }) {
-  const map = useMap();
-  const hasFitted = useRef(false);
-  
-  useEffect(() => {
-    if (positions.length > 0 && !hasFitted.current) {
-      const bounds: LatLngBounds = L.latLngBounds(positions.map(p => L.latLng(p[0], p[1])));
-      map.fitBounds(bounds, { padding: [20, 20] });
-      hasFitted.current = true;
-    }
-  }, [map, positions]);
-  
-  return null;
 }
 
 interface ChartConfig {
@@ -154,6 +139,23 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState("");
   const [isGeneratingTitle, setIsGeneratingTitle] = useState(false);
+  const [expandedChart, setExpandedChart] = useState<string | null>(null);
+  const [thresholds, setThresholds] = useState<ThresholdEntry[]>([]);
+
+  // Responsive layout hooks for resizable map
+  const {
+    height: mapHeight,
+    isResizing,
+    startResizeHeight,
+  } = useResizableMap({
+    storageKey: "activity-detail",
+    defaultHeight: 250,
+    minHeight: 150,
+    maxHeight: 400,
+    defaultWidthPercent: 40,
+    minWidthPercent: 25,
+    maxWidthPercent: 60,
+  });
 
   useEffect(() => {
     setComparison(null);
@@ -164,12 +166,14 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
       fetchActivityRecords(activityId),
       fetchSameRouteActivities(activityId),
       fetchActivityWbal(activityId),
+      fetchThresholds(),
     ])
-      .then(([a, g, sr, wbal]) => {
+      .then(([a, g, sr, wbal, th]) => {
         setActivity(a);
         setGeojson(g);
         setSameRoute(sr);
         setWbalData(wbal);
+        setThresholds(th);
       })
       .catch((e) => setError(e));
   }, [activityId]);
@@ -188,6 +192,19 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
   const timestamps = useMemo(() => (geojson ? geojsonToTimestamps(geojson) : []), [geojson]);
   const posByDist = useMemo(() => (geojson ? positionsByDistance(geojson.features) : []), [geojson]);
   const firstTs = useMemo(() => timestamps.length > 0 ? timestamps[0] : 0, [timestamps]);
+
+  // Get applicable threshold for the activity date (most recent threshold before or on activity date)
+  const applicableThreshold = useMemo(() => {
+    if (!activity || thresholds.length === 0) return null;
+    const activityDate = new Date(activity.started_at).toISOString().split("T")[0];
+    // Thresholds are sorted by effective_date descending
+    const applicable = thresholds.find((t) => t.effective_date <= activityDate);
+    return applicable ?? thresholds[thresholds.length - 1]; // fallback to oldest if none applicable
+  }, [activity, thresholds]);
+
+  // Get FTP from wbalData (preferred) or threshold
+  const ftpWatts = wbalData?.ftp_watts ?? applicableThreshold?.ftp_watts ?? null;
+  const lthrBpm = applicableThreshold?.lthr_bpm ?? null;
 
   // Create a lookup for positions by elapsed time
   const posByElapsed = useMemo(() => {
@@ -259,9 +276,6 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
     f.geometry!.coordinates[1],
     f.geometry!.coordinates[0],
   ]);
-
-  const center: [number, number] =
-    positions.length > 0 ? positions[0] : [47.3769, 8.5417];
 
   function toggleAxis(chartKey: string) {
     setAxisModes((prev) => ({
@@ -568,9 +582,9 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
           </div>
         </div>
 
-        {/* Peak Powers */}
+        {/* Peak Powers / Power Curve */}
         {activity.peaks && activity.peaks.length > 0 && (
-          <PeaksSection peaks={activity.peaks} />
+          <ActivityPowerCurve peaks={activity.peaks} />
         )}
 
         {/* Zone Distribution Charts */}
@@ -622,63 +636,17 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
 
         {/* Map */}
         {positions.length > 0 && (
-          <div className="mb-6 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <MapContainer
-              center={center}
-              zoom={13}
-              style={{ height: "400px", width: "100%" }}
-            >
-              <TileLayer
-                url="/tiles/{z}/{x}/{y}.png"
-                attribution='&copy; OpenStreetMap'
-              />
-              <FitBounds positions={positions} />
-              {coloredSegments.length > 0
-                ? coloredSegments.map((seg, i) => (
-                    <Polyline key={i} positions={seg.positions} color={seg.color} weight={4} />
-                  ))
-                : <Polyline positions={positions} color="#6366f1" weight={5} />}
-              {otherPositions && (
-                <Polyline positions={otherPositions} color="#f59e0b" weight={3} dashArray="5,5" />
-              )}
-              {/* Start marker */}
-              <Marker
-                position={positions[0]}
-                icon={L.divIcon({
-                  className: "",
-                  html: `<div style="background:#10b981;width:24px;height:24px;border-radius:50%;border:3px solid white;box-shadow:0 2px 4px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="white"><polygon points="8,5 19,12 8,19"/></svg>
-                  </div>`,
-                  iconSize: [24, 24],
-                  iconAnchor: [12, 12],
-                })}
-              />
-              {/* End marker */}
-              <Marker
-                position={positions[positions.length - 1]}
-                icon={L.divIcon({
-                  className: "",
-                  html: `<div style="background:#ef4444;width:24px;height:24px;border-radius:50%;border:3px solid white;box-shadow:0 2px 4px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;">
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="white"><rect x="6" y="6" width="12" height="12"/></svg>
-                  </div>`,
-                  iconSize: [24, 24],
-                  iconAnchor: [12, 12],
-                })}
-              />
-              {/* Hover position marker */}
-              {hoveredPosition && (
-                <CircleMarker
-                  center={hoveredPosition}
-                  radius={8}
-                  pathOptions={{
-                    color: "#ffffff",
-                    weight: 3,
-                    fillColor: "#f59e0b",
-                    fillOpacity: 1,
-                  }}
-                />
-              )}
-            </MapContainer>
+          <div className="mb-6 sticky top-0 z-10">
+            <ResizableMap
+              positions={positions}
+              coloredSegments={coloredSegments}
+              otherPositions={otherPositions}
+              hoveredPosition={hoveredPosition}
+              height={mapHeight}
+              onResizeStart={startResizeHeight}
+              isResizing={isResizing}
+              showResizeHandle={true}
+            />
           </div>
         )}
 
@@ -756,6 +724,7 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
                   {axisModes[chart.key] === "distance" ? "Distance" : "Time"}
                 </button>
               }
+              onExpand={() => setExpandedChart(chart.key)}
             >
               <ResponsiveContainer width="100%" height={200}>
                 <LineChart 
@@ -833,6 +802,36 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
           />
         )}
       </div>
+
+      {/* Chart expansion modal */}
+      {expandedChart && (() => {
+        const chart = CHARTS.find((c) => c.key === expandedChart);
+        if (!chart) return null;
+        
+        // Prepare chart data with elapsed times
+        const resampled = resampleByDistance(records);
+        const chartData = resampled.map((r, i) => {
+          const elapsed = i < timestamps.length ? timestamps[i] - firstTs : i * 10;
+          return {
+            ...r,
+            elapsed,
+          };
+        });
+        
+        return (
+          <ChartExpandModal
+            chart={chart}
+            data={chartData}
+            axisMode={axisModes[chart.key]}
+            onToggleAxis={() => toggleAxis(chart.key)}
+            onClose={() => setExpandedChart(null)}
+            formatDistance={(m) => formatDistance(m, unitSystem)}
+            formatTime={(s) => formatTime(s)}
+            ftpWatts={ftpWatts}
+            lthrBpm={lthrBpm}
+          />
+        );
+      })()}
     </div>
   );
 }
@@ -859,11 +858,13 @@ function ChartCard({
   title,
   subtitle,
   action,
+  onExpand,
   children,
 }: {
   title: string;
   subtitle?: string;
   action?: React.ReactNode;
+  onExpand?: () => void;
   children: React.ReactNode;
 }) {
   return (
@@ -875,7 +876,21 @@ function ChartCard({
             <p className="text-xs text-gray-500 dark:text-gray-400">{subtitle}</p>
           )}
         </div>
-        {action}
+        <div className="flex items-center gap-2">
+          {action}
+          {onExpand && (
+            <button
+              onClick={onExpand}
+              className="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+              aria-label="Expand chart"
+              title="Expand chart"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
       <div className="p-4">{children}</div>
     </div>
@@ -1095,78 +1110,3 @@ function WbalChart({
   );
 }
 
-
-// Key durations to display (in seconds)
-const KEY_DURATIONS = [5, 30, 60, 300, 1200, 3600, 7200];
-
-function formatDuration(seconds: number): string {
-  if (seconds < 60) return `${seconds}s`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
-  return `${Math.floor(seconds / 3600)}h`;
-}
-
-function PeaksSection({ peaks }: { peaks: PeakPower[] }) {
-  const [showAll, setShowAll] = useState(false);
-  
-  // Filter to key durations for compact view
-  const keyPeaks = peaks.filter(p => KEY_DURATIONS.includes(p.duration_seconds));
-  const displayPeaks = showAll ? peaks : keyPeaks;
-  
-  if (displayPeaks.length === 0) return null;
-
-  return (
-    <div className="mb-6">
-      <div className="flex items-center justify-between mb-2">
-        <h2 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Peak Powers</h2>
-        {peaks.length > keyPeaks.length && (
-          <button
-            onClick={() => setShowAll(!showAll)}
-            className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
-          >
-            {showAll ? "Show key durations" : `Show all ${peaks.length} durations`}
-          </button>
-        )}
-      </div>
-      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-2">
-        {displayPeaks.map((peak) => (
-          <div
-            key={peak.duration_seconds}
-            className={`p-3 rounded-lg border ${
-              peak.is_pr
-                ? "bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700"
-                : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"
-            }`}
-          >
-            <div className="text-xs text-gray-500 dark:text-gray-400 mb-1 flex items-center gap-1">
-              {formatDuration(peak.duration_seconds)}
-              {peak.is_pr && (
-                <span className="text-amber-600 dark:text-amber-400" title="Personal Record!">
-                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                  </svg>
-                </span>
-              )}
-            </div>
-            <div className={`text-lg font-semibold ${
-              peak.is_pr 
-                ? "text-amber-700 dark:text-amber-300" 
-                : "text-gray-900 dark:text-white"
-            }`}>
-              {peak.watts}W
-            </div>
-            {peak.pct_of_pr != null && !peak.is_pr && (
-              <div className="text-xs text-gray-500 dark:text-gray-400">
-                {peak.pct_of_pr.toFixed(0)}% of PR
-              </div>
-            )}
-            {peak.is_pr && (
-              <div className="text-xs font-medium text-amber-600 dark:text-amber-400">
-                PR!
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
