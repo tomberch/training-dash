@@ -4,43 +4,53 @@ This document describes TrainDash's system design and code organization for deve
 
 ## System Overview
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         Browser                                  │
-│  React SPA (TypeScript, Tailwind, Recharts, Leaflet)            │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      FastAPI Backend                             │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────────┐ │
-│  │  Auth    │  │Activities│  │Analytics │  │     Admin        │ │
-│  │  Router  │  │  Router  │  │  Router  │  │     Router       │ │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────────────┘ │
-│                              │                                   │
-│  ┌───────────────────────────┴───────────────────────────────┐  │
-│  │                    Domain Services                         │  │
-│  │  ingest.py │ fitness.py │ pmc.py │ peaks.py │ metrics.py  │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                              │                                   │
-│  ┌───────────────────────────┴───────────────────────────────┐  │
-│  │              SQLAlchemy Models + PostgreSQL/PostGIS        │  │
-│  └───────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-        ┌─────────────────────┼─────────────────────┐
-        ▼                     ▼                     ▼
-┌──────────────┐     ┌──────────────┐      ┌──────────────┐
-│  PostgreSQL  │     │    Redis     │      │    Worker    │
-│   + PostGIS  │     │   (Queue)    │◄─────│    (arq)     │
-└──────────────┘     └──────────────┘      └──────────────┘
-                                                   │
-                           ┌───────────────────────┼───────────────┐
-                           ▼                       ▼               ▼
-                    ┌────────────┐          ┌────────────┐   ┌──────────┐
-                    │   Garmin   │          │    Xert    │   │   FIT    │
-                    │  Connect   │          │    API     │   │  Parser  │
-                    └────────────┘          └────────────┘   └──────────┘
+```mermaid
+flowchart TB
+    subgraph Browser["Browser"]
+        SPA["React SPA<br/>(TypeScript, Tailwind, Recharts, Leaflet)"]
+    end
+
+    subgraph Backend["FastAPI Backend"]
+        subgraph Routers["API Routers"]
+            Auth["Auth"]
+            Activities["Activities"]
+            Analytics["Analytics"]
+            Admin["Admin"]
+        end
+        subgraph Services["Domain Services"]
+            Ingest["ingest.py"]
+            Fitness["fitness.py"]
+            PMC["pmc.py"]
+            Peaks["peaks.py"]
+            Metrics["metrics.py"]
+        end
+        subgraph Data["Data Layer"]
+            Models["SQLAlchemy Models"]
+        end
+    end
+
+    subgraph Infrastructure
+        DB[("PostgreSQL<br/>+ PostGIS")]
+        Redis[("Redis<br/>(Queue)")]
+        Worker["Worker<br/>(arq)"]
+    end
+
+    subgraph External["External Services"]
+        Garmin["Garmin Connect"]
+        Xert["Xert API"]
+        FIT["FIT Parser"]
+    end
+
+    SPA --> Routers
+    Routers --> Services
+    Services --> Models
+    Models --> DB
+    Worker --> Redis
+    Worker --> Garmin
+    Worker --> Xert
+    Worker --> FIT
+    Backend --> DB
+    Backend --> Redis
 ```
 
 ## Backend Structure

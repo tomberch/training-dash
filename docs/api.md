@@ -37,7 +37,7 @@ Clear the session cookie.
 
 ### POST /api/register
 
-Register a new account. First user becomes admin automatically.
+Register a new account. The first registered user becomes admin automatically. Subsequent users may require admin approval depending on app settings.
 
 **Request:**
 ```json

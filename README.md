@@ -72,9 +72,9 @@ cd training-dash
 docker compose up
 ```
 
-Open http://localhost:8000 and log in:
-- **Email:** `admin`
-- **Password:** `admin`
+Open http://localhost:8000 and log in with the seed admin account:
+- **Email:** `admin@example.com`
+- **Password:** `admin` (or value of `ADMIN_PASSWORD` env var)
 
 To sync activities from Garmin or Xert, go to **Settings > Integrations**.
 

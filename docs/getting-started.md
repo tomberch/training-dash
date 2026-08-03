@@ -89,9 +89,11 @@ python -c "import secrets, base64; print(base64.b64encode(secrets.token_bytes(32
 
 ### 1. Log In
 
-Default credentials:
-- **Email:** `admin`
-- **Password:** `admin`
+**Docker deployment** — A seed admin account is created automatically:
+- **Email:** `admin@example.com`
+- **Password:** `admin` (or value of `ADMIN_PASSWORD` env var)
+
+**Manual deployment** — Register the first account at `/register`. The first user automatically becomes admin.
 
 ### 2. Upload Activities
 
