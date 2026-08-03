@@ -10,6 +10,7 @@ import { Sidebar } from "./Sidebar";
 import { Dashboard } from "./pages/Dashboard";
 import { PMCView } from "./pages/PMCView";
 import { PowerCurveView } from "./pages/PowerCurveView";
+import { ActivityTable } from "./pages/ActivityTable";
 import { fetchMe } from "./api";
 import type { User } from "./api";
 import "./App.css";
@@ -49,6 +50,10 @@ function AppLayout({ user, onLogout, onUserUpdate }: {
                   />
                 </div>
               } 
+            />
+            <Route 
+              path="/activities/table" 
+              element={<ActivityTable unitSystem={user.unit_system} />} 
             />
             <Route 
               path="/activities/:id" 

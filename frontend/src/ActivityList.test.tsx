@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { ActivityList } from "./ActivityList";
 
 vi.mock("./api", () => ({
@@ -43,6 +44,11 @@ const baseActivity = {
   map_polyline: null as string | null,
 };
 
+// Helper to render with router
+const renderWithRouter = (ui: React.ReactElement) => {
+  return render(<MemoryRouter>{ui}</MemoryRouter>);
+};
+
 describe("ActivityList", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -57,7 +63,7 @@ describe("ActivityList", () => {
       pagination: { page: 1, per_page: 20, total: 2, total_pages: 1 },
     });
 
-    render(<ActivityList onSelect={() => {}} />);
+    renderWithRouter(<ActivityList onSelect={() => {}} />);
 
     await waitFor(() => {
       // Distance text appears in both desktop and mobile views
@@ -72,7 +78,7 @@ describe("ActivityList", () => {
       pagination: { page: 1, per_page: 20, total: 0, total_pages: 0 },
     });
 
-    render(<ActivityList onSelect={() => {}} />);
+    renderWithRouter(<ActivityList onSelect={() => {}} />);
 
     await waitFor(() => {
       expect(screen.getByText("No activities yet. Upload a FIT file to get started.")).toBeInTheDocument();
@@ -86,7 +92,7 @@ describe("ActivityList", () => {
     });
 
     const onSelect = vi.fn();
-    render(<ActivityList onSelect={onSelect} />);
+    renderWithRouter(<ActivityList onSelect={onSelect} />);
 
     await waitFor(() => {
       // Distance text appears in both desktop and mobile views
