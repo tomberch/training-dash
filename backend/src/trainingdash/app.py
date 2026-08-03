@@ -161,6 +161,13 @@ def create_app() -> FastAPI:
         # Serve static assets (JS, CSS, etc.)
         app.mount("/assets", StaticFiles(directory=static_dir / "assets"), name="assets")
 
+    # Serve uploaded files (avatars, etc.)
+    uploads_dir = Path("/app/uploads")
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
+
+    # Serve frontend static files if the dist directory exists
+    if static_dir.exists():
         # Catch-all route for SPA - must be registered last
         @app.get("/{full_path:path}")
         async def serve_spa(full_path: str):

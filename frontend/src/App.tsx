@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams } from "react-router-dom";
-import { ActivityList, Login } from "./ActivityList";
+import { ActivityList, Login, PendingApproval } from "./ActivityList";
 import { ActivityDetail } from "./ActivityDetail";
 import { RecordsView } from "./RecordsView";
 import { AdminView } from "./AdminView";
@@ -28,7 +28,9 @@ function AppLayout({ user, onLogout, onUserUpdate }: {
       <Sidebar isAdmin={user.is_admin} />
       <div className="flex-1 flex flex-col min-w-0">
         <Header
-          username={user.username}
+          displayName={user.display_name}
+          email={user.email}
+          avatarPath={user.avatar_path}
           onLogout={onLogout}
           onSettings={() => navigate("/settings")}
           onUploadComplete={() => setRefreshKey((k) => k + 1)}
@@ -132,7 +134,7 @@ export default function App() {
       .finally(() => setLoading(false));
   }, []);
 
-  function handleLogin(_isAdmin: boolean) {
+  function handleLogin(_result: { is_admin: boolean; is_approved: boolean }) {
     // Refetch user to get full user data
     fetchMe().then(setUser);
   }
@@ -151,6 +153,11 @@ export default function App() {
 
   if (!user) {
     return <Login onLogin={handleLogin} />;
+  }
+
+  // Show pending approval screen if user is not approved
+  if (!user.is_approved) {
+    return <PendingApproval onLogout={handleLogout} />;
   }
 
   return (

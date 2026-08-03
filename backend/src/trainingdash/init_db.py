@@ -44,19 +44,26 @@ async def init_db():
     # Seed admin user if not exists
     async with async_session() as session:
         result = await session.execute(
-            text("SELECT count(*) FROM users WHERE username = :u"),
-            {"u": "admin"},
+            text("SELECT count(*) FROM users WHERE email = :e"),
+            {"e": "admin@example.com"},
         )
         count = result.scalar()
         if count == 0:
-            user = User(
-                username="admin",
-                password_hash=hash_password(os.environ.get("ADMIN_PASSWORD", "admin")),
-                is_admin=True,
-            )
-            session.add(user)
-            await session.commit()
-            print("Created seed admin user (password: admin)")
+            # Check if any user exists at all
+            any_users = await session.execute(text("SELECT count(*) FROM users"))
+            if any_users.scalar() == 0:
+                # First user - create admin
+                user = User(
+                    email="admin@example.com",
+                    password_hash=hash_password(os.environ.get("ADMIN_PASSWORD", "admin")),
+                    is_admin=True,
+                    is_approved=True,
+                )
+                session.add(user)
+                await session.commit()
+                print("Created seed admin user (password: admin)")
+            else:
+                print("Users exist, skipping admin seed")
         else:
             print("Admin user already exists")
 

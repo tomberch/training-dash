@@ -3,7 +3,7 @@
 import json
 from datetime import date, datetime, timedelta, timezone
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy import select, delete
 
@@ -54,7 +54,9 @@ async def get_me(db: DbSession, user: CurrentUser):
 
 
 class UpdateMeRequest(BaseModel):
+    display_name: str | None = None
     unit_system: str | None = None
+    sync_hour: int | None = None
     date_of_birth: date | None = None
     weight_kg: float | None = None
     hr_derived_power_enabled: bool | None = None
@@ -63,12 +65,22 @@ class UpdateMeRequest(BaseModel):
 @router.patch("/me")
 async def update_me(db: DbSession, user: CurrentUser, request: UpdateMeRequest):
     """Update the current user's preferences."""
+    if request.display_name is not None:
+        user.display_name = request.display_name.strip() if request.display_name else None
+    
     if request.unit_system is not None:
         if request.unit_system not in ("metric", "imperial"):
             raise HTTPException(
                 status_code=400, detail="unit_system must be 'metric' or 'imperial'"
             )
         user.unit_system = request.unit_system
+
+    if request.sync_hour is not None:
+        if request.sync_hour < 0 or request.sync_hour > 23:
+            raise HTTPException(
+                status_code=400, detail="sync_hour must be between 0 and 23"
+            )
+        user.sync_hour = request.sync_hour
 
     if request.date_of_birth is not None:
         today = date.today()
@@ -690,3 +702,118 @@ async def dismiss_notification(
     await db.commit()
 
     return {"success": True}
+
+
+
+# --- Avatar ---
+
+
+@router.post("/me/avatar")
+async def upload_avatar(db: DbSession, user: CurrentUser, request: Request):
+    """Upload a new avatar image for the current user."""
+    import os
+    from pathlib import Path
+    
+    # Read the raw body (image bytes)
+    content_type = request.headers.get("content-type", "")
+    if not content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Content-Type must be an image")
+    
+    body = await request.body()
+    if len(body) > 5 * 1024 * 1024:  # 5MB limit
+        raise HTTPException(status_code=400, detail="Image too large (max 5MB)")
+    
+    # Determine file extension from content type
+    ext_map = {
+        "image/jpeg": ".jpg",
+        "image/png": ".png",
+        "image/gif": ".gif",
+        "image/webp": ".webp",
+    }
+    ext = ext_map.get(content_type, ".jpg")
+    
+    # Ensure uploads directory exists
+    uploads_dir = Path("/app/uploads/avatars")
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Delete old avatar if exists
+    if user.avatar_path:
+        old_path = Path("/app") / user.avatar_path.lstrip("/")
+        if old_path.exists():
+            old_path.unlink()
+    
+    # Save new avatar
+    filename = f"{user.id}{ext}"
+    filepath = uploads_dir / filename
+    with open(filepath, "wb") as f:
+        f.write(body)
+    
+    # Update user record
+    user.avatar_path = f"/uploads/avatars/{filename}"
+    await db.commit()
+    await db.refresh(user)
+    
+    return {"avatar_path": user.avatar_path}
+
+
+@router.delete("/me/avatar")
+async def delete_avatar(db: DbSession, user: CurrentUser):
+    """Delete the current user's avatar."""
+    from pathlib import Path
+    
+    if user.avatar_path:
+        filepath = Path("/app") / user.avatar_path.lstrip("/")
+        if filepath.exists():
+            filepath.unlink()
+        user.avatar_path = None
+        await db.commit()
+    
+    return {"success": True}
+
+
+# --- User Sync ---
+
+
+async def _trigger_user_sync(
+    db: DbSession, 
+    user_id: int, 
+    cred_model: type, 
+    job_name: str,
+    integration_name: str
+) -> dict:
+    """Generic helper to trigger a sync job for a user's integration."""
+    from trainingdash.jobs import create_redis_pool
+    
+    # Check if user has credentials for this integration
+    result = await db.execute(
+        select(cred_model).where(cred_model.user_id == user_id)
+    )
+    creds = result.scalar_one_or_none()
+    if creds is None:
+        raise HTTPException(
+            status_code=400, detail=f"No {integration_name} credentials configured"
+        )
+    
+    # Enqueue sync job
+    pool = await create_redis_pool()
+    try:
+        job = await pool.enqueue_job(job_name, user_id)
+        return {"success": True, "job_id": job.job_id}
+    finally:
+        await pool.close()
+
+
+@router.post("/me/sync/garmin")
+async def trigger_garmin_sync(db: DbSession, user: CurrentUser):
+    """Trigger a Garmin sync for the current user."""
+    return await _trigger_user_sync(
+        db, user.id, GarminCredentials, "sync_garmin_job", "Garmin"
+    )
+
+
+@router.post("/me/sync/xert")
+async def trigger_xert_sync(db: DbSession, user: CurrentUser):
+    """Trigger a Xert sync for the current user."""
+    return await _trigger_user_sync(
+        db, user.id, XertCredentials, "sync_xert_job", "Xert"
+    )

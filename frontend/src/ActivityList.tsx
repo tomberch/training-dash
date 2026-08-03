@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import type { Activity } from "./api";
-import { ApiError, fetchActivities, login } from "./api";
+import { ApiError, fetchActivities, login, register } from "./api";
 import { formatDistance, formatTime, formatDate, formatElevation } from "./format";
 import type { UnitSystem } from "./format";
 import { ErrorDisplay } from "./ErrorDisplay";
@@ -101,19 +101,47 @@ export function ActivityList({
 export function Login({
   onLogin,
 }: {
-  onLogin: (isAdmin: boolean) => void;
+  onLogin: (user: { is_admin: boolean; is_approved: boolean }) => void;
 }) {
-  const [username, setUsername] = useState("");
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const result = await login(username, password);
-    if (result) {
-      onLogin(result.is_admin ?? false);
-    } else {
-      setError("Invalid credentials");
+    setError(null);
+    setLoading(true);
+
+    try {
+      if (mode === "login") {
+        const result = await login(email, password);
+        if (result) {
+          onLogin({ is_admin: result.is_admin ?? false, is_approved: result.is_approved ?? true });
+        } else {
+          setError("Invalid credentials");
+        }
+      } else {
+        // Register mode
+        if (password !== confirmPassword) {
+          setError("Passwords do not match");
+          setLoading(false);
+          return;
+        }
+        if (password.length < 8) {
+          setError("Password must be at least 8 characters");
+          setLoading(false);
+          return;
+        }
+        const result = await register(email, password);
+        onLogin({ is_admin: result.is_admin, is_approved: result.is_approved });
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -134,14 +162,15 @@ export function Login({
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Username
+                Email
               </label>
               <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                placeholder="Enter username"
+                placeholder="Enter email"
+                required
               />
             </div>
             
@@ -155,16 +184,76 @@ export function Login({
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                 placeholder="Enter password"
+                required
               />
             </div>
+
+            {mode === "register" && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Confirm Password
+                </label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  placeholder="Confirm password"
+                  required
+                />
+              </div>
+            )}
             
             <button
               type="submit"
-              className="w-full py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+              disabled={loading}
+              className="w-full py-2 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
             >
-              Sign in
+              {loading ? "Please wait..." : mode === "login" ? "Sign in" : "Create account"}
             </button>
           </form>
+
+          <div className="mt-4 text-center">
+            <button
+              type="button"
+              onClick={() => {
+                setMode(mode === "login" ? "register" : "login");
+                setError(null);
+              }}
+              className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
+            >
+              {mode === "login" ? "Don't have an account? Register" : "Already have an account? Sign in"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function PendingApproval({ onLogout }: { onLogout: () => void }) {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
+      <div className="w-full max-w-md text-center">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+            <svg className="w-8 h-8 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+            Account Pending Approval
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400 mb-6">
+            Your account has been created and is waiting for administrator approval. 
+            You'll be able to access the dashboard once your account is approved.
+          </p>
+          <button
+            onClick={onLogout}
+            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+          >
+            Sign out
+          </button>
         </div>
       </div>
     </div>

@@ -16,7 +16,7 @@ serializer = URLSafeSerializer(settings.secret_key, salt="session")
 
 
 class LoginRequest(BaseModel):
-    username: str
+    email: str
     password: str
 
 

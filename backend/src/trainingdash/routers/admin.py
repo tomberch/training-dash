@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from trainingdash.auth import AdminUser, DbSession, hash_password
 from trainingdash.crypto import encrypt, EncryptionError
-from trainingdash.models import GarminCredentials, User, XertCredentials
+from trainingdash.models import AppSettings, GarminCredentials, User, XertCredentials
 from trainingdash.routers.serializers import user_summary
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -35,24 +35,25 @@ async def admin_list_users(db: DbSession, admin: AdminUser):
 
 
 class CreateUserRequest(BaseModel):
-    username: str
+    email: str
     password: str
 
 
 @router.post("/users")
 async def admin_create_user(db: DbSession, admin: AdminUser, request: CreateUserRequest):
     """Create a new user account (admin only)."""
-    # Check if username already exists
-    existing = await db.execute(select(User).where(User.username == request.username))
+    # Check if email already exists
+    existing = await db.execute(select(User).where(User.email == request.email))
     if existing.scalar_one_or_none() is not None:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Username already exists"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Email already exists"
         )
 
     user = User(
-        username=request.username,
+        email=request.email,
         password_hash=hash_password(request.password),
         is_admin=False,
+        is_approved=True,  # Admin-created users are pre-approved
     )
     db.add(user)
     await db.commit()
@@ -178,3 +179,97 @@ async def admin_delete_xert_credentials(db: DbSession, admin: AdminUser, user_id
         await db.delete(creds)
         await db.commit()
     return {"success": True}
+
+
+
+# --- User approval ---
+
+
+@router.get("/users/pending")
+async def admin_list_pending_users(db: DbSession, admin: AdminUser):
+    """List all users pending approval (admin only)."""
+    result = await db.execute(
+        select(User).where(User.is_approved == False).order_by(User.created_at)
+    )
+    users = result.scalars().all()
+    return [user_summary(u) for u in users]
+
+
+@router.post("/users/{user_id}/approve")
+async def admin_approve_user(db: DbSession, admin: AdminUser, user_id: int):
+    """Approve a pending user (admin only)."""
+    user = await _get_user_or_404(db, user_id)
+    if user.is_approved:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="User is already approved"
+        )
+    user.is_approved = True
+    await db.commit()
+    return {"success": True}
+
+
+@router.post("/users/{user_id}/reject")
+async def admin_reject_user(db: DbSession, admin: AdminUser, user_id: int):
+    """Reject and delete a pending user (admin only)."""
+    user = await _get_user_or_404(db, user_id)
+    if user.is_approved:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot reject an already approved user",
+        )
+    await db.delete(user)
+    await db.commit()
+    return {"success": True}
+
+
+# --- App settings ---
+
+# Settings that should be treated as booleans
+BOOLEAN_SETTINGS = {"require_approval"}
+
+
+@router.get("/settings")
+async def admin_get_settings(db: DbSession, admin: AdminUser):
+    """Get all app settings (admin only)."""
+    result = await db.execute(select(AppSettings))
+    settings = result.scalars().all()
+    # Return booleans for boolean settings, strings for others
+    return {
+        s.key: s.as_bool() if s.key in BOOLEAN_SETTINGS else s.value
+        for s in settings
+    }
+
+
+class UpdateSettingRequest(BaseModel):
+    value: bool | str
+
+
+@router.put("/settings/{key}")
+async def admin_update_setting(
+    db: DbSession, admin: AdminUser, key: str, request: UpdateSettingRequest
+):
+    """Update an app setting (admin only)."""
+    allowed_keys = {"require_approval"}
+    if key not in allowed_keys:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unknown setting key: {key}",
+        )
+
+    # Convert boolean to string for storage
+    if key in BOOLEAN_SETTINGS and isinstance(request.value, bool):
+        str_value = AppSettings.bool_to_str(request.value)
+    else:
+        str_value = str(request.value)
+
+    result = await db.execute(select(AppSettings).where(AppSettings.key == key))
+    setting = result.scalar_one_or_none()
+
+    if setting is None:
+        setting = AppSettings(key=key, value=str_value)
+        db.add(setting)
+    else:
+        setting.value = str_value
+
+    await db.commit()
+    return {"key": key, "value": request.value}

@@ -17,9 +17,13 @@ def user_response(user: User) -> dict:
     """Return a dict of user info for API responses."""
     return {
         "id": user.id,
-        "username": user.username,
+        "email": user.email,
+        "display_name": user.display_name,
+        "avatar_path": user.avatar_path,
         "is_admin": user.is_admin,
+        "is_approved": user.is_approved,
         "unit_system": user.unit_system,
+        "sync_hour": user.sync_hour,
         "date_of_birth": user.date_of_birth.isoformat() if user.date_of_birth else None,
         "weight_kg": float(user.weight_kg) if user.weight_kg else None,
         "hr_derived_power_enabled": user.hr_derived_power_enabled,
@@ -30,8 +34,10 @@ def user_summary(user: User) -> dict:
     """Return a dict summary of a user for admin responses."""
     return {
         "id": user.id,
-        "username": user.username,
+        "email": user.email,
+        "display_name": user.display_name,
         "is_admin": user.is_admin,
+        "is_approved": user.is_approved,
         "created_at": user.created_at.isoformat(),
     }
 

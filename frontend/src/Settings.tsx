@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   updatePreferences,
   fetchMyXertCredentials,
@@ -12,6 +12,10 @@ import {
   createThreshold,
   fetchZones,
   updateZones,
+  uploadAvatar,
+  deleteAvatar,
+  triggerGarminSync,
+  triggerXertSync,
   ApiError,
 } from "./api";
 import type { 
@@ -99,6 +103,7 @@ export function Settings({ user, onBack, onUserUpdate }: SettingsProps) {
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Settings</h1>
         
         <div className="space-y-6">
+          <ProfileSection user={user} onUserUpdate={onUserUpdate} />
           <PreferencesSection user={user} onUserUpdate={onUserUpdate} />
           <ThresholdsSection />
           <ZonesSection />
@@ -106,6 +111,231 @@ export function Settings({ user, onBack, onUserUpdate }: SettingsProps) {
         </div>
       </div>
     </div>
+  );
+}
+
+function ProfileSection({ user, onUserUpdate }: { user: User; onUserUpdate: (user: User) => void }) {
+  const [displayName, setDisplayName] = useState(user.display_name || "");
+  const [syncHour, setSyncHour] = useState(user.sync_hour);
+  const [saving, setSaving] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleSaveProfile() {
+    setSaving(true);
+    setFeedback(null);
+    try {
+      const updated = await updatePreferences({ 
+        display_name: displayName || null,
+        sync_hour: syncHour,
+      });
+      onUserUpdate(updated);
+      setFeedback({ type: "success", message: "Profile saved" });
+      setTimeout(() => setFeedback(null), 3000);
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Failed to save profile";
+      setFeedback({ type: "error", message });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith("image/")) {
+      setFeedback({ type: "error", message: "Please select an image file" });
+      return;
+    }
+
+    // Validate file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      setFeedback({ type: "error", message: "Image must be less than 5MB" });
+      return;
+    }
+
+    setUploadingAvatar(true);
+    setFeedback(null);
+    try {
+      const result = await uploadAvatar(file);
+      onUserUpdate({ ...user, avatar_path: result.avatar_path });
+      setFeedback({ type: "success", message: "Avatar uploaded" });
+      setTimeout(() => setFeedback(null), 3000);
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Failed to upload avatar";
+      setFeedback({ type: "error", message });
+    } finally {
+      setUploadingAvatar(false);
+      // Reset input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  }
+
+  async function handleDeleteAvatar() {
+    setUploadingAvatar(true);
+    setFeedback(null);
+    try {
+      await deleteAvatar();
+      onUserUpdate({ ...user, avatar_path: null });
+      setFeedback({ type: "success", message: "Avatar removed" });
+      setTimeout(() => setFeedback(null), 3000);
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Failed to remove avatar";
+      setFeedback({ type: "error", message });
+    } finally {
+      setUploadingAvatar(false);
+    }
+  }
+
+  // Generate initials for fallback avatar
+  function getInitials(): string {
+    if (displayName) {
+      const parts = displayName.trim().split(/\s+/);
+      if (parts.length >= 2) {
+        return (parts[0][0] + parts[1][0]).toUpperCase();
+      }
+      return parts[0].slice(0, 2).toUpperCase();
+    }
+    const local = user.email.split("@")[0];
+    if (local.includes(".")) {
+      const parts = local.split(".");
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return local.slice(0, 2).toUpperCase();
+  }
+
+  return (
+    <section className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+      <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Profile</h2>
+      
+      <div className="space-y-4">
+        {/* Avatar */}
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            {user.avatar_path ? (
+              <img
+                src={user.avatar_path}
+                alt="Avatar"
+                className="w-16 h-16 rounded-full object-cover border-2 border-gray-200 dark:border-gray-600"
+              />
+            ) : (
+              <div className="w-16 h-16 rounded-full bg-indigo-500 flex items-center justify-center text-white text-xl font-medium">
+                {getInitials()}
+              </div>
+            )}
+            {uploadingAvatar && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full">
+                <svg className="w-6 h-6 text-white animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+              </div>
+            )}
+          </div>
+          <div className="flex flex-col gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleAvatarChange}
+              className="hidden"
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadingAvatar}
+              className="px-3 py-1.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors disabled:opacity-50"
+            >
+              {user.avatar_path ? "Change photo" : "Upload photo"}
+            </button>
+            {user.avatar_path && (
+              <button
+                onClick={handleDeleteAvatar}
+                disabled={uploadingAvatar}
+                className="px-3 py-1.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-50"
+              >
+                Remove
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Email (read-only) */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Email
+          </label>
+          <input
+            type="email"
+            value={user.email}
+            disabled
+            className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400 cursor-not-allowed"
+          />
+        </div>
+
+        {/* Display name */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Display Name
+          </label>
+          <input
+            type="text"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            placeholder="How you want to be called"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+          />
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            This name will be shown in the header and anywhere your profile appears
+          </p>
+        </div>
+
+        {/* Sync Hour */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Daily Sync Time
+          </label>
+          <select
+            value={syncHour}
+            onChange={(e) => setSyncHour(parseInt(e.target.value))}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+          >
+            {Array.from({ length: 24 }, (_, i) => (
+              <option key={i} value={i}>
+                {i.toString().padStart(2, "0")}:00 UTC
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            Your integrations (Garmin, Xert) will sync automatically at this hour
+          </p>
+        </div>
+
+        <button
+          onClick={handleSaveProfile}
+          disabled={saving}
+          className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors disabled:opacity-50"
+        >
+          {saving ? "Saving..." : "Save Profile"}
+        </button>
+      </div>
+
+      {feedback && (
+        <div
+          className={`mt-4 p-3 rounded-lg text-sm ${
+            feedback.type === "success"
+              ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800"
+              : "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800"
+          }`}
+        >
+          {feedback.message}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -669,6 +899,54 @@ function ZonesSection() {
   );
 }
 
+function SyncButton({ onSync, label }: { onSync: () => Promise<{ success: boolean; job_id?: string }>; label: string }) {
+  const [syncing, setSyncing] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  async function handleSync() {
+    setSyncing(true);
+    setFeedback(null);
+    try {
+      const result = await onSync();
+      if (result.success) {
+        setFeedback({ type: "success", message: "Sync started" });
+        setTimeout(() => setFeedback(null), 3000);
+      } else {
+        setFeedback({ type: "error", message: "Failed to start sync" });
+      }
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Failed to start sync";
+      setFeedback({ type: "error", message });
+      setTimeout(() => setFeedback(null), 5000);
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  return (
+    <div className="relative">
+      <button
+        onClick={handleSync}
+        disabled={syncing}
+        className="px-4 py-2 text-sm font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors disabled:opacity-50"
+      >
+        {syncing ? "Syncing..." : label}
+      </button>
+      {feedback && (
+        <div
+          className={`absolute top-full left-0 mt-1 px-2 py-1 text-xs rounded whitespace-nowrap ${
+            feedback.type === "success"
+              ? "bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-400"
+              : "bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-400"
+          }`}
+        >
+          {feedback.message}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function IntegrationsSection() {
   return (
     <section className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
@@ -842,14 +1120,17 @@ function XertIntegration() {
           </button>
           
           {xertStatus?.configured && (
-            <button
-              onClick={handleDisconnect}
-              disabled={saving}
-              data-testid="xert-disconnect"
-              className="px-4 py-2 text-sm font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors disabled:opacity-50"
-            >
-              Disconnect
-            </button>
+            <>
+              <SyncButton onSync={triggerXertSync} label="Sync Now" />
+              <button
+                onClick={handleDisconnect}
+                disabled={saving}
+                data-testid="xert-disconnect"
+                className="px-4 py-2 text-sm font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors disabled:opacity-50"
+              >
+                Disconnect
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -1195,14 +1476,17 @@ function GarminCredentialsForm({
         </button>
         
         {configured && (
-          <button
-            onClick={onDisconnect}
-            disabled={saving}
-            data-testid="garmin-disconnect"
-            className="px-4 py-2 text-sm font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors disabled:opacity-50"
-          >
-            Disconnect
-          </button>
+          <>
+            <SyncButton onSync={triggerGarminSync} label="Sync Now" />
+            <button
+              onClick={onDisconnect}
+              disabled={saving}
+              data-testid="garmin-disconnect"
+              className="px-4 py-2 text-sm font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors disabled:opacity-50"
+            >
+              Disconnect
+            </button>
+          </>
         )}
       </div>
     </div>

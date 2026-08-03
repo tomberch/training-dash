@@ -2,14 +2,57 @@ import { useState, useRef, useEffect } from "react";
 import { logout, uploadFit, fetchJobStatus } from "./api";
 
 interface HeaderProps {
-  username: string;
+  displayName: string | null;
+  email: string;
+  avatarPath: string | null;
   onLogout: () => void;
   onSettings: () => void;
   onUploadComplete?: () => void;
   showUpload?: boolean;
 }
 
-export function Header({ username, onLogout, onSettings, onUploadComplete, showUpload = true }: HeaderProps) {
+/** Get initials from display name or email */
+function getInitials(displayName: string | null, email: string): string {
+  if (displayName) {
+    const parts = displayName.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+  // Fallback to email: take first letter, and first letter after @ or .
+  const local = email.split("@")[0];
+  if (local.includes(".")) {
+    const parts = local.split(".");
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+  return local.slice(0, 2).toUpperCase();
+}
+
+/** Generate a consistent color based on email */
+function getAvatarColor(email: string): string {
+  const colors = [
+    "bg-red-500", "bg-orange-500", "bg-amber-500", "bg-yellow-500",
+    "bg-lime-500", "bg-green-500", "bg-emerald-500", "bg-teal-500",
+    "bg-cyan-500", "bg-sky-500", "bg-blue-500", "bg-indigo-500",
+    "bg-violet-500", "bg-purple-500", "bg-fuchsia-500", "bg-pink-500",
+  ];
+  let hash = 0;
+  for (let i = 0; i < email.length; i++) {
+    hash = email.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colors[Math.abs(hash) % colors.length];
+}
+
+export function Header({ 
+  displayName, 
+  email, 
+  avatarPath, 
+  onLogout, 
+  onSettings, 
+  onUploadComplete, 
+  showUpload = true 
+}: HeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [processing, setProcessing] = useState(false);
@@ -70,6 +113,9 @@ export function Header({ username, onLogout, onSettings, onUploadComplete, showU
     onLogout();
   }
 
+  const initials = getInitials(displayName, email);
+  const avatarColorClass = getAvatarColor(email);
+
   return (
     <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -101,11 +147,24 @@ export function Header({ username, onLogout, onSettings, onUploadComplete, showU
             <button
               onClick={() => setMenuOpen(!menuOpen)}
               data-testid="user-menu-button"
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+              className="flex items-center gap-2 hover:opacity-80 transition-opacity"
             >
-              <span>{username}</span>
+              {/* Round Avatar */}
+              {avatarPath ? (
+                <img
+                  src={avatarPath}
+                  alt="Avatar"
+                  className="w-9 h-9 rounded-full object-cover border-2 border-gray-200 dark:border-gray-600"
+                />
+              ) : (
+                <div 
+                  className={`w-9 h-9 rounded-full flex items-center justify-center text-white font-medium text-sm ${avatarColorClass}`}
+                >
+                  {initials}
+                </div>
+              )}
               <svg
-                className={`w-4 h-4 transition-transform ${menuOpen ? "rotate-180" : ""}`}
+                className={`w-4 h-4 text-gray-500 dark:text-gray-400 transition-transform ${menuOpen ? "rotate-180" : ""}`}
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -117,8 +176,17 @@ export function Header({ username, onLogout, onSettings, onUploadComplete, showU
             {menuOpen && (
               <div
                 data-testid="user-menu-dropdown"
-                className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50"
+                className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50"
               >
+                {/* User info header */}
+                <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                  <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                    {displayName || email.split("@")[0]}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                    {email}
+                  </p>
+                </div>
                 <button
                   onClick={() => {
                     setMenuOpen(false);

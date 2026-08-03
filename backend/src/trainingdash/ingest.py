@@ -87,6 +87,17 @@ def _safe_float(val: Any) -> float | None:
         return None
 
 
+# Speed threshold for determining "moving" (0.5 m/s ≈ 1.8 km/h)
+MOVING_SPEED_THRESHOLD = 0.5
+
+
+def _compute_moving_time(records: list[dict]) -> int:
+    """Compute moving time by counting seconds where speed exceeds threshold."""
+    if not records:
+        return 0
+    return sum(1 for r in records if (r.get("speed_mps") or 0) > MOVING_SPEED_THRESHOLD)
+
+
 def parse_records(fit_bytes: bytes) -> dict[str, Any]:
     """Parse a FIT file and extract activity data using fitdecode."""
     import fitdecode
@@ -142,11 +153,14 @@ def parse_records(fit_bytes: bytes) -> dict[str, Any]:
                 
             elif frame.name == "session":
                 # Extract session summary data
+                timer_time = _safe_float(_get_field(frame, "total_timer_time"))
+                elapsed_time = _safe_float(_get_field(frame, "total_elapsed_time"))
+                logger.debug(f"FIT session: timer_time={timer_time}, elapsed_time={elapsed_time}")
                 session_data = {
                     "started_at": _to_naive_utc(_get_field(frame, "start_time")),
                     "total_distance_m": _safe_float(_get_field(frame, "total_distance")) or 0,
-                    "total_timer_time": _safe_float(_get_field(frame, "total_timer_time")),
-                    "total_elapsed_time": _safe_float(_get_field(frame, "total_elapsed_time")),
+                    "total_timer_time": timer_time,
+                    "total_elapsed_time": elapsed_time,
                     "total_ascent": _safe_int(_get_field(frame, "total_ascent")),
                     "avg_speed": _safe_float(_get_field(frame, "enhanced_avg_speed", "avg_speed")),
                     "max_speed": _safe_float(_get_field(frame, "enhanced_max_speed", "max_speed")),
@@ -161,6 +175,14 @@ def parse_records(fit_bytes: bytes) -> dict[str, Any]:
         total_distance = session_data["total_distance_m"]
         moving_time = int(session_data["total_timer_time"] or 0)
         elapsed_time = int(session_data["total_elapsed_time"] or 0)
+        
+        # If moving_time is 0 but we have records, compute from records
+        if moving_time == 0 and records:
+            computed_moving = _compute_moving_time(records)
+            if computed_moving > 0:
+                moving_time = computed_moving
+                logger.debug(f"Computed moving_time from records: {moving_time}s (elapsed: {elapsed_time}s)")
+        
         elev_gain = session_data["total_ascent"] or 0
         avg_speed = session_data["avg_speed"] or 0
         avg_hr = session_data["avg_hr"]
@@ -171,8 +193,8 @@ def parse_records(fit_bytes: bytes) -> dict[str, Any]:
         # Fallback: compute from records
         started_at = records[0]["timestamp"] if records else datetime.utcnow()
         total_distance = records[-1]["distance_m"] if records else 0
-        moving_time = 0
-        elapsed_time = 0
+        moving_time = _compute_moving_time(records)
+        elapsed_time = len(records) if records else 0
         elev_gain = 0
         avg_speed = 0
         avg_hr = None

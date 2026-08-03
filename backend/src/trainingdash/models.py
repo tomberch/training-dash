@@ -23,14 +23,37 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    username: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    avatar_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     is_admin: Mapped[bool] = mapped_column(default=False)
+    is_approved: Mapped[bool] = mapped_column(default=True)
     unit_system: Mapped[str] = mapped_column(String(10), default="metric", nullable=False)
+    sync_hour: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     date_of_birth: Mapped[date | None] = mapped_column(Date, nullable=True)
     weight_kg: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
     hr_derived_power_enabled: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
+
+
+class AppSettings(Base):
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(String(100), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
+
+    def as_bool(self, default: bool = False) -> bool:
+        """Parse the setting value as a boolean."""
+        if self.value is None:
+            return default
+        return self.value.lower() in ("true", "1", "yes", "on")
+
+    @staticmethod
+    def bool_to_str(value: bool) -> str:
+        """Convert a boolean to the canonical string representation."""
+        return "true" if value else "false"
 
 
 class Route(Base):

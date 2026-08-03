@@ -128,22 +128,26 @@ export interface JobStatus {
 
 export interface AdminUser {
   id: number;
-  username: string;
+  email: string;
+  display_name: string | null;
   is_admin: boolean;
+  is_approved: boolean;
   created_at: string;
 }
 
-export interface LoginResponse {
-  user_id: number;
-  username: string;
-  is_admin?: boolean;
+export interface AdminSettings {
+  require_approval: boolean;
 }
 
 export interface User {
   id: number;
-  username: string;
+  email: string;
+  display_name: string | null;
+  avatar_path: string | null;
   is_admin: boolean;
+  is_approved: boolean;
   unit_system: "metric" | "imperial";
+  sync_hour: number;
 }
 
 export interface XertCredentialsStatus {
@@ -440,14 +444,46 @@ export async function fetchJobStatus(jobId: string): Promise<JobStatus> {
 // Auth API
 // ============================================================================
 
-export async function login(username: string, password: string): Promise<LoginResponse | null> {
+export interface LoginResponse {
+  user_id: number;
+  email: string;
+  is_admin: boolean;
+  is_approved: boolean;
+  display_name: string | null;
+  avatar_path: string | null;
+  unit_system: string;
+  sync_hour: number;
+}
+
+export interface RegisterResponse {
+  user_id: number;
+  email: string;
+  is_admin: boolean;
+  is_approved: boolean;
+}
+
+export async function login(email: string, password: string): Promise<LoginResponse | null> {
   const res = await fetch(`${API_BASE}/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ email, password }),
   });
   if (!res.ok) return null;
+  return res.json();
+}
+
+export async function register(email: string, password: string): Promise<RegisterResponse> {
+  const res = await fetch(`${API_BASE}/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ email, password }),
+  });
+  if (!res.ok) {
+    const { detail } = await extractError(res, "Registration failed");
+    throw new ApiError(detail, res.status);
+  }
   return res.json();
 }
 
@@ -463,7 +499,14 @@ export async function fetchMe(): Promise<User> {
   return apiGet<User>("/me");
 }
 
-export async function updatePreferences(prefs: { unit_system?: string }): Promise<User> {
+export async function updatePreferences(prefs: { 
+  unit_system?: string;
+  display_name?: string | null;
+  sync_hour?: number;
+  date_of_birth?: string;
+  weight_kg?: number;
+  hr_derived_power_enabled?: boolean;
+}): Promise<User> {
   return apiPatch<User>("/me", prefs, "Failed to update preferences");
 }
 
@@ -477,6 +520,40 @@ export async function acceptNotification(id: number): Promise<void> {
 
 export async function dismissNotification(id: number): Promise<void> {
   return apiPost(`/me/notifications/${id}/dismiss`, undefined, "Failed to dismiss notification");
+}
+
+// ============================================================================
+// Avatar API
+// ============================================================================
+
+export async function uploadAvatar(file: File): Promise<{ avatar_path: string }> {
+  const res = await fetch(`${API_BASE}/me/avatar`, {
+    method: "POST",
+    headers: { "Content-Type": file.type },
+    credentials: "include",
+    body: file,
+  });
+  if (!res.ok) {
+    const { detail } = await extractError(res, "Failed to upload avatar");
+    throw new ApiError(detail, res.status);
+  }
+  return res.json();
+}
+
+export async function deleteAvatar(): Promise<void> {
+  return apiDelete("/me/avatar", "Failed to delete avatar");
+}
+
+// ============================================================================
+// User Sync API
+// ============================================================================
+
+export async function triggerGarminSync(): Promise<{ success: boolean; job_id?: string }> {
+  return apiPost("/me/sync/garmin", undefined, "Failed to trigger Garmin sync");
+}
+
+export async function triggerXertSync(): Promise<{ success: boolean; job_id?: string }> {
+  return apiPost("/me/sync/xert", undefined, "Failed to trigger Xert sync");
 }
 
 // ============================================================================
@@ -557,8 +634,20 @@ export async function fetchAdminUsers(): Promise<AdminUser[]> {
   return apiGet<AdminUser[]>("/admin/users");
 }
 
-export async function createUser(username: string, password: string): Promise<AdminUser> {
-  return apiPost<AdminUser>("/admin/users", { username, password }, "Failed to create user");
+export async function fetchPendingUsers(): Promise<AdminUser[]> {
+  return apiGet<AdminUser[]>("/admin/users/pending");
+}
+
+export async function createUser(email: string, password: string): Promise<AdminUser> {
+  return apiPost<AdminUser>("/admin/users", { email, password }, "Failed to create user");
+}
+
+export async function approveUser(userId: number): Promise<void> {
+  return apiPost(`/admin/users/${userId}/approve`, undefined, "Failed to approve user");
+}
+
+export async function rejectUser(userId: number): Promise<void> {
+  return apiPost(`/admin/users/${userId}/reject`, undefined, "Failed to reject user");
 }
 
 export async function resetUserPassword(userId: number, password: string): Promise<void> {
@@ -571,6 +660,14 @@ export async function triggerUserSync(userId: number): Promise<{ job_id: string 
     undefined,
     "Failed to trigger sync"
   );
+}
+
+export async function fetchAdminSettings(): Promise<AdminSettings> {
+  return apiGet<AdminSettings>("/admin/settings");
+}
+
+export async function updateAdminSetting(key: string, value: boolean | string): Promise<void> {
+  return apiPut(`/admin/settings/${key}`, { value }, "Failed to update setting");
 }
 
 // ============================================================================
