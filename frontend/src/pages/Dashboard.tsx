@@ -8,7 +8,7 @@ import {
   ResponsiveContainer,
   ReferenceArea,
 } from "recharts";
-import type { Activity, PMCPoint, PowerCurvePoint, Notification, GeoJSONFeatureCollection, RecordsResponse } from "../api";
+import type { Activity, PMCPoint, PowerCurvePoint, Notification, RecordsResponse } from "../api";
 import { 
   fetchActivities, 
   fetchPMC, 
@@ -16,10 +16,9 @@ import {
   fetchNotifications,
   acceptNotification,
   dismissNotification,
-  fetchActivityRecords,
   fetchRecords,
 } from "../api";
-import { MiniMap } from "../components/MiniMap";
+import { PolylineMap } from "../components/PolylineMap";
 
 // TSB zone definitions (same as PMC view)
 const TSB_ZONES = [
@@ -51,7 +50,6 @@ export function Dashboard() {
   const [pmcData, setPmcData] = useState<PMCPoint[]>([]);
   const [powerCurve, setPowerCurve] = useState<PowerCurvePoint[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [featuredActivityGps, setFeaturedActivityGps] = useState<GeoJSONFeatureCollection | null>(null);
   const [records, setRecords] = useState<RecordsResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -75,13 +73,6 @@ export function Dashboard() {
         setNotifications(notifs);
         setRecords(recs);
         setLoading(false);
-        
-        // Fetch GPS data for featured activity (first one)
-        if (acts.activities.length > 0) {
-          fetchActivityRecords(acts.activities[0].id)
-            .then(setFeaturedActivityGps)
-            .catch(() => setFeaturedActivityGps(null));
-        }
       })
       .catch(() => setLoading(false));
   }, []);
@@ -439,8 +430,8 @@ export function Dashboard() {
           >
             <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">Latest Activity</h2>
             
-            {/* Mini-map */}
-            <MiniMap geojson={featuredActivityGps} className="h-32 mb-3" />
+            {/* Polyline map */}
+            <PolylineMap polyline={featuredActivity.map_polyline} className="h-32 mb-3" showMarkers={true} />
             
             <div className="flex items-start justify-between">
               <div>
@@ -506,22 +497,24 @@ export function Dashboard() {
               {recentActivities.map(activity => (
                 <div 
                   key={activity.id}
-                  className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
+                  className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
                   onClick={() => navigate(`/activities/${activity.id}`)}
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="text-sm">
-                      <div className="font-medium text-gray-900 dark:text-white">
-                        {activity.title || new Date(activity.started_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                      </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">
-                        {activity.title && new Date(activity.started_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                        {activity.title && " • "}
-                        {formatDistance(activity.total_distance_m)}
-                      </div>
+                  {/* Small polyline thumbnail */}
+                  <div className="w-16 h-12 flex-shrink-0">
+                    <PolylineMap polyline={activity.map_polyline} className="w-full h-full" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                      {activity.title || new Date(activity.started_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      {activity.title && new Date(activity.started_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                      {activity.title && " • "}
+                      {formatDistance(activity.total_distance_m)}
                     </div>
                   </div>
-                  <div className="text-right text-sm">
+                  <div className="text-right text-sm flex-shrink-0">
                     <div className="text-gray-900 dark:text-white">{formatDuration(activity.moving_time_s)}</div>
                     <div className="text-xs text-gray-500 dark:text-gray-400">
                       {activity.tss ? `${Math.round(activity.tss)} TSS` : ""}
