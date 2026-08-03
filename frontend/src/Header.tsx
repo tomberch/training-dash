@@ -29,13 +29,12 @@ function getInitials(displayName: string | null, email: string): string {
   return local.slice(0, 2).toUpperCase();
 }
 
-/** Generate a consistent color based on email */
+/** Generate a consistent color based on email - harmonious with indigo UI */
 function getAvatarColor(email: string): string {
+  // Limited to blue/indigo/violet/purple tones to harmonize with primary indigo UI
   const colors = [
-    "bg-red-500", "bg-orange-500", "bg-amber-500", "bg-yellow-500",
-    "bg-lime-500", "bg-green-500", "bg-emerald-500", "bg-teal-500",
-    "bg-cyan-500", "bg-sky-500", "bg-blue-500", "bg-indigo-500",
-    "bg-violet-500", "bg-purple-500", "bg-fuchsia-500", "bg-pink-500",
+    "bg-blue-500", "bg-indigo-500", "bg-violet-500", "bg-purple-500",
+    "bg-sky-500", "bg-indigo-600", "bg-violet-600", "bg-purple-600",
   ];
   let hash = 0;
   for (let i = 0; i < email.length; i++) {
