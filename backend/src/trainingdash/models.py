@@ -111,6 +111,8 @@ class Activity(Base):
     title: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # Title source: 'auto' (geocoded), 'manual' (user edited), 'pending' (bulk import, awaiting geocoding)
     title_source: Mapped[str] = mapped_column(String(20), server_default="auto", nullable=False)
+    # Simplified GPS polyline for list view thumbnails (Google polyline encoding)
+    map_polyline: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Routing
     route_id: Mapped[int | None] = mapped_column(
         ForeignKey("routes.id"), nullable=True

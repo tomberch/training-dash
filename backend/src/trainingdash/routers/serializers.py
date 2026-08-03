@@ -91,7 +91,9 @@ def activity_summary(a: Activity) -> dict[str, Any]:
         "avg_power_w": a.avg_power_w,
         "max_speed_mps": a.max_speed_mps,
         "max_hr_bpm": a.max_hr_bpm,
+        "tss": a.tss,
         "is_breakthrough": a.is_breakthrough,
+        "map_polyline": a.map_polyline,
     }
 
 

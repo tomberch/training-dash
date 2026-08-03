@@ -15,6 +15,19 @@ from trainingdash.routers.serializers import (
 
 router = APIRouter(prefix="/api", tags=["activities"])
 
+# Pagination defaults
+DEFAULT_PAGE = 1
+DEFAULT_PER_PAGE = 20
+MAX_PER_PAGE = 100
+
+
+class PaginationMeta(BaseModel):
+    """Pagination metadata."""
+    total: int
+    page: int
+    per_page: int
+    total_pages: int
+
 
 class ActivityUpdateRequest(BaseModel):
     """Request body for updating an activity."""
@@ -37,15 +50,47 @@ async def _get_owned_activity(
 
 
 @router.get("/activities")
-async def list_activities(db: DbSession, user: CurrentUser):
-    """List all activities for the current user."""
+async def list_activities(
+    db: DbSession,
+    user: CurrentUser,
+    page: int = Query(DEFAULT_PAGE, ge=1, description="Page number (1-indexed)"),
+    per_page: int = Query(DEFAULT_PER_PAGE, ge=1, le=MAX_PER_PAGE, description="Items per page"),
+):
+    """List activities for the current user with pagination.
+    
+    Returns:
+        activities: List of activity summaries
+        pagination: Pagination metadata (total, page, per_page, total_pages)
+    """
+    # Count total activities
+    count_result = await db.execute(
+        select(func.count(Activity.id)).where(Activity.user_id == user.id)
+    )
+    total = count_result.scalar() or 0
+    
+    # Calculate pagination
+    total_pages = (total + per_page - 1) // per_page if total > 0 else 1
+    offset = (page - 1) * per_page
+    
+    # Fetch page of activities
     result = await db.execute(
         select(Activity)
         .where(Activity.user_id == user.id)
         .order_by(Activity.started_at.desc())
+        .offset(offset)
+        .limit(per_page)
     )
     activities = result.scalars().all()
-    return [activity_summary(a) for a in activities]
+    
+    return {
+        "activities": [activity_summary(a) for a in activities],
+        "pagination": {
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+            "total_pages": total_pages,
+        }
+    }
 
 
 @router.get("/activities/{activity_id}")

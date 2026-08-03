@@ -8,6 +8,7 @@ from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from trainingdash.models import Activity, Lap, Record, ThresholdHistory, PowerZone, HrZone, ActivityPeakPower, FitnessHistory, Notification, User
+from trainingdash.polyline import generate_map_polyline
 from trainingdash.metrics import (
     compute_normalized_power,
     compute_intensity_factor,
@@ -309,6 +310,7 @@ async def ingest_fit(
         avg_power_w=parsed["avg_power_w"],
         max_speed_mps=parsed["max_speed_mps"],
         max_hr_bpm=parsed["max_hr_bpm"],
+        map_polyline=generate_map_polyline(parsed["records"]),
         raw_fit=fit_bytes,
     )
     db.add(activity)
@@ -1313,6 +1315,7 @@ async def ingest_xert_activity(
         max_hr_bpm=max_hr,
         source="xert",
         source_ref=source_ref,
+        map_polyline=generate_map_polyline(records),
         # Store XSS as training_load initially (may be overwritten by TSS computation)
         training_load=detail.xss,
     )
