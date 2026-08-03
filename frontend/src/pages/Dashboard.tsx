@@ -388,9 +388,11 @@ export function Dashboard() {
             <div className="flex items-start justify-between">
               <div>
                 <div className="text-lg font-semibold text-gray-900 dark:text-white">
-                  {new Date(featuredActivity.started_at).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}
+                  {featuredActivity.title || new Date(featuredActivity.started_at).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}
                 </div>
                 <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                  {featuredActivity.title && new Date(featuredActivity.started_at).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+                  {featuredActivity.title && " • "}
                   {formatDistance(featuredActivity.total_distance_m)} • {formatDuration(featuredActivity.moving_time_s)}
                 </div>
               </div>
@@ -453,9 +455,11 @@ export function Dashboard() {
                   <div className="flex items-center gap-3">
                     <div className="text-sm">
                       <div className="font-medium text-gray-900 dark:text-white">
-                        {new Date(activity.started_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                        {activity.title || new Date(activity.started_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                       </div>
                       <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {activity.title && new Date(activity.started_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                        {activity.title && " • "}
                         {formatDistance(activity.total_distance_m)}
                       </div>
                     </div>
