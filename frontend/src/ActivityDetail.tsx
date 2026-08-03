@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { Link } from "react-router-dom";
 import {
   LineChart,
   Line,
@@ -11,8 +12,8 @@ import {
   ReferenceDot,
   ReferenceArea,
 } from "recharts";
-import type { Activity, GeoJSONFeatureCollection, CompareResponse, SameRouteResponse, GapPoint, WbalResponse, ThresholdEntry } from "./api";
-import { ApiError, fetchActivity, fetchActivityRecords, fetchActivityWbal, fetchSameRouteActivities, fetchComparison, updateActivityTitle, generateActivityTitle, fetchThresholds } from "./api";
+import type { Activity, GeoJSONFeatureCollection, SameRouteResponse, WbalResponse, ThresholdEntry } from "./api";
+import { ApiError, fetchActivity, fetchActivityRecords, fetchActivityWbal, fetchSameRouteActivities, updateActivityTitle, generateActivityTitle, fetchThresholds } from "./api";
 import { formatDistance, formatTime, formatElevation, formatSpeed } from "./format";
 import type { UnitSystem } from "./format";
 import { resampleByDistance } from "./resampler";
@@ -26,12 +27,6 @@ import { ChartErrorBoundary } from "./components/ErrorBoundary";
 
 type AxisMode = "time" | "distance";
 
-function gapColor(gap: number): string {
-  if (gap < -0.5) return "#10b981"; // green = faster
-  if (gap > 0.5) return "#ef4444"; // red = slower
-  return "#6366f1"; // neutral indigo
-}
-
 function positionsByDistance(gpsFeatures: GeoJSONFeatureCollection["features"]): { distance_m: number; pos: [number, number] }[] {
   return gpsFeatures
     .filter((f) => f.geometry !== null && f.geometry.coordinates.length >= 2)
@@ -39,33 +34,6 @@ function positionsByDistance(gpsFeatures: GeoJSONFeatureCollection["features"]):
       distance_m: f.properties.distance_m,
       pos: [f.geometry!.coordinates[1], f.geometry!.coordinates[0]] as [number, number],
     }));
-}
-
-function buildColoredSegments(
-  gapSeries: GapPoint[],
-  posByDist: { distance_m: number; pos: [number, number] }[]
-): { positions: [number, number][]; color: string }[] {
-  if (gapSeries.length < 2 || posByDist.length < 2) return [];
-
-  const segments: { positions: [number, number][]; color: string }[] = [];
-
-  for (let i = 0; i < gapSeries.length - 1; i++) {
-    const distStart = gapSeries[i].distance_m;
-    const distEnd = gapSeries[i + 1].distance_m;
-    const color = gapColor(gapSeries[i].gap_s);
-
-    const pointsInSegment: [number, number][] = [];
-    for (const p of posByDist) {
-      if (p.distance_m >= distStart && p.distance_m <= distEnd) {
-        pointsInSegment.push(p.pos);
-      }
-    }
-    if (pointsInSegment.length >= 2) {
-      segments.push({ positions: pointsInSegment, color });
-    }
-  }
-
-  return segments;
 }
 
 interface ChartConfig {
@@ -133,8 +101,6 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
     elevation: "time",
   });
   const [sameRoute, setSameRoute] = useState<SameRouteResponse | null>(null);
-  const [compareOtherId, setCompareOtherId] = useState<number | null>(null);
-  const [comparison, setComparison] = useState<CompareResponse | null>(null);
   const [wbalData, setWbalData] = useState<WbalResponse | null>(null);
   const [hoveredPosition, setHoveredPosition] = useState<[number, number] | null>(null);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -159,8 +125,6 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
   });
 
   useEffect(() => {
-    setComparison(null);
-    setCompareOtherId(null);
     setWbalData(null);
     Promise.all([
       fetchActivity(activityId),
@@ -178,16 +142,6 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
       })
       .catch((e) => setError(e));
   }, [activityId]);
-
-  useEffect(() => {
-    if (compareOtherId === null) {
-      setComparison(null);
-      return;
-    }
-    fetchComparison(activityId, compareOtherId)
-      .then(setComparison)
-      .catch((e) => setError(e));
-  }, [activityId, compareOtherId]);
 
   const records = useMemo(() => (geojson ? geojsonToRecords(geojson) : []), [geojson]);
   const timestamps = useMemo(() => (geojson ? geojsonToTimestamps(geojson) : []), [geojson]);
@@ -408,17 +362,6 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
     };
   }
 
-  const otherPositions: [number, number][] | null = comparison?.other_geojson
-    ? comparison.other_geojson.features
-        .filter((f) => f.geometry !== null && f.geometry.coordinates.length >= 2)
-        .map((f) => [f.geometry!.coordinates[1], f.geometry!.coordinates[0]])
-    : null;
-
-  const gapSeries = comparison?.gap_series ?? [];
-  const coloredSegments = comparison?.comparable
-    ? buildColoredSegments(gapSeries, posByDist)
-    : [];
-
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="max-w-6xl mx-auto px-4 py-6">
@@ -430,6 +373,30 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
           >
             &larr; Back
           </button>
+          
+          {/* Analyze and Compare buttons */}
+          <div className="flex items-center gap-2">
+            <Link
+              to={`/analyze?activity=${activityId}`}
+              className="px-4 py-2 text-sm font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-700 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              Analyze
+            </Link>
+            {sameRoute && sameRoute.route_id !== null && sameRoute.activities.length > 0 && (
+              <Link
+                to={`/compare?base=${activityId}`}
+                className="px-4 py-2 text-sm font-medium text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-colors flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                </svg>
+                Compare
+              </Link>
+            )}
+          </div>
           <div className="flex-1">
             {isEditingTitle ? (
               <div className="flex items-center gap-2">
@@ -614,40 +581,11 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
           </div>
         )}
 
-        {/* Compare selector */}
-        {sameRoute && sameRoute.route_id !== null && sameRoute.activities.length > 0 && (
-          <div className="mb-6 p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Compare with another ride on this route
-            </label>
-            <select
-              value={compareOtherId ?? ""}
-              onChange={(e) => setCompareOtherId(e.target.value ? Number(e.target.value) : null)}
-              className="w-full sm:w-auto px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="">Select a ride...</option>
-              {sameRoute.activities.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {new Date(a.started_at).toLocaleDateString()} — {formatDistance(a.total_distance_m, unitSystem)}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {comparison && !comparison.comparable && (
-          <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg text-yellow-700 dark:text-yellow-400">
-            These rides are not on the same route and cannot be compared.
-          </div>
-        )}
-
         {/* Map */}
         {positions.length > 0 && (
           <div className="mb-6 sticky top-0 z-10">
             <ResizableMap
               positions={positions}
-              coloredSegments={coloredSegments}
-              otherPositions={otherPositions}
               hoveredPosition={hoveredPosition}
               height={mapHeight}
               onResizeStart={startResizeHeight}
@@ -655,49 +593,6 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
               showResizeHandle={true}
             />
           </div>
-        )}
-
-        {/* Gap Chart (comparison mode) */}
-        {comparison && comparison.comparable && gapSeries.length > 0 && (
-          <ChartErrorBoundary chartName="Time Gap" height={200}>
-            <ChartCard title="Time Gap" subtitle="vs comparison ride">
-              <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={gapSeries}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis
-                    dataKey="distance_m"
-                    tickFormatter={(v) => formatDistance(v, unitSystem)}
-                    tick={{ fontSize: 12, fill: "#6b7280" }}
-                    axisLine={{ stroke: "#d1d5db" }}
-                    tickLine={{ stroke: "#d1d5db" }}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 12, fill: "#6b7280" }}
-                    axisLine={{ stroke: "#d1d5db" }}
-                    tickLine={{ stroke: "#d1d5db" }}
-                    label={{ value: "Gap (s)", angle: -90, position: "insideLeft", fontSize: 12, fill: "#6b7280" }}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "white",
-                      border: "1px solid #e5e7eb",
-                      borderRadius: "8px",
-                      fontSize: "12px",
-                    }}
-                  />
-                  <ReferenceLine y={0} stroke="#9ca3af" strokeDasharray="3 3" />
-                  <Line
-                    type="monotone"
-                    dataKey="gap_s"
-                    stroke="#6366f1"
-                    strokeWidth={2}
-                    dot={false}
-                    name="Time Gap"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </ChartCard>
-          </ChartErrorBoundary>
         )}
 
         {/* Data Charts */}

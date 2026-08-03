@@ -11,6 +11,7 @@ interface ActivitySelectorProps {
   selectedId: number | null;
   onSelect: (activity: Activity | null) => void;
   excludeIds?: number[];
+  filterIds?: number[];  // If provided, only show activities with these IDs
   placeholder?: string;
   unitSystem?: UnitSystem;
   label?: string;
@@ -35,6 +36,7 @@ export function ActivitySelector({
   selectedId,
   onSelect,
   excludeIds = [],
+  filterIds,
   placeholder = "Select an activity...",
   unitSystem = "metric",
   label,
@@ -71,10 +73,11 @@ export function ActivitySelector({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Filter activities based on debounced search and exclusions
+  // Filter activities based on debounced search, exclusions, and filterIds
   const filteredActivities = useMemo(() => {
     return activities
       .filter((a) => !excludeIds.includes(a.id))
+      .filter((a) => !filterIds || filterIds.includes(a.id))  // If filterIds is provided, only include those
       .filter((a) => {
         if (!debouncedSearch) return true;
         const searchLower = debouncedSearch.toLowerCase();
