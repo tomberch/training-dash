@@ -39,6 +39,8 @@ const baseActivity = {
   // Peaks and breakthrough
   peaks: [],
   is_breakthrough: false,
+  // Map
+  map_polyline: null as string | null,
 };
 
 describe("ActivityList", () => {
@@ -47,21 +49,28 @@ describe("ActivityList", () => {
   });
 
   it("renders rows from mocked API response", async () => {
-    mockFetchActivities.mockResolvedValue([
-      { id: 1, ...baseActivity },
-      { id: 2, ...baseActivity, started_at: "2024-03-10T08:00:00", total_distance_m: 25000 },
-    ]);
+    mockFetchActivities.mockResolvedValue({
+      activities: [
+        { id: 1, ...baseActivity },
+        { id: 2, ...baseActivity, started_at: "2024-03-10T08:00:00", total_distance_m: 25000 },
+      ],
+      pagination: { page: 1, per_page: 20, total: 2, total_pages: 1 },
+    });
 
     render(<ActivityList onSelect={() => {}} />);
 
     await waitFor(() => {
-      expect(screen.getByText("40.0 km")).toBeInTheDocument();
-      expect(screen.getByText("25.0 km")).toBeInTheDocument();
+      // Distance text appears in both desktop and mobile views
+      expect(screen.getAllByText("40.0 km").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("25.0 km").length).toBeGreaterThan(0);
     });
   });
 
   it("renders empty state when no activities", async () => {
-    mockFetchActivities.mockResolvedValue([]);
+    mockFetchActivities.mockResolvedValue({
+      activities: [],
+      pagination: { page: 1, per_page: 20, total: 0, total_pages: 0 },
+    });
 
     render(<ActivityList onSelect={() => {}} />);
 
@@ -71,16 +80,20 @@ describe("ActivityList", () => {
   });
 
   it("calls onSelect with activity id when row is clicked", async () => {
-    mockFetchActivities.mockResolvedValue([{ id: 42, ...baseActivity }]);
+    mockFetchActivities.mockResolvedValue({
+      activities: [{ id: 42, ...baseActivity }],
+      pagination: { page: 1, per_page: 20, total: 1, total_pages: 1 },
+    });
 
     const onSelect = vi.fn();
     render(<ActivityList onSelect={onSelect} />);
 
     await waitFor(() => {
-      expect(screen.getByText("40.0 km")).toBeInTheDocument();
+      // Distance text appears in both desktop and mobile views
+      expect(screen.getAllByText("40.0 km").length).toBeGreaterThan(0);
     });
 
-    fireEvent.click(screen.getByText("40.0 km"));
+    fireEvent.click(screen.getAllByText("40.0 km")[0]);
     expect(onSelect).toHaveBeenCalledWith(42);
   });
 });

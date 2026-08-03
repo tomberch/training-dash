@@ -69,7 +69,7 @@ export function Dashboard() {
       fetchRecords(),
     ])
       .then(([acts, pmc, curve, notifs, recs]) => {
-        setActivities(acts);
+        setActivities(acts.activities);
         setPmcData(pmc);
         setPowerCurve(curve);
         setNotifications(notifs);
@@ -77,8 +77,8 @@ export function Dashboard() {
         setLoading(false);
         
         // Fetch GPS data for featured activity (first one)
-        if (acts.length > 0) {
-          fetchActivityRecords(acts[0].id)
+        if (acts.activities.length > 0) {
+          fetchActivityRecords(acts.activities[0].id)
             .then(setFeaturedActivityGps)
             .catch(() => setFeaturedActivityGps(null));
         }
