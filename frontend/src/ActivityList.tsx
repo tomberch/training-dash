@@ -1,9 +1,89 @@
 import { useState, useEffect } from "react";
-import type { Activity } from "./api";
-import { ApiError, fetchActivities, login, register } from "./api";
+import type { Activity, GeoJSONFeatureCollection } from "./api";
+import { ApiError, fetchActivities, fetchActivityRecords, login, register } from "./api";
 import { formatDistance, formatTime, formatDate, formatElevation } from "./format";
 import type { UnitSystem } from "./format";
 import { ErrorDisplay } from "./ErrorDisplay";
+import { MiniMap } from "./components/MiniMap";
+
+// Activity card with lazy-loaded mini-map
+function ActivityCard({ 
+  activity, 
+  onSelect, 
+  unitSystem 
+}: { 
+  activity: Activity; 
+  onSelect: (id: number) => void; 
+  unitSystem: UnitSystem;
+}) {
+  const [gpsData, setGpsData] = useState<GeoJSONFeatureCollection | null>(null);
+  const [gpsLoading, setGpsLoading] = useState(true);
+
+  useEffect(() => {
+    fetchActivityRecords(activity.id)
+      .then(setGpsData)
+      .catch(() => setGpsData(null))
+      .finally(() => setGpsLoading(false));
+  }, [activity.id]);
+
+  return (
+    <div 
+      onClick={() => onSelect(activity.id)}
+      className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden cursor-pointer hover:border-indigo-300 dark:hover:border-indigo-600 transition-colors"
+    >
+      {/* Mini-map */}
+      <div className="h-32 bg-gray-100 dark:bg-gray-700">
+        {gpsLoading ? (
+          <div className="h-full flex items-center justify-center">
+            <div className="animate-pulse w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-600"></div>
+          </div>
+        ) : (
+          <MiniMap geojson={gpsData} className="h-full" />
+        )}
+      </div>
+      
+      {/* Activity info */}
+      <div className="p-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1">
+              <h3 className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                {activity.title || formatDate(activity.started_at)}
+              </h3>
+              {activity.is_breakthrough && (
+                <svg className="w-4 h-4 text-amber-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                </svg>
+              )}
+            </div>
+            {activity.title && (
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {formatDate(activity.started_at)}
+              </p>
+            )}
+          </div>
+        </div>
+        
+        {/* Metrics row */}
+        <div className="mt-2 flex items-center gap-3 text-xs text-gray-600 dark:text-gray-400">
+          <span className="font-medium text-gray-900 dark:text-white">
+            {formatDistance(activity.total_distance_m, unitSystem)}
+          </span>
+          <span>•</span>
+          <span>{formatTime(activity.moving_time_s)}</span>
+          <span>•</span>
+          <span>{formatElevation(activity.elevation_gain_m, unitSystem)}</span>
+          {activity.tss && (
+            <>
+              <span>•</span>
+              <span>{Math.round(activity.tss)} TSS</span>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function ActivityList({
   onSelect,
@@ -14,6 +94,7 @@ export function ActivityList({
 }) {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [error, setError] = useState<Error | ApiError | null>(null);
+  const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
 
   useEffect(() => {
     fetchActivities()
@@ -27,11 +108,49 @@ export function ActivityList({
 
   return (
     <div>
+      {/* View mode toggle */}
+      {activities.length > 0 && (
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-xl font-bold text-gray-900 dark:text-white">Activities</h1>
+          <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
+            <button
+              onClick={() => setViewMode("cards")}
+              className={`p-1.5 rounded ${viewMode === "cards" ? "bg-white dark:bg-gray-700 shadow-sm" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}
+              title="Card view"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+              </svg>
+            </button>
+            <button
+              onClick={() => setViewMode("table")}
+              className={`p-1.5 rounded ${viewMode === "table" ? "bg-white dark:bg-gray-700 shadow-sm" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}
+              title="Table view"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
       {activities.length === 0 ? (
         <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
           <p className="text-gray-500 dark:text-gray-400">
             No activities yet. Upload a FIT file to get started.
           </p>
+        </div>
+      ) : viewMode === "cards" ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {activities.map((a) => (
+            <ActivityCard 
+              key={a.id} 
+              activity={a} 
+              onSelect={onSelect} 
+              unitSystem={unitSystem} 
+            />
+          ))}
         </div>
       ) : (
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
@@ -64,6 +183,11 @@ export function ActivityList({
                       <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
                         {a.title || formatDate(a.started_at)}
                       </span>
+                      {a.is_breakthrough && (
+                        <svg className="w-4 h-4 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                        </svg>
+                      )}
                       {a.title_source === "pending" && (
                         <span title="Click to generate location-based title">
                           <svg className="w-3.5 h-3.5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
