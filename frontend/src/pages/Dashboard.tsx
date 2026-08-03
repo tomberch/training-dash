@@ -19,49 +19,8 @@ import {
   fetchRecords,
 } from "../api";
 import { PolylineMap } from "../components/PolylineMap";
-
-// TSB zone definitions (same as PMC view)
-const TSB_ZONES = [
-  { name: "Fresh", min: 25, max: 100, color: "#bbf7d0" },
-  { name: "Optimal", min: 5, max: 25, color: "#fef08a" },
-  { name: "Neutral", min: -10, max: 5, color: "#e5e7eb" },
-  { name: "Fatigued", min: -25, max: -10, color: "#fed7aa" },
-  { name: "Very Fatigued", min: -100, max: -25, color: "#fecaca" },
-];
-
-function getTSBZone(tsb: number) {
-  return TSB_ZONES.find(z => tsb >= z.min && tsb < z.max) || TSB_ZONES[4];
-}
-
-function formatDuration(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m}m`;
-}
-
-function formatDistance(meters: number): string {
-  return `${(meters / 1000).toFixed(1)} km`;
-}
-
-function formatRelativeTime(dateString: string): string {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  
-  if (diffDays === 0) return "Today";
-  if (diffDays === 1) return "Yesterday";
-  if (diffDays < 7) return `${diffDays} days ago`;
-  if (diffDays < 14) return "1 week ago";
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-  if (diffDays < 60) return "1 month ago";
-  return `${Math.floor(diffDays / 30)} months ago`;
-}
-
-function formatElevation(meters: number): string {
-  return `${Math.round(meters)} m`;
-}
+import { formatDuration, formatDistance, formatRelativeTime, formatElevation } from "../format";
+import { TSB_ZONES, getTSBZone } from "../constants";
 
 export function Dashboard() {
   const navigate = useNavigate();

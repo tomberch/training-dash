@@ -24,6 +24,7 @@ import { useResizableMap } from "./hooks/useResizableMap";
 import { ChartExpandModal } from "./components/ChartExpandModal";
 import { ActivityPowerCurve } from "./components/ActivityPowerCurve";
 import { ChartErrorBoundary } from "./components/ErrorBoundary";
+import { POWER_ZONE_COLORS, HR_ZONE_COLORS } from "./constants";
 
 type AxisMode = "time" | "distance";
 
@@ -50,25 +51,6 @@ const CHARTS: ChartConfig[] = [
   { key: "power", label: "Power", unit: "W", color: "#f59e0b", dataKey: "power_w" },
   { key: "elevation", label: "Elevation", unit: "m", color: "#10b981", dataKey: "altitude_m" },
 ];
-
-// Zone colors (matching typical training zone colors)
-const POWER_ZONE_COLORS: Record<string, string> = {
-  "1": "#9ca3af", // Recovery - gray
-  "2": "#3b82f6", // Endurance - blue
-  "3": "#22c55e", // Tempo - green
-  "4": "#eab308", // Threshold - yellow
-  "5": "#f97316", // VO2max - orange
-  "6": "#ef4444", // Anaerobic - red
-  "7": "#7c3aed", // Neuromuscular - purple
-};
-
-const HR_ZONE_COLORS: Record<string, string> = {
-  "1": "#9ca3af", // Recovery - gray
-  "2": "#3b82f6", // Aerobic - blue
-  "3": "#22c55e", // Tempo - green
-  "4": "#eab308", // Threshold - yellow
-  "5": "#ef4444", // VO2max - red
-};
 
 interface Props {
   activityId: string;

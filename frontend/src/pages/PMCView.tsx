@@ -12,19 +12,7 @@ import {
 } from "recharts";
 import type { PMCPoint, ThresholdEntry } from "../api";
 import { fetchPMC, fetchThresholds } from "../api";
-
-// TSB zone definitions
-const TSB_ZONES = [
-  { name: "Fresh", min: 25, max: 100, color: "#bbf7d0" },      // Green
-  { name: "Optimal", min: 5, max: 25, color: "#fef08a" },      // Yellow
-  { name: "Neutral", min: -10, max: 5, color: "#e5e7eb" },     // Gray
-  { name: "Fatigued", min: -25, max: -10, color: "#fed7aa" },  // Orange
-  { name: "Very Fatigued", min: -100, max: -25, color: "#fecaca" }, // Red
-];
-
-function getTSBZone(tsb: number): typeof TSB_ZONES[0] {
-  return TSB_ZONES.find(z => tsb >= z.min && tsb < z.max) || TSB_ZONES[4];
-}
+import { TSB_ZONES, getTSBZone } from "../constants";
 
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr);

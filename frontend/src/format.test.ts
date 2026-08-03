@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { formatDistance, formatElevation, formatSpeed } from "./format";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { formatDistance, formatElevation, formatSpeed, formatDuration, formatRelativeTime } from "./format";
 
 describe("formatDistance", () => {
   it("returns km for metric", () => {
@@ -54,5 +54,68 @@ describe("formatSpeed", () => {
 
   it("defaults to metric when no unit system provided", () => {
     expect(formatSpeed(10)).toBe("36.0 km/h");
+  });
+});
+
+describe("formatDuration", () => {
+  it("formats minutes only for durations under an hour", () => {
+    expect(formatDuration(300)).toBe("5m");
+    expect(formatDuration(1800)).toBe("30m");
+    expect(formatDuration(60)).toBe("1m");
+  });
+
+  it("formats hours and minutes for longer durations", () => {
+    expect(formatDuration(3600)).toBe("1h 0m");
+    expect(formatDuration(3660)).toBe("1h 1m");
+    expect(formatDuration(7200)).toBe("2h 0m");
+    expect(formatDuration(5400)).toBe("1h 30m");
+  });
+
+  it("handles zero", () => {
+    expect(formatDuration(0)).toBe("0m");
+  });
+});
+
+describe("formatRelativeTime", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2024-06-15T12:00:00Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("returns Today for same day", () => {
+    expect(formatRelativeTime("2024-06-15T08:00:00Z")).toBe("Today");
+  });
+
+  it("returns Yesterday for previous day", () => {
+    expect(formatRelativeTime("2024-06-14T12:00:00Z")).toBe("Yesterday");
+  });
+
+  it("returns days ago for 2-6 days", () => {
+    expect(formatRelativeTime("2024-06-13T12:00:00Z")).toBe("2 days ago");
+    expect(formatRelativeTime("2024-06-10T12:00:00Z")).toBe("5 days ago");
+  });
+
+  it("returns 1 week ago for 7-13 days", () => {
+    expect(formatRelativeTime("2024-06-08T12:00:00Z")).toBe("1 week ago");
+    expect(formatRelativeTime("2024-06-03T12:00:00Z")).toBe("1 week ago");
+  });
+
+  it("returns weeks ago for 14-29 days", () => {
+    expect(formatRelativeTime("2024-06-01T12:00:00Z")).toBe("2 weeks ago");
+    expect(formatRelativeTime("2024-05-20T12:00:00Z")).toBe("3 weeks ago");
+  });
+
+  it("returns 1 month ago for 30-59 days", () => {
+    expect(formatRelativeTime("2024-05-16T12:00:00Z")).toBe("1 month ago");
+    expect(formatRelativeTime("2024-04-20T12:00:00Z")).toBe("1 month ago");
+  });
+
+  it("returns months ago for 60+ days", () => {
+    expect(formatRelativeTime("2024-04-15T12:00:00Z")).toBe("2 months ago");
+    expect(formatRelativeTime("2024-01-15T12:00:00Z")).toBe("5 months ago");
   });
 });
