@@ -458,69 +458,72 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
                 </button>
               </div>
             ) : (
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {activity.title || new Date(activity.started_at).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                </h1>
-                {activity.title_source === "pending" && (
+              <>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                    {activity.title || new Date(activity.started_at).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                  </h1>
+                  {activity.title_source === "pending" && (
+                    <button
+                      onClick={() => {
+                        setIsGeneratingTitle(true);
+                        generateActivityTitle(activityId)
+                          .then((updated) => {
+                            setActivity({ ...activity!, title: updated.title, title_source: updated.title_source });
+                          })
+                          .catch((e) => setError(e))
+                          .finally(() => setIsGeneratingTitle(false));
+                      }}
+                      disabled={isGeneratingTitle}
+                      className="p-1 text-indigo-500 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 disabled:opacity-50"
+                      title="Generate location-based title from GPS"
+                    >
+                      {isGeneratingTitle ? (
+                        <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                      )}
+                    </button>
+                  )}
                   <button
                     onClick={() => {
-                      setIsGeneratingTitle(true);
-                      generateActivityTitle(activityId)
-                        .then((updated) => {
-                          setActivity({ ...activity!, title: updated.title, title_source: updated.title_source });
-                        })
-                        .catch((e) => setError(e))
-                        .finally(() => setIsGeneratingTitle(false));
+                      setEditedTitle(activity.title || "");
+                      setIsEditingTitle(true);
                     }}
-                    disabled={isGeneratingTitle}
-                    className="p-1 text-indigo-500 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 disabled:opacity-50"
-                    title="Generate location-based title from GPS"
+                    className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                    title="Edit title"
                   >
-                    {isGeneratingTitle ? (
-                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                    ) : (
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                    )}
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
                   </button>
-                )}
-                <button
-                  onClick={() => {
-                    setEditedTitle(activity.title || "");
-                    setIsEditingTitle(true);
-                  }}
-                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-                  title="Edit title"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                  </svg>
-                </button>
-              </div>
-              {/* Date/time subtitle */}
-              <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400 mt-1">
-                <span className="flex items-center gap-1.5">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  {new Date(activity.started_at).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  {new Date(activity.started_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })}
-                  –
-                  {new Date(new Date(activity.started_at).getTime() + (activity.elapsed_time_s * 1000)).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })}
-                  <span className="text-gray-400 dark:text-gray-500">({formatTime(activity.elapsed_time_s)})</span>
-                </span>
-              </div>
+                </div>
+                {/* Date/time subtitle */}
+                <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400 mt-1">
+                  <span className="flex items-center gap-1.5">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    {new Date(activity.started_at).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    {new Date(activity.started_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })}
+                    {" - "}
+                    {new Date(new Date(activity.started_at).getTime() + (activity.elapsed_time_s * 1000)).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })}
+                    {" "}
+                    <span className="text-gray-400 dark:text-gray-500">({formatTime(activity.elapsed_time_s)})</span>
+                  </span>
+                </div>
+              </>
             )}
           </div>
           {activity.is_breakthrough && (
