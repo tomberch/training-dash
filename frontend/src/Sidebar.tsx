@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { NavLink, useLocation } from "react-router-dom";
+import { Logo } from "./components/Logo";
 
 interface SidebarProps {
   isAdmin?: boolean;
@@ -181,14 +182,8 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
   const SidebarContent = ({ isMobile = false }: { isMobile?: boolean }) => (
     <div className="flex flex-col h-full">
       {/* Logo/Title */}
-      <div className={`p-4 border-b border-gray-200 dark:border-gray-700 ${collapsed && !isMobile ? "px-2" : ""}`}>
-        {collapsed && !isMobile ? (
-          <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold">
-            T
-          </div>
-        ) : (
-          <h1 className="text-lg font-bold text-gray-900 dark:text-white">TrainDash</h1>
-        )}
+      <div className={`p-4 border-b border-gray-200 dark:border-gray-700 ${collapsed && !isMobile ? "px-2 flex justify-center" : ""}`}>
+        <Logo size={collapsed && !isMobile ? "sm" : "md"} showText={!collapsed || isMobile} />
       </div>
 
       {/* Navigation */}

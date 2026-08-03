@@ -4,6 +4,7 @@ import { ApiError, fetchActivities, fetchActivityRecords, login, register } from
 import { formatDistance, formatTime, formatDate, formatElevation } from "./format";
 import type { UnitSystem } from "./format";
 import { ErrorDisplay } from "./ErrorDisplay";
+import { Logo } from "./components/Logo";
 import { MiniMap } from "./components/MiniMap";
 
 // Activity card with lazy-loaded mini-map
@@ -273,9 +274,9 @@ export function Login({
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
       <div className="w-full max-w-sm">
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8">
-          <h1 className="text-2xl font-bold text-center text-gray-900 dark:text-white mb-6">
-            TrainDash
-          </h1>
+          <div className="flex justify-center mb-6">
+            <Logo size="lg" />
+          </div>
           
           {error && (
             <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-400">
