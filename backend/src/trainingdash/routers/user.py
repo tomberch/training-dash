@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy import select, delete
 
-from trainingdash.auth import CurrentUser, DbSession
+from trainingdash.auth import CurrentUser, DbSession, hash_password
 from trainingdash.crypto import encrypt, EncryptionError
 from trainingdash.garmin import get_garmin_client, GarminAPIError, GarminMFARequired
 from trainingdash.models import (
@@ -18,6 +18,7 @@ from trainingdash.models import (
     Notification,
     PowerZone,
     ThresholdHistory,
+    UserOAuthLink,
     XertCredentials,
 )
 from trainingdash.routers.serializers import (
@@ -816,3 +817,162 @@ async def trigger_xert_sync(db: DbSession, user: CurrentUser):
     return await _trigger_user_sync(
         db, user.id, XertCredentials, "sync_xert_job", "Xert"
     )
+
+
+
+# --- OAuth Links ---
+
+
+@router.get("/me/oauth-links")
+async def list_oauth_links(db: DbSession, user: CurrentUser) -> list[dict]:
+    """List connected OAuth providers for the current user.
+
+    Returns a list of OAuth provider connections with their details.
+
+    Args:
+        db: Database session.
+        user: The authenticated user.
+
+    Returns:
+        List of OAuth link objects with provider, email, display_name,
+        avatar_url, and created_at fields.
+    """
+    result = await db.execute(
+        select(UserOAuthLink).where(UserOAuthLink.user_id == user.id)
+    )
+    links = result.scalars().all()
+    
+    return [
+        {
+            "provider": link.provider,
+            "provider_email": link.provider_email,
+            "display_name": link.display_name,
+            "avatar_url": link.avatar_url,
+            "created_at": link.created_at.isoformat() if link.created_at else None,
+        }
+        for link in links
+    ]
+
+
+@router.delete("/me/oauth-links/{provider}")
+async def disconnect_oauth_provider(
+    db: DbSession, user: CurrentUser, provider: str
+) -> dict:
+    """Disconnect an OAuth provider from the current user's account.
+
+    Includes lockout protection: refuses to disconnect if it would leave
+    the user with no way to sign in (no password and no other OAuth links).
+
+    Args:
+        db: Database session.
+        user: The authenticated user.
+        provider: The OAuth provider to disconnect ('github' or 'google').
+
+    Returns:
+        Success indicator.
+
+    Raises:
+        HTTPException: 404 if no such link exists, 400 if disconnecting
+            would lock the user out.
+    """
+    # Check if the link exists
+    result = await db.execute(
+        select(UserOAuthLink).where(
+            UserOAuthLink.user_id == user.id,
+            UserOAuthLink.provider == provider,
+        )
+    )
+    link = result.scalar_one_or_none()
+    
+    if not link:
+        raise HTTPException(status_code=404, detail=f"No {provider} account connected")
+    
+    # Lockout protection: check if user would be locked out
+    # User needs at least one auth method: password OR another OAuth link
+    has_password = user.password_hash is not None and user.password_hash != ""
+    
+    if not has_password:
+        # Count other OAuth links
+        other_links_result = await db.execute(
+            select(UserOAuthLink).where(
+                UserOAuthLink.user_id == user.id,
+                UserOAuthLink.provider != provider,
+            )
+        )
+        other_links = other_links_result.scalars().all()
+        
+        if len(other_links) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot disconnect: this is your only sign-in method. Set a password or connect another provider first.",
+            )
+    
+    # Safe to delete
+    await db.delete(link)
+    await db.commit()
+    
+    return {"success": True}
+
+
+class SetPasswordRequest(BaseModel):
+    """Request body for setting a password."""
+
+    password: str
+
+
+@router.post("/me/set-password")
+async def set_password(
+    db: DbSession, user: CurrentUser, request: SetPasswordRequest
+) -> dict:
+    """Set a password for OAuth-only users who don't have one.
+
+    Allows users who signed up via OAuth to add a password so they can
+    also sign in with email/password.
+
+    Args:
+        db: Database session.
+        user: The authenticated user.
+        request: The password to set.
+
+    Returns:
+        Success indicator.
+
+    Raises:
+        HTTPException: 400 if user already has a password or password
+            is too short.
+    """
+    # Only allow if user has no password
+    if user.password_hash is not None and user.password_hash != "":
+        raise HTTPException(
+            status_code=400,
+            detail="Password already set. Use change password instead.",
+        )
+    
+    # Validate password
+    if len(request.password) < 8:
+        raise HTTPException(
+            status_code=400,
+            detail="Password must be at least 8 characters long.",
+        )
+    
+    # Set password
+    user.password_hash = hash_password(request.password)
+    await db.commit()
+    
+    return {"success": True}
+
+
+@router.get("/me/has-password")
+async def has_password(user: CurrentUser) -> dict:
+    """Check if the current user has a password set.
+
+    Used by the frontend to determine whether to show the
+    'Set Password' option for OAuth-only users.
+
+    Args:
+        user: The authenticated user.
+
+    Returns:
+        Object with has_password boolean.
+    """
+    return {"has_password": user.password_hash is not None and user.password_hash != ""}

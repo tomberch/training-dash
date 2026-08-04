@@ -13,6 +13,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
     text,
 )
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
@@ -26,7 +27,7 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
-    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     avatar_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     is_admin: Mapped[bool] = mapped_column(default=False)
@@ -37,6 +38,27 @@ class User(Base):
     weight_kg: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
     hr_derived_power_enabled: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
+
+
+class UserOAuthLink(Base):
+    """Links users to OAuth provider accounts (GitHub, Google, etc.)."""
+    __tablename__ = "user_oauth_links"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    provider: Mapped[str] = mapped_column(String(20), nullable=False)  # 'github', 'google'
+    provider_user_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    provider_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
+
+    __table_args__ = (
+        # One link per provider account globally (prevents same OAuth account linking to multiple users)
+        UniqueConstraint("provider", "provider_user_id", name="uq_oauth_provider_user"),
+    )
 
 
 class AppSettings(Base):

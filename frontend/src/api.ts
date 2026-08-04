@@ -761,3 +761,32 @@ export async function fetchPowerCurve(start?: string, end?: string): Promise<Pow
 export async function fetchFitness(): Promise<FitnessResponse> {
   return apiGet<FitnessResponse>("/fitness");
 }
+
+
+// ============================================================================
+// OAuth API
+// ============================================================================
+
+export interface OAuthLink {
+  provider: string;
+  provider_email: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+  created_at: string | null;
+}
+
+export async function fetchOAuthLinks(): Promise<OAuthLink[]> {
+  return apiGet<OAuthLink[]>("/me/oauth-links");
+}
+
+export async function disconnectOAuthProvider(provider: string): Promise<void> {
+  return apiDelete(`/me/oauth-links/${provider}`, "Failed to disconnect provider");
+}
+
+export async function setPassword(password: string): Promise<{ success: boolean }> {
+  return apiPost("/me/set-password", { password }, "Failed to set password");
+}
+
+export async function hasPassword(): Promise<{ has_password: boolean }> {
+  return apiGet<{ has_password: boolean }>("/me/has-password");
+}
