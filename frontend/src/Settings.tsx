@@ -953,7 +953,7 @@ function SyncButton({ onSync, label }: { onSync: () => Promise<{ success: boolea
   );
 }
 
-function ConnectedAccountsSection(): JSX.Element {
+function ConnectedAccountsSection(): React.JSX.Element {
   const [oauthLinks, setOauthLinks] = useState<OAuthLink[]>([]);
   const [userHasPassword, setUserHasPassword] = useState(true);
   const [loading, setLoading] = useState(true);
