@@ -1,0 +1,80 @@
+/* =============================================================================
+   Catppuccin Latte Theme - Light Mode
+   
+   Maps Catppuccin Latte palette to TrainDash semantic tokens.
+   This file is loaded when [data-theme="latte"] is set on <html>.
+   ============================================================================= */
+
+[data-theme="latte"] {
+  /* Surfaces */
+  --background: #eff1f5;           /* ctp-base */
+  --surface: #e6e9ef;              /* ctp-mantle */
+  --surface-hover: #dce0e8;        /* ctp-crust */
+  --surface-elevated: #ffffff;     /* white for modals/dropdowns */
+
+  /* Text */
+  --text: #4c4f69;                 /* ctp-text */
+  --text-secondary: #5c5f77;       /* ctp-subtext1 */
+  --text-muted: #6c6f85;           /* ctp-subtext0 */
+  --text-inverted: #eff1f5;        /* ctp-base (for text on colored bg) */
+
+  /* Brand - using mauve (purple) as primary for analytics feel */
+  --primary: #8839ef;              /* ctp-mauve */
+  --primary-hover: #7c2de0;        /* darker mauve */
+  --primary-muted: #ead6fd;        /* mauve-100 equivalent */
+  --primary-foreground: #ffffff;   /* white text on primary */
+
+  /* Accent - using blue */
+  --accent: #1e66f5;               /* ctp-blue */
+  --accent-hover: #1a5cdd;         /* darker blue */
+  --accent-muted: #c9dafa;         /* blue-100 equivalent */
+
+  /* Semantic - Success (green) */
+  --success: #40a02b;              /* ctp-green */
+  --success-muted: #d4edcf;        /* green-100 equivalent */
+  --success-foreground: #ffffff;
+
+  /* Semantic - Warning (yellow/peach) */
+  --warning: #df8e1d;              /* ctp-yellow */
+  --warning-muted: #f9e8c9;        /* yellow-100 equivalent */
+  --warning-foreground: #4c4f69;   /* dark text on yellow */
+
+  /* Semantic - Danger (red) */
+  --danger: #d20f39;               /* ctp-red */
+  --danger-muted: #f8d0d8;         /* red-100 equivalent */
+  --danger-foreground: #ffffff;
+
+  /* Borders */
+  --border: #ccd0da;               /* ctp-surface0 */
+  --border-muted: #bcc0cc;         /* ctp-surface1 */
+
+  /* Focus ring */
+  --ring: #8839ef;                 /* same as primary */
+
+  /* Input backgrounds */
+  --input: #ffffff;                /* white input fields */
+  --input-border: #acb0be;         /* ctp-surface2 */
+
+  /* Muted backgrounds (for secondary buttons, etc) */
+  --muted: #e6e9ef;                /* ctp-mantle */
+  --muted-foreground: #6c6f85;     /* ctp-subtext0 */
+
+  /* Card */
+  --card: #ffffff;
+  --card-foreground: #4c4f69;
+
+  /* Popover */
+  --popover: #ffffff;
+  --popover-foreground: #4c4f69;
+
+  /* Secondary */
+  --secondary: #ccd0da;            /* ctp-surface0 */
+  --secondary-foreground: #4c4f69;
+
+  /* Destructive (alias for danger) */
+  --destructive: #d20f39;
+  --destructive-foreground: #ffffff;
+
+  /* Border radius */
+  --radius: 0.5rem;
+}

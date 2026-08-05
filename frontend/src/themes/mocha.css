@@ -1,0 +1,80 @@
+/* =============================================================================
+   Catppuccin Mocha Theme - Dark Mode
+   
+   Maps Catppuccin Mocha palette to TrainDash semantic tokens.
+   This file is loaded when [data-theme="mocha"] is set on <html>.
+   ============================================================================= */
+
+[data-theme="mocha"] {
+  /* Surfaces */
+  --background: #1e1e2e;           /* ctp-base */
+  --surface: #181825;              /* ctp-mantle */
+  --surface-hover: #313244;        /* ctp-surface0 */
+  --surface-elevated: #45475a;     /* ctp-surface1 */
+
+  /* Text */
+  --text: #cdd6f4;                 /* ctp-text */
+  --text-secondary: #bac2de;       /* ctp-subtext1 */
+  --text-muted: #a6adc8;           /* ctp-subtext0 */
+  --text-inverted: #1e1e2e;        /* ctp-base (for text on colored bg) */
+
+  /* Brand - using mauve (purple) as primary for analytics feel */
+  --primary: #cba6f7;              /* ctp-mauve */
+  --primary-hover: #b98cf5;        /* slightly darker/more saturated */
+  --primary-muted: #45405a;        /* dark purple tint */
+  --primary-foreground: #1e1e2e;   /* dark text on primary */
+
+  /* Accent - using blue */
+  --accent: #89b4fa;               /* ctp-blue */
+  --accent-hover: #74a8f9;         /* slightly darker */
+  --accent-muted: #2d3a52;         /* dark blue tint */
+
+  /* Semantic - Success (green) */
+  --success: #a6e3a1;              /* ctp-green */
+  --success-muted: #2d4a2d;        /* dark green tint */
+  --success-foreground: #1e1e2e;
+
+  /* Semantic - Warning (yellow) */
+  --warning: #f9e2af;              /* ctp-yellow */
+  --warning-muted: #4a4530;        /* dark yellow tint */
+  --warning-foreground: #1e1e2e;
+
+  /* Semantic - Danger (red) */
+  --danger: #f38ba8;               /* ctp-red */
+  --danger-muted: #4a2d35;         /* dark red tint */
+  --danger-foreground: #1e1e2e;
+
+  /* Borders */
+  --border: #45475a;               /* ctp-surface1 */
+  --border-muted: #313244;         /* ctp-surface0 */
+
+  /* Focus ring */
+  --ring: #cba6f7;                 /* same as primary */
+
+  /* Input backgrounds */
+  --input: #313244;                /* ctp-surface0 */
+  --input-border: #585b70;         /* ctp-surface2 */
+
+  /* Muted backgrounds (for secondary buttons, etc) */
+  --muted: #313244;                /* ctp-surface0 */
+  --muted-foreground: #a6adc8;     /* ctp-subtext0 */
+
+  /* Card */
+  --card: #181825;                 /* ctp-mantle */
+  --card-foreground: #cdd6f4;
+
+  /* Popover */
+  --popover: #181825;
+  --popover-foreground: #cdd6f4;
+
+  /* Secondary */
+  --secondary: #45475a;            /* ctp-surface1 */
+  --secondary-foreground: #cdd6f4;
+
+  /* Destructive (alias for danger) */
+  --destructive: #f38ba8;
+  --destructive-foreground: #1e1e2e;
+
+  /* Border radius */
+  --radius: 0.5rem;
+}

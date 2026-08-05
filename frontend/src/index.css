@@ -1,77 +1,344 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
 /* Leaflet CSS must be imported for map to work */
 @import "leaflet/dist/leaflet.css";
 
-/* ============================================================================
-   Design Tokens - TrainDash Theme
-   ============================================================================ */
+/* Theme definitions - Catppuccin */
+@import "./themes/latte.css";
+@import "./themes/mocha.css";
 
-@theme {
-  /* Primary colors - Indigo */
-  --color-primary-50: var(--color-indigo-50);
-  --color-primary-100: var(--color-indigo-100);
-  --color-primary-200: var(--color-indigo-200);
-  --color-primary-300: var(--color-indigo-300);
-  --color-primary-400: var(--color-indigo-400);
-  --color-primary-500: var(--color-indigo-500);
-  --color-primary-600: var(--color-indigo-600);
-  --color-primary-700: var(--color-indigo-700);
-  --color-primary-800: var(--color-indigo-800);
-  --color-primary-900: var(--color-indigo-900);
-  --color-primary-950: var(--color-indigo-950);
+/* Dark mode variant for Tailwind */
+@custom-variant dark (&:is(.dark *));
 
-  /* Accent colors - Violet */
-  --color-accent-50: var(--color-violet-50);
-  --color-accent-100: var(--color-violet-100);
-  --color-accent-200: var(--color-violet-200);
-  --color-accent-300: var(--color-violet-300);
-  --color-accent-400: var(--color-violet-400);
-  --color-accent-500: var(--color-violet-500);
-  --color-accent-600: var(--color-violet-600);
-  --color-accent-700: var(--color-violet-700);
-  --color-accent-800: var(--color-violet-800);
-  --color-accent-900: var(--color-violet-900);
-  --color-accent-950: var(--color-violet-950);
+/* =============================================================================
+   Design Token Contract
+   
+   These tokens map our semantic variables to Tailwind CSS custom properties.
+   The actual values come from the active theme (latte.css or mocha.css).
+   ============================================================================= */
 
-  /* Semantic colors */
-  --color-success-50: var(--color-green-50);
-  --color-success-500: var(--color-green-500);
-  --color-success-600: var(--color-green-600);
-  --color-success-700: var(--color-green-700);
+@theme inline {
+  /* Font */
+  --font-sans: system-ui, -apple-system, sans-serif;
 
-  --color-warning-50: var(--color-amber-50);
-  --color-warning-500: var(--color-amber-500);
-  --color-warning-600: var(--color-amber-600);
-  --color-warning-700: var(--color-amber-700);
+  /* Surfaces */
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-surface-elevated: var(--surface-elevated);
 
-  --color-danger-50: var(--color-red-50);
-  --color-danger-500: var(--color-red-500);
-  --color-danger-600: var(--color-red-600);
-  --color-danger-700: var(--color-red-700);
+  /* Text */
+  --color-foreground: var(--text);
+  --color-text: var(--text);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-text-inverted: var(--text-inverted);
 
-  /* Chart colors - PMC */
-  --color-chart-ctl: var(--color-blue-500);
-  --color-chart-atl: var(--color-pink-500);
-  --color-chart-tsb: var(--color-amber-500);
+  /* Brand - Primary */
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-muted: var(--primary-muted);
+  --color-primary-foreground: var(--primary-foreground);
 
-  /* Chart colors - Power zones */
-  --color-zone-1: var(--color-gray-400);
-  --color-zone-2: var(--color-blue-500);
-  --color-zone-3: var(--color-green-500);
-  --color-zone-4: var(--color-yellow-500);
-  --color-zone-5: var(--color-orange-500);
-  --color-zone-6: var(--color-red-500);
-  --color-zone-7: var(--color-violet-500);
+  /* Brand - Accent */
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-muted: var(--accent-muted);
+  --color-accent-foreground: var(--text-inverted);
+
+  /* Semantic - Success */
+  --color-success: var(--success);
+  --color-success-muted: var(--success-muted);
+  --color-success-foreground: var(--success-foreground);
+
+  /* Semantic - Warning */
+  --color-warning: var(--warning);
+  --color-warning-muted: var(--warning-muted);
+  --color-warning-foreground: var(--warning-foreground);
+
+  /* Semantic - Danger/Destructive */
+  --color-danger: var(--danger);
+  --color-danger-muted: var(--danger-muted);
+  --color-danger-foreground: var(--danger-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  /* Borders */
+  --color-border: var(--border);
+  --color-border-muted: var(--border-muted);
+
+  /* Focus ring */
+  --color-ring: var(--ring);
+
+  /* Input */
+  --color-input: var(--input);
+  --color-input-border: var(--input-border);
+
+  /* Muted (secondary backgrounds) */
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  /* Card */
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+
+  /* Popover */
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  /* Secondary */
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  /* Border radius scale */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
 }
 
-/* Base styles */
+/* =============================================================================
+   Chart Colors - Fixed (Not Themeable)
+   
+   These colors have domain-specific meaning (red = hard effort, green = easy)
+   and should remain consistent regardless of theme.
+   ============================================================================= */
+
+@theme {
+  /* PMC Chart */
+  --color-chart-ctl: #3b82f6;    /* blue - Chronic Training Load */
+  --color-chart-atl: #ec4899;    /* pink - Acute Training Load */
+  --color-chart-tsb: #f59e0b;    /* amber - Training Stress Balance */
+
+  /* Power Zones */
+  --color-zone-1: #9ca3af;       /* gray - Recovery */
+  --color-zone-2: #3b82f6;       /* blue - Endurance */
+  --color-zone-3: #22c55e;       /* green - Tempo */
+  --color-zone-4: #eab308;       /* yellow - Threshold */
+  --color-zone-5: #f97316;       /* orange - VO2max */
+  --color-zone-6: #ef4444;       /* red - Anaerobic */
+  --color-zone-7: #8b5cf6;       /* violet - Neuromuscular */
+
+  /* Activity series colors */
+  --color-series-power: #f59e0b;    /* amber */
+  --color-series-hr: #ef4444;       /* red */
+  --color-series-speed: #3b82f6;    /* blue */
+  --color-series-cadence: #8b5cf6;  /* violet */
+  --color-series-elevation: #10b981; /* emerald */
+
+  /* shadcn chart colors (generic) */
+  --color-chart-1: #3b82f6;
+  --color-chart-2: #22c55e;
+  --color-chart-3: #f59e0b;
+  --color-chart-4: #ef4444;
+  --color-chart-5: #8b5cf6;
+}
+
+/* =============================================================================
+   Base Styles
+   ============================================================================= */
+
+/* Default to latte (light) theme if no theme is set */
+:root {
+  --background: #eff1f5;
+  --surface: #e6e9ef;
+  --surface-hover: #dce0e8;
+  --surface-elevated: #ffffff;
+  --text: #4c4f69;
+  --text-secondary: #5c5f77;
+  --text-muted: #6c6f85;
+  --text-inverted: #eff1f5;
+  --primary: #8839ef;
+  --primary-hover: #7c2de0;
+  --primary-muted: #ead6fd;
+  --primary-foreground: #ffffff;
+  --accent: #1e66f5;
+  --accent-hover: #1a5cdd;
+  --accent-muted: #c9dafa;
+  --success: #40a02b;
+  --success-muted: #d4edcf;
+  --success-foreground: #ffffff;
+  --warning: #df8e1d;
+  --warning-muted: #f9e8c9;
+  --warning-foreground: #4c4f69;
+  --danger: #d20f39;
+  --danger-muted: #f8d0d8;
+  --danger-foreground: #ffffff;
+  --border: #ccd0da;
+  --border-muted: #bcc0cc;
+  --ring: #8839ef;
+  --input: #ffffff;
+  --input-border: #acb0be;
+  --muted: #e6e9ef;
+  --muted-foreground: #6c6f85;
+  --card: #ffffff;
+  --card-foreground: #4c4f69;
+  --popover: #ffffff;
+  --popover-foreground: #4c4f69;
+  --secondary: #ccd0da;
+  --secondary-foreground: #4c4f69;
+  --destructive: #d20f39;
+  --destructive-foreground: #ffffff;
+  --radius: 0.5rem;
+  
+  /* Shadcn foreground alias */
+  --foreground: #4c4f69;
+}
+
+/* Base layer for shadcn components */
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
 body {
-  @apply bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100;
   margin: 0;
   font-family: system-ui, -apple-system, sans-serif;
 }
 
 #root {
   min-height: 100vh;
+}
+
+/* =============================================================================
+   Custom styles for map and chart integration
+   ============================================================================= */
+
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+  border-radius: 0.5rem;
+}
+
+.recharts-responsive-container {
+  min-height: 200px;
+}
+
+/* =============================================================================
+   Utility Classes for Theme Colors
+   
+   These provide backward compatibility with existing code while we migrate
+   to the new token system.
+   ============================================================================= */
+
+@layer utilities {
+  .bg-background { background-color: var(--background); }
+  .bg-surface { background-color: var(--surface); }
+  .bg-surface-hover { background-color: var(--surface-hover); }
+  .bg-surface-elevated { background-color: var(--surface-elevated); }
+  
+  .text-foreground { color: var(--text); }
+  .text-secondary-color { color: var(--text-secondary); }
+  .text-muted-color { color: var(--text-muted); }
+  
+  .border-default { border-color: var(--border); }
+  .border-muted-color { border-color: var(--border-muted); }
+  
+  .ring-default { --tw-ring-color: var(--ring); }
+}
+
+/* =============================================================================
+   Animation Utilities
+   
+   Standardized timing and easing for consistent motion throughout the app.
+   - Fast (150ms): micro-interactions (hover, active states)
+   - Normal (200ms): standard transitions (cards, buttons)
+   - Slow (300ms): larger elements (modals, panels)
+   ============================================================================= */
+
+@layer utilities {
+  /* Standard transition presets */
+  .transition-fast {
+    transition-property: color, background-color, border-color, box-shadow, transform, opacity;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 150ms;
+  }
+  
+  .transition-normal {
+    transition-property: color, background-color, border-color, box-shadow, transform, opacity;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 200ms;
+  }
+  
+  .transition-slow {
+    transition-property: color, background-color, border-color, box-shadow, transform, opacity;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 300ms;
+  }
+  
+  /* Interactive card hover effect */
+  .card-interactive {
+    transition-property: transform, box-shadow, border-color;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 200ms;
+  }
+  
+  .card-interactive:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    border-color: var(--primary);
+  }
+  
+  /* Button press effect */
+  .btn-press:active {
+    transform: scale(0.97);
+  }
+  
+  /* Fade in animation */
+  .animate-fade-in {
+    animation: fadeIn 200ms ease-out;
+  }
+  
+  /* Slide up animation */
+  .animate-slide-up {
+    animation: slideUp 200ms ease-out;
+  }
+  
+  /* Scale in animation (for modals) */
+  .animate-scale-in {
+    animation: scaleIn 200ms ease-out;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
 }
