@@ -31,11 +31,11 @@ export function ErrorDisplay({ error, context }: ErrorDisplayProps) {
     : message;
 
   return (
-    <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-      <p className="text-red-700 dark:text-red-400">{displayMessage}</p>
+    <div className="p-4 bg-destructive/10 border border-destructive/30 rounded-lg">
+      <p className="text-destructive">{displayMessage}</p>
       {errorId && (
-        <p className="mt-2 text-xs text-red-500 dark:text-red-500">
-          Error ID: <code className="font-mono bg-red-100 dark:bg-red-900/40 px-1 py-0.5 rounded">{errorId}</code>
+        <p className="mt-2 text-xs text-destructive/80">
+          Error ID: <code className="font-mono bg-destructive/20 px-1 py-0.5 rounded">{errorId}</code>
         </p>
       )}
     </div>

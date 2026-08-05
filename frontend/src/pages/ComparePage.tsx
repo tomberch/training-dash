@@ -148,11 +148,11 @@ function PowerComparisonChart({
   
   if (!hasPowerData) {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-        <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
+      <div className="bg-card rounded-lg border border-border p-4">
+        <h3 className="text-sm font-medium text-muted-foreground">
           Power Comparison
         </h3>
-        <p className="mt-2 text-sm text-gray-400 dark:text-gray-500">
+        <p className="mt-2 text-sm text-muted-foreground">
           No power data available for these activities.
         </p>
       </div>
@@ -160,19 +160,19 @@ function PowerComparisonChart({
   }
   
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+    <div className="bg-card rounded-lg border border-border">
       {/* Collapsible header */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors rounded-t-lg"
+        className="w-full flex items-center justify-between p-4 text-left hover:bg-muted/50 transition-fast rounded-t-lg"
       >
-        <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+        <h3 className="text-sm font-medium text-foreground">
           Power Comparison
         </h3>
         <div className="flex items-center gap-4">
           {/* Legend preview when collapsed */}
           {!isExpanded && (
-            <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
+            <div className="flex items-center gap-4 text-xs text-muted-foreground">
               <div className="flex items-center gap-1">
                 <span className="w-3 h-0.5 bg-indigo-500" />
                 <span>{baseActivity.title || "Base"}</span>
@@ -265,7 +265,7 @@ function PowerComparisonChart({
           </div>
           
           {/* Legend */}
-          <div className="flex items-center justify-center gap-6 mt-3 text-xs text-gray-500 dark:text-gray-400">
+          <div className="flex items-center justify-center gap-6 mt-3 text-xs text-muted-foreground">
             <div className="flex items-center gap-2">
               <span className="w-4 h-0.5 bg-indigo-500" />
               <span>{baseActivity.title || "Base"}</span>
@@ -526,32 +526,32 @@ function StatsTable({ baseActivity, compareActivity, comparison }: StatsTablePro
   }, [baseActivity, compareActivity, comparison]);
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-      <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-        <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+    <div className="bg-card rounded-lg border border-border overflow-hidden">
+      <div className="px-4 py-3 border-b border-border">
+        <h3 className="text-sm font-medium text-foreground">
           Stats Comparison
         </h3>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="bg-gray-50 dark:bg-gray-700/50">
-              <th className="px-4 py-2 text-left font-medium text-gray-600 dark:text-gray-400">
+            <tr className="bg-muted/50">
+              <th className="px-4 py-2 text-left font-medium text-muted-foreground">
                 Metric
               </th>
-              <th className="px-4 py-2 text-center font-medium text-gray-600 dark:text-gray-400">
+              <th className="px-4 py-2 text-center font-medium text-muted-foreground">
                 <div className="flex items-center justify-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-indigo-500" />
                   {baseActivity.title || "Base"}
                 </div>
               </th>
-              <th className="px-4 py-2 text-center font-medium text-gray-600 dark:text-gray-400">
+              <th className="px-4 py-2 text-center font-medium text-muted-foreground">
                 <div className="flex items-center justify-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-amber-500" />
                   {compareActivity.title || "Compare"}
                 </div>
               </th>
-              <th className="px-4 py-2 text-center font-medium text-gray-600 dark:text-gray-400">
+              <th className="px-4 py-2 text-center font-medium text-muted-foreground">
                 Delta
               </th>
             </tr>
@@ -560,24 +560,24 @@ function StatsTable({ baseActivity, compareActivity, comparison }: StatsTablePro
             {stats.map((stat, idx) => (
               <tr
                 key={stat.label}
-                className={`border-t border-gray-100 dark:border-gray-700 ${
-                  idx % 2 === 0 ? "" : "bg-gray-50/50 dark:bg-gray-700/25"
+                className={`border-t border-border ${
+                  idx % 2 === 0 ? "" : "bg-muted/25"
                 }`}
               >
-                <td className="px-4 py-2 font-medium text-gray-700 dark:text-gray-300">
+                <td className="px-4 py-2 font-medium text-foreground">
                   {stat.label}
                 </td>
                 <td className="px-4 py-2 text-center">
                   <span
                     className={`${
                       stat.winner === "base"
-                        ? "text-green-600 dark:text-green-400 font-semibold"
-                        : "text-gray-600 dark:text-gray-400"
+                        ? "text-success font-semibold"
+                        : "text-muted-foreground"
                     }`}
                   >
                     {stat.baseValue || "—"}
                     {stat.winner === "base" && (
-                      <span className="ml-1 text-green-500">✓</span>
+                      <span className="ml-1 text-success">✓</span>
                     )}
                   </span>
                 </td>
@@ -585,17 +585,17 @@ function StatsTable({ baseActivity, compareActivity, comparison }: StatsTablePro
                   <span
                     className={`${
                       stat.winner === "compare"
-                        ? "text-green-600 dark:text-green-400 font-semibold"
-                        : "text-gray-600 dark:text-gray-400"
+                        ? "text-success font-semibold"
+                        : "text-muted-foreground"
                     }`}
                   >
                     {stat.compareValue || "—"}
                     {stat.winner === "compare" && (
-                      <span className="ml-1 text-green-500">✓</span>
+                      <span className="ml-1 text-success">✓</span>
                     )}
                   </span>
                 </td>
-                <td className="px-4 py-2 text-center text-gray-500 dark:text-gray-400">
+                <td className="px-4 py-2 text-center text-muted-foreground">
                   {stat.delta || "—"}
                 </td>
               </tr>
@@ -902,7 +902,7 @@ export function ComparePage() {
   };
 
   return (
-    <div className="h-full flex flex-col bg-gray-50 dark:bg-gray-900">
+    <div className="h-full flex flex-col bg-background">
       {/* Sticky map */}
       {basePositions.length > 0 && (
         <div className="flex-shrink-0 p-4 pb-0">
@@ -933,7 +933,7 @@ export function ComparePage() {
             {baseActivity && (
               <Link
                 to={`/activities/${baseActivity.id}`}
-                className="inline-flex items-center mt-2 text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
+                className="inline-flex items-center mt-2 text-sm text-primary hover:underline"
               >
                 <span className="w-2 h-2 rounded-full bg-indigo-500 mr-2" />
                 {baseActivity.title || "Untitled"} →
@@ -957,7 +957,7 @@ export function ComparePage() {
                   {compareActivity && (
                     <Link
                       to={`/activities/${compareActivity.id}`}
-                      className="inline-flex items-center mt-2 text-sm text-amber-600 dark:text-amber-400 hover:underline"
+                      className="inline-flex items-center mt-2 text-sm text-warning hover:underline"
                     >
                       <span className="w-2 h-2 rounded-full bg-amber-500 mr-2" />
                       {compareActivity.title || "Untitled"} →
@@ -966,20 +966,20 @@ export function ComparePage() {
                 </>
               ) : (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label className="block text-sm font-medium text-foreground mb-1">
                     Compare With (same route)
                   </label>
-                  <div className="px-3 py-2 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 text-sm">
+                  <div className="px-3 py-2 bg-muted rounded-lg border border-border text-muted-foreground text-sm">
                     No other rides on this route yet. Select a different base activity.
                   </div>
                 </div>
               )
             ) : (
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   Compare With
                 </label>
-                <div className="px-3 py-2 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 text-sm">
+                <div className="px-3 py-2 bg-muted rounded-lg border border-border text-muted-foreground text-sm">
                   Select a base activity first
                 </div>
               </div>
@@ -993,7 +993,7 @@ export function ComparePage() {
             <button
               onClick={handleSwap}
               disabled={loading}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-muted-foreground bg-card border border-border rounded-lg hover:bg-muted transition-fast disabled:opacity-50"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
@@ -1007,8 +1007,8 @@ export function ComparePage() {
       {/* Comparison content area */}
       <div className="flex-1 min-h-0 p-4 pt-0 overflow-y-auto">
         {loading ? (
-          <div className="flex items-center justify-center h-64 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-            <div className="flex items-center gap-3 text-gray-500 dark:text-gray-400">
+          <div className="flex items-center justify-center h-64 bg-card rounded-lg border border-border">
+            <div className="flex items-center gap-3 text-muted-foreground">
               <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
@@ -1020,17 +1020,17 @@ export function ComparePage() {
           <div className="space-y-4">
             {/* Activities summary cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+              <div className="bg-card rounded-lg border border-border p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="w-3 h-3 rounded-full bg-indigo-500" />
-                  <span className="text-xs font-medium text-indigo-600 dark:text-indigo-400 uppercase tracking-wide">
+                  <span className="text-xs font-medium text-primary uppercase tracking-wide">
                     Base
                   </span>
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                <h3 className="text-lg font-semibold text-foreground">
                   {baseActivity.title || "Untitled"}
                 </h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
+                <p className="text-sm text-muted-foreground">
                   {new Date(baseActivity.started_at).toLocaleDateString(undefined, {
                     weekday: "short",
                     year: "numeric",
@@ -1039,17 +1039,17 @@ export function ComparePage() {
                   })}
                 </p>
               </div>
-              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+              <div className="bg-card rounded-lg border border-border p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="w-3 h-3 rounded-full bg-amber-500" />
-                  <span className="text-xs font-medium text-amber-600 dark:text-amber-400 uppercase tracking-wide">
+                  <span className="text-xs font-medium text-warning uppercase tracking-wide">
                     Compare
                   </span>
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                <h3 className="text-lg font-semibold text-foreground">
                   {compareActivity.title || "Untitled"}
                 </h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
+                <p className="text-sm text-muted-foreground">
                   {new Date(compareActivity.started_at).toLocaleDateString(undefined, {
                     weekday: "short",
                     year: "numeric",
@@ -1063,8 +1063,8 @@ export function ComparePage() {
             {/* Gap Chart */}
             {comparison?.comparable && gapChartData.length > 0 && (
               <ChartErrorBoundary>
-                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                <div className="bg-card rounded-lg border border-border p-4">
+                  <h3 className="text-sm font-medium text-foreground mb-3">
                     Time Gap vs Distance
                   </h3>
                   <div style={{ height: 350 }}>
@@ -1143,7 +1143,7 @@ export function ComparePage() {
                       </ComposedChart>
                     </ResponsiveContainer>
                   </div>
-                  <div className="flex items-center justify-center gap-6 mt-3 text-xs text-gray-500 dark:text-gray-400">
+                  <div className="flex items-center justify-center gap-6 mt-3 text-xs text-muted-foreground">
                     <div className="flex items-center gap-1">
                       <span className="w-3 h-3 rounded-full bg-green-500" />
                       <span>Faster (ahead)</span>
@@ -1179,8 +1179,8 @@ export function ComparePage() {
             />
           </div>
         ) : (
-          <div className="flex items-center justify-center h-64 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-            <p className="text-gray-500 dark:text-gray-400">
+          <div className="flex items-center justify-center h-64 bg-card rounded-lg border border-border">
+            <p className="text-muted-foreground">
               {!baseActivity
                 ? "Select a base activity to begin comparison."
                 : "Select an activity to compare with."}

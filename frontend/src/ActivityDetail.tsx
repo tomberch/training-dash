@@ -23,6 +23,59 @@ import { ChartExpandModal } from "./components/ChartExpandModal";
 import { ActivityPowerCurve } from "./components/ActivityPowerCurve";
 import { ChartErrorBoundary } from "./components/ErrorBoundary";
 import { POWER_ZONE_COLORS, HR_ZONE_COLORS } from "./constants";
+import { Skeleton } from "@/components/ui/skeleton";
+
+function ActivityDetailLoadingSkeleton() {
+  return (
+    <div className="min-h-screen bg-background p-6">
+      <div className="max-w-6xl mx-auto space-y-6">
+        {/* Back button and header */}
+        <Skeleton className="h-8 w-20" />
+        <div className="space-y-2">
+          <Skeleton className="h-8 w-64" />
+          <Skeleton className="h-4 w-48" />
+        </div>
+        
+        {/* Stats row */}
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} className="bg-card rounded-lg border border-border p-4">
+              <Skeleton className="h-3 w-16 mb-2" />
+              <Skeleton className="h-7 w-20" />
+            </div>
+          ))}
+        </div>
+        
+        {/* Map */}
+        <div className="bg-card rounded-lg border border-border p-4">
+          <Skeleton className="h-5 w-16 mb-3" />
+          <div className="h-80 bg-muted rounded-lg flex items-center justify-center">
+            <svg className="w-12 h-12 text-muted-foreground/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+            </svg>
+          </div>
+        </div>
+        
+        {/* Chart */}
+        <div className="bg-card rounded-lg border border-border p-4">
+          <div className="flex items-center justify-between mb-3">
+            <Skeleton className="h-5 w-32" />
+            <div className="flex gap-2">
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-8 w-16 rounded" />
+              ))}
+            </div>
+          </div>
+          <div className="h-64 bg-muted rounded flex items-end justify-around p-4 gap-1">
+            {[40, 55, 35, 60, 45, 70, 50, 65, 45, 75, 55, 80, 60, 50, 70].map((h, i) => (
+              <Skeleton key={i} className="flex-1 rounded-t" style={{ height: `${h}%` }} />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 interface ChartConfig {
   key: string;
@@ -99,7 +152,7 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
+      <div className="min-h-screen bg-background p-6">
         <div className="max-w-6xl mx-auto">
           <ErrorDisplay error={error} context="loading activity" />
         </div>
@@ -108,11 +161,7 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
   }
 
   if (loading || !activity || !geojson) {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <div className="text-gray-500 dark:text-gray-400">Loading...</div>
-      </div>
-    );
+    return <ActivityDetailLoadingSkeleton />;
   }
 
   interface ChartDataPoint {
@@ -239,7 +288,7 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-background">
       <div className="max-w-6xl mx-auto px-4 py-6">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
@@ -250,7 +299,7 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
                   type="text"
                   value={editedTitle}
                   onChange={(e) => setEditedTitle(e.target.value)}
-                  className="flex-1 px-3 py-2 text-lg font-bold text-gray-900 dark:text-white bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="flex-1 px-3 py-2 text-lg font-bold text-foreground bg-input border border-input-border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
                   autoFocus
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
@@ -264,13 +313,13 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
                   onClick={() => {
                     saveTitle(editedTitle).catch((err) => setError(err));
                   }}
-                  className="px-3 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
+                  className="px-3 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-lg hover:bg-primary/80"
                 >
                   Save
                 </button>
                 <button
                   onClick={() => setIsEditingTitle(false)}
-                  className="px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
+                  className="px-3 py-2 text-sm font-medium text-foreground bg-card border border-border rounded-lg hover:bg-muted"
                 >
                   Cancel
                 </button>
@@ -278,7 +327,7 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
             ) : (
               <>
                 <div className="flex items-center gap-2">
-                  <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  <h1 className="text-2xl font-bold text-foreground">
                     {activity.title || new Date(activity.started_at).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                   </h1>
                   {activity.title_source === "pending" && (
@@ -287,7 +336,7 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
                         generateTitle().catch((err) => setError(err));
                       }}
                       disabled={isGeneratingTitle}
-                      className="p-1 text-indigo-500 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 disabled:opacity-50"
+                      className="p-1 text-primary hover:text-primary/80 disabled:opacity-50"
                       title="Generate location-based title from GPS"
                     >
                       {isGeneratingTitle ? (
@@ -308,7 +357,7 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
                       setEditedTitle(activity.title || "");
                       setIsEditingTitle(true);
                     }}
-                    className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                    className="p-1 text-muted-foreground hover:text-foreground"
                     title="Edit title"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -317,7 +366,7 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
                   </button>
                 </div>
                 {/* Date/time subtitle */}
-                <div className="flex items-center gap-4 text-base text-gray-500 dark:text-gray-400 mt-1">
+                <div className="flex items-center gap-4 text-base text-muted-foreground mt-1">
                   <span className="flex items-center gap-1.5">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -332,7 +381,7 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
                     {" - "}
                     {new Date(new Date(activity.started_at).getTime() + (activity.elapsed_time_s * 1000)).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })}
                     {" "}
-                    <span className="text-gray-400 dark:text-gray-500">({formatTime(activity.elapsed_time_s)})</span>
+                    <span className="text-muted-foreground/70">({formatTime(activity.elapsed_time_s)})</span>
                   </span>
                 </div>
               </>
@@ -343,7 +392,7 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
           <div className="flex items-center gap-2 flex-shrink-0">
             <button
               onClick={onBack}
-              className="w-28 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center justify-center gap-2"
+              className="w-28 px-4 py-2 text-sm font-medium text-foreground bg-card border border-border rounded-lg hover:bg-muted transition-fast flex items-center justify-center gap-2"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -352,7 +401,7 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
             </button>
             <Link
               to={`/analyze?activity=${activityId}`}
-              className="w-28 px-4 py-2 text-sm font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-700 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors flex items-center justify-center gap-2"
+              className="w-28 px-4 py-2 text-sm font-medium text-primary bg-primary/10 border border-primary/30 rounded-lg hover:bg-primary/20 transition-fast flex items-center justify-center gap-2"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -362,7 +411,7 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
             {sameRoute && sameRoute.route_id !== null && sameRoute.activities.length > 0 && (
               <Link
                 to={`/compare?base=${activityId}`}
-                className="w-28 px-4 py-2 text-sm font-medium text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-colors flex items-center justify-center gap-2"
+                className="w-28 px-4 py-2 text-sm font-medium text-warning bg-warning/10 border border-warning/30 rounded-lg hover:bg-warning/20 transition-fast flex items-center justify-center gap-2"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
@@ -373,7 +422,7 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
           </div>
           
           {activity.is_breakthrough && (
-            <span className="inline-flex items-center gap-1 px-3 py-1 text-sm font-semibold text-amber-800 bg-amber-100 dark:text-amber-200 dark:bg-amber-900/50 rounded-full">
+            <span className="inline-flex items-center gap-1 px-3 py-1 text-sm font-semibold text-warning-foreground bg-warning/90 rounded-full">
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
               </svg>
@@ -384,7 +433,7 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
 
         {/* Stats Grid - Row 1: Ride Basics */}
         <div className="mb-3">
-          <h2 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Ride Basics</h2>
+          <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Ride Basics</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             <StatTile label="Distance" value={formatDistance(activity.total_distance_m, unitSystem)} />
             <StatTile label="Moving Time" value={formatTime(activity.moving_time_s)} />
@@ -396,7 +445,7 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
 
         {/* Stats Grid - Row 2: Training Metrics */}
         <div className="mb-6">
-          <h2 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Training Metrics</h2>
+          <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Training Metrics</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             <StatTile 
               label="Avg Power" 
@@ -483,10 +532,10 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
                 action={
                   <button
                     onClick={() => toggleAxis(chart.key)}
-                    className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+                    className={`px-3 py-1 text-xs font-medium rounded-full transition-fast ${
                       axisModes[chart.key] === "distance"
-                        ? "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300"
-                        : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
+                        ? "bg-primary/10 text-primary"
+                        : "bg-muted text-muted-foreground"
                     }`}
                   >
                     {axisModes[chart.key] === "distance" ? "Distance" : "Time"}
@@ -609,15 +658,15 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
 
 function StatTile({ label, value, subtitle }: { label: string; value: string; subtitle?: string }) {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 text-center">
-      <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
+    <div className="bg-card rounded-lg border border-border p-3 text-center">
+      <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
         {label}
       </div>
-      <div className="text-lg font-semibold text-gray-900 dark:text-white tabular-nums">
+      <div className="text-lg font-semibold text-foreground tabular-nums">
         {value}
       </div>
       {subtitle && (
-        <div className="text-xs text-indigo-500 dark:text-indigo-400 mt-0.5">
+        <div className="text-xs text-primary mt-0.5">
           {subtitle}
         </div>
       )}
@@ -639,12 +688,12 @@ function ChartCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="mb-6 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+    <div className="mb-6 bg-card rounded-lg border border-border overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
         <div>
-          <h2 className="text-sm font-semibold text-gray-900 dark:text-white">{title}</h2>
+          <h2 className="text-sm font-semibold text-foreground">{title}</h2>
           {subtitle && (
-            <p className="text-xs text-gray-500 dark:text-gray-400">{subtitle}</p>
+            <p className="text-xs text-muted-foreground">{subtitle}</p>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -652,7 +701,7 @@ function ChartCard({
           {onExpand && (
             <button
               onClick={onExpand}
-              className="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+              className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-fast"
               aria-label="Expand chart"
               title="Expand chart"
             >
@@ -704,8 +753,8 @@ function ZoneChart({
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-      <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">{title}</h3>
+    <div className="bg-card rounded-lg border border-border p-4">
+      <h3 className="text-sm font-semibold text-foreground mb-4">{title}</h3>
       <div className="space-y-2">
         {zones.map(({ zone, seconds, label }) => {
           const percentage = (seconds / totalSeconds) * 100;
@@ -713,10 +762,10 @@ function ZoneChart({
           
           return (
             <div key={zone} className="flex items-center gap-3">
-              <div className="w-8 text-xs font-medium text-gray-600 dark:text-gray-400">
+              <div className="w-8 text-xs font-medium text-muted-foreground">
                 {label}
               </div>
-              <div className="flex-1 h-6 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+              <div className="flex-1 h-6 bg-muted rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all duration-300"
                   style={{ 
@@ -725,17 +774,17 @@ function ZoneChart({
                   }}
                 />
               </div>
-              <div className="w-16 text-xs text-right text-gray-600 dark:text-gray-400 tabular-nums">
+              <div className="w-16 text-xs text-right text-muted-foreground tabular-nums">
                 {formatZoneTime(seconds)}
               </div>
-              <div className="w-12 text-xs text-right text-gray-500 dark:text-gray-500 tabular-nums">
+              <div className="w-12 text-xs text-right text-muted-foreground/70 tabular-nums">
                 {percentage.toFixed(0)}%
               </div>
             </div>
           );
         })}
       </div>
-      <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 flex justify-between text-xs text-gray-500 dark:text-gray-400">
+      <div className="mt-3 pt-3 border-t border-border flex justify-between text-xs text-muted-foreground">
         <span>Total</span>
         <span className="tabular-nums">{formatZoneTime(totalSeconds)}</span>
       </div>

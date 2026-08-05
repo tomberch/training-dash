@@ -388,7 +388,7 @@ export function AnalyzePage() {
   }, [rawChartData, visibleSeries]);
 
   return (
-    <div ref={containerRef} className="h-full flex flex-col bg-gray-50 dark:bg-gray-900">
+    <div ref={containerRef} className="h-full flex flex-col bg-background">
       {/* Sticky map */}
       {selectedActivity && positions.length > 0 && (
         <div className="flex-shrink-0 p-4 pb-0">
@@ -419,18 +419,18 @@ export function AnalyzePage() {
           
           {/* Row 2: Chart controls (only shown when activity is loaded) */}
           {selectedActivity && geojson && (
-            <div className="flex flex-wrap items-center gap-4 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+            <div className="flex flex-wrap items-center gap-4 p-3 bg-card rounded-lg border border-border">
               {/* Series toggles - only show available series */}
               <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Series:</span>
+                <span className="text-xs font-medium text-muted-foreground uppercase">Series:</span>
                 {SERIES_CONFIG.filter((series) => availableSeries.has(series.key)).map((series) => (
                   <button
                     key={series.key}
                     onClick={() => toggleSeries(series.key)}
-                    className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                    className={`px-2 py-1 text-xs font-medium rounded transition-fast ${
                       visibleSeries.has(series.key)
                         ? "text-white"
-                        : "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600"
+                        : "bg-muted text-muted-foreground hover:bg-muted/80"
                     }`}
                     style={visibleSeries.has(series.key) ? { backgroundColor: series.color } : undefined}
                   >
@@ -439,19 +439,19 @@ export function AnalyzePage() {
                 ))}
               </div>
 
-              <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
+              <div className="w-px h-6 bg-border" />
 
               {/* Smoothing */}
               <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Smooth:</span>
+                <span className="text-xs font-medium text-muted-foreground uppercase">Smooth:</span>
                 {(["raw", "10s", "30s"] as SmoothingLevel[]).map((level) => (
                   <button
                     key={level}
                     onClick={() => setSmoothing(level)}
-                    className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                    className={`px-2 py-1 text-xs font-medium rounded transition-fast ${
                       smoothing === level
-                        ? "bg-indigo-600 text-white"
-                        : "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground hover:bg-muted/80"
                     }`}
                   >
                     {level === "raw" ? "Raw" : level}
@@ -459,14 +459,14 @@ export function AnalyzePage() {
                 ))}
               </div>
 
-              <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
+              <div className="w-px h-6 bg-border" />
 
               {/* X-axis toggle */}
               <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">X-axis:</span>
+                <span className="text-xs font-medium text-muted-foreground uppercase">X-axis:</span>
                 <button
                   onClick={() => setAxisMode(axisMode === "time" ? "distance" : "time")}
-                  className="px-2 py-1 text-xs font-medium rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                  className="px-2 py-1 text-xs font-medium rounded bg-muted text-muted-foreground hover:bg-muted/80 transition-fast"
                 >
                   {axisMode === "time" ? "Time" : "Distance"}
                 </button>
@@ -475,13 +475,13 @@ export function AnalyzePage() {
               {/* Zone thresholds toggle - only show if zones are available */}
               {hasZonesAvailable && (
                 <>
-                  <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
+                  <div className="w-px h-6 bg-border" />
                   <button
                     onClick={() => setShowZoneThresholds(!showZoneThresholds)}
-                    className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                    className={`px-2 py-1 text-xs font-medium rounded transition-fast ${
                       showZoneThresholds
-                        ? "bg-indigo-600 text-white"
-                        : "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground hover:bg-muted/80"
                     }`}
                   >
                     Zones
@@ -496,7 +496,7 @@ export function AnalyzePage() {
               {zoomDomain && (
                 <button
                   onClick={resetZoom}
-                  className="px-2 py-1 text-xs font-medium rounded bg-amber-600 text-white hover:bg-amber-700 transition-colors"
+                  className="px-2 py-1 text-xs font-medium rounded bg-warning text-warning-foreground hover:bg-warning/80 transition-fast"
                 >
                   Reset Zoom
                 </button>
@@ -509,8 +509,8 @@ export function AnalyzePage() {
       {/* Chart area - fills remaining viewport */}
       <div className="flex-1 min-h-0 p-4 pt-0">
         {loading ? (
-          <div className="h-full flex items-center justify-center bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-            <div className="flex items-center gap-3 text-gray-500 dark:text-gray-400">
+          <div className="h-full flex items-center justify-center bg-card rounded-lg border border-border">
+            <div className="flex items-center gap-3 text-muted-foreground">
               <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
@@ -519,12 +519,12 @@ export function AnalyzePage() {
             </div>
           </div>
         ) : error ? (
-          <div className="h-full flex items-center justify-center bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+          <div className="h-full flex items-center justify-center bg-card rounded-lg border border-border">
             <div className="text-center">
-              <p className="text-red-500 dark:text-red-400 mb-2">{error}</p>
+              <p className="text-destructive mb-2">{error}</p>
               <button
                 onClick={() => selectedActivity && handleActivitySelect(selectedActivity)}
-                className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
+                className="text-sm text-primary hover:underline"
               >
                 Try again
               </button>
@@ -532,7 +532,7 @@ export function AnalyzePage() {
           </div>
         ) : selectedActivity && geojson ? (
           <ChartErrorBoundary>
-            <div className="h-full bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+            <div className="h-full bg-card rounded-lg border border-border p-4">
               {hasVisibleData ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart
@@ -653,15 +653,15 @@ export function AnalyzePage() {
                   </ComposedChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-full flex items-center justify-center text-gray-500 dark:text-gray-400">
+                <div className="h-full flex items-center justify-center text-muted-foreground">
                   No data available for selected series. Try enabling different metrics.
                 </div>
               )}
             </div>
           </ChartErrorBoundary>
         ) : (
-          <div className="h-full flex items-center justify-center bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-            <p className="text-gray-500 dark:text-gray-400">
+          <div className="h-full flex items-center justify-center bg-card rounded-lg border border-border">
+            <p className="text-muted-foreground">
               Select an activity above to begin analysis.
             </p>
           </div>

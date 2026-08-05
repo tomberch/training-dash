@@ -17,6 +17,8 @@ import {
   nukeAccount,
 } from "./api";
 import { ErrorDisplay } from "./ErrorDisplay";
+import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
 
 interface SyncStatus {
   userId: number;
@@ -157,24 +159,74 @@ export function AdminView({ onBack }: { onBack: () => void }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <div className="text-gray-500 dark:text-gray-400">Loading...</div>
+      <div className="min-h-screen bg-background p-6">
+        <div className="max-w-4xl mx-auto space-y-6">
+          {/* Header skeleton */}
+          <div className="flex items-center gap-4 mb-6">
+            <Skeleton className="h-8 w-20" />
+            <Skeleton className="h-8 w-32" />
+          </div>
+          
+          {/* Pending approvals skeleton */}
+          <div className="bg-card rounded-lg border border-border p-6">
+            <Skeleton className="h-6 w-40 mb-4" />
+            <div className="space-y-3">
+              {[1, 2].map((i) => (
+                <div key={i} className="flex items-center justify-between p-4 border border-border rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="w-10 h-10 rounded-full" />
+                    <div>
+                      <Skeleton className="h-4 w-32 mb-1" />
+                      <Skeleton className="h-3 w-48" />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Skeleton className="h-8 w-20" />
+                    <Skeleton className="h-8 w-20" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          {/* Users list skeleton */}
+          <div className="bg-card rounded-lg border border-border p-6">
+            <Skeleton className="h-6 w-24 mb-4" />
+            <div className="space-y-3">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="flex items-center justify-between p-4 border border-border rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="w-10 h-10 rounded-full" />
+                    <div>
+                      <Skeleton className="h-4 w-40 mb-1" />
+                      <Skeleton className="h-3 w-56" />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Skeleton className="h-8 w-24" />
+                    <Skeleton className="h-8 w-16" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-background">
       <div className="max-w-4xl mx-auto px-4 py-6">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
           <button
             onClick={onBack}
-            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            className="px-4 py-2 text-sm font-medium text-foreground bg-card border border-border rounded-lg hover:bg-muted transition-fast"
           >
             &larr; Back
           </button>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+          <h1 className="text-2xl font-bold text-foreground">
             Admin Panel
           </h1>
         </div>
@@ -187,14 +239,14 @@ export function AdminView({ onBack }: { onBack: () => void }) {
         )}
 
         {/* Settings Section */}
-        <section className="mb-8 p-6 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+        <section className="mb-8 p-6 bg-card rounded-lg border border-border">
+          <h2 className="text-lg font-semibold text-foreground mb-4">
             Registration Settings
           </h2>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-900 dark:text-white">Require approval for new users</p>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
+              <p className="text-sm font-medium text-foreground">Require approval for new users</p>
+              <p className="text-sm text-muted-foreground">
                 When enabled, new users must be approved by an admin before they can access the app
               </p>
             </div>
@@ -202,8 +254,8 @@ export function AdminView({ onBack }: { onBack: () => void }) {
               onClick={handleToggleRequireApproval}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                 settings?.require_approval
-                  ? "bg-indigo-600"
-                  : "bg-gray-200 dark:bg-gray-600"
+                  ? "bg-primary"
+                  : "bg-muted"
               }`}
             >
               <span
@@ -217,19 +269,19 @@ export function AdminView({ onBack }: { onBack: () => void }) {
 
         {/* Pending Users Section */}
         {pendingUsers.length > 0 && (
-          <section className="mb-8 p-6 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
-            <h2 className="text-lg font-semibold text-amber-800 dark:text-amber-200 mb-4">
+          <section className="mb-8 p-6 bg-warning/10 rounded-lg border border-warning/30">
+            <h2 className="text-lg font-semibold text-warning mb-4">
               Pending Approval ({pendingUsers.length})
             </h2>
             <div className="space-y-3">
               {pendingUsers.map((user) => (
                 <div
                   key={user.id}
-                  className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg border border-amber-200 dark:border-amber-700"
+                  className="flex items-center justify-between p-3 bg-card rounded-lg border border-warning/30"
                 >
                   <div>
-                    <p className="font-medium text-gray-900 dark:text-white">{user.email}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                    <p className="font-medium text-foreground">{user.email}</p>
+                    <p className="text-xs text-muted-foreground">
                       Registered {new Date(user.created_at).toLocaleString()}
                     </p>
                   </div>
@@ -237,14 +289,14 @@ export function AdminView({ onBack }: { onBack: () => void }) {
                     <button
                       onClick={() => handleApproveUser(user.id)}
                       disabled={approvingUserId === user.id}
-                      className="px-3 py-1.5 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors disabled:opacity-50"
+                      className="px-3 py-1.5 text-sm font-medium text-primary-foreground bg-success hover:bg-success/80 rounded-lg transition-fast disabled:opacity-50"
                     >
                       {approvingUserId === user.id ? "..." : "Approve"}
                     </button>
                     <button
                       onClick={() => handleRejectUser(user.id)}
                       disabled={approvingUserId === user.id}
-                      className="px-3 py-1.5 text-sm font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition-colors disabled:opacity-50"
+                      className="px-3 py-1.5 text-sm font-medium text-destructive bg-destructive/10 hover:bg-destructive/20 rounded-lg transition-fast disabled:opacity-50"
                     >
                       Reject
                     </button>
@@ -256,8 +308,8 @@ export function AdminView({ onBack }: { onBack: () => void }) {
         )}
 
         {/* Create User Section */}
-        <section className="mb-8 p-6 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+        <section className="mb-8 p-6 bg-card rounded-lg border border-border">
+          <h2 className="text-lg font-semibold text-foreground mb-4">
             Create User
           </h2>
           <form onSubmit={handleCreateUser} className="flex flex-col sm:flex-row gap-3">
@@ -267,7 +319,7 @@ export function AdminView({ onBack }: { onBack: () => void }) {
               value={newEmail}
               onChange={(e) => setNewEmail(e.target.value)}
               data-testid="new-username"
-              className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="flex-1 px-3 py-2 border border-input-border rounded-lg bg-input text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
             <input
               type="password"
@@ -275,13 +327,13 @@ export function AdminView({ onBack }: { onBack: () => void }) {
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               data-testid="new-password"
-              className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="flex-1 px-3 py-2 border border-input-border rounded-lg bg-input text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
             <button
               type="submit"
               disabled={creating}
               data-testid="create-user-btn"
-              className="px-6 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-6 py-2 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/80 disabled:opacity-50 disabled:cursor-not-allowed transition-fast"
             >
               {creating ? "Creating..." : "Create"}
             </button>
@@ -289,71 +341,80 @@ export function AdminView({ onBack }: { onBack: () => void }) {
         </section>
 
         {/* Users Table Section */}
-        <section className="p-6 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+        <section className="p-6 bg-card rounded-lg border border-border">
+          <h2 className="text-lg font-semibold text-foreground mb-4">
             Users
           </h2>
           {users.length === 0 ? (
-            <p className="text-gray-500 dark:text-gray-400">No users.</p>
+            <EmptyState
+              icon={
+                <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                </svg>
+              }
+              title="No users yet"
+              description="Create a user above to get started."
+              className="py-8"
+            />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-gray-200 dark:border-gray-700">
-                    <th className="py-3 px-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <tr className="border-b border-border">
+                    <th className="py-3 px-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                       ID
                     </th>
-                    <th className="py-3 px-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    <th className="py-3 px-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                       Email
                     </th>
-                    <th className="py-3 px-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    <th className="py-3 px-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                       Status
                     </th>
-                    <th className="py-3 px-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    <th className="py-3 px-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                       Created
                     </th>
-                    <th className="py-3 px-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    <th className="py-3 px-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                       Actions
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                <tbody className="divide-y divide-border">
                   {users.map((user) => (
                     <tr
                       key={user.id}
                       data-testid={`user-row-${user.id}`}
-                      className="hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                      className="hover:bg-muted/50"
                     >
-                      <td className="py-3 px-4 text-sm text-gray-900 dark:text-white tabular-nums">
+                      <td className="py-3 px-4 text-sm text-foreground tabular-nums">
                         {user.id}
                       </td>
                       <td className="py-3 px-4">
-                        <div className="text-sm font-medium text-gray-900 dark:text-white">
+                        <div className="text-sm font-medium text-foreground">
                           {user.display_name || user.email}
                         </div>
                         {user.display_name && (
-                          <div className="text-xs text-gray-500 dark:text-gray-400">{user.email}</div>
+                          <div className="text-xs text-muted-foreground">{user.email}</div>
                         )}
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex flex-wrap gap-1">
                           {user.is_admin && (
-                            <span className="inline-flex px-2 py-0.5 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded-full">
+                            <span className="inline-flex px-2 py-0.5 text-xs font-medium bg-purple-500/20 text-purple-600 rounded-full">
                               Admin
                             </span>
                           )}
                           {user.is_approved ? (
-                            <span className="inline-flex px-2 py-0.5 text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-full">
+                            <span className="inline-flex px-2 py-0.5 text-xs font-medium bg-success/20 text-success rounded-full">
                               Approved
                             </span>
                           ) : (
-                            <span className="inline-flex px-2 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-full">
+                            <span className="inline-flex px-2 py-0.5 text-xs font-medium bg-warning/20 text-warning rounded-full">
                               Pending
                             </span>
                           )}
                         </div>
                       </td>
-                      <td className="py-3 px-4 text-sm text-gray-500 dark:text-gray-400">
+                      <td className="py-3 px-4 text-sm text-muted-foreground">
                         {new Date(user.created_at).toLocaleDateString()}
                       </td>
                       <td className="py-3 px-4">
@@ -366,18 +427,18 @@ export function AdminView({ onBack }: { onBack: () => void }) {
                                 value={resetPassword}
                                 onChange={(e) => setResetPassword(e.target.value)}
                                 data-testid={`reset-password-input-${user.id}`}
-                                className="w-32 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                className="w-32 px-2 py-1 text-sm border border-input-border rounded bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                               />
                               <button
                                 onClick={() => handleResetPassword(user.id)}
                                 data-testid={`confirm-reset-btn-${user.id}`}
-                                className="px-3 py-1 text-xs font-medium bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors"
+                                className="px-3 py-1 text-xs font-medium bg-primary text-primary-foreground rounded hover:bg-primary/80 transition-fast"
                               >
                                 Save
                               </button>
                               <button
                                 onClick={() => setResetUserId(null)}
-                                className="px-3 py-1 text-xs font-medium bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors"
+                                className="px-3 py-1 text-xs font-medium bg-muted text-foreground rounded hover:bg-muted/80 transition-fast"
                               >
                                 Cancel
                               </button>
@@ -386,7 +447,7 @@ export function AdminView({ onBack }: { onBack: () => void }) {
                             <button
                               onClick={() => setResetUserId(user.id)}
                               data-testid={`reset-btn-${user.id}`}
-                              className="px-3 py-1 text-xs font-medium bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors"
+                              className="px-3 py-1 text-xs font-medium bg-muted text-foreground rounded hover:bg-muted/80 transition-fast"
                             >
                               Reset Password
                             </button>
@@ -395,26 +456,26 @@ export function AdminView({ onBack }: { onBack: () => void }) {
                             onClick={() => handleTriggerSync(user.id)}
                             disabled={syncStatus?.userId === user.id && syncStatus.status === "syncing"}
                             data-testid={`sync-btn-${user.id}`}
-                            className="px-3 py-1 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded hover:bg-amber-200 dark:hover:bg-amber-900/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            className="px-3 py-1 text-xs font-medium bg-warning/20 text-warning rounded hover:bg-warning/30 disabled:opacity-50 disabled:cursor-not-allowed transition-fast"
                           >
                             {syncStatus?.userId === user.id && syncStatus.status === "syncing"
                               ? "Syncing..."
                               : "Trigger Sync"}
                           </button>
                           {syncStatus?.userId === user.id && syncStatus.status === "success" && (
-                            <span className="px-2 py-1 text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded">
+                            <span className="px-2 py-1 text-xs bg-success/20 text-success rounded">
                               {syncStatus.message}
                             </span>
                           )}
                           {syncStatus?.userId === user.id && syncStatus.status === "error" && (
-                            <span className="px-2 py-1 text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded">
+                            <span className="px-2 py-1 text-xs bg-destructive/20 text-destructive rounded">
                               {syncStatus.message}
                             </span>
                           )}
                           <button
                             onClick={() => setNukeUser(user)}
                             data-testid={`nuke-btn-${user.id}`}
-                            className="px-3 py-1 text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
+                            className="px-3 py-1 text-xs font-medium bg-destructive/20 text-destructive rounded hover:bg-destructive/30 transition-fast"
                           >
                             Nuke
                           </button>
@@ -544,20 +605,20 @@ function NukeModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-card rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+        <div className="p-6 border-b border-border">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
-              <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="w-10 h-10 rounded-full bg-destructive/20 flex items-center justify-center">
+              <svg className="w-5 h-5 text-destructive" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              <h2 className="text-lg font-semibold text-foreground">
                 {preview?.is_self ? "Reset My Data" : "Nuke User Data"}
               </h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
+              <p className="text-sm text-muted-foreground">
                 {user.email}
                 {preview?.is_self && " (your account)"}
               </p>
@@ -568,13 +629,13 @@ function NukeModal({
         {/* Content */}
         <div className="p-6 space-y-6">
           {loading ? (
-            <div className="text-center py-8 text-gray-500 dark:text-gray-400">Loading preview...</div>
+            <div className="text-center py-8 text-muted-foreground">Loading preview...</div>
           ) : error && !result ? (
-            <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400">
+            <div className="p-4 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive">
               {error}
             </div>
           ) : result ? (
-            <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg text-green-700 dark:text-green-400">
+            <div className="p-4 bg-success/10 border border-success/30 rounded-lg text-success">
               <p className="font-medium">Nuke complete!</p>
               <p className="text-sm mt-1">Deleted: {result}</p>
             </div>
@@ -582,11 +643,11 @@ function NukeModal({
             <>
               {/* Action selector */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-foreground mb-2">
                   What do you want to delete?
                 </label>
                 <div className="space-y-2">
-                  <label className="flex items-start gap-3 p-3 border border-gray-200 dark:border-gray-700 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                  <label className="flex items-start gap-3 p-3 border border-border rounded-lg cursor-pointer hover:bg-muted/50">
                     <input
                       type="radio"
                       name="action"
@@ -596,13 +657,13 @@ function NukeModal({
                       className="mt-1"
                     />
                     <div>
-                      <p className="font-medium text-gray-900 dark:text-white">Reset Activities</p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                      <p className="font-medium text-foreground">Reset Activities</p>
+                      <p className="text-sm text-muted-foreground">
                         Delete activities, records, routes, fitness history. Keep account and credentials.
                       </p>
                     </div>
                   </label>
-                  <label className="flex items-start gap-3 p-3 border border-gray-200 dark:border-gray-700 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                  <label className="flex items-start gap-3 p-3 border border-border rounded-lg cursor-pointer hover:bg-muted/50">
                     <input
                       type="radio"
                       name="action"
@@ -612,16 +673,16 @@ function NukeModal({
                       className="mt-1"
                     />
                     <div>
-                      <p className="font-medium text-gray-900 dark:text-white">Disconnect Integrations</p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                      <p className="font-medium text-foreground">Disconnect Integrations</p>
+                      <p className="text-sm text-muted-foreground">
                         Delete Garmin and Xert credentials only. Keep all activity data.
                       </p>
                     </div>
                   </label>
                   <label className={`flex items-start gap-3 p-3 border rounded-lg ${
                     preview?.is_self 
-                      ? "border-gray-200 dark:border-gray-700 opacity-50 cursor-not-allowed" 
-                      : "border-red-200 dark:border-red-800 cursor-pointer hover:bg-red-50 dark:hover:bg-red-900/20"
+                      ? "border-border opacity-50 cursor-not-allowed" 
+                      : "border-destructive/30 cursor-pointer hover:bg-destructive/10"
                   }`}>
                     <input
                       type="radio"
@@ -633,8 +694,8 @@ function NukeModal({
                       className="mt-1"
                     />
                     <div>
-                      <p className={`font-medium ${preview?.is_self ? "text-gray-400 dark:text-gray-500" : "text-red-700 dark:text-red-400"}`}>Delete User Account</p>
-                      <p className={`text-sm ${preview?.is_self ? "text-gray-400 dark:text-gray-500" : "text-red-600 dark:text-red-500"}`}>
+                      <p className={`font-medium ${preview?.is_self ? "text-muted-foreground" : "text-destructive"}`}>Delete User Account</p>
+                      <p className={`text-sm ${preview?.is_self ? "text-muted-foreground" : "text-destructive/80"}`}>
                         {preview?.is_self 
                           ? "Cannot delete your own account." 
                           : "Permanently delete the user and all associated data."}
@@ -645,22 +706,22 @@ function NukeModal({
               </div>
 
               {/* Preview */}
-              <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">This will delete:</p>
-                <p className="text-sm text-gray-900 dark:text-white">{getActionSummary()}</p>
+              <div className="p-4 bg-muted rounded-lg">
+                <p className="text-sm font-medium text-foreground mb-1">This will delete:</p>
+                <p className="text-sm text-foreground">{getActionSummary()}</p>
               </div>
 
               {/* Confirmation */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Type <span className="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded">{user.email}</span> to confirm
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Type <span className="font-mono bg-muted px-1 rounded">{user.email}</span> to confirm
                 </label>
                 <input
                   type="text"
                   value={confirmEmail}
                   onChange={(e) => setConfirmEmail(e.target.value)}
                   placeholder="Enter email to confirm"
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-input-border rounded-lg bg-input text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-destructive focus:border-transparent"
                 />
               </div>
             </>
@@ -668,10 +729,10 @@ function NukeModal({
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+        <div className="p-6 border-t border-border flex justify-end gap-3">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+            className="px-4 py-2 text-sm font-medium text-foreground bg-card border border-border rounded-lg hover:bg-muted transition-fast"
           >
             {result ? "Close" : "Cancel"}
           </button>
@@ -679,7 +740,7 @@ function NukeModal({
             <button
               onClick={handleNuke}
               disabled={!isConfirmValid || nuking || loading}
-              className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-4 py-2 text-sm font-medium text-destructive-foreground bg-destructive rounded-lg hover:bg-destructive/80 disabled:opacity-50 disabled:cursor-not-allowed transition-fast"
             >
               {nuking ? "Nuking..." : "Nuke"}
             </button>
