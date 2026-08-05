@@ -102,7 +102,7 @@ describe("RecordsView", () => {
     render(<RecordsView />);
 
     await waitFor(() => {
-      expect(screen.getByText("No activities yet. Upload a FIT file to see your PRs.")).toBeInTheDocument();
+      expect(screen.getByText("No personal records yet")).toBeInTheDocument();
     });
   });
 });

@@ -81,7 +81,7 @@ describe("ActivityList", () => {
     renderWithRouter(<ActivityList onSelect={() => {}} />);
 
     await waitFor(() => {
-      expect(screen.getByText("No activities yet. Upload a FIT file to get started.")).toBeInTheDocument();
+      expect(screen.getByText("No activities yet")).toBeInTheDocument();
     });
   });
 
