@@ -11,6 +11,8 @@ import {
 } from "recharts";
 import type { PowerCurvePoint, FitnessResponse } from "../api";
 import { fetchPowerCurve, fetchFitness, fetchMe } from "../api";
+import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
 
 // Key durations to label (in seconds)
 const KEY_DURATIONS = [5, 30, 60, 300, 1200, 3600, 7200];
@@ -212,15 +214,52 @@ export function PowerCurveView() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+      <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+        {/* Header skeleton */}
+        <div>
+          <Skeleton className="h-8 w-40 mb-2" />
+          <Skeleton className="h-4 w-64" />
+        </div>
+        
+        {/* Controls skeleton */}
+        <div className="flex flex-wrap gap-4">
+          <div className="flex gap-2">
+            {[1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} className="h-8 w-20 rounded" />
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <Skeleton className="h-8 w-24 rounded" />
+            <Skeleton className="h-8 w-24 rounded" />
+          </div>
+        </div>
+        
+        {/* Chart skeleton */}
+        <div className="bg-card rounded-lg border border-border p-4">
+          <div className="h-80 bg-muted rounded flex items-end px-4 pb-4 gap-0.5">
+            {/* Power curve shape - descending */}
+            {[95, 90, 82, 75, 68, 62, 58, 55, 52, 50, 48, 46, 44, 42, 40, 38, 36, 35, 34, 33].map((h, i) => (
+              <Skeleton key={i} className="flex-1 rounded-t" style={{ height: `${h}%` }} />
+            ))}
+          </div>
+        </div>
+        
+        {/* Key metrics skeleton */}
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+          {[1, 2, 3, 4, 5, 6, 7].map((i) => (
+            <div key={i} className="bg-card rounded-lg border border-border p-3 text-center">
+              <Skeleton className="h-3 w-12 mx-auto mb-2" />
+              <Skeleton className="h-6 w-16 mx-auto" />
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="p-4 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 rounded-lg">
+      <div className="p-4 bg-destructive/10 text-destructive rounded-lg">
         {error}
       </div>
     );
@@ -235,16 +274,16 @@ export function PowerCurveView() {
     <div className="max-w-6xl mx-auto px-4 py-6">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+        <h1 className="text-2xl font-bold text-foreground">
           Power Curve
         </h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+        <p className="text-sm text-muted-foreground mt-1">
           Your best power output at each duration
         </p>
       </div>
 
       {/* Controls */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-6">
+      <div className="bg-card rounded-lg border border-border p-4 mb-6">
         <div className="flex flex-wrap items-center gap-4">
           {/* Date presets */}
           <div className="flex gap-2">
@@ -252,10 +291,10 @@ export function PowerCurveView() {
               <button
                 key={preset.label}
                 onClick={() => setActivePreset(i)}
-                className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-fast ${
                   activePreset === i
-                    ? "bg-indigo-600 text-white"
-                    : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-foreground hover:bg-muted/80"
                 }`}
               >
                 {preset.label}
@@ -271,9 +310,9 @@ export function PowerCurveView() {
                   type="checkbox"
                   checked={showWkg}
                   onChange={(e) => setShowWkg(e.target.checked)}
-                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  className="rounded border-border text-primary focus:ring-ring"
                 />
-                <span className="text-sm text-gray-700 dark:text-gray-300">W/kg</span>
+                <span className="text-sm text-foreground">W/kg</span>
               </label>
             )}
 
@@ -284,9 +323,9 @@ export function PowerCurveView() {
                   type="checkbox"
                   checked={showModel}
                   onChange={(e) => setShowModel(e.target.checked)}
-                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  className="rounded border-border text-primary focus:ring-ring"
                 />
-                <span className="text-sm text-gray-700 dark:text-gray-300">Show model</span>
+                <span className="text-sm text-foreground">Show model</span>
               </label>
             )}
 
@@ -296,16 +335,16 @@ export function PowerCurveView() {
                 type="checkbox"
                 checked={showComparison}
                 onChange={(e) => setShowComparison(e.target.checked)}
-                className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                className="rounded border-border text-primary focus:ring-ring"
               />
-              <span className="text-sm text-gray-700 dark:text-gray-300">Compare</span>
+              <span className="text-sm text-foreground">Compare</span>
             </label>
 
             {showComparison && (
               <select
                 value={comparisonPreset}
                 onChange={(e) => setComparisonPreset(Number(e.target.value))}
-                className="px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                className="px-2 py-1.5 text-sm border border-input-border rounded-lg bg-input text-foreground"
               >
                 {DATE_PRESETS.map((preset, i) => (
                   <option key={preset.label} value={i}>{preset.label}</option>
@@ -317,18 +356,18 @@ export function PowerCurveView() {
       </div>
 
       {/* Chart */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-6">
+      <div className="bg-card rounded-lg border border-border p-4 mb-6">
         <div className="flex items-center gap-6 mb-4">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-indigo-500"></div>
-            <span className="text-sm text-gray-600 dark:text-gray-400">
+            <span className="text-sm text-muted-foreground">
               {DATE_PRESETS[activePreset].label}
             </span>
           </div>
           {showComparison && (
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
-              <span className="text-sm text-gray-600 dark:text-gray-400">
+              <span className="text-sm text-muted-foreground">
                 {DATE_PRESETS[comparisonPreset].label}
               </span>
             </div>
@@ -336,7 +375,7 @@ export function PowerCurveView() {
           {showModel && fitness?.current && (
             <div className="flex items-center gap-2">
               <div className="w-6 h-0.5 bg-purple-500" style={{ borderStyle: "dashed", borderWidth: 1 }}></div>
-              <span className="text-sm text-gray-600 dark:text-gray-400">
+              <span className="text-sm text-muted-foreground">
                 Model (CP: {fitness.current.cp_watts}W)
               </span>
             </div>
@@ -344,8 +383,16 @@ export function PowerCurveView() {
         </div>
 
         {curveData.length === 0 ? (
-          <div className="flex items-center justify-center h-64 text-gray-500 dark:text-gray-400">
-            No power data available
+          <div className="bg-card rounded-lg border border-border">
+            <EmptyState
+              icon={
+                <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                </svg>
+              }
+              title="No power data available"
+              description="Upload activities with power data to see your power curve and track improvements over time."
+            />
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={400}>
@@ -356,7 +403,7 @@ export function PowerCurveView() {
                 dataKey="logDuration"
                 type="number"
                 domain={[Math.log10(1), Math.log10(7200)]}
-                tickFormatter={(v) => formatDuration(Math.pow(10, v))}
+                tickFormatter={(v) => formatDuration(Math.round(Math.pow(10, v)))}
                 ticks={KEY_DURATIONS.map(d => Math.log10(d))}
                 tick={{ fontSize: 11, fill: "#6b7280" }}
                 axisLine={{ stroke: "#d1d5db" }}
@@ -386,8 +433,8 @@ export function PowerCurveView() {
                   if (!active || !payload?.length) return null;
                   const point = payload[0].payload;
                   return (
-                    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3">
-                      <div className="text-sm font-medium text-gray-900 dark:text-white mb-2">
+                    <div className="bg-card border border-border rounded-lg shadow-lg p-3">
+                      <div className="text-sm font-medium text-foreground mb-2">
                         {formatDuration(point.duration)}
                       </div>
                       <div className="space-y-1 text-sm">
@@ -408,7 +455,7 @@ export function PowerCurveView() {
                           </div>
                         )}
                         {point.achievedDate && (
-                          <div className="text-gray-500 text-xs pt-1 border-t border-gray-200 dark:border-gray-600">
+                          <div className="text-muted-foreground text-xs pt-1 border-t border-border">
                             {new Date(point.achievedDate).toLocaleDateString()} ({point.daysAgo}d ago)
                           </div>
                         )}
@@ -459,39 +506,39 @@ export function PowerCurveView() {
 
       {/* Data table */}
       {curveData.length > 0 && (
-        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="bg-card rounded-lg border border-border overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 dark:bg-gray-700">
+            <thead className="bg-muted">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Duration</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Power</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Duration</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">Power</th>
                 {userWeight && (
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">W/kg</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">W/kg</th>
                 )}
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Date</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Freshness</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">Date</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">Freshness</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+            <tbody className="divide-y divide-border">
               {curveData.map((point) => {
                 const isKey = KEY_DURATIONS.includes(point.duration_seconds);
                 return (
                   <tr 
                     key={point.duration_seconds}
-                    className={isKey ? "bg-indigo-50 dark:bg-indigo-900/10" : ""}
+                    className={isKey ? "bg-primary/5" : ""}
                   >
-                    <td className={`px-4 py-3 ${isKey ? "font-semibold" : ""} text-gray-900 dark:text-white`}>
+                    <td className={`px-4 py-3 ${isKey ? "font-semibold" : ""} text-foreground`}>
                       {formatDuration(point.duration_seconds)}
                     </td>
-                    <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-white">
+                    <td className="px-4 py-3 text-right font-medium text-foreground">
                       {point.watts} W
                     </td>
                     {userWeight && (
-                      <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-400">
+                      <td className="px-4 py-3 text-right text-muted-foreground">
                         {(point.watts / userWeight).toFixed(2)} W/kg
                       </td>
                     )}
-                    <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-400">
+                    <td className="px-4 py-3 text-right text-muted-foreground">
                       {new Date(point.achieved_date).toLocaleDateString()}
                     </td>
                     <td className="px-4 py-3 text-right">

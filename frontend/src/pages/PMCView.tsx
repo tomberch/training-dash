@@ -13,6 +13,8 @@ import {
 import type { PMCPoint, ThresholdEntry } from "../api";
 import { fetchPMC, fetchThresholds } from "../api";
 import { TSB_ZONES, getTSBZone } from "../constants";
+import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
 
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr);
@@ -89,6 +91,9 @@ export function PMCView() {
   const currentTSB = pmcData.length > 0 ? pmcData[pmcData.length - 1].tsb : 0;
   const currentZone = getTSBZone(currentTSB);
 
+  // Check if FTP is configured (needed for TSS calculation)
+  const hasFTP = thresholds.length > 0 && thresholds[0].ftp_watts !== null;
+
   // FTP changes within the date range
   const ftpMarkers = useMemo(() => {
     if (!start) return [];
@@ -109,15 +114,51 @@ export function PMCView() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+      <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+        {/* Header skeleton */}
+        <div className="flex items-center justify-between">
+          <div>
+            <Skeleton className="h-8 w-72 mb-2" />
+            <Skeleton className="h-4 w-56" />
+          </div>
+          <div className="text-right">
+            <Skeleton className="h-3 w-20 mb-1" />
+            <Skeleton className="h-8 w-32 rounded-full" />
+          </div>
+        </div>
+        
+        {/* Date range selector skeleton */}
+        <div className="flex gap-2">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <Skeleton key={i} className="h-8 w-20 rounded" />
+          ))}
+        </div>
+        
+        {/* Chart skeleton */}
+        <div className="bg-card rounded-lg border border-border p-4">
+          <div className="h-80 bg-muted rounded flex items-end justify-around p-4 gap-1">
+            {[40, 55, 35, 60, 45, 70, 50, 65, 45, 75, 55, 80, 60, 50, 70, 45, 60, 75, 50, 65].map((h, i) => (
+              <Skeleton key={i} className="flex-1 rounded-t" style={{ height: `${h}%` }} />
+            ))}
+          </div>
+        </div>
+        
+        {/* Stats row skeleton */}
+        <div className="grid grid-cols-3 gap-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="bg-card rounded-lg border border-border p-4">
+              <Skeleton className="h-3 w-12 mb-2" />
+              <Skeleton className="h-7 w-16" />
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="p-4 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 rounded-lg">
+      <div className="p-4 bg-destructive/10 text-destructive rounded-lg">
         {error}
       </div>
     );
@@ -128,15 +169,15 @@ export function PMCView() {
       {/* Header with form badge */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+          <h1 className="text-2xl font-bold text-foreground">
             Performance Management Chart
           </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          <p className="text-sm text-muted-foreground mt-1">
             Track your fitness, fatigue, and form over time
           </p>
         </div>
         <div className="text-right">
-          <div className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
+          <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
             Current Form
           </div>
           <span
@@ -148,8 +189,26 @@ export function PMCView() {
         </div>
       </div>
 
+      {/* FTP missing banner */}
+      {!hasFTP && (
+        <div className="bg-warning/10 border border-warning/30 rounded-lg p-4 mb-6">
+          <div className="flex items-start gap-3">
+            <svg className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <div>
+              <p className="text-sm font-medium text-warning">FTP not set — TSS cannot be calculated</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Upload more rides to auto-detect FTP, or{" "}
+                <a href="/settings" className="text-primary hover:underline">set manually in Settings → Thresholds</a>.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Date range controls */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-6">
+      <div className="bg-card rounded-lg border border-border p-4 mb-6">
         <div className="flex flex-wrap items-center gap-4">
           {/* Presets */}
           <div className="flex gap-2">
@@ -160,10 +219,10 @@ export function PMCView() {
                   setActivePreset(i);
                   setUseCustomRange(false);
                 }}
-                className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-fast ${
                   !useCustomRange && activePreset === i
-                    ? "bg-indigo-600 text-white"
-                    : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-foreground hover:bg-muted/80"
                 }`}
               >
                 {preset.label}
@@ -180,9 +239,9 @@ export function PMCView() {
                 setCustomStart(e.target.value);
                 setUseCustomRange(true);
               }}
-              className="px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              className="px-2 py-1.5 text-sm border border-input-border rounded-lg bg-input text-foreground"
             />
-            <span className="text-gray-500">to</span>
+            <span className="text-muted-foreground">to</span>
             <input
               type="date"
               value={customEnd}
@@ -190,32 +249,49 @@ export function PMCView() {
                 setCustomEnd(e.target.value);
                 setUseCustomRange(true);
               }}
-              className="px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              className="px-2 py-1.5 text-sm border border-input-border rounded-lg bg-input text-foreground"
             />
           </div>
         </div>
       </div>
 
       {/* PMC Chart */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+      <div className="bg-card rounded-lg border border-border p-4">
         <div className="flex items-center gap-6 mb-4">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 group relative">
             <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-            <span className="text-sm text-gray-600 dark:text-gray-400">CTL (Fitness)</span>
+            <span className="text-sm text-muted-foreground">CTL (Fitness)</span>
+            <div className="absolute bottom-full left-0 mb-2 px-3 py-2 bg-popover text-popover-foreground text-xs rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none w-64 z-10 border border-border">
+              <strong>Chronic Training Load</strong> — your long-term fitness level, calculated from the rolling average of daily TSS over ~42 days.
+            </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 group relative">
             <div className="w-3 h-3 rounded-full bg-pink-500"></div>
-            <span className="text-sm text-gray-600 dark:text-gray-400">ATL (Fatigue)</span>
+            <span className="text-sm text-muted-foreground">ATL (Fatigue)</span>
+            <div className="absolute bottom-full left-0 mb-2 px-3 py-2 bg-popover text-popover-foreground text-xs rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none w-64 z-10 border border-border">
+              <strong>Acute Training Load</strong> — your short-term fatigue, calculated from the rolling average of daily TSS over ~7 days.
+            </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 group relative">
             <div className="w-3 h-3 rounded-full bg-amber-500"></div>
-            <span className="text-sm text-gray-600 dark:text-gray-400">TSB (Form)</span>
+            <span className="text-sm text-muted-foreground">TSB (Form)</span>
+            <div className="absolute bottom-full left-0 mb-2 px-3 py-2 bg-popover text-popover-foreground text-xs rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none w-64 z-10 border border-border">
+              <strong>Training Stress Balance</strong> — CTL minus ATL. Positive = fresh and ready to perform. Negative = fatigued and building fitness.
+            </div>
           </div>
         </div>
 
         {pmcData.length === 0 ? (
-          <div className="flex items-center justify-center h-64 text-gray-500 dark:text-gray-400">
-            No data available for the selected date range
+          <div className="bg-card rounded-lg border border-border">
+            <EmptyState
+              icon={
+                <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              }
+              title="No data for this date range"
+              description="Try selecting a different date range, or upload activities with TSS data to see your performance trends."
+            />
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={400}>
@@ -273,8 +349,8 @@ export function PMCView() {
                   const point = payload[0].payload as PMCPoint;
                   const zone = getTSBZone(point.tsb);
                   return (
-                    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3">
-                      <div className="text-sm font-medium text-gray-900 dark:text-white mb-2">
+                    <div className="bg-card border border-border rounded-lg shadow-lg p-3">
+                      <div className="text-sm font-medium text-foreground mb-2">
                         {new Date(point.date).toLocaleDateString(undefined, {
                           weekday: "short",
                           month: "short",
@@ -295,7 +371,7 @@ export function PMCView() {
                           <span className="text-amber-600">TSB (Form)</span>
                           <span className="font-medium">{point.tsb.toFixed(1)}</span>
                         </div>
-                        <div className="pt-1 border-t border-gray-200 dark:border-gray-600 mt-1">
+                        <div className="pt-1 border-t border-border mt-1">
                           <span
                             className="inline-block px-2 py-0.5 rounded text-xs font-medium"
                             style={{ backgroundColor: zone.color, color: "#1f2937" }}
@@ -346,7 +422,7 @@ export function PMCView() {
               className="w-4 h-4 rounded"
               style={{ backgroundColor: zone.color }}
             ></div>
-            <span className="text-xs text-gray-600 dark:text-gray-400">
+            <span className="text-xs text-muted-foreground">
               {zone.name} ({zone.min > -100 ? zone.min : "<-25"} to {zone.max < 100 ? zone.max : ">25"})
             </span>
           </div>
