@@ -31,6 +31,11 @@ import type {
   HrZone,
   OAuthLink,
 } from "./api";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardHeader, CardTitle, CardContent, CardAction } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 function EyeIcon({ className }: { className?: string }) {
   return (
@@ -49,6 +54,25 @@ function EyeSlashIcon({ className }: { className?: string }) {
   );
 }
 
+
+
+// Reusable feedback alert component
+function FeedbackAlert({ feedback }: { feedback: { type: "success" | "error"; message: string } | null }) {
+  if (!feedback) return null;
+  return (
+    <div
+      className={cn(
+        "mt-4 p-3 rounded-lg text-sm border",
+        feedback.type === "success"
+          ? "bg-success/10 text-success border-success/20"
+          : "bg-destructive/10 text-destructive border-destructive/20"
+      )}
+    >
+      {feedback.message}
+    </div>
+  );
+}
+
 function PasswordInput({
   value,
   onChange,
@@ -64,18 +88,18 @@ function PasswordInput({
 
   return (
     <div className="relative">
-      <input
+      <Input
         type={showPassword ? "text" : "password"}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         data-testid={dataTestId}
-        className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+        className="pr-10"
       />
       <button
         type="button"
         onClick={() => setShowPassword(!showPassword)}
-        className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+        className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground"
         tabIndex={-1}
       >
         {showPassword ? (
@@ -94,18 +118,17 @@ interface SettingsProps {
   onUserUpdate: (user: User) => void;
 }
 
+
+
 export function Settings({ user, onBack, onUserUpdate }: SettingsProps) {
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-background">
       <div className="max-w-2xl mx-auto px-4 py-6">
-        <button
-          onClick={onBack}
-          className="mb-6 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-        >
+        <Button variant="outline" onClick={onBack} className="mb-6">
           &larr; Back
-        </button>
+        </Button>
         
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Settings</h1>
+        <h1 className="text-2xl font-bold text-foreground mb-6">Settings</h1>
         
         <div className="space-y-6">
           <ProfileSection user={user} onUserUpdate={onUserUpdate} />
@@ -147,17 +170,17 @@ function ProfileSection({ user, onUserUpdate }: { user: User; onUserUpdate: (use
     }
   }
 
+
+
   async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
     if (!file.type.startsWith("image/")) {
       setFeedback({ type: "error", message: "Please select an image file" });
       return;
     }
 
-    // Validate file size (5MB max)
     if (file.size > 5 * 1024 * 1024) {
       setFeedback({ type: "error", message: "Image must be less than 5MB" });
       return;
@@ -175,7 +198,6 @@ function ProfileSection({ user, onUserUpdate }: { user: User; onUserUpdate: (use
       setFeedback({ type: "error", message });
     } finally {
       setUploadingAvatar(false);
-      // Reset input
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -198,7 +220,6 @@ function ProfileSection({ user, onUserUpdate }: { user: User; onUserUpdate: (use
     }
   }
 
-  // Generate initials for fallback avatar
   function getInitials(): string {
     if (displayName) {
       const parts = displayName.trim().split(/\s+/);
@@ -215,11 +236,14 @@ function ProfileSection({ user, onUserUpdate }: { user: User; onUserUpdate: (use
     return local.slice(0, 2).toUpperCase();
   }
 
+
+
   return (
-    <section className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-      <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Profile</h2>
-      
-      <div className="space-y-4">
+    <Card>
+      <CardHeader>
+        <CardTitle>Profile</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
         {/* Avatar */}
         <div className="flex items-center gap-4">
           <div className="relative">
@@ -227,10 +251,10 @@ function ProfileSection({ user, onUserUpdate }: { user: User; onUserUpdate: (use
               <img
                 src={user.avatar_path}
                 alt="Avatar"
-                className="w-16 h-16 rounded-full object-cover border-2 border-gray-200 dark:border-gray-600"
+                className="w-16 h-16 rounded-full object-cover border-2 border-border"
               />
             ) : (
-              <div className="w-16 h-16 rounded-full bg-indigo-500 flex items-center justify-center text-white text-xl font-medium">
+              <div className="w-16 h-16 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xl font-medium">
                 {getInitials()}
               </div>
             )}
@@ -251,64 +275,60 @@ function ProfileSection({ user, onUserUpdate }: { user: User; onUserUpdate: (use
               onChange={handleAvatarChange}
               className="hidden"
             />
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => fileInputRef.current?.click()}
               disabled={uploadingAvatar}
-              className="px-3 py-1.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors disabled:opacity-50"
             >
               {user.avatar_path ? "Change photo" : "Upload photo"}
-            </button>
+            </Button>
             {user.avatar_path && (
-              <button
+              <Button
+                variant="destructive"
+                size="sm"
                 onClick={handleDeleteAvatar}
                 disabled={uploadingAvatar}
-                className="px-3 py-1.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-50"
               >
                 Remove
-              </button>
+              </Button>
             )}
           </div>
         </div>
 
+
+
         {/* Email (read-only) */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Email
-          </label>
-          <input
+        <div className="space-y-1.5">
+          <Label>Email</Label>
+          <Input
             type="email"
             value={user.email}
             disabled
-            className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400 cursor-not-allowed"
           />
         </div>
 
         {/* Display name */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Display Name
-          </label>
-          <input
+        <div className="space-y-1.5">
+          <Label>Display Name</Label>
+          <Input
             type="text"
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
             placeholder="How you want to be called"
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
           />
-          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          <p className="text-xs text-muted-foreground">
             This name will be shown in the header and anywhere your profile appears
           </p>
         </div>
 
         {/* Sync Hour */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Daily Sync Time
-          </label>
+        <div className="space-y-1.5">
+          <Label>Daily Sync Time</Label>
           <select
             value={syncHour}
             onChange={(e) => setSyncHour(parseInt(e.target.value))}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            className="w-full h-8 px-2.5 rounded-lg border border-input bg-transparent text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             {Array.from({ length: 24 }, (_, i) => (
               <option key={i} value={i}>
@@ -316,34 +336,22 @@ function ProfileSection({ user, onUserUpdate }: { user: User; onUserUpdate: (use
               </option>
             ))}
           </select>
-          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          <p className="text-xs text-muted-foreground">
             Your integrations (Garmin, Xert) will sync automatically at this hour
           </p>
         </div>
 
-        <button
-          onClick={handleSaveProfile}
-          disabled={saving}
-          className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors disabled:opacity-50"
-        >
+        <Button onClick={handleSaveProfile} disabled={saving}>
           {saving ? "Saving..." : "Save Profile"}
-        </button>
-      </div>
+        </Button>
 
-      {feedback && (
-        <div
-          className={`mt-4 p-3 rounded-lg text-sm ${
-            feedback.type === "success"
-              ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800"
-              : "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800"
-          }`}
-        >
-          {feedback.message}
-        </div>
-      )}
-    </section>
+        <FeedbackAlert feedback={feedback} />
+      </CardContent>
+    </Card>
   );
 }
+
+
 
 function PreferencesSection({ user, onUserUpdate }: { user: User; onUserUpdate: (user: User) => void }) {
   const [saving, setSaving] = useState(false);
@@ -367,69 +375,57 @@ function PreferencesSection({ user, onUserUpdate }: { user: User; onUserUpdate: 
   }
 
   return (
-    <section className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-      <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Preferences</h2>
-      
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-gray-900 dark:text-white">Unit System</p>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            Display distances, elevations, and speeds in {user.unit_system === "metric" ? "kilometers and meters" : "miles and feet"}
-          </p>
+    <Card>
+      <CardHeader>
+        <CardTitle>Preferences</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-foreground">Unit System</p>
+            <p className="text-sm text-muted-foreground">
+              Display distances, elevations, and speeds in {user.unit_system === "metric" ? "kilometers and meters" : "miles and feet"}
+            </p>
+          </div>
+          
+          <button
+            onClick={handleToggle}
+            disabled={saving}
+            data-testid="unit-toggle"
+            className={cn(
+              "relative inline-flex h-9 w-36 items-center rounded-lg transition-colors",
+              saving && "opacity-50 cursor-not-allowed",
+              user.unit_system === "metric" ? "bg-primary/10" : "bg-success/10"
+            )}
+          >
+            <span
+              className={cn(
+                "absolute inset-y-1 w-[calc(50%-4px)] rounded-md bg-card shadow transition-transform ml-1",
+                user.unit_system === "imperial" && "translate-x-[calc(100%+4px)]"
+              )}
+            />
+            <span className={cn(
+              "relative z-10 flex-1 text-center text-sm font-medium transition-colors",
+              user.unit_system === "metric" ? "text-primary" : "text-muted-foreground"
+            )}>
+              Metric
+            </span>
+            <span className={cn(
+              "relative z-10 flex-1 text-center text-sm font-medium transition-colors",
+              user.unit_system === "imperial" ? "text-success" : "text-muted-foreground"
+            )}>
+              Imperial
+            </span>
+          </button>
         </div>
         
-        <button
-          onClick={handleToggle}
-          disabled={saving}
-          data-testid="unit-toggle"
-          className={`relative inline-flex h-9 w-36 items-center rounded-lg transition-colors ${
-            saving ? "opacity-50 cursor-not-allowed" : ""
-          } ${
-            user.unit_system === "metric"
-              ? "bg-indigo-100 dark:bg-indigo-900/30"
-              : "bg-green-100 dark:bg-green-900/30"
-          }`}
-        >
-          <span
-            className={`absolute inset-y-1 w-[calc(50%-4px)] rounded-md bg-white dark:bg-gray-700 shadow transition-transform ${
-              user.unit_system === "imperial" ? "translate-x-[calc(100%+4px)] ml-1" : "ml-1"
-            }`}
-          />
-          <span
-            className={`relative z-10 flex-1 text-center text-sm font-medium transition-colors ${
-              user.unit_system === "metric"
-                ? "text-indigo-700 dark:text-indigo-300"
-                : "text-gray-500 dark:text-gray-400"
-            }`}
-          >
-            Metric
-          </span>
-          <span
-            className={`relative z-10 flex-1 text-center text-sm font-medium transition-colors ${
-              user.unit_system === "imperial"
-                ? "text-green-700 dark:text-green-300"
-                : "text-gray-500 dark:text-gray-400"
-            }`}
-          >
-            Imperial
-          </span>
-        </button>
-      </div>
-      
-      {feedback && (
-        <div
-          className={`mt-4 p-3 rounded-lg text-sm ${
-            feedback.type === "success"
-              ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800"
-              : "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800"
-          }`}
-        >
-          {feedback.message}
-        </div>
-      )}
-    </section>
+        <FeedbackAlert feedback={feedback} />
+      </CardContent>
+    </Card>
   );
 }
+
+
 
 function ThresholdsSection() {
   const [thresholds, setThresholds] = useState<ThresholdEntry[]>([]);
@@ -484,150 +480,140 @@ function ThresholdsSection() {
 
   if (loading) {
     return (
-      <section className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-        <div className="animate-pulse">
-          <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mb-4"></div>
-          <div className="h-20 bg-gray-200 dark:bg-gray-700 rounded"></div>
-        </div>
-      </section>
+      <Card>
+        <CardContent className="animate-pulse">
+          <div className="h-5 bg-muted rounded w-1/4 mb-4"></div>
+          <div className="h-20 bg-muted rounded"></div>
+        </CardContent>
+      </Card>
     );
   }
 
+
+
   return (
-    <section className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Thresholds</h2>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="px-3 py-1.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
-        >
-          {showForm ? "Cancel" : "+ Add"}
-        </button>
-      </div>
+    <Card>
+      <CardHeader>
+        <CardTitle>Thresholds</CardTitle>
+        <CardAction>
+          <Button variant="ghost" size="sm" onClick={() => setShowForm(!showForm)}>
+            {showForm ? "Cancel" : "+ Add"}
+          </Button>
+        </CardAction>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Current values */}
+        {currentThreshold && (
+          <div className="grid grid-cols-3 gap-4 p-4 bg-muted/50 rounded-lg">
+            <div>
+              <div className="text-xs text-muted-foreground uppercase tracking-wide">FTP</div>
+              <div className="text-xl font-bold text-foreground">{currentThreshold.ftp_watts}W</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground uppercase tracking-wide">LTHR</div>
+              <div className="text-xl font-bold text-foreground">{currentThreshold.lthr_bpm} bpm</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground uppercase tracking-wide">HRmax</div>
+              <div className="text-xl font-bold text-foreground">{currentThreshold.max_hr_bpm} bpm</div>
+            </div>
+          </div>
+        )}
 
-      {/* Current values */}
-      {currentThreshold && (
-        <div className="grid grid-cols-3 gap-4 mb-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-          <div>
-            <div className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">FTP</div>
-            <div className="text-xl font-bold text-gray-900 dark:text-white">{currentThreshold.ftp_watts}W</div>
-          </div>
-          <div>
-            <div className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">LTHR</div>
-            <div className="text-xl font-bold text-gray-900 dark:text-white">{currentThreshold.lthr_bpm} bpm</div>
-          </div>
-          <div>
-            <div className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">HRmax</div>
-            <div className="text-xl font-bold text-gray-900 dark:text-white">{currentThreshold.max_hr_bpm} bpm</div>
-          </div>
-        </div>
-      )}
+        {/* Add form */}
+        {showForm && (
+          <form onSubmit={handleSubmit} className="p-4 bg-primary/5 rounded-lg space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Effective Date</Label>
+                <Input
+                  type="date"
+                  value={formData.effective_date}
+                  onChange={(e) => setFormData({ ...formData, effective_date: e.target.value })}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">FTP (watts)</Label>
+                <Input
+                  type="number"
+                  value={formData.ftp_watts}
+                  onChange={(e) => setFormData({ ...formData, ftp_watts: e.target.value })}
+                  placeholder="e.g. 250"
+                  min="50"
+                  max="600"
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">LTHR (bpm)</Label>
+                <Input
+                  type="number"
+                  value={formData.lthr_bpm}
+                  onChange={(e) => setFormData({ ...formData, lthr_bpm: e.target.value })}
+                  placeholder="e.g. 165"
+                  min="80"
+                  max="220"
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">HRmax (bpm)</Label>
+                <Input
+                  type="number"
+                  value={formData.hrmax_bpm}
+                  onChange={(e) => setFormData({ ...formData, hrmax_bpm: e.target.value })}
+                  placeholder="e.g. 185"
+                  min="100"
+                  max="250"
+                  required
+                />
+              </div>
+            </div>
+            <Button type="submit" disabled={saving} className="w-full">
+              {saving ? "Saving..." : "Save Threshold"}
+            </Button>
+          </form>
+        )}
 
-      {/* Add form */}
-      {showForm && (
-        <form onSubmit={handleSubmit} className="mb-4 p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Effective Date</label>
-              <input
-                type="date"
-                value={formData.effective_date}
-                onChange={(e) => setFormData({ ...formData, effective_date: e.target.value })}
-                className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">FTP (watts)</label>
-              <input
-                type="number"
-                value={formData.ftp_watts}
-                onChange={(e) => setFormData({ ...formData, ftp_watts: e.target.value })}
-                placeholder="e.g. 250"
-                min="50"
-                max="600"
-                required
-                className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">LTHR (bpm)</label>
-              <input
-                type="number"
-                value={formData.lthr_bpm}
-                onChange={(e) => setFormData({ ...formData, lthr_bpm: e.target.value })}
-                placeholder="e.g. 165"
-                min="80"
-                max="220"
-                required
-                className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">HRmax (bpm)</label>
-              <input
-                type="number"
-                value={formData.hrmax_bpm}
-                onChange={(e) => setFormData({ ...formData, hrmax_bpm: e.target.value })}
-                placeholder="e.g. 185"
-                min="100"
-                max="250"
-                required
-                className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              />
-            </div>
-          </div>
-          <button
-            type="submit"
-            disabled={saving}
-            className="w-full px-3 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors disabled:opacity-50"
-          >
-            {saving ? "Saving..." : "Save Threshold"}
-          </button>
-        </form>
-      )}
 
-      {/* History table */}
-      {thresholds.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide border-b border-gray-200 dark:border-gray-700">
-                <th className="pb-2">Date</th>
-                <th className="pb-2 text-right">FTP</th>
-                <th className="pb-2 text-right">LTHR</th>
-                <th className="pb-2 text-right">HRmax</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-              {thresholds.map((t, i) => (
-                <tr key={i} className={i === 0 ? "text-gray-900 dark:text-white font-medium" : "text-gray-600 dark:text-gray-400"}>
-                  <td className="py-2">{new Date(t.effective_date).toLocaleDateString()}</td>
-                  <td className="py-2 text-right">{t.ftp_watts}W</td>
-                  <td className="py-2 text-right">{t.lthr_bpm} bpm</td>
-                  <td className="py-2 text-right">{t.max_hr_bpm} bpm</td>
+
+        {/* History table */}
+        {thresholds.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-muted-foreground uppercase tracking-wide border-b border-border">
+                  <th className="pb-2">Date</th>
+                  <th className="pb-2 text-right">FTP</th>
+                  <th className="pb-2 text-right">LTHR</th>
+                  <th className="pb-2 text-right">HRmax</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              </thead>
+              <tbody className="divide-y divide-border">
+                {thresholds.map((t, i) => (
+                  <tr key={i} className={i === 0 ? "text-foreground font-medium" : "text-muted-foreground"}>
+                    <td className="py-2">{new Date(t.effective_date).toLocaleDateString()}</td>
+                    <td className="py-2 text-right">{t.ftp_watts}W</td>
+                    <td className="py-2 text-right">{t.lthr_bpm} bpm</td>
+                    <td className="py-2 text-right">{t.max_hr_bpm} bpm</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
-      {thresholds.length === 0 && !showForm && (
-        <p className="text-sm text-gray-500 dark:text-gray-400">No thresholds configured. Add your first threshold to enable zone calculations.</p>
-      )}
+        {thresholds.length === 0 && !showForm && (
+          <p className="text-sm text-muted-foreground">No thresholds configured. Add your first threshold to enable zone calculations.</p>
+        )}
 
-      {feedback && (
-        <div className={`mt-4 p-3 rounded-lg text-sm ${
-          feedback.type === "success"
-            ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800"
-            : "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800"
-        }`}>
-          {feedback.message}
-        </div>
-      )}
-    </section>
+        <FeedbackAlert feedback={feedback} />
+      </CardContent>
+    </Card>
   );
 }
+
+
 
 function ZonesSection() {
   const [powerZones, setPowerZones] = useState<PowerZone[]>([]);
@@ -692,6 +678,8 @@ function ZonesSection() {
     }
   }
 
+
+
   async function handleReset() {
     if (!confirm("Reset all zones to defaults based on current thresholds?")) return;
     setSaving(true);
@@ -735,175 +723,160 @@ function ZonesSection() {
 
   if (loading) {
     return (
-      <section className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-        <div className="animate-pulse">
-          <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mb-4"></div>
-          <div className="h-32 bg-gray-200 dark:bg-gray-700 rounded"></div>
-        </div>
-      </section>
+      <Card>
+        <CardContent className="animate-pulse">
+          <div className="h-5 bg-muted rounded w-1/4 mb-4"></div>
+          <div className="h-32 bg-muted rounded"></div>
+        </CardContent>
+      </Card>
     );
   }
 
   const displayPowerZones = editMode ? editedPowerZones : powerZones;
   const displayHrZones = editMode ? editedHrZones : hrZones;
 
+
+
   return (
-    <section className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Training Zones</h2>
-        <div className="flex gap-2">
-          {editMode ? (
-            <>
-              <button
-                onClick={cancelEdit}
-                disabled={saving}
-                className="px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="px-3 py-1.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors disabled:opacity-50"
-              >
-                {saving ? "Saving..." : "Save"}
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                onClick={handleReset}
-                disabled={saving || powerZones.length === 0}
-                className="px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50"
-              >
-                Reset
-              </button>
-              <button
-                onClick={startEdit}
-                disabled={powerZones.length === 0}
-                className="px-3 py-1.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors disabled:opacity-50"
-              >
-                Edit
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-
-      {powerZones.length === 0 && hrZones.length === 0 ? (
-        <p className="text-sm text-gray-500 dark:text-gray-400">Add thresholds first to generate training zones.</p>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Power Zones */}
-          <div>
-            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Power Zones</h3>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide border-b border-gray-200 dark:border-gray-700">
-                  <th className="pb-2 w-8">Zone</th>
-                  <th className="pb-2">Name</th>
-                  <th className="pb-2 text-right">Min</th>
-                  <th className="pb-2 text-right">Max</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                {displayPowerZones.map((z, i) => (
-                  <tr key={z.zone_number}>
-                    <td className="py-2 font-medium text-gray-900 dark:text-white">Z{z.zone_number}</td>
-                    <td className="py-2 text-gray-600 dark:text-gray-400">{z.name}</td>
-                    <td className="py-2 text-right">
-                      {editMode ? (
-                        <input
-                          type="number"
-                          value={z.min_watts}
-                          onChange={(e) => updatePowerZone(i, "min_watts", e.target.value)}
-                          className="w-16 px-1 py-0.5 text-right text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                        />
-                      ) : (
-                        <span className="text-gray-900 dark:text-white">{z.min_watts}W</span>
-                      )}
-                    </td>
-                    <td className="py-2 text-right">
-                      {editMode ? (
-                        <input
-                          type="number"
-                          value={z.max_watts ?? ""}
-                          onChange={(e) => updatePowerZone(i, "max_watts", e.target.value)}
-                          placeholder="∞"
-                          className="w-16 px-1 py-0.5 text-right text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                        />
-                      ) : (
-                        <span className="text-gray-900 dark:text-white">{z.max_watts ? `${z.max_watts}W` : "∞"}</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+    <Card>
+      <CardHeader>
+        <CardTitle>Training Zones</CardTitle>
+        <CardAction>
+          <div className="flex gap-2">
+            {editMode ? (
+              <>
+                <Button variant="ghost" size="sm" onClick={cancelEdit} disabled={saving}>
+                  Cancel
+                </Button>
+                <Button size="sm" onClick={handleSave} disabled={saving}>
+                  {saving ? "Saving..." : "Save"}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="ghost" size="sm" onClick={handleReset} disabled={saving || powerZones.length === 0}>
+                  Reset
+                </Button>
+                <Button variant="ghost" size="sm" onClick={startEdit} disabled={powerZones.length === 0}>
+                  Edit
+                </Button>
+              </>
+            )}
           </div>
-
-          {/* HR Zones */}
-          <div>
-            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Heart Rate Zones</h3>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide border-b border-gray-200 dark:border-gray-700">
-                  <th className="pb-2 w-8">Zone</th>
-                  <th className="pb-2">Name</th>
-                  <th className="pb-2 text-right">Min</th>
-                  <th className="pb-2 text-right">Max</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                {displayHrZones.map((z, i) => (
-                  <tr key={z.zone_number}>
-                    <td className="py-2 font-medium text-gray-900 dark:text-white">Z{z.zone_number}</td>
-                    <td className="py-2 text-gray-600 dark:text-gray-400">{z.name}</td>
-                    <td className="py-2 text-right">
-                      {editMode ? (
-                        <input
-                          type="number"
-                          value={z.min_bpm}
-                          onChange={(e) => updateHrZone(i, "min_bpm", e.target.value)}
-                          className="w-16 px-1 py-0.5 text-right text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                        />
-                      ) : (
-                        <span className="text-gray-900 dark:text-white">{z.min_bpm} bpm</span>
-                      )}
-                    </td>
-                    <td className="py-2 text-right">
-                      {editMode ? (
-                        <input
-                          type="number"
-                          value={z.max_bpm ?? ""}
-                          onChange={(e) => updateHrZone(i, "max_bpm", e.target.value)}
-                          placeholder="∞"
-                          className="w-16 px-1 py-0.5 text-right text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                        />
-                      ) : (
-                        <span className="text-gray-900 dark:text-white">{z.max_bpm ? `${z.max_bpm} bpm` : "∞"}</span>
-                      )}
-                    </td>
+        </CardAction>
+      </CardHeader>
+      <CardContent>
+        {powerZones.length === 0 && hrZones.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Add thresholds first to generate training zones.</p>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Power Zones */}
+            <div>
+              <h3 className="text-sm font-medium text-foreground mb-2">Power Zones</h3>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs text-muted-foreground uppercase tracking-wide border-b border-border">
+                    <th className="pb-2 w-8">Zone</th>
+                    <th className="pb-2">Name</th>
+                    <th className="pb-2 text-right">Min</th>
+                    <th className="pb-2 text-right">Max</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {displayPowerZones.map((z, i) => (
+                    <tr key={z.zone_number}>
+                      <td className="py-2 font-medium text-foreground">Z{z.zone_number}</td>
+                      <td className="py-2 text-muted-foreground">{z.name}</td>
+                      <td className="py-2 text-right">
+                        {editMode ? (
+                          <Input
+                            type="number"
+                            value={z.min_watts}
+                            onChange={(e) => updatePowerZone(i, "min_watts", e.target.value)}
+                            className="w-16 text-right"
+                          />
+                        ) : (
+                          <span className="text-foreground">{z.min_watts}W</span>
+                        )}
+                      </td>
+                      <td className="py-2 text-right">
+                        {editMode ? (
+                          <Input
+                            type="number"
+                            value={z.max_watts ?? ""}
+                            onChange={(e) => updatePowerZone(i, "max_watts", e.target.value)}
+                            placeholder="∞"
+                            className="w-16 text-right"
+                          />
+                        ) : (
+                          <span className="text-foreground">{z.max_watts ? `${z.max_watts}W` : "∞"}</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
-      {feedback && (
-        <div className={`mt-4 p-3 rounded-lg text-sm ${
-          feedback.type === "success"
-            ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800"
-            : "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800"
-        }`}>
-          {feedback.message}
-        </div>
-      )}
-    </section>
+
+
+            {/* HR Zones */}
+            <div>
+              <h3 className="text-sm font-medium text-foreground mb-2">Heart Rate Zones</h3>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs text-muted-foreground uppercase tracking-wide border-b border-border">
+                    <th className="pb-2 w-8">Zone</th>
+                    <th className="pb-2">Name</th>
+                    <th className="pb-2 text-right">Min</th>
+                    <th className="pb-2 text-right">Max</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {displayHrZones.map((z, i) => (
+                    <tr key={z.zone_number}>
+                      <td className="py-2 font-medium text-foreground">Z{z.zone_number}</td>
+                      <td className="py-2 text-muted-foreground">{z.name}</td>
+                      <td className="py-2 text-right">
+                        {editMode ? (
+                          <Input
+                            type="number"
+                            value={z.min_bpm}
+                            onChange={(e) => updateHrZone(i, "min_bpm", e.target.value)}
+                            className="w-16 text-right"
+                          />
+                        ) : (
+                          <span className="text-foreground">{z.min_bpm} bpm</span>
+                        )}
+                      </td>
+                      <td className="py-2 text-right">
+                        {editMode ? (
+                          <Input
+                            type="number"
+                            value={z.max_bpm ?? ""}
+                            onChange={(e) => updateHrZone(i, "max_bpm", e.target.value)}
+                            placeholder="∞"
+                            className="w-16 text-right"
+                          />
+                        ) : (
+                          <span className="text-foreground">{z.max_bpm ? `${z.max_bpm} bpm` : "∞"}</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        <FeedbackAlert feedback={feedback} />
+      </CardContent>
+    </Card>
   );
 }
+
+
 
 function SyncButton({ onSync, label }: { onSync: () => Promise<{ success: boolean; job_id?: string }>; label: string }) {
   const [syncing, setSyncing] = useState(false);
@@ -931,20 +904,17 @@ function SyncButton({ onSync, label }: { onSync: () => Promise<{ success: boolea
 
   return (
     <div className="relative">
-      <button
-        onClick={handleSync}
-        disabled={syncing}
-        className="px-4 py-2 text-sm font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors disabled:opacity-50"
-      >
+      <Button variant="outline" onClick={handleSync} disabled={syncing} className="border-success/50 text-success hover:bg-success/10">
         {syncing ? "Syncing..." : label}
-      </button>
+      </Button>
       {feedback && (
         <div
-          className={`absolute top-full left-0 mt-1 px-2 py-1 text-xs rounded whitespace-nowrap ${
+          className={cn(
+            "absolute top-full left-0 mt-1 px-2 py-1 text-xs rounded whitespace-nowrap",
             feedback.type === "success"
-              ? "bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-400"
-              : "bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-400"
-          }`}
+              ? "bg-success/20 text-success"
+              : "bg-destructive/20 text-destructive"
+          )}
         >
           {feedback.message}
         </div>
@@ -953,6 +923,8 @@ function SyncButton({ onSync, label }: { onSync: () => Promise<{ success: boolea
   );
 }
 
+
+
 function ConnectedAccountsSection(): React.JSX.Element {
   const [oauthLinks, setOauthLinks] = useState<OAuthLink[]>([]);
   const [userHasPassword, setUserHasPassword] = useState(true);
@@ -960,7 +932,6 @@ function ConnectedAccountsSection(): React.JSX.Element {
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   
-  // Password form state
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -1021,38 +992,33 @@ function ConnectedAccountsSection(): React.JSX.Element {
 
   const googleLink = oauthLinks.find((l) => l.provider === "google");
   const githubLink = oauthLinks.find((l) => l.provider === "github");
-  
-  // Can disconnect if: user has password OR has more than one OAuth link
   const canDisconnect = userHasPassword || oauthLinks.length > 1;
 
   if (loading) {
     return (
-      <section className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Connected Accounts</h2>
-        <div className="text-gray-500 dark:text-gray-400">Loading...</div>
-      </section>
+      <Card>
+        <CardHeader>
+          <CardTitle>Connected Accounts</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-muted-foreground">Loading...</div>
+        </CardContent>
+      </Card>
     );
   }
 
-  return (
-    <section className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-      <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Connected Accounts</h2>
-      
-      {feedback && (
-        <div
-          className={`mb-4 p-3 rounded-lg text-sm ${
-            feedback.type === "success"
-              ? "bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-400"
-              : "bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-400"
-          }`}
-        >
-          {feedback.message}
-        </div>
-      )}
 
-      <div className="space-y-4">
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Connected Accounts</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <FeedbackAlert feedback={feedback} />
+
         {/* Google */}
-        <div className="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-600 rounded-lg">
+        <div className="flex items-center justify-between p-4 border border-border rounded-lg">
           <div className="flex items-center gap-3">
             <svg className="w-6 h-6" viewBox="0 0 24 24">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -1061,141 +1027,135 @@ function ConnectedAccountsSection(): React.JSX.Element {
               <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
             </svg>
             <div>
-              <div className="font-medium text-gray-900 dark:text-white">Google</div>
+              <div className="font-medium text-foreground">Google</div>
               {googleLink ? (
-                <div className="text-sm text-gray-500 dark:text-gray-400">{googleLink.provider_email}</div>
+                <div className="text-sm text-muted-foreground">{googleLink.provider_email}</div>
               ) : (
-                <div className="text-sm text-gray-400 dark:text-gray-500">Not connected</div>
+                <div className="text-sm text-muted-foreground">Not connected</div>
               )}
             </div>
           </div>
           {googleLink ? (
-            <button
+            <Button
+              variant="destructive"
+              size="sm"
               onClick={() => handleDisconnect("google")}
               disabled={disconnecting === "google" || !canDisconnect}
               title={!canDisconnect ? "Set a password before disconnecting your last OAuth provider" : undefined}
-              className="px-3 py-1.5 text-sm text-red-600 dark:text-red-400 border border-red-300 dark:border-red-700 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {disconnecting === "google" ? "Disconnecting..." : "Disconnect"}
-            </button>
+            </Button>
           ) : (
-            <a
-              href="/auth/google/connect"
-              className="px-3 py-1.5 text-sm text-indigo-600 dark:text-indigo-400 border border-indigo-300 dark:border-indigo-700 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
-            >
-              Connect
-            </a>
+            <Button variant="outline" size="sm" asChild>
+              <a href="/auth/google/connect">Connect</a>
+            </Button>
           )}
         </div>
 
+
+
         {/* GitHub */}
-        <div className="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-600 rounded-lg">
+        <div className="flex items-center justify-between p-4 border border-border rounded-lg">
           <div className="flex items-center gap-3">
-            <svg className="w-6 h-6 text-gray-900 dark:text-white" fill="currentColor" viewBox="0 0 24 24">
+            <svg className="w-6 h-6 text-foreground" fill="currentColor" viewBox="0 0 24 24">
               <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33.85 0 1.71.11 2.5.33 1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0012 2z"/>
             </svg>
             <div>
-              <div className="font-medium text-gray-900 dark:text-white">GitHub</div>
+              <div className="font-medium text-foreground">GitHub</div>
               {githubLink ? (
-                <div className="text-sm text-gray-500 dark:text-gray-400">{githubLink.provider_email || githubLink.display_name}</div>
+                <div className="text-sm text-muted-foreground">{githubLink.provider_email || githubLink.display_name}</div>
               ) : (
-                <div className="text-sm text-gray-400 dark:text-gray-500">Not connected</div>
+                <div className="text-sm text-muted-foreground">Not connected</div>
               )}
             </div>
           </div>
           {githubLink ? (
-            <button
+            <Button
+              variant="destructive"
+              size="sm"
               onClick={() => handleDisconnect("github")}
               disabled={disconnecting === "github" || !canDisconnect}
               title={!canDisconnect ? "Set a password before disconnecting your last OAuth provider" : undefined}
-              className="px-3 py-1.5 text-sm text-red-600 dark:text-red-400 border border-red-300 dark:border-red-700 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {disconnecting === "github" ? "Disconnecting..." : "Disconnect"}
-            </button>
+            </Button>
           ) : (
-            <a
-              href="/auth/github/connect"
-              className="px-3 py-1.5 text-sm text-indigo-600 dark:text-indigo-400 border border-indigo-300 dark:border-indigo-700 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
-            >
-              Connect
-            </a>
+            <Button variant="outline" size="sm" asChild>
+              <a href="/auth/github/connect">Connect</a>
+            </Button>
           )}
         </div>
-      </div>
 
-      {/* Password section for OAuth-only users */}
-      {!userHasPassword && (
-        <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-          <div className="flex items-center justify-between mb-2">
-            <div>
-              <div className="font-medium text-gray-900 dark:text-white">Password</div>
-              <div className="text-sm text-gray-500 dark:text-gray-400">
-                Set a password to enable email/password login
+
+
+        {/* Password section for OAuth-only users */}
+        {!userHasPassword && (
+          <div className="mt-6 pt-6 border-t border-border">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <div className="font-medium text-foreground">Password</div>
+                <div className="text-sm text-muted-foreground">
+                  Set a password to enable email/password login
+                </div>
               </div>
+              {!showPasswordForm && (
+                <Button variant="outline" size="sm" onClick={() => setShowPasswordForm(true)}>
+                  Set Password
+                </Button>
+              )}
             </div>
-            {!showPasswordForm && (
-              <button
-                onClick={() => setShowPasswordForm(true)}
-                className="px-3 py-1.5 text-sm text-indigo-600 dark:text-indigo-400 border border-indigo-300 dark:border-indigo-700 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
-              >
-                Set Password
-              </button>
+
+            {showPasswordForm && (
+              <div className="mt-4 space-y-3">
+                <Input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="New password (min 8 characters)"
+                />
+                <Input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Confirm password"
+                />
+                <div className="flex gap-2">
+                  <Button onClick={handleSetPassword} disabled={settingPassword}>
+                    {settingPassword ? "Saving..." : "Save Password"}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setShowPasswordForm(false);
+                      setNewPassword("");
+                      setConfirmPassword("");
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
             )}
           </div>
-
-          {showPasswordForm && (
-            <div className="mt-4 space-y-3">
-              <input
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="New password (min 8 characters)"
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              />
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Confirm password"
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              />
-              <div className="flex gap-2">
-                <button
-                  onClick={handleSetPassword}
-                  disabled={settingPassword}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white text-sm font-medium rounded-lg"
-                >
-                  {settingPassword ? "Saving..." : "Save Password"}
-                </button>
-                <button
-                  onClick={() => {
-                    setShowPasswordForm(false);
-                    setNewPassword("");
-                    setConfirmPassword("");
-                  }}
-                  className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-    </section>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
+
+
 function IntegrationsSection() {
   return (
-    <section className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-      <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Integrations</h2>
-      
-      <div className="space-y-4">
+    <Card>
+      <CardHeader>
+        <CardTitle>Integrations</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
         <XertIntegration />
         <GarminIntegration />
-      </div>
-    </section>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -1250,6 +1210,8 @@ function XertIntegration() {
     }
   }
 
+
+
   async function handleDisconnect() {
     setSaving(true);
     setFeedback(null);
@@ -1269,21 +1231,21 @@ function XertIntegration() {
 
   if (loading) {
     return (
-      <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+      <div className="border border-border rounded-lg p-4">
         <div className="animate-pulse">
-          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mb-2"></div>
-          <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded"></div>
+          <div className="h-4 bg-muted rounded w-1/4 mb-2"></div>
+          <div className="h-10 bg-muted rounded"></div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+    <div className="border border-border rounded-lg p-4">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="text-sm font-medium text-gray-900 dark:text-white">Xert</h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
+          <h3 className="text-sm font-medium text-foreground">Xert</h3>
+          <p className="text-sm text-muted-foreground">
             {xertStatus?.configured
               ? `Connected as ${xertStatus.xert_email}`
               : "Not connected"}
@@ -1291,35 +1253,33 @@ function XertIntegration() {
         </div>
         <span
           data-testid="xert-status"
-          className={`px-2 py-1 text-xs font-medium rounded-full ${
+          className={cn(
+            "px-2 py-1 text-xs font-medium rounded-full",
             xertStatus?.configured
-              ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
-              : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
-          }`}
+              ? "bg-success/20 text-success"
+              : "bg-muted text-muted-foreground"
+          )}
         >
           {xertStatus?.configured ? "Connected" : "Not configured"}
         </span>
       </div>
+
+
       
       <div className="space-y-3">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Xert Email
-          </label>
-          <input
+        <div className="space-y-1.5">
+          <Label>Xert Email</Label>
+          <Input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="your@email.com"
             data-testid="xert-email"
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
           />
         </div>
         
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Xert Password
-          </label>
+        <div className="space-y-1.5">
+          <Label>Xert Password</Label>
           <PasswordInput
             value={password}
             onChange={setPassword}
@@ -1328,64 +1288,45 @@ function XertIntegration() {
           />
         </div>
         
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Sync activities since
-          </label>
-          <input
+        <div className="space-y-1.5">
+          <Label>Sync activities since</Label>
+          <Input
             type="date"
             value={syncSince}
             onChange={(e) => setSyncSince(e.target.value)}
             data-testid="xert-sync-since"
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
           />
-          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          <p className="text-xs text-muted-foreground">
             Activities from this date onwards will be imported
           </p>
         </div>
         
         <div className="flex gap-3 pt-2">
-          <button
+          <Button
             onClick={handleConnect}
             disabled={saving || !email || !password}
             data-testid="xert-connect"
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-              saving || !email || !password
-                ? "bg-gray-100 dark:bg-gray-700 text-gray-400 cursor-not-allowed"
-                : "bg-indigo-600 text-white hover:bg-indigo-700"
-            }`}
           >
             {saving ? "Connecting..." : xertStatus?.configured ? "Update" : "Connect"}
-          </button>
+          </Button>
           
           {xertStatus?.configured && (
             <>
               <SyncButton onSync={triggerXertSync} label="Sync Now" />
-              <button
+              <Button
+                variant="destructive"
                 onClick={handleDisconnect}
                 disabled={saving}
                 data-testid="xert-disconnect"
-                className="px-4 py-2 text-sm font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors disabled:opacity-50"
               >
                 Disconnect
-              </button>
+              </Button>
             </>
           )}
         </div>
       </div>
       
-      {feedback && (
-        <div
-          data-testid="xert-feedback"
-          className={`mt-4 p-3 rounded-lg text-sm ${
-            feedback.type === "success"
-              ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800"
-              : "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800"
-          }`}
-        >
-          {feedback.message}
-        </div>
-      )}
+      <FeedbackAlert feedback={feedback} />
     </div>
   );
 }
@@ -1452,6 +1393,8 @@ function GarminIntegration() {
     }
   }
 
+
+
   async function handleMfaSubmit() {
     if (!mfaCode) return;
     setSaving(true);
@@ -1503,21 +1446,23 @@ function GarminIntegration() {
 
   if (loading) {
     return (
-      <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+      <div className="border border-border rounded-lg p-4">
         <div className="animate-pulse">
-          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mb-2"></div>
-          <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded"></div>
+          <div className="h-4 bg-muted rounded w-1/4 mb-2"></div>
+          <div className="h-10 bg-muted rounded"></div>
         </div>
       </div>
     );
   }
 
+
+
   return (
-    <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+    <div className="border border-border rounded-lg p-4">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="text-sm font-medium text-gray-900 dark:text-white">Garmin</h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
+          <h3 className="text-sm font-medium text-foreground">Garmin</h3>
+          <p className="text-sm text-muted-foreground">
             {garminStatus?.configured
               ? `Connected as ${garminStatus.garmin_email}`
               : "Not connected"}
@@ -1525,11 +1470,12 @@ function GarminIntegration() {
         </div>
         <span
           data-testid="garmin-status"
-          className={`px-2 py-1 text-xs font-medium rounded-full ${
+          className={cn(
+            "px-2 py-1 text-xs font-medium rounded-full",
             garminStatus?.configured
-              ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
-              : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
-          }`}
+              ? "bg-success/20 text-success"
+              : "bg-muted text-muted-foreground"
+          )}
         >
           {garminStatus?.configured ? "Connected" : "Not configured"}
         </span>
@@ -1558,21 +1504,12 @@ function GarminIntegration() {
         />
       )}
       
-      {feedback && (
-        <div
-          data-testid="garmin-feedback"
-          className={`mt-4 p-3 rounded-lg text-sm ${
-            feedback.type === "success"
-              ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800"
-              : "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800"
-          }`}
-        >
-          {feedback.message}
-        </div>
-      )}
+      <FeedbackAlert feedback={feedback} />
     </div>
   );
 }
+
+
 
 function MfaForm({
   mfaCode,
@@ -1589,49 +1526,34 @@ function MfaForm({
 }) {
   return (
     <div className="space-y-3">
-      <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-          MFA Code
-        </label>
-        <input
+      <div className="space-y-1.5">
+        <Label>MFA Code</Label>
+        <Input
           type="text"
           value={mfaCode}
           onChange={(e) => setMfaCode(e.target.value)}
           placeholder="Enter 6-digit code"
           data-testid="garmin-mfa-code"
           autoComplete="one-time-code"
-          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
         />
-        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+        <p className="text-xs text-muted-foreground">
           Enter the code from your Garmin authenticator app or email
         </p>
       </div>
       
       <div className="flex gap-3 pt-2">
-        <button
-          onClick={onSubmit}
-          disabled={saving || !mfaCode}
-          data-testid="garmin-mfa-submit"
-          className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-            saving || !mfaCode
-              ? "bg-gray-100 dark:bg-gray-700 text-gray-400 cursor-not-allowed"
-              : "bg-indigo-600 text-white hover:bg-indigo-700"
-          }`}
-        >
+        <Button onClick={onSubmit} disabled={saving || !mfaCode} data-testid="garmin-mfa-submit">
           {saving ? "Verifying..." : "Verify"}
-        </button>
-        
-        <button
-          onClick={onCancel}
-          disabled={saving}
-          className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
-        >
+        </Button>
+        <Button variant="outline" onClick={onCancel} disabled={saving}>
           Cancel
-        </button>
+        </Button>
       </div>
     </div>
   );
 }
+
+
 
 function GarminCredentialsForm({
   email,
@@ -1658,24 +1580,19 @@ function GarminCredentialsForm({
 }) {
   return (
     <div className="space-y-3">
-      <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-          Garmin Email
-        </label>
-        <input
+      <div className="space-y-1.5">
+        <Label>Garmin Email</Label>
+        <Input
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="your@email.com"
           data-testid="garmin-email"
-          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
         />
       </div>
       
-      <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-          Garmin Password
-        </label>
+      <div className="space-y-1.5">
+        <Label>Garmin Password</Label>
         <PasswordInput
           value={password}
           onChange={setPassword}
@@ -1684,47 +1601,35 @@ function GarminCredentialsForm({
         />
       </div>
       
-      <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-          Sync activities since
-        </label>
-        <input
+      <div className="space-y-1.5">
+        <Label>Sync activities since</Label>
+        <Input
           type="date"
           value={syncSince}
           onChange={(e) => setSyncSince(e.target.value)}
           data-testid="garmin-sync-since"
-          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
         />
-        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+        <p className="text-xs text-muted-foreground">
           Activities from this date onwards will be imported
         </p>
       </div>
       
       <div className="flex gap-3 pt-2">
-        <button
-          onClick={onConnect}
-          disabled={saving || !email || !password}
-          data-testid="garmin-connect"
-          className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-            saving || !email || !password
-              ? "bg-gray-100 dark:bg-gray-700 text-gray-400 cursor-not-allowed"
-              : "bg-indigo-600 text-white hover:bg-indigo-700"
-          }`}
-        >
+        <Button onClick={onConnect} disabled={saving || !email || !password} data-testid="garmin-connect">
           {saving ? "Connecting..." : configured ? "Update" : "Connect"}
-        </button>
+        </Button>
         
         {configured && (
           <>
             <SyncButton onSync={triggerGarminSync} label="Sync Now" />
-            <button
+            <Button
+              variant="destructive"
               onClick={onDisconnect}
               disabled={saving}
               data-testid="garmin-disconnect"
-              className="px-4 py-2 text-sm font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors disabled:opacity-50"
             >
               Disconnect
-            </button>
+            </Button>
           </>
         )}
       </div>

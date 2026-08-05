@@ -17,6 +17,39 @@ import { fetchMe } from "./api";
 import type { User } from "./api";
 import "./App.css";
 
+// Initialize theme on app load
+function initializeTheme() {
+  // Skip in test environment where DOM APIs may not be available
+  if (typeof window === "undefined" || !window.matchMedia) {
+    return;
+  }
+  
+  // Check for stored preference
+  const stored = localStorage.getItem("traindash-theme");
+  
+  let theme: "latte" | "mocha";
+  
+  if (stored === "latte" || stored === "mocha") {
+    theme = stored;
+  } else if (stored === "system" || !stored) {
+    // Follow system preference
+    theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "mocha" : "latte";
+  } else {
+    theme = "latte"; // Default fallback
+  }
+  
+  // Apply theme
+  document.documentElement.setAttribute("data-theme", theme);
+  if (theme === "mocha") {
+    document.documentElement.classList.add("dark");
+  } else {
+    document.documentElement.classList.remove("dark");
+  }
+}
+
+// Run theme initialization immediately
+initializeTheme();
+
 // Layout wrapper with sidebar
 function AppLayout({ user, onLogout, onUserUpdate }: { 
   user: User; 
@@ -27,7 +60,7 @@ function AppLayout({ user, onLogout, onUserUpdate }: {
   const navigate = useNavigate();
 
   return (
-    <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="flex min-h-screen bg-background">
       <Sidebar isAdmin={user.is_admin} />
       <div className="flex-1 flex flex-col min-w-0">
         <Header
@@ -154,8 +187,8 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <div className="text-gray-500 dark:text-gray-400">Loading...</div>
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-muted-foreground">Loading...</div>
       </div>
     );
   }

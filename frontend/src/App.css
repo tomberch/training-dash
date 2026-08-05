@@ -1,4 +1,9 @@
-@import "tailwindcss";
+/* =============================================================================
+   App-specific CSS
+   
+   Note: Theme variables and Tailwind imports are in index.css
+   This file is for component-specific overrides only.
+   ============================================================================= */
 
 /* Custom styles for Leaflet map integration */
 .leaflet-container {

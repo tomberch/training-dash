@@ -24,21 +24,21 @@ export function Logo({ size = "md", showText = true }: LogoProps) {
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
       >
-        {/* Background circle */}
-        <circle cx="16" cy="16" r="15" className="fill-indigo-600"/>
+        {/* Background circle - uses primary color from theme */}
+        <circle cx="16" cy="16" r="15" className="fill-primary"/>
         {/* Power curve shape */}
         <path 
           d="M6 10 Q8 8, 12 12 Q16 16, 20 14 Q24 12, 26 18" 
-          stroke="white" 
+          className="stroke-primary-foreground"
           strokeWidth="3" 
           strokeLinecap="round"
           fill="none"
         />
         {/* Peak dot */}
-        <circle cx="8" cy="9" r="2" fill="white"/>
+        <circle cx="8" cy="9" r="2" className="fill-primary-foreground"/>
       </svg>
       {showText && (
-        <span className={`font-bold text-gray-900 dark:text-white ${textSizeClasses[size]}`}>
+        <span className={`font-bold text-foreground ${textSizeClasses[size]}`}>
           TrainDash
         </span>
       )}
