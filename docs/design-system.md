@@ -247,6 +247,74 @@ import { Skeleton } from "@/components/ui/skeleton";
 </span>
 ```
 
+### Toast Notifications
+
+TrainDash uses [Sonner](https://sonner.emilkowal.ski/) for toast notifications. The `<Toaster>` component is mounted in `App.tsx` and responds to theme changes via the `data-theme` attribute.
+
+```tsx
+import { toast } from "sonner";
+
+// Success toast with action
+toast.success("Activity uploaded successfully", {
+  action: {
+    label: "View",
+    onClick: () => navigate(`/activities/${activityId}`),
+  },
+});
+
+// Error toast with description
+toast.error("Upload failed", {
+  description: error.message,
+});
+
+// Simple info toast
+toast("Processing complete");
+
+// Promise-based toast (shows loading, then success/error)
+toast.promise(asyncOperation(), {
+  loading: "Processing...",
+  success: "Done!",
+  error: "Failed",
+});
+```
+
+**Configuration:** Toasts appear in the bottom-right corner with a maximum of 4 visible. Auto-dismiss after 4 seconds for success/info, errors persist until dismissed.
+
+**Styling:** Toasts automatically adapt to the current theme (Latte/Mocha) using semantic colors:
+- Success: `text-success` (green)
+- Error: `text-destructive` (red)
+- Warning: `text-warning` (amber)
+
+### Empty States
+
+Use the `EmptyState` component for sections with no data.
+
+```tsx
+import { EmptyState } from "@/components/ui/empty-state";
+
+<EmptyState
+  icon={
+    <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+    </svg>
+  }
+  title="No power data available"
+  description="Upload activities with power data to see your power curve and track improvements over time."
+  action={<Button onClick={handleUpload}>Upload Activity</Button>}
+/>
+```
+
+**Tone Guidelines:**
+- **Title:** Neutral, factual — e.g., "No activities yet", "No data for this range"
+- **Description:** Helpful direction on resolution — e.g., "Upload a FIT file or connect Xert..."
+- **Icon:** Simple monochrome SVG in `text-muted-foreground`
+- **Action:** Optional button for primary resolution
+
+**When to add a button CTA:**
+- New user onboarding (Dashboard) — yes, guided cards
+- Filtered results showing zero — no, just description
+- Missing data (power curve, PMC) — no, just description
+
 ## Migration Guide
 
 When migrating existing components:
@@ -286,5 +354,6 @@ When migrating existing components:
 | `src/themes/latte.css` | Light theme token values |
 | `src/themes/mocha.css` | Dark theme token values |
 | `src/components/ui/*.tsx` | shadcn/ui components |
+| `src/components/ui/sonner.tsx` | Toast notification component |
 | `src/lib/utils.ts` | `cn()` utility for class merging |
 | `src/hooks/useTheme.ts` | Theme switching hook |
