@@ -1,23 +1,40 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense, useRef } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams } from "react-router-dom";
 import { ActivityList, Login, PendingApproval } from "./ActivityList";
-import { ActivityDetail } from "./ActivityDetail";
-import { RecordsView } from "./RecordsView";
-import { AdminView } from "./AdminView";
 import { Header } from "./Header";
-import { Settings } from "./Settings";
 import { Sidebar } from "./Sidebar";
-import { Dashboard } from "./pages/Dashboard";
-import { PMCView } from "./pages/PMCView";
-import { PowerCurveView } from "./pages/PowerCurveView";
-import { ActivityTable } from "./pages/ActivityTable";
-import { AnalyzePage } from "./pages/AnalyzePage";
-import { ComparePage } from "./pages/ComparePage";
-import { fetchMe, fetchThresholds } from "./api";
+import { fetchMe, fetchThresholds, fetchActivities } from "./api";
 import type { User } from "./api";
 import "./App.css";
 
 import { OnboardingDialog } from "./components/OnboardingDialog";
+import { CommandMenu } from "./components/CommandMenu";
+import { Toaster } from "./components/ui/sonner";
+
+// Lazy-loaded page components for code splitting
+const ActivityDetail = lazy(() => import("./ActivityDetail").then(m => ({ default: m.ActivityDetail })));
+const RecordsView = lazy(() => import("./RecordsView").then(m => ({ default: m.RecordsView })));
+const AdminView = lazy(() => import("./AdminView").then(m => ({ default: m.AdminView })));
+const Settings = lazy(() => import("./Settings").then(m => ({ default: m.Settings })));
+const Dashboard = lazy(() => import("./pages/Dashboard").then(m => ({ default: m.Dashboard })));
+const PMCView = lazy(() => import("./pages/PMCView").then(m => ({ default: m.PMCView })));
+const PowerCurveView = lazy(() => import("./pages/PowerCurveView").then(m => ({ default: m.PowerCurveView })));
+const ActivityTable = lazy(() => import("./pages/ActivityTable").then(m => ({ default: m.ActivityTable })));
+const AnalyzePage = lazy(() => import("./pages/AnalyzePage").then(m => ({ default: m.AnalyzePage })));
+const ComparePage = lazy(() => import("./pages/ComparePage").then(m => ({ default: m.ComparePage })));
+
+// Page loading skeleton for Suspense fallback
+function PageLoadingSkeleton() {
+  return (
+    <div className="flex-1 p-6">
+      <div className="animate-pulse space-y-4">
+        <div className="h-8 bg-muted rounded w-1/4"></div>
+        <div className="h-64 bg-muted rounded"></div>
+        <div className="h-32 bg-muted rounded"></div>
+      </div>
+    </div>
+  );
+}
 
 // Initialize theme on app load
 function initializeTheme() {
@@ -59,6 +76,7 @@ function AppLayout({ user, onLogout, onUserUpdate }: {
   onUserUpdate: (user: User) => void;
 }) {
   const [refreshKey, setRefreshKey] = useState(0);
+  const uploadTriggerRef = useRef<(() => void) | null>(null);
   const navigate = useNavigate();
 
   return (
@@ -72,56 +90,63 @@ function AppLayout({ user, onLogout, onUserUpdate }: {
           onLogout={onLogout}
           onSettings={() => navigate("/settings")}
           onUploadComplete={() => setRefreshKey((k) => k + 1)}
+          onUploadTriggerRef={(trigger) => { uploadTriggerRef.current = trigger; }}
+        />
+        <CommandMenu 
+          onUpload={() => uploadTriggerRef.current?.()} 
+          isAdmin={user.is_admin}
         />
         <main className="flex-1 overflow-auto">
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route 
-              path="/activities" 
-              element={
-                <div className="max-w-6xl mx-auto px-4 py-6">
-                  <ActivityList
-                    key={refreshKey}
-                    onSelect={(id) => navigate(`/activities/${id}`)}
-                    unitSystem={user.unit_system}
+          <Suspense fallback={<PageLoadingSkeleton />}>
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route 
+                path="/activities" 
+                element={
+                  <div className="max-w-6xl mx-auto px-4 py-6">
+                    <ActivityList
+                      key={refreshKey}
+                      onSelect={(id) => navigate(`/activities/${id}`)}
+                      unitSystem={user.unit_system}
+                    />
+                  </div>
+                } 
+              />
+              <Route 
+                path="/activities/table" 
+                element={<ActivityTable unitSystem={user.unit_system} />} 
+              />
+              <Route 
+                path="/activities/:id" 
+                element={<ActivityDetailWrapper unitSystem={user.unit_system} />} 
+              />
+              <Route path="/pmc" element={<PMCView />} />
+              <Route path="/power-curve" element={<PowerCurveView />} />
+              <Route path="/analyze" element={<AnalyzePage />} />
+              <Route path="/compare" element={<ComparePage />} />
+              <Route 
+                path="/records" 
+                element={
+                  <div className="max-w-6xl mx-auto px-4 py-6">
+                    <RecordsView unitSystem={user.unit_system} />
+                  </div>
+                } 
+              />
+              <Route 
+                path="/settings" 
+                element={
+                  <SettingsWrapper 
+                    user={user} 
+                    onUserUpdate={onUserUpdate} 
                   />
-                </div>
-              } 
-            />
-            <Route 
-              path="/activities/table" 
-              element={<ActivityTable unitSystem={user.unit_system} />} 
-            />
-            <Route 
-              path="/activities/:id" 
-              element={<ActivityDetailWrapper unitSystem={user.unit_system} />} 
-            />
-            <Route path="/pmc" element={<PMCView />} />
-            <Route path="/power-curve" element={<PowerCurveView />} />
-            <Route path="/analyze" element={<AnalyzePage />} />
-            <Route path="/compare" element={<ComparePage />} />
-            <Route 
-              path="/records" 
-              element={
-                <div className="max-w-6xl mx-auto px-4 py-6">
-                  <RecordsView unitSystem={user.unit_system} />
-                </div>
-              } 
-            />
-            <Route 
-              path="/settings" 
-              element={
-                <SettingsWrapper 
-                  user={user} 
-                  onUserUpdate={onUserUpdate} 
-                />
-              } 
-            />
-            {user.is_admin && (
-              <Route path="/admin" element={<AdminViewWrapper />} />
-            )}
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+                } 
+              />
+              {user.is_admin && (
+                <Route path="/admin" element={<AdminViewWrapper />} />
+              )}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
         </main>
       </div>
     </div>
@@ -180,13 +205,21 @@ export default function App() {
   }, []);
 
   function handleLogin(_result: { is_admin: boolean; is_approved: boolean }) {
-    // Refetch user, then check whether thresholds exist — show onboarding if not
+    // Refetch user, then check whether user has activities or thresholds — show onboarding if neither
     fetchMe().then((u) => {
       setUser(u);
       if (u.is_approved) {
-        fetchThresholds()
-          .then((entries) => { if (entries.length === 0) setShowOnboarding(true); })
-          .catch(() => {}); // silently ignore — non-critical
+        // Check both activities and thresholds - show onboarding only if BOTH are empty
+        Promise.all([
+          fetchActivities(1, 1).catch(() => ({ activities: [], pagination: { page: 1, per_page: 1, total: 0, total_pages: 0 } })),
+          fetchThresholds().catch(() => [])
+        ]).then(([activitiesResult, thresholds]) => {
+          const hasActivities = activitiesResult.activities.length > 0;
+          const hasThresholds = thresholds.length > 0;
+          if (!hasActivities && !hasThresholds) {
+            setShowOnboarding(true);
+          }
+        });
       }
     });
   }
@@ -199,7 +232,13 @@ export default function App() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-muted-foreground">Loading...</div>
+        <div className="flex flex-col items-center gap-4">
+          <svg className="w-8 h-8 text-primary animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          <span className="text-muted-foreground text-sm">Loading...</span>
+        </div>
       </div>
     );
   }
@@ -220,6 +259,7 @@ export default function App() {
         open={showOnboarding}
         onDone={() => setShowOnboarding(false)}
       />
+      <Toaster />
     </BrowserRouter>
   );
 }

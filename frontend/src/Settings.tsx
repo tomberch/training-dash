@@ -35,6 +35,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardHeader, CardTitle, CardContent, CardAction } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useTheme } from "./hooks/useTheme";
 import type { Theme } from "./hooks/useTheme";
@@ -1056,8 +1057,29 @@ function ConnectedAccountsSection(): React.JSX.Element {
         <CardHeader>
           <CardTitle>Connected Accounts</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="text-muted-foreground">Loading...</div>
+        <CardContent className="space-y-4">
+          {/* Google skeleton */}
+          <div className="flex items-center justify-between p-4 border border-border rounded-lg">
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-6 w-6 rounded" />
+              <div>
+                <Skeleton className="h-4 w-20 mb-1" />
+                <Skeleton className="h-3 w-32" />
+              </div>
+            </div>
+            <Skeleton className="h-9 w-24" />
+          </div>
+          {/* GitHub skeleton */}
+          <div className="flex items-center justify-between p-4 border border-border rounded-lg">
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-6 w-6 rounded" />
+              <div>
+                <Skeleton className="h-4 w-20 mb-1" />
+                <Skeleton className="h-3 w-32" />
+              </div>
+            </div>
+            <Skeleton className="h-9 w-24" />
+          </div>
         </CardContent>
       </Card>
     );

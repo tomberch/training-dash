@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import { logout, uploadFit, fetchJobStatus } from "./api";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -13,6 +15,7 @@ interface HeaderProps {
   onLogout: () => void;
   onSettings: () => void;
   onUploadComplete?: () => void;
+  onUploadTriggerRef?: (trigger: () => void) => void;
   showUpload?: boolean;
 }
 
@@ -50,7 +53,8 @@ export function Header({
   avatarPath, 
   onLogout, 
   onSettings, 
-  onUploadComplete, 
+  onUploadComplete,
+  onUploadTriggerRef,
   showUpload = true 
 }: HeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -59,6 +63,14 @@ export function Header({
   const menuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { resolvedTheme, setTheme } = useTheme();
+  const navigate = useNavigate();
+
+  // Expose the upload trigger function to parent
+  useEffect(() => {
+    if (onUploadTriggerRef) {
+      onUploadTriggerRef(() => fileInputRef.current?.click());
+    }
+  }, [onUploadTriggerRef]);
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -79,6 +91,8 @@ export function Header({
     setUploading(true);
     try {
       const result = await uploadFit(file);
+      let activityId: string | null | undefined;
+      
       if ("job_id" in result && result.job_id) {
         setProcessing(true);
         const jobId = result.job_id;
@@ -87,7 +101,11 @@ export function Header({
           await new Promise((r) => setTimeout(r, 2000));
           try {
             const status = await fetchJobStatus(jobId);
-            if (status.status === "complete" || status.status === "not_found") {
+            if (status.status === "complete") {
+              activityId = status.result?.activity_id;
+              break;
+            }
+            if (status.status === "not_found") {
               break;
             }
           } catch {
@@ -95,10 +113,28 @@ export function Header({
           }
         }
         setProcessing(false);
+      } else if ("activity_id" in result) {
+        activityId = result.activity_id as string;
       }
+      
       onUploadComplete?.();
+      
+      // Show success toast with action to view activity
+      if (activityId) {
+        toast.success("Activity uploaded successfully", {
+          action: {
+            label: "View",
+            onClick: () => navigate(`/activities/${activityId}`),
+          },
+        });
+      } else {
+        toast.success("Activity uploaded successfully");
+      }
     } catch (err) {
       console.error("Upload failed:", err);
+      toast.error("Upload failed", {
+        description: err instanceof Error ? err.message : "Please try again",
+      });
     } finally {
       setUploading(false);
       // Reset the input so the same file can be uploaded again
