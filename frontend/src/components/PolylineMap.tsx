@@ -189,6 +189,22 @@ function calculateZoom(
 /** Tile size in pixels (standard OSM/CartoDB tile size). */
 const TILE_SIZE = 256;
 
+/** A single tile's grid coordinates and its CSS-pixel position within the container. */
+interface TilePosition {
+  tileX: number;
+  tileY: number;
+  /** Left offset in pixels from the container's top-left corner. */
+  left: number;
+  /** Top offset in pixels from the container's top-left corner. */
+  top: number;
+}
+
+/** Result of getTileGrid: the list of tiles to render and the zoom level used. */
+interface TileGrid {
+  tiles: TilePosition[];
+  zoom: number;
+}
+
 /** Convert longitude to tile X at the given zoom level. */
 function lonToTileX(lon: number, zoom: number): number {
   return ((lon + 180) / 360) * Math.pow(2, zoom);
@@ -210,8 +226,8 @@ function getTileGrid(
   minLon: number,
   maxLon: number,
   containerWidth: number,
-  containerHeight: number
-): { tiles: { tileX: number; tileY: number; left: number; top: number }[]; zoom: number } {
+  containerHeight: number,
+): TileGrid {
   // Add 15 % padding around the route bounds
   const latPad = (maxLat - minLat) * 0.2;
   const lonPad = (maxLon - minLon) * 0.2;
@@ -245,7 +261,7 @@ function getTileGrid(
 
   const maxTile = Math.pow(2, zoom) - 1;
 
-  const tiles: { tileX: number; tileY: number; left: number; top: number }[] = [];
+  const tiles: TilePosition[] = [];
 
   for (let tx = startTileX; tx <= endTileX; tx++) {
     for (let ty = startTileY; ty <= endTileY; ty++) {
@@ -294,7 +310,7 @@ export function PolylineMap({
   // Container dimensions in real pixels (2× the SVG viewBox to get crisper tiles)
   const containerW = 300;
   const containerH = 200;
-  const tileGrid = showMapBackground
+  const tileGrid: TileGrid | null = showMapBackground
     ? getTileGrid(bounds.minLat, bounds.maxLat, bounds.minLon, bounds.maxLon, containerW, containerH)
     : null;
 

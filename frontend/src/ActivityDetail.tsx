@@ -32,7 +32,7 @@ import { POWER_ZONE_COLORS, HR_ZONE_COLORS } from "./constants";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
-function ActivityDetailLoadingSkeleton() {
+function ActivityDetailLoadingSkeleton(): JSX.Element {
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -830,7 +830,7 @@ function StatTile({ label, value, subtitle, tooltip }: { label: string; value: s
   return content;
 }
 
-function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }) {
+function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }): JSX.Element {
   return (
     <div className="mb-4 pb-2 border-b border-border">
       <h2 className="text-lg font-semibold text-foreground">{title}</h2>
@@ -926,26 +926,23 @@ function ZoneChart({
         {zones.map(({ zone, seconds, label }) => {
           const percentage = (seconds / totalSeconds) * 100;
           const color = zoneColors[zone] || "#6b7280";
-          
+
           return (
             <div key={zone} className="flex items-center gap-3">
-              <div className="w-8 text-xs font-medium text-muted-foreground">
-                {label}
+              <div className="w-32 text-xs font-medium text-muted-foreground shrink-0">
+                {label}: {percentage.toFixed(0)}%{" "}
+                <span className="text-muted-foreground/70">
+                  ({formatZoneTime(seconds)})
+                </span>
               </div>
-              <div className="flex-1 h-6 bg-muted rounded-full overflow-hidden">
+              <div className="flex-1 h-5 bg-muted rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all duration-300"
-                  style={{ 
+                  style={{
                     width: `${Math.max(percentage, 1)}%`,
                     backgroundColor: color,
                   }}
                 />
-              </div>
-              <div className="w-16 text-xs text-right text-muted-foreground tabular-nums">
-                {formatZoneTime(seconds)}
-              </div>
-              <div className="w-12 text-xs text-right text-muted-foreground/70 tabular-nums">
-                {percentage.toFixed(0)}%
               </div>
             </div>
           );

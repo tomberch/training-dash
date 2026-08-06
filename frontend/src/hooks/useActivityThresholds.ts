@@ -20,7 +20,7 @@ export interface UseActivityThresholdsResult {
  */
 export function useActivityThresholds(
   activity: Activity | null,
-  wbalData?: WbalResponse | null
+  wbalData?: WbalResponse | null,
 ): UseActivityThresholdsResult {
   const [thresholds, setThresholds] = useState<ThresholdEntry[]>([]);
   const [error, setError] = useState<Error | ApiError | null>(null);

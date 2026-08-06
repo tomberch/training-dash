@@ -565,6 +565,40 @@ Update an app setting (e.g., `require_approval`).
 
 ---
 
+## Map Tiles
+
+Tile proxy endpoints that cache map tiles to disk for 30 days, reducing load on
+upstream providers and improving repeat-load performance.
+
+### GET /tiles/{z}/{x}/{y}.png
+
+Proxy and cache an OpenStreetMap raster tile.
+
+**Path params:** `z` (zoom 0–19), `x`, `y` (valid tile coordinates for the zoom level)
+
+**Response:** `200 OK` — PNG image with headers:
+- `Cache-Control: public, max-age=2592000`
+- `X-Cache: HIT` (served from disk) or `MISS` (fetched from upstream)
+
+**Errors:** `400` invalid zoom or coordinates · `502` upstream unreachable
+
+---
+
+### GET /tiles/carto/{style}/{z}/{x}/{y}.png
+
+Proxy and cache a CartoDB raster tile. Used by the frontend for theme-aware map
+backgrounds (Positron for light theme, Dark Matter for dark theme).
+
+**Path params:**
+- `style` — `light` (CartoDB Positron) or `dark` (CartoDB Dark Matter)
+- `z`, `x`, `y` — zoom level and tile coordinates (same constraints as OSM endpoint)
+
+**Response:** `200 OK` — PNG image with the same `Cache-Control` and `X-Cache` headers.
+
+**Errors:** `400` unknown style, invalid zoom, or invalid coordinates · `502` upstream unreachable
+
+---
+
 ## Error Responses
 
 All errors follow this format:

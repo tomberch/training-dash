@@ -64,7 +64,28 @@ export interface UseActivityRecordsResult {
 }
 
 /**
- * Hook for activity records/geojson - always loaded eagerly.
+ * Find the entry in `arr` whose value (extracted by `getValue`) is closest
+ * to `target`. Returns `null` when the array is empty.
+ */
+function findNearest<T>(
+  arr: T[],
+  getValue: (item: T) => number,
+  target: number,
+): T | null {
+  if (arr.length === 0) return null;
+  let closest = arr[0];
+  let minDiff = Math.abs(getValue(arr[0]) - target);
+  for (const item of arr) {
+    const diff = Math.abs(getValue(item) - target);
+    if (diff < minDiff) {
+      minDiff = diff;
+      closest = item;
+    }
+  }
+  return closest;
+}
+
+
  * Handles: time-series data for charts, positions for map, hover sync
  */
 export function useActivityRecords(activityId: string): UseActivityRecordsResult {
@@ -122,37 +143,18 @@ export function useActivityRecords(activityId: string): UseActivityRecordsResult
       }));
   }, [geojson, timestamps]);
 
-  // Position finders
   const findPositionByElapsed = useCallback(
     (elapsed: number): [number, number] | null => {
-      if (posByElapsed.length === 0) return null;
-      let closest = posByElapsed[0];
-      let minDiff = Math.abs(closest.elapsed - elapsed);
-      for (const p of posByElapsed) {
-        const diff = Math.abs(p.elapsed - elapsed);
-        if (diff < minDiff) {
-          minDiff = diff;
-          closest = p;
-        }
-      }
-      return closest.pos;
+      const match = findNearest(posByElapsed, (p) => p.elapsed, elapsed);
+      return match?.pos ?? null;
     },
     [posByElapsed]
   );
 
   const findPositionByDistance = useCallback(
     (distance_m: number): [number, number] | null => {
-      if (posByDist.length === 0) return null;
-      let closest = posByDist[0];
-      let minDiff = Math.abs(closest.distance_m - distance_m);
-      for (const p of posByDist) {
-        const diff = Math.abs(p.distance_m - distance_m);
-        if (diff < minDiff) {
-          minDiff = diff;
-          closest = p;
-        }
-      }
-      return closest.pos;
+      const match = findNearest(posByDist, (p) => p.distance_m, distance_m);
+      return match?.pos ?? null;
     },
     [posByDist]
   );

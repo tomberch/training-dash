@@ -40,80 +40,40 @@ interface CommandItem {
   keywords?: string[];
 }
 
-export function CommandMenu({ onUpload, isAdmin = false }: CommandMenuProps) {
+export function CommandMenu({ onUpload, isAdmin = false }: CommandMenuProps): JSX.Element {
   const [open, setOpen] = useState(false);
   const [awaitingG, setAwaitingG] = useState(false);
   const gTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const navigate = useNavigate();
   const { resolvedTheme, setTheme } = useTheme();
 
-  // Navigation commands (G + letter)
-  const navigationCommands: CommandItem[] = [
-    {
-      id: "nav-dashboard",
-      label: "Go to Dashboard",
-      shortcut: "G D",
-      icon: <HomeIcon className="h-4 w-4" />,
-      action: () => navigate("/"),
-      keywords: ["home", "overview"],
-    },
-    {
-      id: "nav-activities",
-      label: "Go to Activities",
-      shortcut: "G A",
-      icon: <ListIcon className="h-4 w-4" />,
-      action: () => navigate("/activities"),
-      keywords: ["rides", "workouts", "list"],
-    },
-    {
-      id: "nav-analyze",
-      label: "Go to Analyze",
-      shortcut: "G Z",
-      icon: <LayersIcon className="h-4 w-4" />,
-      action: () => navigate("/analyze"),
-      keywords: ["details", "deep dive"],
-    },
-    {
-      id: "nav-compare",
-      label: "Go to Compare",
-      shortcut: "G C",
-      icon: <ArrowRightLeftIcon className="h-4 w-4" />,
-      action: () => navigate("/compare"),
-      keywords: ["side by side", "diff"],
-    },
-    {
-      id: "nav-pmc",
-      label: "Go to PMC",
-      shortcut: "G P",
-      icon: <ChartBarIcon className="h-4 w-4" />,
-      action: () => navigate("/pmc"),
-      keywords: ["fitness", "fatigue", "form", "performance management chart"],
-    },
-    {
-      id: "nav-power-curve",
-      label: "Go to Power Curve",
-      shortcut: "G W",
-      icon: <BoltIcon className="h-4 w-4" />,
-      action: () => navigate("/power-curve"),
-      keywords: ["watts", "cp", "ftp"],
-    },
-    {
-      id: "nav-records",
-      label: "Go to Records",
-      shortcut: "G R",
-      icon: <TrophyIcon className="h-4 w-4" />,
-      action: () => navigate("/records"),
-      keywords: ["prs", "personal records", "best"],
-    },
-    {
-      id: "nav-settings",
-      label: "Go to Settings",
-      shortcut: "G S",
-      icon: <CogIcon className="h-4 w-4" />,
-      action: () => navigate("/settings"),
-      keywords: ["preferences", "config"],
-    },
-  ];
+  // Single source of truth for navigation routes.
+  // The G-shortcut key, command palette entry, and keyboard handler all derive from this.
+  const NAV_ROUTES = [
+    { key: "d", path: "/",            id: "nav-dashboard",   label: "Go to Dashboard",   shortcut: "G D", icon: <HomeIcon className="h-4 w-4" />,          keywords: ["home", "overview"] },
+    { key: "a", path: "/activities",  id: "nav-activities",  label: "Go to Activities",  shortcut: "G A", icon: <ListIcon className="h-4 w-4" />,           keywords: ["rides", "workouts", "list"] },
+    { key: "z", path: "/analyze",     id: "nav-analyze",     label: "Go to Analyze",     shortcut: "G Z", icon: <LayersIcon className="h-4 w-4" />,         keywords: ["details", "deep dive"] },
+    { key: "c", path: "/compare",     id: "nav-compare",     label: "Go to Compare",     shortcut: "G C", icon: <ArrowRightLeftIcon className="h-4 w-4" />, keywords: ["side by side", "diff"] },
+    { key: "p", path: "/pmc",         id: "nav-pmc",         label: "Go to PMC",         shortcut: "G P", icon: <ChartBarIcon className="h-4 w-4" />,       keywords: ["fitness", "fatigue", "form", "performance management chart"] },
+    { key: "w", path: "/power-curve", id: "nav-power-curve", label: "Go to Power Curve", shortcut: "G W", icon: <BoltIcon className="h-4 w-4" />,           keywords: ["watts", "cp", "ftp"] },
+    { key: "r", path: "/records",     id: "nav-records",     label: "Go to Records",     shortcut: "G R", icon: <TrophyIcon className="h-4 w-4" />,         keywords: ["prs", "personal records", "best"] },
+    { key: "s", path: "/settings",    id: "nav-settings",    label: "Go to Settings",    shortcut: "G S", icon: <CogIcon className="h-4 w-4" />,            keywords: ["preferences", "config"] },
+  ] as const;
+
+  // Derived: command palette entries for navigation
+  const navigationCommands: CommandItem[] = NAV_ROUTES.map((r) => ({
+    id: r.id,
+    label: r.label,
+    shortcut: r.shortcut,
+    icon: r.icon,
+    action: () => navigate(r.path),
+    keywords: [...r.keywords],
+  }));
+
+  // Derived: G + letter shortcut map
+  const gShortcuts: Record<string, () => void> = Object.fromEntries(
+    NAV_ROUTES.map((r) => [r.key, () => navigate(r.path)])
+  );
 
   // Action commands (single key)
   const actionCommands: CommandItem[] = [
@@ -122,9 +82,7 @@ export function CommandMenu({ onUpload, isAdmin = false }: CommandMenuProps) {
       label: "Upload FIT File",
       shortcut: "U",
       icon: <UploadIcon className="h-4 w-4" />,
-      action: () => {
-        onUpload?.();
-      },
+      action: () => { onUpload?.(); },
       keywords: ["import", "add activity"],
     },
     {
@@ -132,24 +90,10 @@ export function CommandMenu({ onUpload, isAdmin = false }: CommandMenuProps) {
       label: resolvedTheme === "latte" ? "Switch to Dark Mode" : "Switch to Light Mode",
       shortcut: "T",
       icon: resolvedTheme === "latte" ? <MoonIcon className="h-4 w-4" /> : <SunIcon className="h-4 w-4" />,
-      action: () => {
-        setTheme(resolvedTheme === "latte" ? "mocha" : "latte");
-      },
+      action: () => { setTheme(resolvedTheme === "latte" ? "mocha" : "latte"); },
       keywords: ["dark", "light", "appearance"],
     },
   ];
-
-  // G + letter shortcut map
-  const gShortcuts: Record<string, () => void> = {
-    d: () => navigate("/"),
-    a: () => navigate("/activities"),
-    z: () => navigate("/analyze"),
-    c: () => navigate("/compare"),
-    p: () => navigate("/pmc"),
-    w: () => navigate("/power-curve"),
-    r: () => navigate("/records"),
-    s: () => navigate("/settings"),
-  };
 
   // Single-key shortcuts
   const singleKeyShortcuts: Record<string, () => void> = {
