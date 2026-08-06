@@ -453,8 +453,16 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
               subtitle={activity.power_source === "hr_derived" ? "HR-derived" : undefined}
             />
             <StatTile label="NP" value={activity.np_power_w ? `${activity.np_power_w} W` : "—"} />
-            <StatTile label="IF" value={activity.intensity_factor ? activity.intensity_factor.toFixed(2) : "—"} />
-            <StatTile label="TSS" value={activity.tss ? Math.round(activity.tss).toString() : "—"} />
+            <StatTile 
+              label="IF" 
+              value={activity.intensity_factor ? activity.intensity_factor.toFixed(2) : "—"} 
+              tooltip={!ftpWatts && !activity.intensity_factor ? "Set FTP in Settings to calculate" : undefined}
+            />
+            <StatTile 
+              label="TSS" 
+              value={activity.tss ? Math.round(activity.tss).toString() : "—"} 
+              tooltip={!ftpWatts && !activity.tss ? "Set FTP in Settings to calculate" : undefined}
+            />
             <StatTile 
               label="W'bal Min" 
               value={activity.wbal_min_pct != null ? `${Math.round(activity.wbal_min_pct)}%` : "—"} 
@@ -656,11 +664,16 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
   );
 }
 
-function StatTile({ label, value, subtitle }: { label: string; value: string; subtitle?: string }) {
+function StatTile({ label, value, subtitle, tooltip }: { label: string; value: string; subtitle?: string; tooltip?: string }) {
   return (
-    <div className="bg-card rounded-lg border border-border p-3 text-center">
+    <div className="bg-card rounded-lg border border-border p-3 text-center relative group">
       <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
         {label}
+        {tooltip && (
+          <span className="ml-1 text-warning cursor-help" title={tooltip}>
+            ⚠
+          </span>
+        )}
       </div>
       <div className="text-lg font-semibold text-foreground tabular-nums">
         {value}
@@ -668,6 +681,11 @@ function StatTile({ label, value, subtitle }: { label: string; value: string; su
       {subtitle && (
         <div className="text-xs text-primary mt-0.5">
           {subtitle}
+        </div>
+      )}
+      {tooltip && (
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-popover text-popover-foreground text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10 border border-border">
+          {tooltip}
         </div>
       )}
     </div>
