@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Activity, PaginationMeta } from "./api";
 import { ApiError, fetchActivities, login, register } from "./api";
-import { formatDistance, formatTime, formatDate, formatElevation } from "./format";
+import { formatDistance, formatTime, formatElevation, formatActivityDate } from "./format";
 import type { UnitSystem } from "./format";
 import { ErrorDisplay } from "./ErrorDisplay";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -37,7 +37,7 @@ function ActivityRow({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <h3 className="text-base font-medium text-foreground truncate">
-            {activity.title || formatDate(activity.started_at)}
+            {activity.title || formatActivityDate(activity.started_at, activity.utc_offset_minutes)}
           </h3>
           {activity.is_breakthrough && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-warning-foreground bg-warning/90 rounded-full">
@@ -50,7 +50,7 @@ function ActivityRow({
         </div>
         {activity.title && (
           <p className="text-sm text-muted-foreground mt-0.5">
-            {formatDate(activity.started_at)}
+            {formatActivityDate(activity.started_at, activity.utc_offset_minutes)}
           </p>
         )}
       </div>

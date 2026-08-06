@@ -67,7 +67,7 @@ export function formatActivityDate(
     // browser does not apply its own timezone conversion on top.
     const utcMs = new Date(iso).getTime();
     const localMs = utcMs + utcOffsetMinutes * 60_000;
-    return new Date(localMs).toLocaleDateString("en-CH", { ...options, timeZone: "UTC" });
+    return new Date(localMs).toLocaleDateString(undefined, { ...options, timeZone: "UTC" });
   }
   return new Date(iso).toLocaleDateString(undefined, options);
 }
@@ -86,7 +86,7 @@ export function formatActivityTime(
   if (utcOffsetMinutes !== null) {
     const utcMs = new Date(iso).getTime();
     const localMs = utcMs + utcOffsetMinutes * 60_000;
-    return new Date(localMs).toLocaleTimeString("en-CH", { ...options, timeZone: "UTC" });
+    return new Date(localMs).toLocaleTimeString(undefined, { ...options, timeZone: "UTC" });
   }
   return new Date(iso).toLocaleTimeString(undefined, options);
 }

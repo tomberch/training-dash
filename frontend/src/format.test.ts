@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { formatDistance, formatElevation, formatSpeed, formatDuration, formatRelativeTime } from "./format";
+import {
+  formatDistance,
+  formatElevation,
+  formatSpeed,
+  formatDuration,
+  formatRelativeTime,
+  formatActivityDate,
+  formatActivityTime,
+} from "./format";
 
 describe("formatDistance", () => {
   it("returns km for metric", () => {
@@ -117,5 +125,66 @@ describe("formatRelativeTime", () => {
   it("returns months ago for 60+ days", () => {
     expect(formatRelativeTime("2024-04-15T12:00:00Z")).toBe("2 months ago");
     expect(formatRelativeTime("2024-01-15T12:00:00Z")).toBe("5 months ago");
+  });
+});
+
+
+describe("formatActivityDate", () => {
+  it("uses browser locale when utcOffsetMinutes is null", () => {
+    // When offset is null the result is locale-dependent; just verify it's a non-empty string
+    const result = formatActivityDate("2024-06-15T07:30:00+00:00", null);
+    expect(typeof result).toBe("string");
+    expect(result.length).toBeGreaterThan(0);
+  });
+
+  it("shows date in ride-local time when offset is positive (UTC+2)", () => {
+    // 2024-06-15T22:30:00Z + 120min → 2024-06-16T00:30 local
+    // With timeZone:'UTC' and undefined locale the date portion should be June 16
+    const result = formatActivityDate("2024-06-15T22:30:00+00:00", 120);
+    expect(result).toContain("16");   // day 16 in local time
+    expect(result).not.toContain("15"); // not day 15 (UTC day)
+  });
+
+  it("shows date in ride-local time when offset is negative (UTC-5)", () => {
+    // 2024-06-15T02:00:00Z - 300min → 2024-06-14T21:00 local
+    const result = formatActivityDate("2024-06-15T02:00:00+00:00", -300);
+    expect(result).toContain("14");   // day 14 in local time
+    expect(result).not.toContain("15");
+  });
+
+  it("accepts custom DateTimeFormatOptions", () => {
+    const result = formatActivityDate(
+      "2024-06-15T07:30:00+00:00",
+      120,
+      { month: "long", day: "numeric" },
+    );
+    expect(typeof result).toBe("string");
+    expect(result.length).toBeGreaterThan(0);
+  });
+});
+
+describe("formatActivityTime", () => {
+  it("uses browser locale when utcOffsetMinutes is null", () => {
+    const result = formatActivityTime("2024-06-15T07:30:00+00:00", null);
+    expect(typeof result).toBe("string");
+    expect(result.length).toBeGreaterThan(0);
+  });
+
+  it("shows time in ride-local time when offset is positive (UTC+2)", () => {
+    // 07:30 UTC + 120min → 09:30 local
+    const result = formatActivityTime("2024-06-15T07:30:00+00:00", 120);
+    expect(result).toBe("09:30");
+  });
+
+  it("shows time in ride-local time when offset is negative (UTC-5)", () => {
+    // 14:00 UTC - 300min → 09:00 local
+    const result = formatActivityTime("2024-06-15T14:00:00+00:00", -300);
+    expect(result).toBe("09:00");
+  });
+
+  it("handles midnight rollover correctly", () => {
+    // 23:00 UTC + 120min → 01:00 next day
+    const result = formatActivityTime("2024-06-15T23:00:00+00:00", 120);
+    expect(result).toBe("01:00");
   });
 });
