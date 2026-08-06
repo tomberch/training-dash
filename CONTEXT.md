@@ -32,7 +32,7 @@ Per-user display settings stored on the User record. Currently includes:
 
 A connection to an external service that syncs data into TrainingDash. Each integration has its own credentials stored per user. Users can configure multiple integrations; if the same activity appears in both, the first one synced wins (duplicates detected by `started_at` within 60s and `total_distance_m` within 1%).
 
-- **Xert Integration** — stores encrypted Xert email and password. When configured, a nightly job (2 AM) syncs the user's activities from Xert. Credentials are validated on save by attempting a Xert login.
+- **Xert Integration** — stores encrypted Xert email and password. When configured, a nightly job (2 AM) syncs the user's activities from Xert by downloading raw FIT files via a web session and ingesting them through the standard FIT pipeline. This gives full field coverage: power, HR, cadence, GPS, temperature, grade, and left/right power balance. XSS (Xert Strain Score) is fetched separately via the OAuth API and stored as the activity's training load. Credentials are validated on save by attempting a Xert login.
 
 - **Garmin Integration** — stores encrypted Garmin email and password. When configured, a nightly job (3 AM) syncs the user's activities from Garmin Connect by downloading FIT files. Credentials are validated on save; if MFA is enabled, validation is a two-step flow (credentials first, then MFA code).
 
