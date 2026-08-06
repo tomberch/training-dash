@@ -704,6 +704,9 @@ class ActivityPipeline:
                 if title:
                     result.title = title
                     result.title_source = "auto"
+                else:
+                    result.title = _time_of_day_title(self.activity.started_at)
+                    result.title_source = "pending"
             except Exception as e:
                 logger.warning(
                     f"Failed to generate title for activity {self.activity.id}: {e}"
