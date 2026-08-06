@@ -437,6 +437,10 @@ export async function generateActivityTitle(id: string): Promise<Activity> {
   return apiPost<Activity>(`/activities/${id}/generate-title`, {}, "Failed to generate activity title");
 }
 
+export async function deleteActivity(id: string): Promise<void> {
+  return apiDelete(`/activities/${id}`, "Failed to delete activity");
+}
+
 export async function fetchComparison(id: string, otherId: string): Promise<CompareResponse> {
   return apiGet<CompareResponse>(`/activities/${id}/compare?other=${otherId}`);
 }

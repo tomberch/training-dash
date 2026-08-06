@@ -90,8 +90,10 @@ class Route(Base):
     simplified_polyline: Mapped[object] = mapped_column(
         Geography("LINESTRING", srid=4326, spatial_index=True), nullable=False
     )
-    first_seen_activity_id: Mapped[UUID] = mapped_column(
-        PgUUID(as_uuid=True), ForeignKey("activities.id"), nullable=False
+    first_seen_activity_id: Mapped[UUID | None] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("activities.id", ondelete="SET NULL"),
+        nullable=True,
     )
     ride_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))

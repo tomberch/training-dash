@@ -1,3 +1,4 @@
+import * as React from "react";
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -31,8 +32,20 @@ import { ChartErrorBoundary } from "./components/ErrorBoundary";
 import { POWER_ZONE_COLORS, HR_ZONE_COLORS } from "./constants";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
+import { deleteActivity } from "./api";
 
-function ActivityDetailLoadingSkeleton(): JSX.Element {
+function ActivityDetailLoadingSkeleton(): React.JSX.Element {
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -143,6 +156,24 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
   const { wbalData } = useActivityWbal(activityId);
   const { sameRoute } = useActivitySameRoute(activityId);
   const { ftpWatts, lthrBpm } = useActivityThresholds(activity, wbalData);
+
+  // Delete state
+  const [showDeleteDialog, setShowDeleteDialog] = React.useState(false);
+  const [isDeleting, setIsDeleting] = React.useState(false);
+
+  async function handleDelete(): Promise<void> {
+    setIsDeleting(true);
+    try {
+      await deleteActivity(activityId);
+      toast.success("Activity deleted");
+      onBack();
+    } catch {
+      toast.error("Failed to delete activity");
+      setShowDeleteDialog(false);
+    } finally {
+      setIsDeleting(false);
+    }
+  }
 
   // Lazy section loading
   const { sentinelRef: analysisSentinelRef, hasEntered: analysisVisible } = useLazySection();
@@ -511,6 +542,16 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
                 Compare
               </Link>
             )}
+            <button
+              onClick={() => setShowDeleteDialog(true)}
+              className="w-28 px-4 py-2 text-sm font-medium text-destructive bg-destructive/10 border border-destructive/30 rounded-lg hover:bg-destructive/20 transition-fast flex items-center justify-center gap-2"
+              title="Delete this activity"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              Delete
+            </button>
           </div>
           
           {activity.is_breakthrough && (
@@ -761,6 +802,39 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
         )}
       </div>
 
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete activity?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this activity and all its records.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <span className="flex items-center gap-2">
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Deleting…
+                </span>
+              ) : (
+                "Delete"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Chart expansion modal */}
       {expandedChart && (() => {
         const chart = CHARTS.find((c) => c.key === expandedChart);
@@ -830,7 +904,7 @@ function StatTile({ label, value, subtitle, tooltip }: { label: string; value: s
   return content;
 }
 
-function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }): JSX.Element {
+function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }): React.JSX.Element {
   return (
     <div className="mb-4 pb-2 border-b border-border">
       <h2 className="text-lg font-semibold text-foreground">{title}</h2>

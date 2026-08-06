@@ -79,3 +79,21 @@ async def enqueue_sync_garmin_job(user_id: int) -> str | None:
         return job.job_id
     finally:
         await pool.aclose()
+
+
+
+async def enqueue_recalculate_after_delete_job(user_id: int) -> str | None:
+    """
+    Enqueue fitness/breakthrough recalculation after an activity is deleted.
+
+    Returns job_id or None if Redis is not available (recalculation is skipped
+    in that case — acceptable for development environments).
+    """
+    if not redis_available():
+        return None
+    pool = await create_redis_pool()
+    try:
+        job = await pool.enqueue_job("recalculate_after_delete_job", user_id=user_id)
+        return job.job_id
+    finally:
+        await pool.aclose()

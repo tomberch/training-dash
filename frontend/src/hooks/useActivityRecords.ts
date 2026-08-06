@@ -85,7 +85,7 @@ function findNearest<T>(
   return closest;
 }
 
-
+/**
  * Handles: time-series data for charts, positions for map, hover sync
  */
 export function useActivityRecords(activityId: string): UseActivityRecordsResult {
