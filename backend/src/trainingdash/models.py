@@ -276,6 +276,9 @@ class GarminCredentials(Base):
 class ThresholdHistory(Base):
     """Tracks FTP, LTHR, and HRmax over time with effective dates."""
     __tablename__ = "threshold_history"
+    __table_args__ = (
+        UniqueConstraint("user_id", "effective_date", name="uq_threshold_user_date"),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     user_id: Mapped[int] = mapped_column(

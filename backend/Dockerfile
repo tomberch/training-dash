@@ -7,21 +7,29 @@ COPY frontend/ ./
 RUN npm run build
 
 # Build backend
-FROM python:3.12-slim
+FROM python:3.12-slim AS backend
 
 WORKDIR /app
 
+# Install uv once (cached layer)
 RUN pip install --no-cache-dir uv
 
+# Copy only dependency file first (cached layer for deps)
 COPY backend/pyproject.toml ./
+
+# Install dependencies (cached unless pyproject.toml changes)
+RUN uv pip install --system --no-cache .
+
+# Now copy source code (changes frequently, but deps already cached)
 COPY backend/src/ ./src/
 COPY backend/alembic.ini ./
 COPY backend/migrations/ ./migrations/
 
+# Re-install to register the package (fast, deps already there)
+RUN uv pip install --system --no-cache .
+
 # Copy built frontend
 COPY --from=frontend-builder /frontend/dist ./static/
-
-RUN uv pip install --system --no-cache .
 
 # Create tile cache directory
 RUN mkdir -p /app/tile-cache

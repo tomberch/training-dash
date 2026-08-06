@@ -1,8 +1,8 @@
 /**
  * OnboardingDialog — 2-step onboarding for new users.
  *
- * Step 1: Get Data — Connect Xert / Upload FIT / Skip
- * Step 2: Set Thresholds — FTP, LTHR, HRmax (optional)
+ * Step 1: Set Thresholds — FTP, LTHR, HRmax (optional)
+ * Step 2: Get Data — Connect Xert / Upload FIT / Skip
  *
  * Users can skip either step. Re-shows next login until user has
  * thresholds OR activities.
@@ -29,13 +29,13 @@ interface Props {
   onDone: () => void;
 }
 
-type Step = "get-data" | "set-thresholds";
+type Step = "set-thresholds" | "get-data";
 
 export function OnboardingDialog({ open, onDone }: Props): React.JSX.Element {
   const navigate = useNavigate();
-  const [step, setStep] = useState<Step>("get-data");
+  const [step, setStep] = useState<Step>("set-thresholds");
   
-  // Step 2: Threshold form state
+  // Step 1: Threshold form state
   const [ftp, setFtp] = useState("");
   const [lthr, setLthr] = useState("");
   const [hrmax, setHrmax] = useState("");
@@ -62,9 +62,9 @@ export function OnboardingDialog({ open, onDone }: Props): React.JSX.Element {
     try {
       await uploadFit(file);
       toast.success("Activity uploaded!", {
-        description: "Your first ride has been imported. Let's set up your training zones.",
+        description: "Your first ride has been imported.",
       });
-      setStep("set-thresholds");
+      onDone();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to upload file");
       toast.error("Upload failed", {
@@ -92,7 +92,8 @@ export function OnboardingDialog({ open, onDone }: Props): React.JSX.Element {
       toast.success("Thresholds saved!", {
         description: "Your training zones are now configured.",
       });
-      onDone();
+      // Advance to step 2: get data
+      setStep("get-data");
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Failed to save thresholds";
       setError(errorMessage);
@@ -104,18 +105,18 @@ export function OnboardingDialog({ open, onDone }: Props): React.JSX.Element {
     }
   }
 
-  function handleSkipData() {
-    setStep("set-thresholds");
+  function handleSkipThresholds() {
+    setStep("get-data");
   }
 
-  function handleSkipAll() {
+  function handleSkipData() {
     onDone();
   }
 
   // Reset state when dialog closes
   function handleOpenChange(isOpen: boolean) {
     if (!isOpen) {
-      setStep("get-data");
+      setStep("set-thresholds");
       setFtp("");
       setLthr("");
       setHrmax("");
@@ -127,13 +128,89 @@ export function OnboardingDialog({ open, onDone }: Props): React.JSX.Element {
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-md">
-        {step === "get-data" ? (
+        {step === "set-thresholds" ? (
           <>
             <DialogHeader>
               <DialogTitle>Welcome to TrainDash</DialogTitle>
               <DialogDescription>
-                Let's get your training data loaded. You can connect an integration
-                or upload a FIT file to get started.
+                Let's set up your training thresholds. TrainDash uses FTP, LTHR,
+                and HRmax to calculate zone times, TSS, and intensity factor.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="ob-ftp">FTP — Functional Threshold Power</Label>
+                <Input
+                  id="ob-ftp"
+                  type="number"
+                  min={50}
+                  max={600}
+                  placeholder="e.g. 250 W"
+                  value={ftp}
+                  onChange={(e) => setFtp(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  The highest average power you can sustain for ~1 hour (watts).
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="ob-lthr">LTHR — Lactate Threshold Heart Rate</Label>
+                <Input
+                  id="ob-lthr"
+                  type="number"
+                  min={80}
+                  max={220}
+                  placeholder="e.g. 162 bpm"
+                  value={lthr}
+                  onChange={(e) => setLthr(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Your heart rate at lactate threshold — roughly your 1-hour race HR.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="ob-hrmax">Max Heart Rate</Label>
+                <Input
+                  id="ob-hrmax"
+                  type="number"
+                  min={100}
+                  max={250}
+                  placeholder="e.g. 185 bpm"
+                  value={hrmax}
+                  onChange={(e) => setHrmax(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Your highest recorded heart rate (bpm).
+                </p>
+              </div>
+
+              {error && (
+                <p className="text-sm text-destructive">{error}</p>
+              )}
+            </div>
+
+            <DialogFooter className="gap-2">
+              <Button variant="ghost" onClick={handleSkipThresholds} disabled={saving}>
+                Skip for now
+              </Button>
+              <Button
+                onClick={handleSaveThresholds}
+                disabled={!hasAnyValue || saving}
+              >
+                {saving ? "Saving…" : "Save & continue"}
+              </Button>
+            </DialogFooter>
+          </>
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle>Get Your Training Data</DialogTitle>
+              <DialogDescription>
+                Connect an integration or upload a FIT file to start analyzing
+                your rides. You can also do this later in Settings.
               </DialogDescription>
             </DialogHeader>
 
@@ -202,83 +279,6 @@ export function OnboardingDialog({ open, onDone }: Props): React.JSX.Element {
             <DialogFooter>
               <Button variant="ghost" onClick={handleSkipData}>
                 Skip for now
-              </Button>
-            </DialogFooter>
-          </>
-        ) : (
-          <>
-            <DialogHeader>
-              <DialogTitle>Set Your Training Thresholds</DialogTitle>
-              <DialogDescription>
-                TrainDash uses FTP, LTHR, and HRmax to calculate zone times, TSS,
-                and intensity factor. You can skip this and add them later in
-                Settings → Thresholds.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-4 py-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="ob-ftp">FTP — Functional Threshold Power</Label>
-                <Input
-                  id="ob-ftp"
-                  type="number"
-                  min={50}
-                  max={600}
-                  placeholder="e.g. 250 W"
-                  value={ftp}
-                  onChange={(e) => setFtp(e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  The highest average power you can sustain for ~1 hour (watts).
-                </p>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="ob-lthr">LTHR — Lactate Threshold Heart Rate</Label>
-                <Input
-                  id="ob-lthr"
-                  type="number"
-                  min={80}
-                  max={220}
-                  placeholder="e.g. 162 bpm"
-                  value={lthr}
-                  onChange={(e) => setLthr(e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Your heart rate at lactate threshold — roughly your 1-hour race HR.
-                </p>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="ob-hrmax">Max Heart Rate</Label>
-                <Input
-                  id="ob-hrmax"
-                  type="number"
-                  min={100}
-                  max={250}
-                  placeholder="e.g. 185 bpm"
-                  value={hrmax}
-                  onChange={(e) => setHrmax(e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Your highest recorded heart rate (bpm).
-                </p>
-              </div>
-
-              {error && (
-                <p className="text-sm text-destructive">{error}</p>
-              )}
-            </div>
-
-            <DialogFooter className="gap-2">
-              <Button variant="ghost" onClick={handleSkipAll} disabled={saving}>
-                Skip for now
-              </Button>
-              <Button
-                onClick={handleSaveThresholds}
-                disabled={!hasAnyValue || saving}
-              >
-                {saving ? "Saving…" : "Save thresholds"}
               </Button>
             </DialogFooter>
           </>

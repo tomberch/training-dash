@@ -2,7 +2,6 @@ import { MapContainer, Polyline, TileLayer, Marker, CircleMarker, useMap } from 
 import type { LatLngBounds } from "leaflet";
 import L from "leaflet";
 import { useEffect, useRef } from "react";
-import { useTheme } from "@/hooks/useTheme";
 
 // Component to fit map bounds to polyline - only runs once on initial load
 function FitBounds({ positions }: { positions: [number, number][] }) {
@@ -66,8 +65,6 @@ export function ResizableMap({
   isResizing,
   showResizeHandle = true,
 }: ResizableMapProps) {
-  const { resolvedTheme } = useTheme();
-  
   if (positions.length === 0) return null;
 
   const center: [number, number] = [
@@ -75,12 +72,9 @@ export function ResizableMap({
     positions.reduce((sum, p) => sum + p[1], 0) / positions.length,
   ];
 
-  // Theme-aware tile URLs — routed through the backend proxy for caching
-  const tileUrl = resolvedTheme === "mocha"
-    ? "/tiles/carto/dark/{z}/{x}/{y}.png"
-    : "/tiles/carto/light/{z}/{x}/{y}.png";
-  
-  const attribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
+  // OSM tiles via backend proxy
+  const tileUrl = "/tiles/{z}/{x}/{y}.png";
+  const attribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
   return (
     <div className="relative bg-card rounded-lg border border-border overflow-hidden">

@@ -1,6 +1,7 @@
 """User endpoints: /me/*, thresholds, zones, integrations, notifications."""
 
 import json
+import logging
 import os
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -36,6 +37,8 @@ from trainingdash.thresholds import (
     regenerate_zones_from_threshold,
 )
 from trainingdash.xert import get_xert_client, XertAPIError
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["user"])
 
@@ -485,19 +488,43 @@ async def create_threshold(
                 status_code=400, detail="lthr_bpm cannot exceed hrmax_bpm"
             )
 
-    threshold = ThresholdHistory(
-        user_id=user.id,
-        effective_date=effective,
-        ftp_watts=final_ftp,
-        lthr_bpm=final_lthr,
-        hrmax_bpm=final_hrmax,
+    # Upsert: check if there's already a threshold for this user on this date
+    existing_result = await db.execute(
+        select(ThresholdHistory).where(
+            ThresholdHistory.user_id == user.id,
+            ThresholdHistory.effective_date == effective,
+        )
     )
-    db.add(threshold)
+    existing = existing_result.scalar_one_or_none()
+
+    if existing:
+        # Update existing row for today
+        existing.ftp_watts = final_ftp
+        existing.lthr_bpm = final_lthr
+        existing.hrmax_bpm = final_hrmax
+        threshold = existing
+    else:
+        # Create new row
+        threshold = ThresholdHistory(
+            user_id=user.id,
+            effective_date=effective,
+            ftp_watts=final_ftp,
+            lthr_bpm=final_lthr,
+            hrmax_bpm=final_hrmax,
+        )
+        db.add(threshold)
+
     await db.commit()
     await db.refresh(threshold)
 
-    # Regenerate zones if they exist and are not custom
-    await regenerate_zones_from_threshold(db, user.id, threshold)
+    # Regenerate zones if they exist and are not custom (best-effort)
+    try:
+        await regenerate_zones_from_threshold(db, user.id, threshold)
+    except Exception:
+        logger.exception(
+            "Zone regeneration failed after threshold save for user %s — zones may be stale",
+            user.id,
+        )
 
     return threshold_response(threshold)
 

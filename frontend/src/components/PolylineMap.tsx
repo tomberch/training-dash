@@ -4,12 +4,9 @@
  * Unlike MiniMap which uses Leaflet tiles, this renders the route as a
  * pure SVG path - much faster for list views with many activities.
  *
- * When showMapBackground is true, displays a grid of CartoDB raster tiles
+ * When showMapBackground is true, displays a grid of OSM raster tiles
  * composited behind the SVG route overlay.
- * Uses Positron (light) for latte theme and Dark Matter (dark) for mocha theme.
  */
-
-import { useTheme } from "@/hooks/useTheme";
 
 interface PolylineMapProps {
   /** Google-encoded polyline string */
@@ -287,9 +284,6 @@ export function PolylineMap({
   showMarkers = true,
   showMapBackground = true,
 }: PolylineMapProps) {
-  const { resolvedTheme } = useTheme();
-  const isDark = resolvedTheme === "mocha";
-  
   // Decode polyline
   const coords = polyline ? decodePolyline(polyline) : [];
 
@@ -314,10 +308,8 @@ export function PolylineMap({
     ? getTileGrid(bounds.minLat, bounds.maxLat, bounds.minLon, bounds.maxLon, containerW, containerH)
     : null;
 
-  // CartoDB tile base URLs routed through the backend proxy for caching
-  const tileBase = isDark
-    ? "/tiles/carto/dark"
-    : "/tiles/carto/light";
+  // OSM tile base URL via backend proxy
+  const tileBase = "/tiles";
 
   return (
     <div className={`relative rounded overflow-hidden ${className}`}>
