@@ -184,6 +184,11 @@ class ActivityPipeline:
         self.result.route = route_result
         self.result.title = title_result
 
+        # Single commit for the entire pipeline — all steps flush() to get
+        # auto-assigned IDs but only run() commits, keeping the activity
+        # atomic: either all steps land or none.
+        await self.db.commit()
+
         return self.result
 
     async def compute_metrics(self) -> MetricsResult:
@@ -343,7 +348,7 @@ class ActivityPipeline:
         if metrics.wbal_min_pct is not None:
             self.activity.wbal_min_pct = metrics.wbal_min_pct
         
-        await self.db.commit()
+        await self.db.flush()
         await self.db.refresh(self.activity)
 
     async def update_hr_power_model(self) -> None:
@@ -362,7 +367,7 @@ class ActivityPipeline:
         
         # Mark as measured power
         self.activity.power_source = "measured"
-        await self.db.commit()
+        await self.db.flush()
         
         # Update EF model
         await update_ef_model(self.db, self.activity.user_id)
@@ -418,7 +423,7 @@ class ActivityPipeline:
         # Recompute metrics with estimated power
         await self._recompute_metrics_with_estimated_power(estimated_power)
         
-        await self.db.commit()
+        await self.db.flush()
         await self.db.refresh(self.activity)
         
         return result
@@ -486,7 +491,7 @@ class ActivityPipeline:
                 )
                 self.db.add(peak)
         
-        await self.db.commit()
+        await self.db.flush()
         
         return result
 
@@ -522,7 +527,7 @@ class ActivityPipeline:
         
         if is_breakthrough:
             self.activity.is_breakthrough = True
-            await self.db.commit()
+            await self.db.flush()
             await self.db.refresh(self.activity)
             
             # Update fitness model
@@ -601,7 +606,7 @@ class ActivityPipeline:
             cp_watts=model["cp_watts"],
         )
         self.db.add(fitness)
-        await self.db.commit()
+        await self.db.flush()
         
         # Check for FTP notification
         await self._check_ftp_notification(model["cp_watts"])
@@ -636,7 +641,7 @@ class ActivityPipeline:
                 "suggested_ftp": cp_watts,
                 "divergence_pct": round((ratio - 1) * 100, 1),
             })
-            await self.db.commit()
+            await self.db.flush()
             return
         
         notification = Notification(
@@ -651,7 +656,7 @@ class ActivityPipeline:
             status="pending",
         )
         self.db.add(notification)
-        await self.db.commit()
+        await self.db.flush()
 
     async def match_route(self) -> RouteMatchResult:
         """
@@ -673,7 +678,7 @@ class ActivityPipeline:
         if route_id is not None:
             result.route_id = route_id
             self.activity.route_id = route_id
-            await self.db.commit()
+            await self.db.flush()
             await self.db.refresh(self.activity)
         
         return result
@@ -718,7 +723,7 @@ class ActivityPipeline:
         if result.title:
             self.activity.title = result.title
             self.activity.title_source = result.title_source
-            await self.db.commit()
+            await self.db.flush()
             await self.db.refresh(self.activity)
         
         return result

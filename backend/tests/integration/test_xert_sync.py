@@ -694,7 +694,7 @@ class TestXertClientRealAPI:
     @pytest.mark.asyncio
     async def test_real_xert_login_and_list_activities(self, live_client, live_activities):
         """OAuth login and activity listing work against the real API."""
-        assert live_client._access_token is not None
+        assert live_client._oauth._access_token is not None
         assert isinstance(live_activities, list)
         if live_activities:
             a = live_activities[0]

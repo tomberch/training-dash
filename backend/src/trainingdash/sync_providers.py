@@ -13,7 +13,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from trainingdash.models import Activity, XertCredentials, GarminCredentials
-from trainingdash.sync import SyncProvider, ProviderActivity
+from trainingdash.sync import SyncProvider, ProviderActivity, CredentialInfo
 
 logger = logging.getLogger(__name__)
 
@@ -43,17 +43,13 @@ class XertSyncProvider(SyncProvider):
     def credentials_model(self) -> type:
         return XertCredentials
 
-    def get_email(self, creds: XertCredentials) -> str:
-        return creds.xert_email
-
-    def get_encrypted_password(self, creds: XertCredentials) -> str:
-        return creds.encrypted_password
-
-    def get_sync_since(self, creds: XertCredentials) -> datetime | None:
-        return creds.sync_since
-
-    def get_last_synced_at(self, creds: XertCredentials) -> datetime | None:
-        return creds.last_synced_at
+    def extract_credentials(self, creds: XertCredentials) -> CredentialInfo:
+        return CredentialInfo(
+            email=creds.xert_email,
+            encrypted_password=creds.encrypted_password,
+            sync_since=creds.sync_since,
+            last_synced_at=creds.last_synced_at,
+        )
 
     async def connect(self, email: str, password: str) -> None:
         from trainingdash.xert import get_xert_client
@@ -152,19 +148,15 @@ class GarminSyncProvider(SyncProvider):
     @property
     def credentials_model(self) -> type:
         return GarminCredentials
-    
-    def get_email(self, creds: GarminCredentials) -> str:
-        return creds.garmin_email
-    
-    def get_encrypted_password(self, creds: GarminCredentials) -> str:
-        return creds.encrypted_password
-    
-    def get_sync_since(self, creds: GarminCredentials) -> datetime | None:
-        return creds.sync_since
 
-    def get_last_synced_at(self, creds: GarminCredentials) -> datetime | None:
-        return creds.last_synced_at
-    
+    def extract_credentials(self, creds: GarminCredentials) -> CredentialInfo:
+        return CredentialInfo(
+            email=creds.garmin_email,
+            encrypted_password=creds.encrypted_password,
+            sync_since=creds.sync_since,
+            last_synced_at=creds.last_synced_at,
+        )
+
     async def connect(self, email: str, password: str) -> None:
         from trainingdash.garmin import get_garmin_client, GarminMFARequired
         

@@ -329,38 +329,20 @@ async def is_duplicate_activity(
     return False
 
 
-async def ingest_fit(
+async def _store_parsed_fit(
     db: AsyncSession,
     user_id: int,
-    fit_bytes: bytes,
     source: str,
     source_ref: str,
-    batch_mode: bool = False,
-) -> Activity | None:
+    fit_bytes: bytes,
+    parsed: dict,
+) -> Activity:
     """
-    Ingest a FIT file and process through the activity pipeline.
-    
-    Steps:
-    1. Parse FIT file to extract records, laps, and summary data
-    2. Create Activity, Lap, and Record models
-    3. Run activity through the pipeline for metrics, peaks, routes, and titles
-    
-    Args:
-        db: Database session
-        user_id: User ID to attribute the activity to
-        fit_bytes: Raw FIT file bytes
-        source: Source identifier (e.g., "garmin", "xert")
-        source_ref: Unique reference from the source
-        batch_mode: If True, skip per-activity fitness updates and geocoding
-    
-    Returns:
-        Created Activity or None if parsing failed
-    """
-    try:
-        parsed = parse_records(fit_bytes)
-    except Exception:
-        return None
+    Persist a parsed FIT dict as Activity, Lap, and Record rows.
 
+    Handles the ORM construction and flush so ingest_fit() stays at three
+    readable steps: parse → store → pipeline.
+    """
     activity = Activity(
         user_id=user_id,
         source=source,
@@ -416,8 +398,43 @@ async def ingest_fit(
 
     await db.commit()
     await db.refresh(activity)
+    return activity
 
-    # Run activity through the pipeline
+
+async def ingest_fit(
+    db: AsyncSession,
+    user_id: int,
+    fit_bytes: bytes,
+    source: str,
+    source_ref: str,
+    batch_mode: bool = False,
+) -> Activity | None:
+    """
+    Ingest a FIT file and process through the activity pipeline.
+    
+    Steps:
+    1. Parse FIT file to extract records, laps, and summary data
+    2. Create Activity, Lap, and Record models
+    3. Run activity through the pipeline for metrics, peaks, routes, and titles
+    
+    Args:
+        db: Database session
+        user_id: User ID to attribute the activity to
+        fit_bytes: Raw FIT file bytes
+        source: Source identifier (e.g., "garmin", "xert")
+        source_ref: Unique reference from the source
+        batch_mode: If True, skip per-activity fitness updates and geocoding
+    
+    Returns:
+        Created Activity or None if parsing failed
+    """
+    try:
+        parsed = parse_records(fit_bytes)
+    except Exception:
+        return None
+
+    activity = await _store_parsed_fit(db, user_id, source, source_ref, fit_bytes, parsed)
+
     pipeline = ActivityPipeline(
         db=db,
         activity=activity,
@@ -427,396 +444,6 @@ async def ingest_fit(
     await pipeline.run()
 
     return activity
-
-
-async def _compute_activity_metrics(
-    db: AsyncSession,
-    activity: Activity,
-    records: list[dict],
-) -> None:
-    """
-    Compute training metrics for an activity based on user's thresholds.
-    
-    Metrics computed:
-    - Normalized Power (NP)
-    - Intensity Factor (IF)
-    - Training Stress Score (TSS)
-    - Power zone times
-    - HR zone times
-    - W'bal minimum
-    """
-    # Get threshold effective at activity date
-    activity_date = activity.started_at.date()
-    result = await db.execute(
-        select(ThresholdHistory)
-        .where(
-            ThresholdHistory.user_id == activity.user_id,
-            ThresholdHistory.effective_date <= activity_date,
-        )
-        .order_by(ThresholdHistory.effective_date.desc())
-        .limit(1)
-    )
-    threshold = result.scalar_one_or_none()
-    
-    if threshold is None:
-        # No thresholds configured, can't compute metrics
-        return
-    
-    # Extract power and HR arrays from records
-    power_array = [r.get("power_w") for r in records]
-    hr_array = [r.get("hr_bpm") for r in records]
-    
-    # Check if we have power data
-    has_power = any(p is not None and p > 0 for p in power_array)
-    has_hr = any(h is not None and h > 0 for h in hr_array)
-    
-    if has_power:
-        # Compute NP
-        np_watts = compute_normalized_power(power_array)
-        if np_watts is not None:
-            activity.np_power_w = int(np_watts)
-            
-            # Compute IF and TSS
-            if_value = compute_intensity_factor(np_watts, threshold.ftp_watts)
-            if if_value is not None:
-                activity.intensity_factor = if_value
-                
-                # Compute TSS
-                duration_s = activity.moving_time_s or activity.elapsed_time_s
-                tss = compute_tss(duration_s, np_watts, if_value, threshold.ftp_watts)
-                if tss is not None:
-                    activity.tss = tss
-                    activity.training_load = tss  # Use TSS as training load
-        
-        # Compute power zone times
-        power_zones_result = await db.execute(
-            select(PowerZone)
-            .where(PowerZone.user_id == activity.user_id)
-            .order_by(PowerZone.zone_number)
-        )
-        power_zones = power_zones_result.scalars().all()
-        
-        if power_zones:
-            zones_list = [
-                {"zone_number": z.zone_number, "min_watts": z.min_watts, "max_watts": z.max_watts}
-                for z in power_zones
-            ]
-            zone_times = compute_zone_times(power_array, zones_list)
-            if zone_times:
-                activity.power_zone_times = json.dumps(zone_times)
-        
-        # Compute W'bal
-        # Estimate W' from FTP if not available (rough estimate: W' = FTP * 60)
-        w_prime_joules = threshold.ftp_watts * 60  # Simple estimate
-        cp_watts = int(threshold.ftp_watts * 0.95)  # CP is ~95% of FTP
-        
-        wbal_result = compute_wbal_series(power_array, cp_watts, w_prime_joules)
-        if wbal_result["min_wbal"] is not None:
-            activity.wbal_min_joules = wbal_result["min_wbal"]
-            activity.wbal_min_pct = wbal_result["min_wbal_pct"]
-    
-    if has_hr:
-        # Compute HR zone times
-        hr_zones_result = await db.execute(
-            select(HrZone)
-            .where(HrZone.user_id == activity.user_id)
-            .order_by(HrZone.zone_number)
-        )
-        hr_zones = hr_zones_result.scalars().all()
-        
-        if hr_zones:
-            zones_list = [
-                {"zone_number": z.zone_number, "min_bpm": z.min_bpm, "max_bpm": z.max_bpm}
-                for z in hr_zones
-            ]
-            zone_times = compute_zone_times(
-                hr_array, zones_list,
-                value_key_min="min_bpm", value_key_max="max_bpm"
-            )
-            if zone_times:
-                activity.hr_zone_times = json.dumps(zone_times)
-    
-    await db.commit()
-    await db.refresh(activity)
-
-
-
-async def _update_hr_power_model(
-    db: AsyncSession,
-    activity: Activity,
-) -> None:
-    """
-    Update the user's EF model if this is a dual-sensor ride (has both power and HR).
-    """
-    # Check if this is a dual-sensor ride
-    if activity.np_power_w is None or activity.avg_hr_bpm is None:
-        return
-    
-    if activity.avg_hr_bpm <= 0:
-        return
-    
-    # Mark as measured power
-    activity.power_source = "measured"
-    await db.commit()
-    
-    # Update EF model
-    await update_ef_model(db, activity.user_id)
-
-
-async def _estimate_hr_derived_power(
-    db: AsyncSession,
-    activity: Activity,
-    records: list[dict],
-) -> None:
-    """
-    For HR-only activities, estimate power from HR using the EF model.
-    
-    Only applies if:
-    - Activity has no measured power
-    - Activity has HR data
-    - User has HR-derived power enabled
-    - EF model exists
-    """
-    # Skip if already has power
-    if activity.avg_power_w is not None:
-        return
-    
-    # Skip if no HR data
-    if activity.avg_hr_bpm is None or activity.avg_hr_bpm <= 0:
-        return
-    
-    # Check if user has HR-derived power enabled
-    result = await db.execute(
-        select(User).where(User.id == activity.user_id)
-    )
-    user = result.scalar_one_or_none()
-    
-    if user is None or not user.hr_derived_power_enabled:
-        return
-    
-    # Try to estimate power
-    estimated_power, confidence = await estimate_power_from_hr(
-        db, activity.user_id, activity.avg_hr_bpm
-    )
-    
-    if estimated_power is None:
-        return
-    
-    # Update activity with estimated power
-    activity.avg_power_w = estimated_power
-    activity.power_source = "hr_derived"
-    activity.power_confidence = confidence
-    
-    # Re-compute metrics with estimated power
-    await _recompute_metrics_with_estimated_power(db, activity, records, estimated_power)
-    
-    await db.commit()
-    await db.refresh(activity)
-
-
-async def _recompute_metrics_with_estimated_power(
-    db: AsyncSession,
-    activity: Activity,
-    records: list[dict],
-    estimated_power: int,
-) -> None:
-    """
-    Recompute NP, IF, TSS using estimated power for HR-only activities.
-    
-    For HR-derived power, we use a simplified approach:
-    - Assume power was constant at estimated_power
-    - This gives NP ≈ estimated_power (slightly lower due to variability assumption)
-    """
-    # Get threshold
-    activity_date = activity.started_at.date()
-    result = await db.execute(
-        select(ThresholdHistory)
-        .where(
-            ThresholdHistory.user_id == activity.user_id,
-            ThresholdHistory.effective_date <= activity_date,
-        )
-        .order_by(ThresholdHistory.effective_date.desc())
-        .limit(1)
-    )
-    threshold = result.scalar_one_or_none()
-    
-    if threshold is None:
-        return
-    
-    ftp = threshold.ftp_watts
-    
-    # For HR-derived power, estimate NP as slightly lower than avg power
-    # (accounts for assumed variability)
-    np_estimate = int(estimated_power * 0.95)
-    activity.np_power_w = np_estimate
-    
-    # Compute IF and TSS
-    if ftp > 0:
-        intensity_factor = compute_intensity_factor(np_estimate, ftp)
-        activity.intensity_factor = intensity_factor
-        
-        duration_seconds = activity.moving_time_s or activity.elapsed_time_s
-        tss = compute_tss(np_estimate, ftp, duration_seconds)
-        activity.tss = tss
-
-
-async def _extract_activity_peaks(
-    db: AsyncSession,
-    activity: Activity,
-    records: list[dict],
-) -> None:
-    """
-    Extract peak powers at standard durations and store in ActivityPeakPower table.
-    
-    Only stores peaks for durations where the ride was long enough.
-    """
-    # Extract power array from records
-    power_array = [r.get("power_w") for r in records]
-    
-    # Check if we have any power data
-    has_power = any(p is not None and p > 0 for p in power_array)
-    if not has_power:
-        return
-    
-    # Extract peaks at all standard durations
-    peaks = extract_peak_powers(power_array)
-    
-    # Store each peak (only if ride was long enough for that duration)
-    for duration_seconds, watts in peaks.items():
-        if watts is not None:
-            peak = ActivityPeakPower(
-                activity_id=activity.id,
-                duration_seconds=duration_seconds,
-                watts=watts,
-            )
-            db.add(peak)
-    
-    await db.commit()
-
-
-def _time_of_day_title(started_at: datetime) -> str:
-    """
-    Generate a time-of-day based title like "Morning Ride", "Evening Ride".
-    
-    Time ranges:
-    - 05:00-11:59 → Morning Ride
-    - 12:00-16:59 → Afternoon Ride  
-    - 17:00-20:59 → Evening Ride
-    - 21:00-04:59 → Night Ride
-    """
-    hour = started_at.hour
-    
-    if 5 <= hour < 12:
-        return "Morning Ride"
-    elif 12 <= hour < 17:
-        return "Afternoon Ride"
-    elif 17 <= hour < 21:
-        return "Evening Ride"
-    else:
-        return "Night Ride"
-
-
-async def _generate_activity_title(
-    db: AsyncSession,
-    activity: Activity,
-    records: list[dict],
-    skip_if_rate_limited: bool = False,
-) -> None:
-    """
-    Generate and store a title for the activity based on GPS data.
-    
-    Uses reverse geocoding to identify start, end, and key waypoints,
-    then generates a descriptive title like "Roundtrip Bern via Thun".
-    
-    Args:
-        db: Database session
-        activity: Activity to generate title for
-        records: GPS records with lat, lon, distance_m
-        skip_if_rate_limited: If True, use time-of-day title instead of geocoding
-            to avoid rate limit issues during bulk imports.
-    """
-    if skip_if_rate_limited:
-        # For bulk imports, use time-of-day title (e.g., "Morning Ride")
-        # User can regenerate with geocoding later via the UI
-        activity.title = _time_of_day_title(activity.started_at)
-        activity.title_source = "pending"
-        await db.commit()
-        return
-        
-    try:
-        from trainingdash.title_generator import generate_activity_title
-        
-        title = await generate_activity_title(records, activity.started_at)
-        
-        if title:
-            activity.title = title
-            activity.title_source = "auto"
-            await db.commit()
-            await db.refresh(activity)
-            
-    except Exception as e:
-        # Title generation is non-critical - log and continue
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.warning(f"Failed to generate title for activity {activity.id}: {e}")
-
-
-
-
-async def _detect_breakthrough_and_update_fitness(
-    db: AsyncSession,
-    activity: Activity,
-) -> None:
-    """
-    Detect if activity is a breakthrough and update fitness model if so.
-    
-    A breakthrough occurs when the activity sets PRs at key durations
-    (5s, 1min, 5min, 20min).
-    """
-    # Get this activity's peaks
-    result = await db.execute(
-        select(ActivityPeakPower)
-        .where(ActivityPeakPower.activity_id == activity.id)
-    )
-    activity_peaks_rows = result.scalars().all()
-    
-    if not activity_peaks_rows:
-        return
-    
-    activity_peaks = {p.duration_seconds: p.watts for p in activity_peaks_rows}
-    
-    # Get all previous activities' peaks for this user (before this activity)
-    result = await db.execute(
-        select(ActivityPeakPower)
-        .join(Activity, ActivityPeakPower.activity_id == Activity.id)
-        .where(
-            Activity.user_id == activity.user_id,
-            Activity.id != activity.id,
-        )
-    )
-    previous_peaks_rows = result.scalars().all()
-    
-    # Group by activity
-    peaks_by_activity: dict[int, dict[int, int]] = {}
-    for p in previous_peaks_rows:
-        if p.activity_id not in peaks_by_activity:
-            peaks_by_activity[p.activity_id] = {}
-        peaks_by_activity[p.activity_id][p.duration_seconds] = p.watts
-    
-    # Get all-time bests before this activity
-    all_time_bests = get_all_time_bests(list(peaks_by_activity.values()))
-    
-    # Check if this is a breakthrough
-    is_breakthrough = detect_breakthrough(activity_peaks, all_time_bests)
-    
-    if is_breakthrough:
-        activity.is_breakthrough = True
-        await db.commit()
-        await db.refresh(activity)
-        
-        # Update fitness model with new data
-        await _update_fitness_model(db, activity.user_id)
-
 
 async def _update_fitness_model(
     db: AsyncSession,

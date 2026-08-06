@@ -30,7 +30,7 @@ XSS (training load):
 import logging
 import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Protocol
 
@@ -82,36 +82,26 @@ class XertClientProtocol(Protocol):
         ...
 
 
-class XertClient:
+@dataclass
+class _OAuthSession:
     """
-    Xert API client.
+    Owns the OAuth2 Bearer token state for XertClient.
 
-    Uses two authentication surfaces:
-      1. OAuth2 password grant  — for list_activities() and get_xss()
-      2. Web session cookie     — for download_fit()
-
-    Both surfaces are established in login(). The single httpx.AsyncClient
-    instance maintains the cookie jar for the web session automatically.
+    Extracted as an internal seam so the OAuth2 logic is independently
+    navigable from the web-session logic. The httpx.AsyncClient is passed
+    in so both auth surfaces share the same connection pool.
     """
 
     BASE_URL = "https://www.xertonline.com"
     CLIENT_ID = "xert_public"
     CLIENT_SECRET = "xert_public"
 
-    def __init__(self) -> None:
-        # follow_redirects=True so the web login POST follows its redirect
-        self._client = httpx.AsyncClient(timeout=60.0, follow_redirects=True)
-        self._access_token: str | None = None
-        self._refresh_token: str | None = None
-        self._token_expires_at: float = 0
-        self._username: str | None = None
-        self._password: str | None = None
+    _client: httpx.AsyncClient = field(default=None, repr=False)
+    _access_token: str | None = field(default=None)
+    _refresh_token: str | None = field(default=None)
+    _token_expires_at: float = field(default=0.0)
 
-    # ------------------------------------------------------------------
-    # OAuth2 authentication
-    # ------------------------------------------------------------------
-
-    async def _oauth_login(self, username: str, password: str) -> None:
+    async def login(self, username: str, password: str) -> None:
         """Obtain OAuth2 Bearer token via password grant."""
         try:
             response = await self._client.post(
@@ -143,7 +133,7 @@ class XertClient:
         except httpx.RequestError as e:
             raise XertAPIError(f"Failed to connect to Xert: {e}") from e
 
-    async def _refresh_access_token(self) -> None:
+    async def refresh(self) -> None:
         """Refresh the OAuth2 Bearer token."""
         if not self._refresh_token:
             raise XertAPIError("No refresh token available")
@@ -169,16 +159,42 @@ class XertClient:
         except httpx.RequestError as e:
             raise XertAPIError(f"Failed to connect to Xert: {e}") from e
 
-    def _auth_headers(self) -> dict[str, str]:
+    def auth_headers(self) -> dict[str, str]:
         """Return Authorization header dict; raises if not authenticated."""
         if not self._access_token:
             raise XertAPIError("Not authenticated — call login() first")
         return {"Authorization": f"Bearer {self._access_token}"}
 
-    async def _ensure_valid_token(self) -> None:
+    async def ensure_valid_token(self) -> None:
         """Refresh the Bearer token if it has expired or is about to expire."""
         if time.time() >= self._token_expires_at and self._refresh_token:
-            await self._refresh_access_token()
+            await self.refresh()
+
+
+class XertClient:
+    """
+    Xert API client.
+
+    Uses two authentication surfaces:
+      1. OAuth2 password grant  — for list_activities() and get_xss()
+         Managed by the internal _OAuthSession.
+      2. Web session cookie     — for download_fit()
+         The httpx cookie jar is maintained automatically.
+
+    Both surfaces are established in login(). Credentials (_username,
+    _password) are stored so download_fit() can re-establish the web
+    session if it expires mid-sync.
+    """
+
+    BASE_URL = "https://www.xertonline.com"
+
+    def __init__(self) -> None:
+        # follow_redirects=True so the web login POST follows its redirect
+        self._client = httpx.AsyncClient(timeout=60.0, follow_redirects=True)
+        self._oauth = _OAuthSession(_client=self._client)
+        # Stored for web session re-login in download_fit() on session expiry
+        self._username: str | None = None
+        self._password: str | None = None
 
     # ------------------------------------------------------------------
     # Web session authentication
@@ -273,12 +289,12 @@ class XertClient:
         """
         Authenticate with Xert — establishes both OAuth2 token and web session.
 
-        Stores credentials so the client can re-establish the web session
-        if it expires mid-sync.
+        Credentials are stored so download_fit() can re-establish the web
+        session if it expires mid-sync.
         """
         self._username = username
         self._password = password
-        await self._oauth_login(username, password)
+        await self._oauth.login(username, password)
         await self._web_login(username, password)
 
     async def list_activities(
@@ -292,7 +308,7 @@ class XertClient:
         curl -X GET "https://www.xertonline.com/oauth/activity?from=<ts>&to=<ts>"
              -H "Authorization: Bearer <token>"
         """
-        await self._ensure_valid_token()
+        await self._oauth.ensure_valid_token()
 
         if to_timestamp is None:
             to_timestamp = int(time.time())
@@ -302,7 +318,7 @@ class XertClient:
         try:
             response = await self._client.get(
                 f"{self.BASE_URL}/oauth/activity",
-                headers=self._auth_headers(),
+                headers=self._oauth.auth_headers(),
                 params={"from": from_timestamp, "to": to_timestamp},
             )
             response.raise_for_status()
@@ -407,7 +423,7 @@ class XertClient:
 
         Returns None if XSS is not available (e.g. indoor trainer with no power).
         """
-        await self._ensure_valid_token()
+        await self._oauth.ensure_valid_token()
 
         if not activity_id:
             return None
@@ -415,7 +431,7 @@ class XertClient:
         try:
             response = await self._client.get(
                 f"{self.BASE_URL}/oauth/activity/{activity_id}",
-                headers=self._auth_headers(),
+                headers=self._oauth.auth_headers(),
             )
             response.raise_for_status()
             data = response.json()

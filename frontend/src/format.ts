@@ -91,6 +91,40 @@ export function formatActivityTime(
   return new Date(iso).toLocaleTimeString(undefined, options);
 }
 
+/**
+ * Format elapsed seconds as H:MM:SS (or M:SS when under one hour).
+ * Used for chart axis tick labels and activity time ranges.
+ */
+export function formatElapsedTime(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  if (h > 0) {
+    return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  }
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+/**
+ * Format a distance in metres for chart axis labels.
+ * Values ≥ 1 km are shown as km (with one decimal place unless whole number).
+ */
+export function formatDistanceAxis(meters: number): string {
+  if (meters >= 1000) {
+    const km = meters / 1000;
+    return km % 1 === 0 ? `${km.toFixed(0)} km` : `${km.toFixed(1)} km`;
+  }
+  return `${meters.toFixed(0)} m`;
+}
+
+/**
+ * Return the ISO string for the end time of an activity.
+ * Keeps the arithmetic out of JSX and centralises the "start + elapsed" concept.
+ */
+export function activityEndTimeIso(startedAt: string, elapsedTimeS: number): string {
+  return new Date(new Date(startedAt).getTime() + elapsedTimeS * 1000).toISOString();
+}
+
 export function formatDuration(seconds: number): string {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);

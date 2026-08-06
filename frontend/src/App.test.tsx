@@ -73,7 +73,7 @@ vi.mock("./api", () => ({
   fetchThresholds: vi.fn().mockResolvedValue([]),
 }));
 
-import { fetchMe, fetchThresholds } from "./api";
+import { fetchMe } from "./api";
 
 describe("App", () => {
   beforeEach(() => {

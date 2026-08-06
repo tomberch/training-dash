@@ -35,6 +35,15 @@ class SyncResult:
     error: str | None = None
 
 
+@dataclass
+class CredentialInfo:
+    """Normalised credential values extracted from a provider's credentials model."""
+    email: str
+    encrypted_password: bytes
+    sync_since: datetime | None
+    last_synced_at: datetime | None
+
+
 @dataclass 
 class ProviderActivity(Generic[TActivity]):
     """Wrapper for provider-specific activity with common fields."""
@@ -65,23 +74,15 @@ class SyncProvider(ABC, Generic[TActivity]):
         ...
     
     @abstractmethod
-    def get_email(self, creds: Any) -> str:
-        """Extract email/username from credentials model."""
-        ...
-    
-    @abstractmethod
-    def get_encrypted_password(self, creds: Any) -> str:
-        """Extract encrypted password from credentials model."""
-        ...
-    
-    @abstractmethod
-    def get_sync_since(self, creds: Any) -> datetime | None:
-        """Extract sync_since date from credentials model, if set."""
-        ...
+    def extract_credentials(self, creds: Any) -> CredentialInfo:
+        """
+        Extract all credential fields needed by run_sync() from the model.
 
-    @abstractmethod
-    def get_last_synced_at(self, creds: Any) -> datetime | None:
-        """Extract last_synced_at timestamp from credentials model, if set."""
+        Hides the field-name differences between providers (e.g.
+        XertCredentials.xert_email vs GarminCredentials.garmin_email).
+        Returns a CredentialInfo with email, encrypted_password, sync_since,
+        and last_synced_at.
+        """
         ...
     
     @abstractmethod
@@ -165,10 +166,12 @@ async def run_sync(
             user_id=user_id,
             error=f"No {provider.source_name.title()} credentials configured",
         )
-    
+
+    cred_info = provider.extract_credentials(creds)
+
     # Decrypt password
     try:
-        password = decrypt(provider.get_encrypted_password(creds))
+        password = decrypt(cred_info.encrypted_password)
     except EncryptionError:
         logger.error(f"sync_{provider.source_name}: Failed to decrypt credentials for user {user_id}")
         return SyncResult(
@@ -176,22 +179,21 @@ async def run_sync(
             user_id=user_id,
             error="Failed to decrypt credentials",
         )
-    
+
     # Get existing source_refs to skip already-imported activities
     existing_refs = await _get_existing_refs(db, user_id, provider.source_name)
-    
+
     # Determine sync date range
     start_date, end_date, is_first_sync = _determine_sync_range(
-        creds, provider, existing_refs
+        cred_info, existing_refs
     )
 
     log_prefix = f"sync_{provider.source_name}"
     if is_first_sync:
-        sync_since = provider.get_sync_since(creds)
-        if sync_since:
+        if cred_info.sync_since:
             logger.info(
                 "%s: First sync for user %s, using sync_since %s",
-                log_prefix, user_id, sync_since,
+                log_prefix, user_id, cred_info.sync_since,
             )
         else:
             logger.info(
@@ -199,11 +201,10 @@ async def run_sync(
                 log_prefix, user_id,
             )
     else:
-        last_synced_at = provider.get_last_synced_at(creds)
-        if last_synced_at:
+        if cred_info.last_synced_at:
             logger.info(
                 "%s: Incremental sync for user %s, using last_synced_at %s - 4h",
-                log_prefix, user_id, last_synced_at,
+                log_prefix, user_id, cred_info.last_synced_at,
             )
         else:
             logger.info(
@@ -213,7 +214,7 @@ async def run_sync(
 
     # Connect to provider
     try:
-        await provider.connect(provider.get_email(creds), password)
+        await provider.connect(cred_info.email, password)
     except Exception as e:
         logger.error(f"{log_prefix}: Failed to connect for user {user_id}: {e}")
         return SyncResult(
@@ -360,8 +361,7 @@ async def _get_existing_refs(
 
 
 def _determine_sync_range(
-    creds: Any,
-    provider: SyncProvider,
+    cred_info: CredentialInfo,
     existing_refs: set[str],
 ) -> tuple[datetime, datetime, bool]:
     """
@@ -378,7 +378,7 @@ def _determine_sync_range(
     is_first_sync = len(existing_refs) == 0
 
     if is_first_sync:
-        sync_since = provider.get_sync_since(creds)
+        sync_since = cred_info.sync_since
         if sync_since is not None:
             # sync_since may be a date or a datetime
             if hasattr(sync_since, "hour"):
@@ -388,7 +388,7 @@ def _determine_sync_range(
         else:
             start_date = end_date - timedelta(days=90)
     else:
-        last_synced_at = provider.get_last_synced_at(creds)
+        last_synced_at = cred_info.last_synced_at
         if last_synced_at is not None:
             # Incremental window: last sync time minus 4-hour buffer to catch
             # activities that were still uploading when the last sync ran.

@@ -26,8 +26,8 @@ from trainingdash.routers.serializers import (
     power_zone_response,
     threshold_response,
     user_response,
-    _utc,
 )
+from trainingdash.routers.datetime_utils import utc_str
 from trainingdash.thresholds import (
     compute_hr_zones,
     compute_power_zones,
@@ -669,7 +669,7 @@ async def get_notifications(db: DbSession, user: CurrentUser):
             "type": n.type,
             "message": n.message,
             "payload": json.loads(n.payload) if n.payload else None,
-            "created_at": _utc(n.created_at),
+            "created_at": utc_str(n.created_at),
         }
         for n in notifications
     ]
@@ -902,7 +902,7 @@ async def list_oauth_links(db: DbSession, user: CurrentUser) -> list[dict]:
             "provider_email": link.provider_email,
             "display_name": link.display_name,
             "avatar_url": link.avatar_url,
-            "created_at": _utc(link.created_at) if link.created_at else None,
+            "created_at": utc_str(link.created_at) if link.created_at else None,
         }
         for link in links
     ]

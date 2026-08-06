@@ -12,7 +12,7 @@ import {
   ReferenceArea,
 } from "recharts";
 import type { WbalResponse, WbalPoint } from "./api";
-import { formatDistance, formatTime, formatElevation, formatSpeed, formatActivityDate, formatActivityTime } from "./format";
+import { formatDistance, formatTime, formatElevation, formatSpeed, formatActivityDate, formatActivityTime, formatElapsedTime, formatDistanceAxis, activityEndTimeIso } from "./format";
 import type { UnitSystem } from "./format";
 import { resampleByDistance } from "./resampler";
 import { ErrorDisplay } from "./ErrorDisplay";
@@ -172,24 +172,6 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
     hr_bpm: number | null;
     power_w: number | null;
     altitude_m: number | null;
-  }
-
-  function formatElapsedTime(seconds: number): string {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = Math.floor(seconds % 60);
-    if (h > 0) {
-      return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    }
-    return `${m}:${s.toString().padStart(2, '0')}`;
-  }
-
-  function formatDistanceAxis(meters: number): string {
-    if (meters >= 1000) {
-      const km = meters / 1000;
-      return km % 1 === 0 ? `${km.toFixed(0)} km` : `${km.toFixed(1)} km`;
-    }
-    return `${meters.toFixed(0)} m`;
   }
 
   // Heckbert's "nice numbers" algorithm from Graphics Gems
@@ -381,7 +363,7 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
                     {formatActivityTime(activity.started_at, activity.utc_offset_minutes)}
                     {" - "}
                     {formatActivityTime(
-                      new Date(new Date(activity.started_at).getTime() + activity.elapsed_time_s * 1000).toISOString(),
+                      activityEndTimeIso(activity.started_at, activity.elapsed_time_s),
                       activity.utc_offset_minutes,
                     )}
                     {" "}
