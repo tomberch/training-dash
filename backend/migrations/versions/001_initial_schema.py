@@ -99,6 +99,7 @@ def upgrade() -> None:
         sa.Column('map_polyline', sa.Text(), nullable=True),
         sa.Column('route_id', sa.BigInteger(), nullable=True),
         sa.Column('raw_fit', sa.LargeBinary(), nullable=True),
+        sa.Column('utc_offset_minutes', sa.Integer(), nullable=True),
         sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
     )
     op.create_index('ix_activities_user_id', 'activities', ['user_id'])
@@ -214,6 +215,7 @@ def upgrade() -> None:
         sa.Column('xert_email', sa.String(255), nullable=False),
         sa.Column('encrypted_password', sa.LargeBinary(), nullable=False),
         sa.Column('sync_since', sa.DateTime(), nullable=True),
+        sa.Column('last_synced_at', sa.DateTime(), nullable=True),
         sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
         sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
     )
@@ -226,6 +228,7 @@ def upgrade() -> None:
         sa.Column('garmin_email', sa.String(255), nullable=False),
         sa.Column('encrypted_password', sa.LargeBinary(), nullable=False),
         sa.Column('sync_since', sa.DateTime(), nullable=True),
+        sa.Column('last_synced_at', sa.DateTime(), nullable=True),
         sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
         sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
     )
