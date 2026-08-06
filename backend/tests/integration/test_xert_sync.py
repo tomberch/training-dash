@@ -580,89 +580,65 @@ class TestHourlySyncScheduler:
 class TestXertClientRealAPI:
     """Integration tests against the real Xert API."""
 
+    @pytest_asyncio.fixture
+    async def live_client(self):
+        """Authenticated XertClient connected to the real API."""
+        from trainingdash.xert import XertClient
+
+        client = XertClient()
+        await client.login(
+            os.environ["XERT_TEST_USERNAME"],
+            os.environ["XERT_TEST_PASSWORD"],
+        )
+        yield client
+        await client.close()
+
+    @pytest_asyncio.fixture
+    async def live_activities(self, live_client):
+        """Recent activities from the real API (last 7 days)."""
+        import time
+
+        to_ts = int(time.time())
+        from_ts = to_ts - (7 * 24 * 60 * 60)
+        return await live_client.list_activities(
+            from_timestamp=from_ts, to_timestamp=to_ts
+        )
+
     @pytest.mark.asyncio
-    async def test_real_xert_login_and_list_activities(self):
+    async def test_real_xert_login_and_list_activities(self, live_client, live_activities):
         """OAuth login and activity listing work against the real API."""
-        from trainingdash.xert import XertClient
-
-        username = os.environ["XERT_TEST_USERNAME"]
-        password = os.environ["XERT_TEST_PASSWORD"]
-
-        client = XertClient()
-        try:
-            await client.login(username, password)
-            assert client._access_token is not None
-
-            import time
-            to_ts = int(time.time())
-            from_ts = to_ts - (7 * 24 * 60 * 60)
-            activities = await client.list_activities(from_timestamp=from_ts, to_timestamp=to_ts)
-
-            assert isinstance(activities, list)
-            if activities:
-                a = activities[0]
-                assert a.id
-                assert a.name
-                assert a.started_at
-                assert a.activity_type
-        finally:
-            await client.close()
+        assert live_client._access_token is not None
+        assert isinstance(live_activities, list)
+        if live_activities:
+            a = live_activities[0]
+            assert a.id
+            assert a.name
+            assert a.started_at
+            assert a.activity_type
 
     @pytest.mark.asyncio
-    async def test_real_xert_download_fit(self):
+    async def test_real_xert_download_fit(self, live_client, live_activities):
         """FIT download via web session returns valid FIT bytes."""
-        from trainingdash.xert import XertClient
+        if not live_activities:
+            pytest.skip("No activities in the last 7 days")
 
-        username = os.environ["XERT_TEST_USERNAME"]
-        password = os.environ["XERT_TEST_PASSWORD"]
+        fit_bytes = await live_client.download_fit(live_activities[0].id)
 
-        client = XertClient()
-        try:
-            await client.login(username, password)
-
-            import time
-            to_ts = int(time.time())
-            from_ts = to_ts - (7 * 24 * 60 * 60)
-            activities = await client.list_activities(from_timestamp=from_ts, to_timestamp=to_ts)
-
-            if not activities:
-                pytest.skip("No activities in the last 7 days")
-
-            fit_bytes = await client.download_fit(activities[0].id)
-
-            assert len(fit_bytes) > 100
-            # Valid FIT file has ".FIT" magic at bytes 8-12
-            assert fit_bytes[8:12] == b".FIT", (
-                f"Expected FIT magic at bytes 8-12, got {fit_bytes[8:12]!r}"
-            )
-        finally:
-            await client.close()
+        assert len(fit_bytes) > 100
+        # Valid FIT file has ".FIT" magic at bytes 8-12
+        assert fit_bytes[8:12] == b".FIT", (
+            f"Expected FIT magic at bytes 8-12, got {fit_bytes[8:12]!r}"
+        )
 
     @pytest.mark.asyncio
-    async def test_real_xert_get_xss(self):
-        """XSS fetch returns a float for a real activity."""
-        from trainingdash.xert import XertClient
+    async def test_real_xert_get_xss(self, live_client, live_activities):
+        """XSS is fetched from response['summary']['xss'] and is a positive float."""
+        if not live_activities:
+            pytest.skip("No activities in the last 7 days")
 
-        username = os.environ["XERT_TEST_USERNAME"]
-        password = os.environ["XERT_TEST_PASSWORD"]
-
-        client = XertClient()
-        try:
-            await client.login(username, password)
-
-            import time
-            to_ts = int(time.time())
-            from_ts = to_ts - (7 * 24 * 60 * 60)
-            activities = await client.list_activities(from_timestamp=from_ts, to_timestamp=to_ts)
-
-            if not activities:
-                pytest.skip("No activities in the last 7 days")
-
-            xss = await client.get_xss(activities[0].id)
-            # XSS may be None for activities without power; just check the type
-            assert xss is None or isinstance(xss, float)
-        finally:
-            await client.close()
+        xss = await live_client.get_xss(live_activities[0].id)
+        # XSS may be None for activities without power data; otherwise a positive float
+        assert xss is None or (isinstance(xss, float) and xss > 0)
 
     @pytest.mark.asyncio
     async def test_real_xert_invalid_credentials(self):

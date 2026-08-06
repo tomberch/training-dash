@@ -110,7 +110,10 @@ class XertSyncProvider(SyncProvider):
             )
 
             if ingested is not None:
-                # Fetch XSS and store as training_load (overwritten by TSS if threshold exists)
+                # Fetch XSS and overwrite training_load set by ingest_fit().
+                # ingest_fit() already committed; this second commit persists
+                # only the training_load mutation. TSS will overwrite XSS again
+                # once the user has a threshold configured.
                 xss = await self._client.get_xss(activity.id)
                 if xss is not None:
                     ingested.training_load = xss

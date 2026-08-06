@@ -17,18 +17,20 @@ FIT download:
 
 Session expiry detection:
   A stale session returns HTTP 200 with Content-Type: text/html instead of
-  application/octet-stream. On detection the client re-logs in once and retries.
+  application/octet-stream. _is_fit_response() encapsulates that check; on a
+  stale-session hit the client re-logs in once and retries.
 
 XSS (training load):
-  Xert Strain Score is fetched via GET /oauth/activity/<id> (no session_data)
-  and stored as Activity.training_load. It is overwritten by TSS once the user
-  has a threshold configured.
+  Xert Strain Score is fetched via GET /oauth/activity/<id> (no session_data,
+  summary-only response ~1 KB). XSS lives at response["summary"]["xss"].
+  Stored as Activity.training_load; overwritten by TSS once the user has a
+  threshold configured.
 """
 
 import logging
 import re
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
@@ -39,13 +41,13 @@ logger = logging.getLogger(__name__)
 
 class XertAPIError(Exception):
     """Raised when Xert API returns an error."""
-    pass
 
 
 @dataclass
 class XertActivity:
     """Represents an activity from Xert's activity list API."""
-    id: str          # 'path' field from Xert API — used in download URL and detail endpoint
+
+    id: str  # 'path' field from Xert API — used in download URL and detail endpoint
     name: str
     started_at: datetime
     activity_type: str
@@ -76,7 +78,7 @@ class XertClientProtocol(Protocol):
         ...
 
     async def close(self) -> None:
-        """Close the client."""
+        """Close the underlying HTTP client."""
         ...
 
 
@@ -135,7 +137,9 @@ class XertClient:
                 raise XertAPIError("No access_token in Xert login response")
 
         except httpx.HTTPStatusError as e:
-            raise XertAPIError(f"Xert OAuth login failed: HTTP {e.response.status_code}") from e
+            raise XertAPIError(
+                f"Xert OAuth login failed: HTTP {e.response.status_code}"
+            ) from e
         except httpx.RequestError as e:
             raise XertAPIError(f"Failed to connect to Xert: {e}") from e
 
@@ -159,16 +163,20 @@ class XertClient:
             expires_in = data.get("expires_in", 604800)
             self._token_expires_at = time.time() + expires_in - 60
         except httpx.HTTPStatusError as e:
-            raise XertAPIError(f"Token refresh failed: HTTP {e.response.status_code}") from e
+            raise XertAPIError(
+                f"Token refresh failed: HTTP {e.response.status_code}"
+            ) from e
         except httpx.RequestError as e:
             raise XertAPIError(f"Failed to connect to Xert: {e}") from e
 
     def _auth_headers(self) -> dict[str, str]:
+        """Return Authorization header dict; raises if not authenticated."""
         if not self._access_token:
             raise XertAPIError("Not authenticated — call login() first")
         return {"Authorization": f"Bearer {self._access_token}"}
 
     async def _ensure_valid_token(self) -> None:
+        """Refresh the Bearer token if it has expired or is about to expire."""
         if time.time() >= self._token_expires_at and self._refresh_token:
             await self._refresh_access_token()
 
@@ -198,10 +206,13 @@ class XertClient:
             # Extract hidden _token from the login form HTML
             match = re.search(r'name="_token"\s+value="([^"]+)"', home.text)
             if not match:
-                raise XertAPIError("Could not find CSRF _token on Xert login page")
+                raise XertAPIError(
+                    "Could not find CSRF _token on Xert login page"
+                )
             form_token = match.group(1)
 
             # Submit the login form
+            # Field name is 'username' (not 'email') as confirmed by the HTML form
             login_resp = await self._client.post(
                 f"{self.BASE_URL}/auth/login",
                 data={
@@ -215,7 +226,7 @@ class XertClient:
                 },
             )
 
-            # Detect failure: still on /auth or /auth/login
+            # Detect failure: still on /auth or /auth/login after redirects
             final_path = str(login_resp.url).replace(self.BASE_URL, "")
             if final_path.startswith("/auth"):
                 raise XertAPIError(
@@ -225,9 +236,34 @@ class XertClient:
         except XertAPIError:
             raise
         except httpx.HTTPStatusError as e:
-            raise XertAPIError(f"Xert web login HTTP error: {e.response.status_code}") from e
+            raise XertAPIError(
+                f"Xert web login HTTP error: {e.response.status_code}"
+            ) from e
         except httpx.RequestError as e:
             raise XertAPIError(f"Failed to connect to Xert: {e}") from e
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _is_fit_response(response: httpx.Response) -> bool:
+        """
+        Return True if the response contains a valid FIT file.
+
+        The download URL returns application/octet-stream for a real FIT file.
+        A stale web session returns HTTP 200 with Content-Type: text/html
+        (the login page). We check the Content-Type header first, then fall
+        back to the FIT magic bytes at offset 8-12 as a belt-and-suspenders
+        guard.
+        """
+        content_type = response.headers.get("content-type", "")
+        if "octet-stream" in content_type or "fit" in content_type.lower():
+            return True
+        return (
+            len(response.content) > 12
+            and response.content[8:12] == b".FIT"
+        )
 
     # ------------------------------------------------------------------
     # Public API
@@ -273,29 +309,37 @@ class XertClient:
             data = response.json()
 
             if not data.get("success"):
-                raise XertAPIError("Xert API returned success=false for activity list")
+                raise XertAPIError(
+                    "Xert API returned success=false for activity list"
+                )
 
             activities = []
             for item in data.get("activities", []):
                 start_date_obj = item.get("start_date", {})
                 date_str = start_date_obj.get("date", "")
                 try:
-                    started_at = datetime.strptime(date_str.split(".")[0], "%Y-%m-%d %H:%M:%S")
+                    started_at = datetime.strptime(
+                        date_str.split(".")[0], "%Y-%m-%d %H:%M:%S"
+                    )
                 except (ValueError, AttributeError):
                     started_at = datetime.utcnow()
 
-                activities.append(XertActivity(
-                    id=item.get("path", ""),
-                    name=item.get("name", ""),
-                    started_at=started_at,
-                    activity_type=item.get("activity_type", ""),
-                    description=item.get("description", ""),
-                ))
+                activities.append(
+                    XertActivity(
+                        id=item.get("path", ""),
+                        name=item.get("name", ""),
+                        started_at=started_at,
+                        activity_type=item.get("activity_type", ""),
+                        description=item.get("description", ""),
+                    )
+                )
 
             return activities
 
         except httpx.HTTPStatusError as e:
-            raise XertAPIError(f"Failed to list activities: HTTP {e.response.status_code}") from e
+            raise XertAPIError(
+                f"Failed to list activities: HTTP {e.response.status_code}"
+            ) from e
         except httpx.RequestError as e:
             raise XertAPIError(f"Failed to connect to Xert: {e}") from e
 
@@ -304,11 +348,11 @@ class XertClient:
         Download the raw FIT file for an activity via the web session cookie.
 
         URL: GET https://www.xertonline.com/activities/download/<activity_id>
-        Returns application/octet-stream with Content-Disposition: attachment; filename="...fit"
+        Returns application/octet-stream on success.
 
-        If the session has expired the server returns HTTP 200 with an HTML page
-        (Content-Type: text/html). In that case the client re-establishes the
-        web session and retries once.
+        If the session has expired the server returns HTTP 200 with an HTML
+        page (Content-Type: text/html). In that case the client re-establishes
+        the web session once and retries. Raises XertAPIError on second failure.
         """
         if not activity_id:
             raise XertAPIError("No activity_id provided for FIT download")
@@ -321,22 +365,18 @@ class XertClient:
                 response.raise_for_status()
             except httpx.HTTPStatusError as e:
                 raise XertAPIError(
-                    f"FIT download HTTP error for {activity_id}: {e.response.status_code}"
+                    f"FIT download HTTP error for {activity_id}:"
+                    f" {e.response.status_code}"
                 ) from e
             except httpx.RequestError as e:
-                raise XertAPIError(f"FIT download connection error: {e}") from e
+                raise XertAPIError(
+                    f"FIT download connection error: {e}"
+                ) from e
 
-            content_type = response.headers.get("content-type", "")
-            is_fit = (
-                "octet-stream" in content_type
-                or "fit" in content_type.lower()
-                or (len(response.content) > 12 and response.content[8:12] == b".FIT")
-            )
-
-            if is_fit:
+            if self._is_fit_response(response):
                 return response.content
 
-            # Session expired — HTML page returned
+            # Session expired — server returned an HTML page instead of FIT bytes
             if attempt == 0:
                 logger.warning(
                     "Xert FIT download returned HTML for activity %s — "
@@ -350,20 +390,20 @@ class XertClient:
                 await self._web_login(self._username, self._password)
             else:
                 raise XertAPIError(
-                    f"Xert FIT download for {activity_id} returned HTML after re-login — "
-                    "session could not be re-established"
+                    f"Xert FIT download for {activity_id} returned HTML after"
+                    " re-login — session could not be re-established"
                 )
 
-        # Should be unreachable
+        # Unreachable — loop always returns or raises
         raise XertAPIError(f"FIT download failed for {activity_id}")
 
     async def get_xss(self, activity_id: str) -> float | None:
         """
         Fetch the Xert Strain Score for an activity via a lightweight JSON call.
 
-        Uses GET /oauth/activity/<id> WITHOUT include_session_data — returns
-        only the summary (~1 KB). XSS is stored as Activity.training_load and
-        is overwritten by TSS once the user has a threshold configured.
+        Uses GET /oauth/activity/<id> WITHOUT include_session_data. The server
+        returns a summary-only response (~1 KB) where XSS lives at
+        response["summary"]["xss"].
 
         Returns None if XSS is not available (e.g. indoor trainer with no power).
         """
@@ -376,7 +416,6 @@ class XertClient:
             response = await self._client.get(
                 f"{self.BASE_URL}/oauth/activity/{activity_id}",
                 headers=self._auth_headers(),
-                # No include_session_data — summary only
             )
             response.raise_for_status()
             data = response.json()
@@ -387,10 +426,13 @@ class XertClient:
             return data.get("summary", {}).get("xss")
 
         except (httpx.HTTPStatusError, httpx.RequestError) as e:
-            logger.warning("Failed to fetch XSS for activity %s: %s", activity_id, e)
+            logger.warning(
+                "Failed to fetch XSS for activity %s: %s", activity_id, e
+            )
             return None
 
     async def close(self) -> None:
+        """Close the underlying HTTP client and release connections."""
         await self._client.aclose()
 
 
