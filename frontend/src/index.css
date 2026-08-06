@@ -141,7 +141,7 @@
    ============================================================================= */
 
 /* Default to latte (light) theme if no theme is set */
-:root {
+:root:not([data-theme]) {
   --background: #eff1f5;
   --surface: #e6e9ef;
   --surface-hover: #dce0e8;
