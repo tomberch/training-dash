@@ -42,6 +42,7 @@ const baseActivity = {
   is_breakthrough: false,
   // Map
   map_polyline: null as string | null,
+  utc_offset_minutes: null as number | null,
 };
 
 // Helper to render with router

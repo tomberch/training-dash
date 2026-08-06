@@ -1,6 +1,7 @@
 """Response serializers for API endpoints."""
 
 import json
+from datetime import datetime
 from typing import Any
 
 from trainingdash.models import (
@@ -11,6 +12,20 @@ from trainingdash.models import (
     ThresholdHistory,
     User,
 )
+
+
+def _utc(dt: datetime) -> str:
+    """
+    Serialise a naive UTC datetime to an ISO 8601 string with explicit UTC offset.
+
+    All datetimes stored in the database are naive UTC (TIMESTAMP WITHOUT TIME ZONE).
+    Without the +00:00 suffix, JavaScript's new Date() treats the string as local
+    time rather than UTC, causing displayed times to be shifted by the viewer's
+    UTC offset. This helper appends the offset so browsers parse and convert correctly.
+
+    Date-only values (date objects) should NOT use this helper — use .isoformat() directly.
+    """
+    return dt.isoformat() + "+00:00"
 
 
 def user_response(user: User) -> dict:
@@ -38,7 +53,7 @@ def user_summary(user: User) -> dict:
         "display_name": user.display_name,
         "is_admin": user.is_admin,
         "is_approved": user.is_approved,
-        "created_at": user.created_at.isoformat(),
+        "created_at": _utc(user.created_at),
     }
 
 
@@ -81,7 +96,8 @@ def activity_summary(a: Activity) -> dict[str, Any]:
         "id": str(a.id),
         "title": a.title,
         "title_source": a.title_source,
-        "started_at": a.started_at.isoformat(),
+        "started_at": _utc(a.started_at),
+        "utc_offset_minutes": a.utc_offset_minutes,
         "total_distance_m": a.total_distance_m,
         "moving_time_s": a.moving_time_s,
         "elapsed_time_s": a.elapsed_time_s,
@@ -127,7 +143,7 @@ def records_to_geojson(records: list[Record], props_keys: list[str]) -> dict:
     for r in records:
         props = {key: getattr(r, key) for key in props_keys}
         if "timestamp" in props and props["timestamp"] is not None:
-            props["timestamp"] = props["timestamp"].isoformat()
+            props["timestamp"] = _utc(props["timestamp"])
         if r.lat is not None and r.lon is not None:
             features.append({
                 "type": "Feature",

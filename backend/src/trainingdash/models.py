@@ -144,6 +144,7 @@ class Activity(Base):
         ForeignKey("routes.id"), nullable=True
     )
     raw_fit: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    utc_offset_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
 
 

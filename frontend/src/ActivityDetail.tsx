@@ -12,7 +12,7 @@ import {
   ReferenceArea,
 } from "recharts";
 import type { WbalResponse, WbalPoint } from "./api";
-import { formatDistance, formatTime, formatElevation, formatSpeed } from "./format";
+import { formatDistance, formatTime, formatElevation, formatSpeed, formatActivityDate, formatActivityTime } from "./format";
 import type { UnitSystem } from "./format";
 import { resampleByDistance } from "./resampler";
 import { ErrorDisplay } from "./ErrorDisplay";
@@ -329,7 +329,7 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
               <>
                 <div className="flex items-center gap-2">
                   <h1 className="text-2xl font-bold text-foreground">
-                    {activity.title || new Date(activity.started_at).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                    {activity.title || formatActivityDate(activity.started_at, activity.utc_offset_minutes, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                   </h1>
                   {activity.title_source === "pending" && (
                     <button
@@ -372,15 +372,18 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
-                    {new Date(activity.started_at).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+                    {formatActivityDate(activity.started_at, activity.utc_offset_minutes, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
                   </span>
                   <span className="flex items-center gap-1.5">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    {new Date(activity.started_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })}
+                    {formatActivityTime(activity.started_at, activity.utc_offset_minutes)}
                     {" - "}
-                    {new Date(new Date(activity.started_at).getTime() + (activity.elapsed_time_s * 1000)).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })}
+                    {formatActivityTime(
+                      new Date(new Date(activity.started_at).getTime() + activity.elapsed_time_s * 1000).toISOString(),
+                      activity.utc_offset_minutes,
+                    )}
                     {" "}
                     <span className="text-muted-foreground/70">({formatTime(activity.elapsed_time_s)})</span>
                   </span>

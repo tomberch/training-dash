@@ -41,6 +41,8 @@ export interface Activity {
   is_breakthrough: boolean;
   // Map polyline for list view thumbnails
   map_polyline: string | null;
+  // UTC offset in minutes at time of activity (from FIT local_timestamp); null = unknown
+  utc_offset_minutes: number | null;
 }
 
 export interface PaginationMeta {

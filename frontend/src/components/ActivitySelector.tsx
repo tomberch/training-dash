@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import type { Activity } from "../api";
 import { useActivities } from "../hooks/useActivities";
-import { formatDistance, formatTime } from "../format";
+import { formatDistance, formatTime, formatActivityDate } from "../format";
 import type { UnitSystem } from "../format";
 
 /** Debounce delay for search input (ms) */
@@ -82,7 +82,7 @@ export function ActivitySelector({
         if (!debouncedSearch) return true;
         const searchLower = debouncedSearch.toLowerCase();
         const title = a.title || "Untitled";
-        const date = new Date(a.started_at).toLocaleDateString();
+        const date = formatActivityDate(a.started_at, a.utc_offset_minutes);
         return (
           title.toLowerCase().includes(searchLower) ||
           date.includes(searchLower)
@@ -111,7 +111,7 @@ export function ActivitySelector({
   // Format activity display
   const formatActivityDisplay = useCallback((activity: Activity) => {
     const title = activity.title || "Untitled";
-    const date = new Date(activity.started_at).toLocaleDateString();
+    const date = formatActivityDate(activity.started_at, activity.utc_offset_minutes);
     const distance = formatDistance(activity.total_distance_m, unitSystem);
     const duration = formatTime(activity.moving_time_s);
     return { title, date, distance, duration };
@@ -221,7 +221,7 @@ export function ActivitySelector({
             <div className="truncate">
               <span className="font-medium">{selectedActivity.title || "Untitled"}</span>
               <span className="text-gray-500 dark:text-gray-400 text-sm ml-2">
-                {new Date(selectedActivity.started_at).toLocaleDateString()}
+                {formatActivityDate(selectedActivity.started_at, selectedActivity.utc_offset_minutes)}
               </span>
             </div>
             <button

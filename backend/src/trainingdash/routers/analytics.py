@@ -7,6 +7,7 @@ from sqlalchemy import select, func
 
 from trainingdash.auth import CurrentUser, DbSession
 from trainingdash.models import Activity, ActivityPeakPower, FitnessHistory
+from trainingdash.routers.serializers import _utc
 
 router = APIRouter(prefix="/api", tags=["analytics"])
 
@@ -45,14 +46,14 @@ async def get_fitness(db: DbSession, user: CurrentUser):
 
     return {
         "current": {
-            "computed_at": current.computed_at.isoformat(),
+            "computed_at": _utc(current.computed_at),
             "pp_watts": current.pp_watts,
             "w_prime_joules": current.w_prime_joules,
             "cp_watts": current.cp_watts,
         },
         "history": [
             {
-                "computed_at": h.computed_at.isoformat(),
+                "computed_at": _utc(h.computed_at),
                 "pp_watts": h.pp_watts,
                 "w_prime_joules": h.w_prime_joules,
                 "cp_watts": h.cp_watts,

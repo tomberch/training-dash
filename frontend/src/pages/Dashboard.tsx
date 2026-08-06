@@ -20,7 +20,7 @@ import {
   fetchThresholds,
 } from "../api";
 import { PolylineMap } from "../components/PolylineMap";
-import { formatDuration, formatDistance, formatRelativeTime, formatElevation } from "../format";
+import { formatDuration, formatDistance, formatRelativeTime, formatElevation, formatActivityDate } from "../format";
 import { TSB_ZONES, getTSBZone } from "../constants";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
@@ -552,13 +552,13 @@ export function Dashboard() {
                 <div className="p-4">
                   {/* Title */}
                   <h3 className="text-base font-semibold text-foreground truncate mb-1">
-                    {activity.title || new Date(activity.started_at).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}
+                    {activity.title || formatActivityDate(activity.started_at, activity.utc_offset_minutes, { weekday: "long", month: "short", day: "numeric" })}
                   </h3>
                   
                   {/* Date if title exists */}
                   {activity.title && (
                     <p className="text-sm text-muted-foreground mb-3">
-                      {new Date(activity.started_at).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+                      {formatActivityDate(activity.started_at, activity.utc_offset_minutes, { weekday: "short", month: "short", day: "numeric" })}
                     </p>
                   )}
                   
@@ -658,10 +658,10 @@ export function Dashboard() {
                     >
                       <div className="text-sm">
                         <div className="font-medium text-foreground">
-                          {activity.title || new Date(activity.started_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                          {activity.title || formatActivityDate(activity.started_at, activity.utc_offset_minutes, { month: "short", day: "numeric" })}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {new Date(activity.started_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                          {formatActivityDate(activity.started_at, activity.utc_offset_minutes, { month: "short", day: "numeric" })}
                         </div>
                       </div>
                       <span className="text-xs font-medium text-warning">

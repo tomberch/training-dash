@@ -17,7 +17,7 @@ import { ActivitySelector } from "../components/ActivitySelector";
 import { ResizableMap } from "../components/ResizableMap";
 import { useResizableMap } from "../hooks/useResizableMap";
 import { ChartErrorBoundary } from "../components/ErrorBoundary";
-import { formatDistance, formatSpeed, formatTime, formatElevation } from "../format";
+import { formatDistance, formatSpeed, formatTime, formatElevation, formatActivityDate } from "../format";
 
 // Gap coloring thresholds
 function gapColor(gap: number): string {
@@ -1031,7 +1031,7 @@ export function ComparePage() {
                   {baseActivity.title || "Untitled"}
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  {new Date(baseActivity.started_at).toLocaleDateString(undefined, {
+                  {formatActivityDate(baseActivity.started_at, baseActivity.utc_offset_minutes, {
                     weekday: "short",
                     year: "numeric",
                     month: "short",
@@ -1050,7 +1050,7 @@ export function ComparePage() {
                   {compareActivity.title || "Untitled"}
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  {new Date(compareActivity.started_at).toLocaleDateString(undefined, {
+                  {formatActivityDate(compareActivity.started_at, compareActivity.utc_offset_minutes, {
                     weekday: "short",
                     year: "numeric",
                     month: "short",

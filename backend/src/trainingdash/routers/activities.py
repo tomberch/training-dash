@@ -10,6 +10,7 @@ from sqlalchemy import select, func
 from trainingdash.auth import CurrentUser, DbSession
 from trainingdash.models import Activity, ActivityPeakPower, Record, ThresholdHistory
 from trainingdash.routers.serializers import (
+    _utc,
     activity_detail,
     activity_summary,
     records_to_geojson,
@@ -509,7 +510,7 @@ async def upload_activity(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to parse FIT file"
         )
-    return {"id": str(activity.id), "started_at": activity.started_at.isoformat()}
+    return {"id": str(activity.id), "started_at": _utc(activity.started_at)}
 
 
 @router.get("/jobs/{job_id}")

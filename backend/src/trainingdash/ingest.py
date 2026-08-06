@@ -100,19 +100,55 @@ def _compute_moving_time(records: list[dict]) -> int:
     return sum(1 for r in records if (r.get("speed_mps") or 0) > MOVING_SPEED_THRESHOLD)
 
 
+def _derive_utc_offset(
+    local_timestamp: Any,
+    utc_timestamp: Any,
+) -> int | None:
+    """
+    Derive UTC offset in minutes from FIT Activity message timestamps.
+
+    The FIT spec stores local_timestamp (device wall-clock time, naive) and
+    timestamp (UTC, timezone-aware from fitdecode) in the Activity message.
+    Their difference gives the UTC offset that was in effect when the ride ended.
+
+    Validity checks:
+    - Both values must be present and parseable as datetimes.
+    - Computed offset must be within ±840 minutes (±14 hours) to reject
+      epoch-1989 values (Zwift bug) and other bogus timestamps.
+
+    Returns offset in minutes, or None if the value is absent or implausible.
+    """
+    if local_timestamp is None or utc_timestamp is None:
+        return None
+    try:
+        # fitdecode returns local_timestamp as naive datetime, utc as aware
+        if hasattr(utc_timestamp, "tzinfo") and utc_timestamp.tzinfo is not None:
+            utc_naive = utc_timestamp.replace(tzinfo=None)
+        else:
+            utc_naive = utc_timestamp
+        delta_seconds = (local_timestamp - utc_naive).total_seconds()
+        offset_minutes = int(delta_seconds / 60)
+        if -840 <= offset_minutes <= 840:
+            return offset_minutes
+        return None
+    except (TypeError, AttributeError):
+        return None
+
+
 def parse_records(fit_bytes: bytes) -> dict[str, Any]:
     """Parse a FIT file and extract activity data using fitdecode."""
     import fitdecode
-    
+
     records = []
     laps = []
     session_data = None
-    
+    utc_offset_minutes: int | None = None
+
     with fitdecode.FitReader(fit_bytes) as fit:
         for frame in fit:
             if not isinstance(frame, fitdecode.FitDataMessage):
                 continue
-                
+
             if frame.name == "record":
                 # Get position (convert from semicircles to degrees)
                 lat = _semicircles_to_degrees(_get_field(frame, "position_lat"))
@@ -170,7 +206,15 @@ def parse_records(fit_bytes: bytes) -> dict[str, Any]:
                     "max_hr": _safe_int(_get_field(frame, "max_heart_rate")),
                     "avg_power": _safe_int(_get_field(frame, "avg_power")),
                 }
-    
+
+            elif frame.name == "activity":
+                # The Activity message contains local_timestamp (device wall-clock)
+                # alongside timestamp (UTC). Their difference gives the UTC offset
+                # that was in effect when and where the ride ended.
+                local_ts = _get_field(frame, "local_timestamp")
+                utc_ts = _get_field(frame, "timestamp")
+                utc_offset_minutes = _derive_utc_offset(local_ts, utc_ts)
+
     # Build result from session or compute from records
     if session_data and session_data["started_at"]:
         started_at = session_data["started_at"]
@@ -215,6 +259,7 @@ def parse_records(fit_bytes: bytes) -> dict[str, Any]:
         "avg_power_w": avg_power,
         "max_speed_mps": float(max_speed),
         "max_hr_bpm": max_hr,
+        "utc_offset_minutes": utc_offset_minutes,
         "records": records,
         "laps": laps,
     }
@@ -332,6 +377,7 @@ async def ingest_fit(
         max_hr_bpm=parsed["max_hr_bpm"],
         map_polyline=generate_map_polyline(parsed["records"]),
         raw_fit=fit_bytes,
+        utc_offset_minutes=parsed["utc_offset_minutes"],
     )
     db.add(activity)
     await db.flush()
