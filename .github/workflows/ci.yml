@@ -68,7 +68,7 @@ jobs:
     needs: [test-backend, test-frontend]
     # Build on tags, or on main when commit message contains [build]
     if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') || contains(github.event.head_commit.message, '[build]'))
-    
+
     permissions:
       contents: read
       packages: write
