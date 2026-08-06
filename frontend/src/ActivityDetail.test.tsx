@@ -2,11 +2,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { ActivityDetail } from "./ActivityDetail";
+import { deleteActivity } from "./api";
 
 vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
   return {
     ...actual,
+    deleteActivity: vi.fn().mockResolvedValue(undefined),
     fetchActivity: vi.fn().mockResolvedValue({
       id: "test-uuid-1",
       started_at: "2024-03-15T10:00:00",
@@ -159,5 +161,104 @@ describe("ActivityDetail", () => {
       // Compare button is shown when same-route activities exist
       expect(screen.getByText("Compare")).toBeInTheDocument();
     });
+  });
+});
+
+describe("ActivityDetail - Delete", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("renders delete button", async () => {
+    renderWithRouter(<ActivityDetail activityId="test-uuid-1" onBack={() => {}} />);
+    await waitFor(() => {
+      expect(screen.getByTitle("Delete this activity")).toBeInTheDocument();
+    });
+  });
+
+  it("opens confirmation dialog when delete button clicked", async () => {
+    renderWithRouter(<ActivityDetail activityId="test-uuid-1" onBack={() => {}} />);
+    await waitFor(() => {
+      expect(screen.getByTitle("Delete this activity")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTitle("Delete this activity"));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+      expect(screen.getByText("Delete activity?")).toBeInTheDocument();
+      expect(screen.getByText(/This will permanently delete this activity/)).toBeInTheDocument();
+    });
+  });
+
+  it("calls deleteActivity and onBack on confirm", async () => {
+    const onBack = vi.fn();
+    renderWithRouter(<ActivityDetail activityId="test-uuid-1" onBack={onBack} />);
+    await waitFor(() => {
+      expect(screen.getByTitle("Delete this activity")).toBeInTheDocument();
+    });
+
+    // Open dialog
+    fireEvent.click(screen.getByTitle("Delete this activity"));
+    await waitFor(() => {
+      expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    });
+
+    // Click confirm (the destructive action button)
+    const confirmButton = screen.getByRole("button", { name: /Delete/i });
+    fireEvent.click(confirmButton);
+
+    await waitFor(() => {
+      expect(vi.mocked(deleteActivity)).toHaveBeenCalledWith("test-uuid-1");
+      expect(onBack).toHaveBeenCalled();
+    });
+  });
+
+  it("shows error toast and stays on page when delete fails", async () => {
+    vi.mocked(deleteActivity).mockRejectedValueOnce(new Error("Delete failed"));
+    const onBack = vi.fn();
+    renderWithRouter(<ActivityDetail activityId="test-uuid-1" onBack={onBack} />);
+    await waitFor(() => {
+      expect(screen.getByTitle("Delete this activity")).toBeInTheDocument();
+    });
+
+    // Open dialog
+    fireEvent.click(screen.getByTitle("Delete this activity"));
+    await waitFor(() => {
+      expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    });
+
+    // Click confirm
+    const confirmButton = screen.getByRole("button", { name: /Delete/i });
+    fireEvent.click(confirmButton);
+
+    await waitFor(() => {
+      expect(vi.mocked(deleteActivity)).toHaveBeenCalledWith("test-uuid-1");
+      // Should NOT call onBack on error
+      expect(onBack).not.toHaveBeenCalled();
+    });
+  });
+
+  it("closes dialog when cancel clicked", async () => {
+    renderWithRouter(<ActivityDetail activityId="test-uuid-1" onBack={() => {}} />);
+    await waitFor(() => {
+      expect(screen.getByTitle("Delete this activity")).toBeInTheDocument();
+    });
+
+    // Open dialog
+    fireEvent.click(screen.getByTitle("Delete this activity"));
+    await waitFor(() => {
+      expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    });
+
+    // Click cancel
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    });
+
+    // Should not have called deleteActivity
+    expect(vi.mocked(deleteActivity)).not.toHaveBeenCalled();
   });
 });

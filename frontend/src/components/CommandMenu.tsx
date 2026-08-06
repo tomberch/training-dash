@@ -40,7 +40,7 @@ interface CommandItem {
   keywords?: string[];
 }
 
-export function CommandMenu({ onUpload, isAdmin = false }: CommandMenuProps): JSX.Element {
+export function CommandMenu({ onUpload, isAdmin = false }: CommandMenuProps): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [awaitingG, setAwaitingG] = useState(false);
   const gTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);

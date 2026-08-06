@@ -111,7 +111,7 @@ def upgrade() -> None:
         sa.Column('id', sa.BigInteger(), primary_key=True),
         sa.Column('user_id', sa.BigInteger(), sa.ForeignKey('users.id', ondelete='CASCADE'), nullable=False),
         sa.Column('simplified_polyline', Geography('LINESTRING', srid=4326, spatial_index=True), nullable=False),
-        sa.Column('first_seen_activity_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('activities.id'), nullable=False),
+        sa.Column('first_seen_activity_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('activities.id', ondelete='SET NULL'), nullable=True),
         sa.Column('ride_count', sa.Integer(), nullable=False, default=1),
         sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
     )

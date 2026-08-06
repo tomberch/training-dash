@@ -519,3 +519,70 @@ async def get_job_status(user: CurrentUser, job_id: str):
     from trainingdash.jobs import get_job_status as _get_job_status
 
     return await _get_job_status(job_id)
+
+
+
+@router.delete("/activities/{activity_id}", status_code=204)
+async def delete_activity(
+    db: DbSession,
+    user: CurrentUser,
+    activity_id: UUID,
+):
+    """
+    Permanently delete an activity owned by the current user.
+
+    Cascade constraints remove Records, Laps, and ActivityPeakPower automatically.
+    Route ride_count and first_seen_activity_id are repaired synchronously before
+    deletion to avoid FK violations (routes.first_seen_activity_id has no ondelete).
+    A background job then recomputes the fitness model and breakthrough flags.
+    """
+    from trainingdash.models import Route
+    from trainingdash.jobs import enqueue_recalculate_after_delete_job
+
+    activity = await _get_owned_activity(db, user, activity_id)
+
+    # --- Route maintenance and activity deletion ---
+    # routes.first_seen_activity_id has ON DELETE SET NULL, so deleting the
+    # activity automatically nulls that field. We only need to maintain
+    # ride_count and clean up orphan routes ourselves.
+    from sqlalchemy import text as sql_text
+
+    if activity.route_id is not None:
+        route_result = await db.execute(
+            select(Route).where(Route.id == activity.route_id)
+        )
+        route = route_result.scalar_one_or_none()
+        if route is not None:
+            if route.ride_count <= 1:
+                # Sole activity — delete the route after nulling activity.route_id
+                # (activities.route_id → routes.id has no ondelete; null it first).
+                await db.execute(
+                    sql_text("UPDATE activities SET route_id = NULL WHERE id = :aid"),
+                    {"aid": activity.id},
+                )
+                await db.execute(
+                    sql_text("DELETE FROM routes WHERE id = :rid"),
+                    {"rid": route.id},
+                )
+            else:
+                # Decrement ride_count; ON DELETE SET NULL handles first_seen repair.
+                await db.execute(
+                    sql_text(
+                        "UPDATE routes SET ride_count = ride_count - 1 WHERE id = :rid"
+                    ),
+                    {"rid": route.id},
+                )
+                await db.execute(
+                    sql_text("UPDATE activities SET route_id = NULL WHERE id = :aid"),
+                    {"aid": activity.id},
+                )
+
+    # Delete the activity (cascades Records, Laps, ActivityPeakPower)
+    await db.execute(
+        sql_text("DELETE FROM activities WHERE id = :aid"),
+        {"aid": activity.id},
+    )
+    await db.commit()
+
+    # --- Enqueue async recalculation (fitness model + breakthrough flags) ---
+    await enqueue_recalculate_after_delete_job(user.id)
