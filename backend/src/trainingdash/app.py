@@ -147,6 +147,79 @@ def create_app() -> FastAPI:
             },
         )
 
+    # CartoDB tile proxy with caching
+    # Supports two styles: "light" (Positron) and "dark" (Dark Matter)
+    CARTO_STYLES = {
+        "light": "light_all",
+        "dark": "dark_all",
+    }
+
+    @app.get("/tiles/carto/{style}/{z}/{x}/{y}.png")
+    async def get_carto_tile(style: str, z: int, x: int, y: int):
+        """
+        Proxy and cache CartoDB (CARTO) raster tiles.
+
+        Supports two styles:
+          - light  → Positron (clean light grey, used in latte theme)
+          - dark   → Dark Matter (dark background, used in mocha theme)
+
+        Tiles are cached to disk for 30 days.
+        """
+        if style not in CARTO_STYLES:
+            raise HTTPException(status_code=400, detail=f"Unknown style '{style}'. Use 'light' or 'dark'.")
+
+        if z < 0 or z > 19:
+            raise HTTPException(status_code=400, detail="Invalid zoom level")
+
+        max_coord = 2**z - 1
+        if x < 0 or x > max_coord or y < 0 or y > max_coord:
+            raise HTTPException(status_code=400, detail="Invalid tile coordinates")
+
+        cache_path = TILE_CACHE_DIR / "carto" / style / str(z) / str(x) / f"{y}.png"
+
+        if cache_path.exists():
+            mtime = datetime.fromtimestamp(cache_path.stat().st_mtime)
+            age = datetime.now() - mtime
+            if age.days < TILE_CACHE_MAX_AGE_DAYS:
+                return FileResponse(
+                    cache_path,
+                    media_type="image/png",
+                    headers={
+                        "Cache-Control": f"public, max-age={TILE_CACHE_MAX_AGE_DAYS * 86400}",
+                        "X-Cache": "HIT",
+                    },
+                )
+
+        carto_style = CARTO_STYLES[style]
+        carto_url = f"https://a.basemaps.cartocdn.com/{carto_style}/{z}/{x}/{y}.png"
+
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    carto_url,
+                    headers={"User-Agent": TILE_USER_AGENT},
+                    timeout=10.0,
+                )
+                response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            raise HTTPException(
+                status_code=e.response.status_code, detail="Tile fetch failed"
+            )
+        except httpx.RequestError:
+            raise HTTPException(status_code=502, detail="Could not reach CartoDB tile server")
+
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_bytes(response.content)
+
+        return FileResponse(
+            cache_path,
+            media_type="image/png",
+            headers={
+                "Cache-Control": f"public, max-age={TILE_CACHE_MAX_AGE_DAYS * 86400}",
+                "X-Cache": "MISS",
+            },
+        )
+
     # Serve frontend static files if the dist directory exists
     static_dir = Path("/app/static")
     if static_dir.exists():

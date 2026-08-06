@@ -75,11 +75,10 @@ export function ResizableMap({
     positions.reduce((sum, p) => sum + p[1], 0) / positions.length,
   ];
 
-  // Theme-aware tile URLs
-  // CartoDB Positron for light (latte), Dark Matter for dark (mocha)
+  // Theme-aware tile URLs — routed through the backend proxy for caching
   const tileUrl = resolvedTheme === "mocha"
-    ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-    : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
+    ? "/tiles/carto/dark/{z}/{x}/{y}.png"
+    : "/tiles/carto/light/{z}/{x}/{y}.png";
   
   const attribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
 

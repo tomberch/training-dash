@@ -298,10 +298,10 @@ export function PolylineMap({
     ? getTileGrid(bounds.minLat, bounds.maxLat, bounds.minLon, bounds.maxLon, containerW, containerH)
     : null;
 
-  // CartoDB tile base URLs (same as ResizableMap)
+  // CartoDB tile base URLs routed through the backend proxy for caching
   const tileBase = isDark
-    ? "https://a.basemaps.cartocdn.com/dark_all"
-    : "https://a.basemaps.cartocdn.com/light_all";
+    ? "/tiles/carto/dark"
+    : "/tiles/carto/light";
 
   return (
     <div className={`relative rounded overflow-hidden ${className}`}>
