@@ -5,7 +5,7 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
+  Tooltip as RechartsTooltip,
   ResponsiveContainer,
   ReferenceLine,
   ReferenceDot,
@@ -24,6 +24,7 @@ import { ActivityPowerCurve } from "./components/ActivityPowerCurve";
 import { ChartErrorBoundary } from "./components/ErrorBoundary";
 import { POWER_ZONE_COLORS, HR_ZONE_COLORS } from "./constants";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
 function ActivityDetailLoadingSkeleton() {
   return (
@@ -575,7 +576,7 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
                     tickLine={{ stroke: "#d1d5db" }}
                     label={{ value: chart.unit, angle: -90, position: "insideLeft", fontSize: 12, fill: "#6b7280" }}
                   />
-                  <Tooltip
+                  <RechartsTooltip
                     content={({ active, payload }) => {
                       // Update map marker when tooltip is active
                       if (active && payload?.[0]?.payload) {
@@ -665,14 +666,12 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
 }
 
 function StatTile({ label, value, subtitle, tooltip }: { label: string; value: string; subtitle?: string; tooltip?: string }) {
-  return (
-    <div className="bg-card rounded-lg border border-border p-3 text-center relative group">
+  const content = (
+    <div className="bg-card rounded-lg border border-border p-3 text-center">
       <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
         {label}
         {tooltip && (
-          <span className="ml-1 text-warning cursor-help" title={tooltip}>
-            ⚠
-          </span>
+          <span className="ml-1 text-warning">⚠</span>
         )}
       </div>
       <div className="text-lg font-semibold text-foreground tabular-nums">
@@ -683,13 +682,23 @@ function StatTile({ label, value, subtitle, tooltip }: { label: string; value: s
           {subtitle}
         </div>
       )}
-      {tooltip && (
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-popover text-popover-foreground text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10 border border-border">
-          {tooltip}
-        </div>
-      )}
     </div>
   );
+
+  if (tooltip) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className="cursor-help">{content}</div>
+        </TooltipTrigger>
+        <TooltipContent>
+          {tooltip}
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  return content;
 }
 
 function ChartCard({
@@ -892,7 +901,7 @@ function WbalChart({
             tickLine={{ stroke: "#d1d5db" }}
             label={{ value: "%", angle: -90, position: "insideLeft", fontSize: 12, fill: "#6b7280" }}
           />
-          <Tooltip
+          <RechartsTooltip
             content={({ active, payload }) => {
               if (active && payload?.[0]?.payload) {
                 const p = payload[0].payload;

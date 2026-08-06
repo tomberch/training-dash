@@ -38,6 +38,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardAction } from "@/componen
 import { cn } from "@/lib/utils";
 import { useTheme } from "./hooks/useTheme";
 import type { Theme } from "./hooks/useTheme";
+import { SunIcon, MoonIcon, MonitorIcon } from "./components/icons/ThemeIcons";
 
 function EyeIcon({ className }: { className?: string }) {
   return (
@@ -394,21 +395,9 @@ function PreferencesSection({ user, onUserUpdate }: { user: User; onUserUpdate: 
           
           <div className="flex gap-1 bg-muted p-1 rounded-lg">
             {[
-              { value: "latte" as Theme, label: "Light", icon: (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
-              )},
-              { value: "mocha" as Theme, label: "Dark", icon: (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                </svg>
-              )},
-              { value: "system" as Theme, label: "System", icon: (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                </svg>
-              )},
+              { value: "latte" as Theme, label: "Light", icon: <SunIcon className="w-4 h-4" /> },
+              { value: "mocha" as Theme, label: "Dark", icon: <MoonIcon className="w-4 h-4" /> },
+              { value: "system" as Theme, label: "System", icon: <MonitorIcon className="w-4 h-4" /> },
             ].map(({ value, label, icon }) => (
               <button
                 key={value}
@@ -589,7 +578,9 @@ function ThresholdsSection() {
         {showForm && (
           <form onSubmit={handleSubmit} className="p-4 bg-primary/5 rounded-lg space-y-3">
             <p className="text-xs text-muted-foreground mb-2">
-              Enter the values you want to {currentThreshold ? "update" : "set"}. Leave fields empty to keep current values.
+              {currentThreshold 
+                ? "Enter values to update. Empty fields keep current values (previously set values cannot be removed)."
+                : "Enter at least one threshold value. You can add the others later."}
             </p>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">

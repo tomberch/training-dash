@@ -457,18 +457,25 @@ async def create_threshold(
     previous = result.scalar_one_or_none()
     
     # Determine final values - use new value if provided, else carry forward
-    final_ftp = request.ftp_watts
-    final_lthr = request.lthr_bpm  
-    final_hrmax = request.hrmax_bpm
+    # Note: Once a threshold value is set, it cannot be removed - only changed.
+    # Omitting a field preserves the previous value.
+    final_ftp = request.ftp_watts if request.ftp_watts is not None else (previous.ftp_watts if previous else None)
+    final_lthr = request.lthr_bpm if request.lthr_bpm is not None else (previous.lthr_bpm if previous else None)
+    final_hrmax = request.hrmax_bpm if request.hrmax_bpm is not None else (previous.hrmax_bpm if previous else None)
     
+    # If user has previous thresholds but provided no new values, reject
+    # (they should use the existing values or provide updates)
     if previous is not None:
-        # Carry forward previous values if new ones not provided
-        if final_ftp is None:
-            final_ftp = previous.ftp_watts
-        if final_lthr is None:
-            final_lthr = previous.lthr_bpm
-        if final_hrmax is None:
-            final_hrmax = previous.hrmax_bpm
+        has_any_new_value = (
+            request.ftp_watts is not None or 
+            request.lthr_bpm is not None or 
+            request.hrmax_bpm is not None
+        )
+        if not has_any_new_value:
+            raise HTTPException(
+                status_code=400,
+                detail="You already have thresholds set. Provide at least one value to update."
+            )
     
     # Validate lthr doesn't exceed hrmax after merging with previous
     if final_lthr is not None and final_hrmax is not None:
