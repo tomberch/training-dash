@@ -70,9 +70,10 @@ vi.mock("./Sidebar", async () => {
 vi.mock("./api", () => ({
   fetchMe: vi.fn(),
   logout: vi.fn().mockResolvedValue(undefined),
+  fetchThresholds: vi.fn().mockResolvedValue([]),
 }));
 
-import { fetchMe } from "./api";
+import { fetchMe, fetchThresholds } from "./api";
 
 describe("App", () => {
   beforeEach(() => {

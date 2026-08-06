@@ -280,7 +280,7 @@ describe("Settings - Thresholds Section", () => {
       effective_date: "2024-03-15",
       ftp_watts: 260,
       lthr_bpm: 170,
-      max_hr_bpm: 190,
+      hrmax_bpm: 190,
     });
 
     render(

@@ -109,7 +109,7 @@ const mockWbalData = {
 };
 
 const mockThresholds = [
-  { effective_date: "2024-01-01", ftp_watts: 240, lthr_bpm: 160, max_hr_bpm: 185 },
+  { effective_date: "2024-01-01", ftp_watts: 240, lthr_bpm: 160, hrmax_bpm: 185 },
 ];
 
 describe("useActivityDetail", () => {

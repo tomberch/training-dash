@@ -568,7 +568,7 @@ function ThresholdsSection() {
             <div>
               <div className="text-xs text-muted-foreground uppercase tracking-wide">HRmax</div>
               <div className="text-xl font-bold text-foreground">
-                {currentThreshold.max_hr_bpm ? `${currentThreshold.max_hr_bpm} bpm` : "—"}
+                {currentThreshold.hrmax_bpm ? `${currentThreshold.hrmax_bpm} bpm` : "—"}
               </div>
             </div>
           </div>
@@ -619,7 +619,7 @@ function ThresholdsSection() {
                   type="number"
                   value={formData.hrmax_bpm}
                   onChange={(e) => setFormData({ ...formData, hrmax_bpm: e.target.value })}
-                  placeholder={currentThreshold?.max_hr_bpm ? `Current: ${currentThreshold.max_hr_bpm}` : "e.g. 185"}
+                  placeholder={currentThreshold?.hrmax_bpm ? `Current: ${currentThreshold.hrmax_bpm}` : "e.g. 185"}
                   min="100"
                   max="250"
                 />
@@ -651,7 +651,7 @@ function ThresholdsSection() {
                     <td className="py-2">{new Date(t.effective_date).toLocaleDateString()}</td>
                     <td className="py-2 text-right">{t.ftp_watts ? `${t.ftp_watts}W` : "—"}</td>
                     <td className="py-2 text-right">{t.lthr_bpm ? `${t.lthr_bpm} bpm` : "—"}</td>
-                    <td className="py-2 text-right">{t.max_hr_bpm ? `${t.max_hr_bpm} bpm` : "—"}</td>
+                    <td className="py-2 text-right">{t.hrmax_bpm ? `${t.hrmax_bpm} bpm` : "—"}</td>
                   </tr>
                 ))}
               </tbody>

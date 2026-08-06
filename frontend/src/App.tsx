@@ -13,9 +13,11 @@ import { PowerCurveView } from "./pages/PowerCurveView";
 import { ActivityTable } from "./pages/ActivityTable";
 import { AnalyzePage } from "./pages/AnalyzePage";
 import { ComparePage } from "./pages/ComparePage";
-import { fetchMe } from "./api";
+import { fetchMe, fetchThresholds } from "./api";
 import type { User } from "./api";
 import "./App.css";
+
+import { OnboardingDialog } from "./components/OnboardingDialog";
 
 // Initialize theme on app load
 function initializeTheme() {
@@ -167,6 +169,7 @@ function AdminViewWrapper() {
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   // Check if user is logged in on mount
   useEffect(() => {
@@ -177,12 +180,20 @@ export default function App() {
   }, []);
 
   function handleLogin(_result: { is_admin: boolean; is_approved: boolean }) {
-    // Refetch user to get full user data
-    fetchMe().then(setUser);
+    // Refetch user, then check whether thresholds exist — show onboarding if not
+    fetchMe().then((u) => {
+      setUser(u);
+      if (u.is_approved) {
+        fetchThresholds()
+          .then((entries) => { if (entries.length === 0) setShowOnboarding(true); })
+          .catch(() => {}); // silently ignore — non-critical
+      }
+    });
   }
 
   function handleLogout() {
     setUser(null);
+    setShowOnboarding(false);
   }
 
   if (loading) {
@@ -205,6 +216,10 @@ export default function App() {
   return (
     <BrowserRouter>
       <AppLayout user={user} onLogout={handleLogout} onUserUpdate={setUser} />
+      <OnboardingDialog
+        open={showOnboarding}
+        onDone={() => setShowOnboarding(false)}
+      />
     </BrowserRouter>
   );
 }

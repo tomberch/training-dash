@@ -197,7 +197,7 @@ export interface ThresholdEntry {
   effective_date: string;
   ftp_watts: number | null;
   lthr_bpm: number | null;
-  max_hr_bpm: number | null;
+  hrmax_bpm: number | null;
 }
 
 export interface PowerCurvePoint {
