@@ -36,6 +36,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardHeader, CardTitle, CardContent, CardAction } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { useTheme } from "./hooks/useTheme";
+import type { Theme } from "./hooks/useTheme";
 
 function EyeIcon({ className }: { className?: string }) {
   return (
@@ -356,6 +358,7 @@ function ProfileSection({ user, onUserUpdate }: { user: User; onUserUpdate: (use
 function PreferencesSection({ user, onUserUpdate }: { user: User; onUserUpdate: (user: User) => void }) {
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const { theme, setTheme } = useTheme();
 
   async function handleToggle() {
     const newSystem = user.unit_system === "metric" ? "imperial" : "metric";
@@ -379,7 +382,52 @@ function PreferencesSection({ user, onUserUpdate }: { user: User; onUserUpdate: 
       <CardHeader>
         <CardTitle>Preferences</CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-6">
+        {/* Theme selector */}
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-foreground">Theme</p>
+            <p className="text-sm text-muted-foreground">
+              Choose light, dark, or follow your system preference
+            </p>
+          </div>
+          
+          <div className="flex gap-1 bg-muted p-1 rounded-lg">
+            {[
+              { value: "latte" as Theme, label: "Light", icon: (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+              )},
+              { value: "mocha" as Theme, label: "Dark", icon: (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                </svg>
+              )},
+              { value: "system" as Theme, label: "System", icon: (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              )},
+            ].map(({ value, label, icon }) => (
+              <button
+                key={value}
+                onClick={() => setTheme(value)}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+                  theme === value
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {icon}
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Unit system */}
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm font-medium text-foreground">Unit System</p>
@@ -451,14 +499,25 @@ function ThresholdsSection() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    
+    // Check at least one value is provided
+    const hasFtp = formData.ftp_watts !== "";
+    const hasLthr = formData.lthr_bpm !== "";
+    const hasHrmax = formData.hrmax_bpm !== "";
+    
+    if (!hasFtp && !hasLthr && !hasHrmax) {
+      setFeedback({ type: "error", message: "Please enter at least one threshold value" });
+      return;
+    }
+    
     setSaving(true);
     setFeedback(null);
     try {
       const newThreshold = await createThreshold({
         effective_date: formData.effective_date,
-        ftp_watts: parseInt(formData.ftp_watts),
-        lthr_bpm: parseInt(formData.lthr_bpm),
-        hrmax_bpm: parseInt(formData.hrmax_bpm),
+        ftp_watts: hasFtp ? parseInt(formData.ftp_watts) : undefined,
+        lthr_bpm: hasLthr ? parseInt(formData.lthr_bpm) : undefined,
+        hrmax_bpm: hasHrmax ? parseInt(formData.hrmax_bpm) : undefined,
       });
       setThresholds([newThreshold, ...thresholds]);
       setShowForm(false);
@@ -497,7 +556,7 @@ function ThresholdsSection() {
         <CardTitle>Thresholds</CardTitle>
         <CardAction>
           <Button variant="ghost" size="sm" onClick={() => setShowForm(!showForm)}>
-            {showForm ? "Cancel" : "+ Add"}
+            {showForm ? "Cancel" : currentThreshold ? "Update" : "+ Add"}
           </Button>
         </CardAction>
       </CardHeader>
@@ -507,22 +566,31 @@ function ThresholdsSection() {
           <div className="grid grid-cols-3 gap-4 p-4 bg-muted/50 rounded-lg">
             <div>
               <div className="text-xs text-muted-foreground uppercase tracking-wide">FTP</div>
-              <div className="text-xl font-bold text-foreground">{currentThreshold.ftp_watts}W</div>
+              <div className="text-xl font-bold text-foreground">
+                {currentThreshold.ftp_watts ? `${currentThreshold.ftp_watts}W` : "—"}
+              </div>
             </div>
             <div>
               <div className="text-xs text-muted-foreground uppercase tracking-wide">LTHR</div>
-              <div className="text-xl font-bold text-foreground">{currentThreshold.lthr_bpm} bpm</div>
+              <div className="text-xl font-bold text-foreground">
+                {currentThreshold.lthr_bpm ? `${currentThreshold.lthr_bpm} bpm` : "—"}
+              </div>
             </div>
             <div>
               <div className="text-xs text-muted-foreground uppercase tracking-wide">HRmax</div>
-              <div className="text-xl font-bold text-foreground">{currentThreshold.max_hr_bpm} bpm</div>
+              <div className="text-xl font-bold text-foreground">
+                {currentThreshold.max_hr_bpm ? `${currentThreshold.max_hr_bpm} bpm` : "—"}
+              </div>
             </div>
           </div>
         )}
 
-        {/* Add form */}
+        {/* Add/Update form */}
         {showForm && (
           <form onSubmit={handleSubmit} className="p-4 bg-primary/5 rounded-lg space-y-3">
+            <p className="text-xs text-muted-foreground mb-2">
+              Enter the values you want to {currentThreshold ? "update" : "set"}. Leave fields empty to keep current values.
+            </p>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">Effective Date</Label>
@@ -538,10 +606,9 @@ function ThresholdsSection() {
                   type="number"
                   value={formData.ftp_watts}
                   onChange={(e) => setFormData({ ...formData, ftp_watts: e.target.value })}
-                  placeholder="e.g. 250"
+                  placeholder={currentThreshold?.ftp_watts ? `Current: ${currentThreshold.ftp_watts}` : "e.g. 250"}
                   min="50"
                   max="600"
-                  required
                 />
               </div>
               <div className="space-y-1.5">
@@ -550,10 +617,9 @@ function ThresholdsSection() {
                   type="number"
                   value={formData.lthr_bpm}
                   onChange={(e) => setFormData({ ...formData, lthr_bpm: e.target.value })}
-                  placeholder="e.g. 165"
+                  placeholder={currentThreshold?.lthr_bpm ? `Current: ${currentThreshold.lthr_bpm}` : "e.g. 165"}
                   min="80"
                   max="220"
-                  required
                 />
               </div>
               <div className="space-y-1.5">
@@ -562,10 +628,9 @@ function ThresholdsSection() {
                   type="number"
                   value={formData.hrmax_bpm}
                   onChange={(e) => setFormData({ ...formData, hrmax_bpm: e.target.value })}
-                  placeholder="e.g. 185"
+                  placeholder={currentThreshold?.max_hr_bpm ? `Current: ${currentThreshold.max_hr_bpm}` : "e.g. 185"}
                   min="100"
                   max="250"
-                  required
                 />
               </div>
             </div>
@@ -593,9 +658,9 @@ function ThresholdsSection() {
                 {thresholds.map((t, i) => (
                   <tr key={i} className={i === 0 ? "text-foreground font-medium" : "text-muted-foreground"}>
                     <td className="py-2">{new Date(t.effective_date).toLocaleDateString()}</td>
-                    <td className="py-2 text-right">{t.ftp_watts}W</td>
-                    <td className="py-2 text-right">{t.lthr_bpm} bpm</td>
-                    <td className="py-2 text-right">{t.max_hr_bpm} bpm</td>
+                    <td className="py-2 text-right">{t.ftp_watts ? `${t.ftp_watts}W` : "—"}</td>
+                    <td className="py-2 text-right">{t.lthr_bpm ? `${t.lthr_bpm} bpm` : "—"}</td>
+                    <td className="py-2 text-right">{t.max_hr_bpm ? `${t.max_hr_bpm} bpm` : "—"}</td>
                   </tr>
                 ))}
               </tbody>

@@ -261,9 +261,9 @@ export interface UpdateZonesRequest {
 
 export interface CreateThresholdRequest {
   effective_date?: string;
-  ftp_watts: number;
-  lthr_bpm: number;
-  hrmax_bpm: number;
+  ftp_watts?: number;
+  lthr_bpm?: number;
+  hrmax_bpm?: number;
 }
 
 // ============================================================================

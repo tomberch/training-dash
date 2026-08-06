@@ -395,48 +395,94 @@ async def get_my_thresholds(db: DbSession, user: CurrentUser):
 
 class CreateThresholdRequest(BaseModel):
     effective_date: date | None = None
-    ftp_watts: int
-    lthr_bpm: int
-    hrmax_bpm: int
+    ftp_watts: int | None = None
+    lthr_bpm: int | None = None
+    hrmax_bpm: int | None = None
 
 
 @router.post("/me/thresholds")
 async def create_threshold(
     db: DbSession, user: CurrentUser, request: CreateThresholdRequest
 ):
-    """Create a new threshold entry for the current user."""
-    # Validation
-    if request.ftp_watts <= 0:
-        raise HTTPException(status_code=400, detail="ftp_watts must be positive")
-    if request.ftp_watts > 2000:
+    """Create a new threshold entry for the current user.
+    
+    All fields are optional. At least one of ftp_watts, lthr_bpm, or hrmax_bpm
+    must be provided. Once a value is set, it cannot be removed in subsequent
+    entries (only changed).
+    """
+    # Check at least one value provided
+    if request.ftp_watts is None and request.lthr_bpm is None and request.hrmax_bpm is None:
         raise HTTPException(
-            status_code=400, detail="ftp_watts must be realistic (max 2000)"
+            status_code=400, 
+            detail="At least one threshold value (ftp_watts, lthr_bpm, or hrmax_bpm) is required"
         )
-    if request.lthr_bpm <= 0:
-        raise HTTPException(status_code=400, detail="lthr_bpm must be positive")
-    if request.lthr_bpm > 250:
-        raise HTTPException(
-            status_code=400, detail="lthr_bpm must be realistic (max 250)"
-        )
-    if request.hrmax_bpm <= 0:
-        raise HTTPException(status_code=400, detail="hrmax_bpm must be positive")
-    if request.hrmax_bpm > 250:
-        raise HTTPException(
-            status_code=400, detail="hrmax_bpm must be realistic (max 250)"
-        )
-    if request.lthr_bpm > request.hrmax_bpm:
-        raise HTTPException(
-            status_code=400, detail="lthr_bpm cannot exceed hrmax_bpm"
-        )
+    
+    # Validation for provided values
+    if request.ftp_watts is not None:
+        if request.ftp_watts <= 0:
+            raise HTTPException(status_code=400, detail="ftp_watts must be positive")
+        if request.ftp_watts > 2000:
+            raise HTTPException(
+                status_code=400, detail="ftp_watts must be realistic (max 2000)"
+            )
+    if request.lthr_bpm is not None:
+        if request.lthr_bpm <= 0:
+            raise HTTPException(status_code=400, detail="lthr_bpm must be positive")
+        if request.lthr_bpm > 250:
+            raise HTTPException(
+                status_code=400, detail="lthr_bpm must be realistic (max 250)"
+            )
+    if request.hrmax_bpm is not None:
+        if request.hrmax_bpm <= 0:
+            raise HTTPException(status_code=400, detail="hrmax_bpm must be positive")
+        if request.hrmax_bpm > 250:
+            raise HTTPException(
+                status_code=400, detail="hrmax_bpm must be realistic (max 250)"
+            )
+    if request.lthr_bpm is not None and request.hrmax_bpm is not None:
+        if request.lthr_bpm > request.hrmax_bpm:
+            raise HTTPException(
+                status_code=400, detail="lthr_bpm cannot exceed hrmax_bpm"
+            )
 
     effective = request.effective_date or date.today()
+    
+    # Get the most recent threshold to carry forward values
+    result = await db.execute(
+        select(ThresholdHistory)
+        .where(ThresholdHistory.user_id == user.id)
+        .order_by(ThresholdHistory.effective_date.desc())
+        .limit(1)
+    )
+    previous = result.scalar_one_or_none()
+    
+    # Determine final values - use new value if provided, else carry forward
+    final_ftp = request.ftp_watts
+    final_lthr = request.lthr_bpm  
+    final_hrmax = request.hrmax_bpm
+    
+    if previous is not None:
+        # Carry forward previous values if new ones not provided
+        if final_ftp is None:
+            final_ftp = previous.ftp_watts
+        if final_lthr is None:
+            final_lthr = previous.lthr_bpm
+        if final_hrmax is None:
+            final_hrmax = previous.hrmax_bpm
+    
+    # Validate lthr doesn't exceed hrmax after merging with previous
+    if final_lthr is not None and final_hrmax is not None:
+        if final_lthr > final_hrmax:
+            raise HTTPException(
+                status_code=400, detail="lthr_bpm cannot exceed hrmax_bpm"
+            )
 
     threshold = ThresholdHistory(
         user_id=user.id,
         effective_date=effective,
-        ftp_watts=request.ftp_watts,
-        lthr_bpm=request.lthr_bpm,
-        hrmax_bpm=request.hrmax_bpm,
+        ftp_watts=final_ftp,
+        lthr_bpm=final_lthr,
+        hrmax_bpm=final_hrmax,
     )
     db.add(threshold)
     await db.commit()

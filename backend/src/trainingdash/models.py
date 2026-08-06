@@ -277,9 +277,9 @@ class ThresholdHistory(Base):
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     effective_date: Mapped[date] = mapped_column(Date, nullable=False)
-    ftp_watts: Mapped[int] = mapped_column(Integer, nullable=False)
-    lthr_bpm: Mapped[int] = mapped_column(Integer, nullable=False)
-    hrmax_bpm: Mapped[int] = mapped_column(Integer, nullable=False)
+    ftp_watts: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    lthr_bpm: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    hrmax_bpm: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_auto_calculated: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
 

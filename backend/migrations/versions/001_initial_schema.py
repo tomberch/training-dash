@@ -236,9 +236,9 @@ def upgrade() -> None:
         sa.Column('id', sa.BigInteger(), primary_key=True),
         sa.Column('user_id', sa.BigInteger(), sa.ForeignKey('users.id', ondelete='CASCADE'), nullable=False),
         sa.Column('effective_date', sa.Date(), nullable=False),
-        sa.Column('ftp_watts', sa.Integer(), nullable=False),
-        sa.Column('lthr_bpm', sa.Integer(), nullable=False),
-        sa.Column('hrmax_bpm', sa.Integer(), nullable=False),
+        sa.Column('ftp_watts', sa.Integer(), nullable=True),
+        sa.Column('lthr_bpm', sa.Integer(), nullable=True),
+        sa.Column('hrmax_bpm', sa.Integer(), nullable=True),
         sa.Column('is_auto_calculated', sa.Boolean(), default=False, nullable=False),
         sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
     )
