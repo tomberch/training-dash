@@ -2,6 +2,7 @@ import { MapContainer, Polyline, TileLayer, Marker, CircleMarker, useMap } from 
 import type { LatLngBounds } from "leaflet";
 import L from "leaflet";
 import { useEffect, useRef } from "react";
+import { useTheme } from "@/hooks/useTheme";
 
 // Component to fit map bounds to polyline - only runs once on initial load
 function FitBounds({ positions }: { positions: [number, number][] }) {
@@ -65,12 +66,22 @@ export function ResizableMap({
   isResizing,
   showResizeHandle = true,
 }: ResizableMapProps) {
+  const { resolvedTheme } = useTheme();
+  
   if (positions.length === 0) return null;
 
   const center: [number, number] = [
     positions.reduce((sum, p) => sum + p[0], 0) / positions.length,
     positions.reduce((sum, p) => sum + p[1], 0) / positions.length,
   ];
+
+  // Theme-aware tile URLs
+  // CartoDB Positron for light (latte), Dark Matter for dark (mocha)
+  const tileUrl = resolvedTheme === "mocha"
+    ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+    : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
+  
+  const attribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
 
   return (
     <div className="relative bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
@@ -80,8 +91,8 @@ export function ResizableMap({
         style={{ height: `${height}px`, width: "100%" }}
       >
         <TileLayer
-          url="/tiles/{z}/{x}/{y}.png"
-          attribution='&copy; OpenStreetMap'
+          url={tileUrl}
+          attribution={attribution}
         />
         <FitBounds positions={positions} />
         <InvalidateOnResize />

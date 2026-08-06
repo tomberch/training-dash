@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
   LineChart,
@@ -18,7 +19,12 @@ import { resampleByDistance } from "./resampler";
 import { ErrorDisplay } from "./ErrorDisplay";
 import { ResizableMap } from "./components/ResizableMap";
 import { useResizableMap } from "./hooks/useResizableMap";
-import { useActivityDetail } from "./hooks/useActivityDetail";
+import { useActivitySummary } from "./hooks/useActivitySummary";
+import { useActivityRecords } from "./hooks/useActivityRecords";
+import { useActivityWbal } from "./hooks/useActivityWbal";
+import { useActivitySameRoute } from "./hooks/useActivitySameRoute";
+import { useActivityThresholds } from "./hooks/useActivityThresholds";
+import { useLazySection } from "./hooks/useLazySection";
 import { ChartExpandModal } from "./components/ChartExpandModal";
 import { ActivityPowerCurve } from "./components/ActivityPowerCurve";
 import { ChartErrorBoundary } from "./components/ErrorBoundary";
@@ -100,27 +106,12 @@ interface Props {
 }
 
 export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Props) {
-  // Use the custom hook for all activity data management
+  // Use focused hooks for activity data management
   const {
-    loading,
-    error,
+    loading: summaryLoading,
+    error: summaryError,
     setError,
     activity,
-    geojson,
-    sameRoute,
-    wbalData,
-    records,
-    timestamps,
-    firstTs,
-    positions,
-    ftpWatts,
-    lthrBpm,
-    axisModes,
-    toggleAxis,
-    hoveredPosition,
-    setHoveredPosition,
-    findPositionByElapsed,
-    findPositionByDistance,
     isEditingTitle,
     setIsEditingTitle,
     editedTitle,
@@ -128,9 +119,124 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
     saveTitle,
     isGeneratingTitle,
     generateTitle,
+  } = useActivitySummary(activityId);
+
+  const {
+    loading: recordsLoading,
+    error: recordsError,
+    geojson,
+    records,
+    timestamps,
+    firstTs,
+    positions,
+    axisModes,
+    toggleAxis,
+    hoveredPosition,
+    setHoveredPosition,
+    findPositionByElapsed,
+    findPositionByDistance,
     expandedChart,
     setExpandedChart,
-  } = useActivityDetail(activityId);
+  } = useActivityRecords(activityId);
+
+  // Lazy-loaded data
+  const { wbalData } = useActivityWbal(activityId);
+  const { sameRoute } = useActivitySameRoute(activityId);
+  const { ftpWatts, lthrBpm } = useActivityThresholds(activity, wbalData);
+
+  // Lazy section loading
+  const { sentinelRef: analysisSentinelRef, hasEntered: analysisVisible } = useLazySection();
+
+  // Build power-colored segments for map visualization
+  // Uses 7-zone power model based on FTP
+  const coloredSegments = useMemo(() => {
+    if (!geojson || !ftpWatts || positions.length < 2) {
+      return [];
+    }
+
+    // Power zone boundaries as % of FTP (standard 7-zone model)
+    const zoneBoundaries = [
+      { max: 0.55, zone: "1" },  // Recovery: <55%
+      { max: 0.75, zone: "2" },  // Endurance: 55-75%
+      { max: 0.90, zone: "3" },  // Tempo: 75-90%
+      { max: 1.05, zone: "4" },  // Threshold: 90-105%
+      { max: 1.20, zone: "5" },  // VO2max: 105-120%
+      { max: 1.50, zone: "6" },  // Anaerobic: 120-150%
+      { max: Infinity, zone: "7" },  // Neuromuscular: >150%
+    ];
+
+    const getPowerZone = (power: number): string => {
+      const pctFtp = power / ftpWatts;
+      for (const b of zoneBoundaries) {
+        if (pctFtp <= b.max) return b.zone;
+      }
+      return "7";
+    };
+
+    const features = geojson.features.filter(
+      (f) => f.geometry !== null && f.geometry.coordinates.length >= 2
+    );
+
+    if (features.length < 2) return [];
+
+    const segments: { positions: [number, number][]; color: string }[] = [];
+    let currentZone: string | null = null;
+    let currentPositions: [number, number][] = [];
+
+    for (const f of features) {
+      const power = f.properties.power_w;
+      const pos: [number, number] = [
+        f.geometry!.coordinates[1],
+        f.geometry!.coordinates[0],
+      ];
+
+      // Skip points without power data - use default color
+      if (power == null) {
+        if (currentPositions.length >= 2 && currentZone) {
+          segments.push({
+            positions: [...currentPositions],
+            color: POWER_ZONE_COLORS[currentZone] || "#6366f1",
+          });
+        }
+        currentZone = null;
+        currentPositions = [pos];
+        continue;
+      }
+
+      const zone = getPowerZone(power);
+
+      if (zone !== currentZone) {
+        // Save previous segment
+        if (currentPositions.length >= 2 && currentZone) {
+          segments.push({
+            positions: [...currentPositions],
+            color: POWER_ZONE_COLORS[currentZone] || "#6366f1",
+          });
+        }
+        // Start new segment (include last point for continuity)
+        currentZone = zone;
+        currentPositions = currentPositions.length > 0 
+          ? [currentPositions[currentPositions.length - 1], pos]
+          : [pos];
+      } else {
+        currentPositions.push(pos);
+      }
+    }
+
+    // Don't forget the last segment
+    if (currentPositions.length >= 2 && currentZone) {
+      segments.push({
+        positions: currentPositions,
+        color: POWER_ZONE_COLORS[currentZone] || "#6366f1",
+      });
+    }
+
+    return segments;
+  }, [geojson, ftpWatts, positions]);
+
+  // Combined loading/error state
+  const loading = summaryLoading || recordsLoading;
+  const error = summaryError || recordsError;
 
   // Responsive layout hooks for resizable map
   const {
@@ -457,42 +563,12 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
           </div>
         </div>
 
-        {/* Peak Powers / Power Curve */}
-        {activity.peaks && activity.peaks.length > 0 && (
-          <ChartErrorBoundary chartName="Power Curve" height={250}>
-            <ActivityPowerCurve peaks={activity.peaks} />
-          </ChartErrorBoundary>
-        )}
-
-        {/* Zone Distribution Charts */}
-        {(activity.power_zone_times || activity.hr_zone_times) && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            {activity.power_zone_times && (
-              <ChartErrorBoundary chartName="Power Zones" height={200}>
-                <ZoneChart 
-                  title="Power Zones" 
-                  zoneTimes={activity.power_zone_times} 
-                  zoneColors={POWER_ZONE_COLORS}
-                />
-              </ChartErrorBoundary>
-            )}
-            {activity.hr_zone_times && (
-              <ChartErrorBoundary chartName="HR Zones" height={200}>
-                <ZoneChart 
-                  title="HR Zones" 
-                  zoneTimes={activity.hr_zone_times} 
-                  zoneColors={HR_ZONE_COLORS}
-                />
-              </ChartErrorBoundary>
-            )}
-          </div>
-        )}
-
-        {/* Map */}
+        {/* Map - Above the fold */}
         {positions.length > 0 && (
           <div className="mb-6 sticky top-0 z-10">
             <ResizableMap
               positions={positions}
+              coloredSegments={coloredSegments.length > 0 ? coloredSegments : undefined}
               hoveredPosition={hoveredPosition}
               height={mapHeight}
               onResizeStart={startResizeHeight}
@@ -502,118 +578,186 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
           </div>
         )}
 
-        {/* Data Charts */}
-        {CHARTS.map((chart) => {
-          const { data, xKey, tickFormatter, ticks } = getChartData(chart);
-          const hasData = data.some((d) => d[chart.dataKey as keyof typeof d] !== null);
-          if (!hasData) return null;
-          
-          // Calculate Y-axis domain with margin
-          const values = data
-            .map((d) => d[chart.dataKey as keyof typeof d] as number | null)
-            .filter((v): v is number => v !== null);
-          const minVal = Math.min(...values);
-          const maxVal = Math.max(...values);
-          const range = maxVal - minVal;
-          const margin = range * 0.1 || 5; // 10% margin, minimum 5
-          const yMin = Math.max(0, Math.floor(minVal - margin));
-          const yMax = Math.ceil(maxVal + margin);
-          
-          return (
-            <ChartErrorBoundary key={chart.key} chartName={chart.label} height={200}>
-              <ChartCard
-                title={chart.label}
-                action={
-                  <button
-                    onClick={() => toggleAxis(chart.key)}
-                    className={`px-3 py-1 text-xs font-medium rounded-full transition-fast ${
-                      axisModes[chart.key] === "distance"
-                        ? "bg-primary/10 text-primary"
-                        : "bg-muted text-muted-foreground"
-                    }`}
-                  >
-                    {axisModes[chart.key] === "distance" ? "Distance" : "Time"}
-                  </button>
-                }
-                onExpand={() => setExpandedChart(chart.key)}
-              >
-              <ResponsiveContainer width="100%" height={200}>
-                <LineChart 
-                  data={data}
-                  onMouseLeave={handleChartLeave}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis
-                    dataKey={xKey}
-                    type="number"
-                    domain={['dataMin', 'dataMax']}
-                    tickFormatter={tickFormatter}
-                    ticks={ticks}
-                    interval={0}
-                    tick={{ fontSize: 10, fill: "#6b7280" }}
-                    axisLine={{ stroke: "#d1d5db" }}
-                    tickLine={{ stroke: "#d1d5db" }}
-                  />
-                  <YAxis
-                    domain={[yMin, yMax]}
-                    tick={{ fontSize: 12, fill: "#6b7280" }}
-                    axisLine={{ stroke: "#d1d5db" }}
-                    tickLine={{ stroke: "#d1d5db" }}
-                    label={{ value: chart.unit, angle: -90, position: "insideLeft", fontSize: 12, fill: "#6b7280" }}
-                  />
-                  <RechartsTooltip
-                    content={({ active, payload }) => {
-                      // Update map marker when tooltip is active
-                      if (active && payload?.[0]?.payload) {
-                        const p = payload[0].payload;
-                        const mode = axisModes[chart.key];
-                        const pos = mode === "distance"
-                          ? findPositionByDistance(p.distance_m)
-                          : findPositionByElapsed(p.elapsed);
-                        if (pos) {
-                          setTimeout(() => setHoveredPosition(pos), 0);
-                        }
-                      }
-                      // Render default-style tooltip
-                      if (!active || !payload?.length) return null;
-                      const value = payload[0].value;
-                      return (
-                        <div style={{
-                          backgroundColor: "white",
-                          border: "1px solid #e5e7eb",
-                          borderRadius: "8px",
-                          padding: "8px 12px",
-                          fontSize: "12px",
-                        }}>
-                          {chart.label}: {typeof value === "number" ? value.toFixed(2) : value}
-                        </div>
-                      );
-                    }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey={chart.dataKey}
-                    stroke={chart.color}
-                    strokeWidth={2}
-                    dot={false}
-                    name={chart.label}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-              </ChartCard>
-            </ChartErrorBoundary>
-          );
-        })}
+        {/* ========== PERFORMANCE SECTION ========== */}
+        <section className="mb-8">
+          <SectionHeader 
+            title="Performance" 
+            subtitle="Time series data and zone distribution"
+          />
 
-        {/* W'bal Chart */}
-        {wbalData && wbalData.wbal_series.length > 0 && (
-          <ChartErrorBoundary chartName="W'bal" height={200}>
-            <WbalChart 
-              wbalData={wbalData} 
-              findPositionByElapsed={findPositionByElapsed}
-              setHoveredPosition={setHoveredPosition}
+          {/* Data Charts */}
+          {CHARTS.map((chart) => {
+            const { data, xKey, tickFormatter, ticks } = getChartData(chart);
+            const hasData = data.some((d) => d[chart.dataKey as keyof typeof d] !== null);
+            if (!hasData) return null;
+            
+            // Calculate Y-axis domain with margin
+            const values = data
+              .map((d) => d[chart.dataKey as keyof typeof d] as number | null)
+              .filter((v): v is number => v !== null);
+            const minVal = Math.min(...values);
+            const maxVal = Math.max(...values);
+            const range = maxVal - minVal;
+            const margin = range * 0.1 || 5; // 10% margin, minimum 5
+            const yMin = Math.max(0, Math.floor(minVal - margin));
+            const yMax = Math.ceil(maxVal + margin);
+            
+            return (
+              <ChartErrorBoundary key={chart.key} chartName={chart.label} height={200}>
+                <ChartCard
+                  title={chart.label}
+                  action={
+                    <button
+                      onClick={() => toggleAxis(chart.key)}
+                      className={`px-3 py-1 text-xs font-medium rounded-full transition-fast ${
+                        axisModes[chart.key] === "distance"
+                          ? "bg-primary/10 text-primary"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {axisModes[chart.key] === "distance" ? "Distance" : "Time"}
+                    </button>
+                  }
+                  onExpand={() => setExpandedChart(chart.key)}
+                >
+                <ResponsiveContainer width="100%" height={200}>
+                  <LineChart 
+                    data={data}
+                    onMouseLeave={handleChartLeave}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis
+                      dataKey={xKey}
+                      type="number"
+                      domain={['dataMin', 'dataMax']}
+                      tickFormatter={tickFormatter}
+                      ticks={ticks}
+                      interval={0}
+                      tick={{ fontSize: 10, fill: "#6b7280" }}
+                      axisLine={{ stroke: "#d1d5db" }}
+                      tickLine={{ stroke: "#d1d5db" }}
+                    />
+                    <YAxis
+                      domain={[yMin, yMax]}
+                      tick={{ fontSize: 12, fill: "#6b7280" }}
+                      axisLine={{ stroke: "#d1d5db" }}
+                      tickLine={{ stroke: "#d1d5db" }}
+                      label={{ value: chart.unit, angle: -90, position: "insideLeft", fontSize: 12, fill: "#6b7280" }}
+                    />
+                    <RechartsTooltip
+                      content={({ active, payload }) => {
+                        // Update map marker when tooltip is active
+                        if (active && payload?.[0]?.payload) {
+                          const p = payload[0].payload;
+                          const mode = axisModes[chart.key];
+                          const pos = mode === "distance"
+                            ? findPositionByDistance(p.distance_m)
+                            : findPositionByElapsed(p.elapsed);
+                          if (pos) {
+                            setTimeout(() => setHoveredPosition(pos), 0);
+                          }
+                        }
+                        // Render default-style tooltip
+                        if (!active || !payload?.length) return null;
+                        const value = payload[0].value;
+                        return (
+                          <div style={{
+                            backgroundColor: "white",
+                            border: "1px solid #e5e7eb",
+                            borderRadius: "8px",
+                            padding: "8px 12px",
+                            fontSize: "12px",
+                          }}>
+                            {chart.label}: {typeof value === "number" ? value.toFixed(2) : value}
+                          </div>
+                        );
+                      }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey={chart.dataKey}
+                      stroke={chart.color}
+                      strokeWidth={2}
+                      dot={false}
+                      name={chart.label}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+                </ChartCard>
+              </ChartErrorBoundary>
+            );
+          })}
+
+          {/* Zone Distribution Charts */}
+          {(activity.power_zone_times || activity.hr_zone_times) && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {activity.power_zone_times && (
+                <ChartErrorBoundary chartName="Power Zones" height={200}>
+                  <ZoneChart 
+                    title="Power Zones" 
+                    zoneTimes={activity.power_zone_times} 
+                    zoneColors={POWER_ZONE_COLORS}
+                  />
+                </ChartErrorBoundary>
+              )}
+              {activity.hr_zone_times && (
+                <ChartErrorBoundary chartName="HR Zones" height={200}>
+                  <ZoneChart 
+                    title="HR Zones" 
+                    zoneTimes={activity.hr_zone_times} 
+                    zoneColors={HR_ZONE_COLORS}
+                  />
+                </ChartErrorBoundary>
+              )}
+            </div>
+          )}
+        </section>
+
+        {/* ========== ANALYSIS SECTION ========== */}
+        {/* Sentinel for lazy loading - placed before Analysis section */}
+        <div ref={analysisSentinelRef} className="h-px" />
+        
+        {((activity.peaks && activity.peaks.length > 0) || (wbalData && wbalData.wbal_series.length > 0)) && (
+          <section className="mb-8">
+            <SectionHeader 
+              title="Analysis" 
+              subtitle="Power curve and W'bal depletion"
             />
-          </ChartErrorBoundary>
+
+            {analysisVisible ? (
+              <>
+                {/* Peak Powers / Power Curve */}
+                {activity.peaks && activity.peaks.length > 0 && (
+                  <ChartErrorBoundary chartName="Power Curve" height={250}>
+                    <ActivityPowerCurve peaks={activity.peaks} />
+                  </ChartErrorBoundary>
+                )}
+
+                {/* W'bal Chart */}
+                {wbalData && wbalData.wbal_series.length > 0 && (
+                  <ChartErrorBoundary chartName="W'bal" height={200}>
+                    <WbalChart 
+                      wbalData={wbalData} 
+                      findPositionByElapsed={findPositionByElapsed}
+                      setHoveredPosition={setHoveredPosition}
+                    />
+                  </ChartErrorBoundary>
+                )}
+              </>
+            ) : (
+              /* Placeholder skeleton while waiting for intersection */
+              <div className="space-y-6">
+                <div className="bg-card rounded-lg border border-border p-4">
+                  <Skeleton className="h-5 w-32 mb-4" />
+                  <Skeleton className="h-[250px] w-full rounded" />
+                </div>
+                <div className="bg-card rounded-lg border border-border p-4">
+                  <Skeleton className="h-5 w-24 mb-4" />
+                  <Skeleton className="h-[200px] w-full rounded" />
+                </div>
+              </div>
+            )}
+          </section>
         )}
       </div>
 
@@ -684,6 +828,17 @@ function StatTile({ label, value, subtitle, tooltip }: { label: string; value: s
   }
 
   return content;
+}
+
+function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }) {
+  return (
+    <div className="mb-4 pb-2 border-b border-border">
+      <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+      {subtitle && (
+        <p className="text-sm text-muted-foreground mt-0.5">{subtitle}</p>
+      )}
+    </div>
+  );
 }
 
 function ChartCard({

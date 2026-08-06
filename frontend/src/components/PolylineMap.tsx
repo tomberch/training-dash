@@ -4,8 +4,11 @@
  * Unlike MiniMap which uses Leaflet tiles, this renders the route as a
  * pure SVG path - much faster for list views with many activities.
  * 
- * When showMapBackground is true, displays a static map tile from OpenStreetMap.
+ * When showMapBackground is true, displays a static map tile from CartoDB.
+ * Uses Positron (light) for latte theme and Dark Matter (dark) for mocha theme.
  */
+
+import { useTheme } from "@/hooks/useTheme";
 
 interface PolylineMapProps {
   /** Google-encoded polyline string */
@@ -183,8 +186,8 @@ function calculateZoom(
 }
 
 /**
- * Get OSM static map URL for the given bounds.
- * Uses the static map API pattern with center point and zoom.
+ * Get static map URL for the given bounds using OpenStreetMap static service.
+ * Note: This service doesn't support dark mode natively, so we use CSS filters for dark theme.
  */
 function getStaticMapUrl(
   minLat: number,
@@ -208,10 +211,7 @@ function getStaticMapUrl(
   
   const zoom = calculateZoom(paddedMinLat, paddedMaxLat, paddedMinLon, paddedMaxLon, width, height);
   
-  // Use OpenStreetMap tile server with a simple static map approach
-  // This generates a URL that fetches the appropriate tile
-  // For simplicity, we'll use a tile-stitching service or a single tile
-  // Using staticmap.openstreetmap.de which is free for non-commercial use
+  // Use OpenStreetMap static map service
   return `https://staticmap.openstreetmap.de/staticmap.php?center=${centerLat.toFixed(6)},${centerLon.toFixed(6)}&zoom=${Math.max(8, zoom - 1)}&size=${width}x${height}&maptype=osmarenderer`;
 }
 
@@ -223,13 +223,16 @@ export function PolylineMap({
   showMarkers = true,
   showMapBackground = true,
 }: PolylineMapProps) {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "mocha";
+  
   // Decode polyline
   const coords = polyline ? decodePolyline(polyline) : [];
 
   if (coords.length < 2) {
     return (
-      <div className={`bg-gray-100 dark:bg-gray-700 rounded flex items-center justify-center ${className}`}>
-        <span className="text-xs text-gray-400 dark:text-gray-500">No GPS</span>
+      <div className={`bg-muted rounded flex items-center justify-center ${className}`}>
+        <span className="text-xs text-muted-foreground">No GPS</span>
       </div>
     );
   }
@@ -251,7 +254,7 @@ export function PolylineMap({
         <img
           src={mapUrl}
           alt=""
-          className="absolute inset-0 w-full h-full object-cover"
+          className={`absolute inset-0 w-full h-full object-cover ${isDark ? "invert brightness-[0.85] hue-rotate-180" : ""}`}
           loading="lazy"
           onError={(e) => {
             // Hide image on error, fallback to gray background
@@ -260,7 +263,7 @@ export function PolylineMap({
         />
       )}
       {/* Fallback/loading background */}
-      <div className={`absolute inset-0 ${mapUrl ? 'bg-gray-200/50 dark:bg-gray-700/50' : 'bg-gray-100 dark:bg-gray-800'}`} />
+      <div className={`absolute inset-0 ${mapUrl ? 'bg-muted/50' : 'bg-muted'}`} />
       
       {/* SVG overlay with route */}
       <svg

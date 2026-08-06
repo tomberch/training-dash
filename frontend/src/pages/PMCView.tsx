@@ -343,6 +343,20 @@ export function PMCView() {
                 />
               ))}
 
+              {/* Today marker */}
+              <ReferenceLine
+                x={new Date().toISOString().split("T")[0]}
+                stroke="#10b981"
+                strokeWidth={2}
+                label={{
+                  value: "Today",
+                  position: "top",
+                  fill: "#10b981",
+                  fontSize: 10,
+                  fontWeight: 600,
+                }}
+              />
+
               <Tooltip
                 content={({ active, payload }) => {
                   if (!active || !payload?.length) return null;

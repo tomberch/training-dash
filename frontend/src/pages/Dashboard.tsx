@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import {
   LineChart,
@@ -7,7 +7,9 @@ import {
   YAxis,
   ResponsiveContainer,
   ReferenceArea,
+  ReferenceLine,
 } from "recharts";
+import { toast } from "sonner";
 import type { Activity, PMCPoint, PowerCurvePoint, Notification, RecordsResponse, ThresholdEntry } from "../api";
 import { 
   fetchActivities, 
@@ -115,6 +117,9 @@ export function Dashboard() {
   const [records, setRecords] = useState<RecordsResponse | null>(null);
   const [thresholds, setThresholds] = useState<ThresholdEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Track if we've shown the first-activity celebration
+  const celebrationShownRef = useRef(false);
 
   useEffect(() => {
     // Fetch last 8 weeks of PMC data for sparkline
@@ -138,6 +143,21 @@ export function Dashboard() {
         setRecords(recs);
         setThresholds(thresh);
         setLoading(false);
+        
+        // First-activity celebration: show once when user goes from 0→1+ activities
+        const hasSeenCelebration = localStorage.getItem("traindash:first-activity-celebrated");
+        if (
+          !celebrationShownRef.current &&
+          !hasSeenCelebration &&
+          acts.activities.length > 0
+        ) {
+          celebrationShownRef.current = true;
+          localStorage.setItem("traindash:first-activity-celebrated", "true");
+          toast.success("Your first activity is here! 🎉", {
+            description: "Your training journey begins. Explore your ride data below.",
+            duration: 5000,
+          });
+        }
       })
       .catch(() => setLoading(false));
   }, []);
@@ -430,6 +450,11 @@ export function Dashboard() {
                   ))}
                   <XAxis dataKey="date" hide />
                   <YAxis domain={[-30, 50]} hide />
+                  <ReferenceLine
+                    x={new Date().toISOString().split("T")[0]}
+                    stroke="#10b981"
+                    strokeWidth={2}
+                  />
                   <Line type="monotone" dataKey="tsb" stroke="#f59e0b" strokeWidth={2} dot={false} isAnimationActive={false} />
                   <Line type="monotone" dataKey="ctl" stroke="#3b82f6" strokeWidth={1.5} dot={false} isAnimationActive={false} />
                 </LineChart>
