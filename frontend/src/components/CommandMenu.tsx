@@ -237,6 +237,7 @@ export function CommandMenu({ onUpload, isAdmin = false }: CommandMenuProps) {
               key={cmd.id}
               value={`${cmd.label} ${cmd.keywords?.join(" ") ?? ""}`}
               onSelect={() => runCommand(cmd.action)}
+              aria-keyshortcuts={cmd.shortcut?.toLowerCase().replace(" ", "+")}
             >
               {cmd.icon}
               <span>{cmd.label}</span>
@@ -250,6 +251,7 @@ export function CommandMenu({ onUpload, isAdmin = false }: CommandMenuProps) {
               key={cmd.id}
               value={`${cmd.label} ${cmd.keywords?.join(" ") ?? ""}`}
               onSelect={() => runCommand(cmd.action)}
+              aria-keyshortcuts={cmd.shortcut?.toLowerCase()}
             >
               {cmd.icon}
               <span>{cmd.label}</span>

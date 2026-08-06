@@ -35,8 +35,8 @@ export function MiniMap({ geojson, className = "" }: MiniMapProps) {
 
   if (positions.length < 2) {
     return (
-      <div className={`bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center ${className}`}>
-        <span className="text-xs text-gray-400">No GPS data</span>
+      <div className={`bg-muted rounded-lg flex items-center justify-center ${className}`}>
+        <span className="text-xs text-muted-foreground">No GPS data</span>
       </div>
     );
   }

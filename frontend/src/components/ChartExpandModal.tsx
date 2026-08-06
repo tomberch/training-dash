@@ -127,7 +127,7 @@ export function ChartExpandModal({
       onClick={handleBackdropClick}
     >
       <div
-        className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl flex flex-col"
+        className="bg-card rounded-xl shadow-2xl flex flex-col"
         style={{
           width: "90vw",
           height: "70vh",
@@ -136,13 +136,13 @@ export function ChartExpandModal({
         }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border flex-shrink-0">
           <div className="flex items-center gap-4">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              <h2 className="text-lg font-semibold text-foreground">
                 {chart.label}
               </h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
+              <p className="text-sm text-muted-foreground">
                 Expanded view
               </p>
             </div>
@@ -153,8 +153,8 @@ export function ChartExpandModal({
               onClick={onToggleAxis}
               className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
                 axisMode === "distance"
-                  ? "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300"
-                  : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
+                  ? "bg-primary/10 text-primary"
+                  : "bg-muted text-muted-foreground"
               }`}
             >
               {axisMode === "distance" ? "Distance" : "Time"}
@@ -162,7 +162,7 @@ export function ChartExpandModal({
             {/* Close button */}
             <button
               onClick={onClose}
-              className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
               aria-label="Close"
             >
               <svg
@@ -275,8 +275,8 @@ export function ChartExpandModal({
 
         {/* Footer with threshold legend if applicable */}
         {(showFtpLine || showLthrLine) && (
-          <div className="px-6 py-3 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
-            <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
+          <div className="px-6 py-3 border-t border-border flex-shrink-0">
+            <div className="flex items-center gap-4 text-sm text-muted-foreground">
               {showFtpLine && (
                 <div className="flex items-center gap-2">
                   <div className="w-6 h-0.5 bg-amber-500" style={{ backgroundImage: 'linear-gradient(90deg, #f59e0b 50%, transparent 50%)', backgroundSize: '8px 100%' }} />

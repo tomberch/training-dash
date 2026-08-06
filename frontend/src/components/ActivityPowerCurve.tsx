@@ -115,13 +115,13 @@ export function ActivityPowerCurve({ peaks, showAllTimeCurve: initialShowAllTime
   const prCount = peaks.filter((p) => p.is_pr).length;
 
   return (
-    <div className="mb-6 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+    <div className="mb-6 bg-card rounded-lg border border-border overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
         <div>
-          <h2 className="text-sm font-semibold text-gray-900 dark:text-white">
+          <h2 className="text-sm font-semibold text-foreground">
             Power Curve
           </h2>
-          <p className="text-xs text-gray-500 dark:text-gray-400">
+          <p className="text-xs text-muted-foreground">
             {prCount > 0 ? (
               <span className="text-amber-600 dark:text-amber-400">
                 {prCount} PR{prCount > 1 ? "s" : ""} set!
@@ -132,12 +132,12 @@ export function ActivityPowerCurve({ peaks, showAllTimeCurve: initialShowAllTime
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 cursor-pointer">
+          <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
             <input
               type="checkbox"
               checked={showAllTime}
               onChange={(e) => setShowAllTime(e.target.checked)}
-              className="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
+              className="rounded border-border text-primary focus:ring-primary"
             />
             <span>Show all-time curve</span>
             {loading && (
@@ -251,7 +251,7 @@ export function ActivityPowerCurve({ peaks, showAllTimeCurve: initialShowAllTime
         </ResponsiveContainer>
 
         {/* Legend */}
-        <div className="flex items-center justify-center gap-6 mt-3 text-xs text-gray-500 dark:text-gray-400">
+        <div className="flex items-center justify-center gap-6 mt-3 text-xs text-muted-foreground">
           <div className="flex items-center gap-2">
             <div className="w-4 h-0.5 bg-amber-500" />
             <span>This ride</span>

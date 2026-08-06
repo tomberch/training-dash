@@ -84,7 +84,7 @@ export function ResizableMap({
   const attribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
 
   return (
-    <div className="relative bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <div className="relative bg-card rounded-lg border border-border overflow-hidden">
       <MapContainer
         center={center}
         zoom={13}
@@ -153,13 +153,13 @@ export function ResizableMap({
         <div
           onMouseDown={onResizeStart}
           className={`absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize flex items-center justify-center group ${
-            isResizing ? "bg-indigo-200 dark:bg-indigo-800" : "hover:bg-gray-200 dark:hover:bg-gray-700"
+            isResizing ? "bg-primary/20" : "hover:bg-muted"
           }`}
         >
           <div className={`w-12 h-1 rounded-full transition-colors ${
             isResizing 
-              ? "bg-indigo-500" 
-              : "bg-gray-300 dark:bg-gray-600 group-hover:bg-gray-400 dark:group-hover:bg-gray-500"
+              ? "bg-primary" 
+              : "bg-muted-foreground/30 group-hover:bg-muted-foreground/50"
           }`} />
         </div>
       )}

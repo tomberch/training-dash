@@ -94,7 +94,11 @@ export function OnboardingDialog({ open, onDone }: Props): React.JSX.Element {
       });
       onDone();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save thresholds");
+      const errorMessage = err instanceof Error ? err.message : "Failed to save thresholds";
+      setError(errorMessage);
+      toast.error("Failed to save thresholds", {
+        description: "Please check your values and try again.",
+      });
     } finally {
       setSaving(false);
     }
