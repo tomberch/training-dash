@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import {
   LineChart,
   Line,
@@ -8,7 +8,7 @@ import {
   ResponsiveContainer,
   ReferenceArea,
 } from "recharts";
-import type { Activity, PMCPoint, PowerCurvePoint, Notification, RecordsResponse } from "../api";
+import type { Activity, PMCPoint, PowerCurvePoint, Notification, RecordsResponse, ThresholdEntry } from "../api";
 import { 
   fetchActivities, 
   fetchPMC, 
@@ -17,11 +17,14 @@ import {
   acceptNotification,
   dismissNotification,
   fetchRecords,
+  fetchThresholds,
 } from "../api";
 import { PolylineMap } from "../components/PolylineMap";
 import { formatDuration, formatDistance, formatRelativeTime, formatElevation } from "../format";
 import { TSB_ZONES, getTSBZone } from "../constants";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
 function DashboardLoadingSkeleton() {
   return (
@@ -110,6 +113,7 @@ export function Dashboard() {
   const [powerCurve, setPowerCurve] = useState<PowerCurvePoint[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [records, setRecords] = useState<RecordsResponse | null>(null);
+  const [thresholds, setThresholds] = useState<ThresholdEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -124,13 +128,15 @@ export function Dashboard() {
       fetchPowerCurve(),
       fetchNotifications(),
       fetchRecords(),
+      fetchThresholds().catch(() => []),
     ])
-      .then(([acts, pmc, curve, notifs, recs]) => {
+      .then(([acts, pmc, curve, notifs, recs, thresh]) => {
         setActivities(acts.activities);
         setPmcData(pmc);
         setPowerCurve(curve);
         setNotifications(notifs);
         setRecords(recs);
+        setThresholds(thresh);
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -329,6 +335,30 @@ export function Dashboard() {
   return (
     <div className="max-w-6xl mx-auto px-4 py-6">
       <h1 className="text-2xl font-bold text-foreground mb-6">Dashboard</h1>
+
+      {/* Onboarding: Prompt to set thresholds */}
+      {thresholds.length === 0 && (
+        <Card className="mb-6 border-primary/30 bg-primary/5">
+          <CardContent className="flex items-center justify-between py-4">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/20">
+                <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="font-medium text-foreground">Set your training thresholds</h3>
+                <p className="text-sm text-muted-foreground">
+                  Add your FTP, LTHR, and HRmax to enable TSS, training zones, and performance metrics.
+                </p>
+              </div>
+            </div>
+            <Button variant="default" size="sm" asChild>
+              <Link to="/settings">Configure</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Notifications Banner */}
       {notifications.length > 0 && (
