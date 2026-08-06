@@ -40,6 +40,13 @@ A connection to an external service that syncs data into TrainingDash. Each inte
 
 A single workout session (ride, run, etc.) parsed from a FIT file. Belongs to one User. Contains summary stats and links to Records.
 
+**Deletion** — An Activity can be permanently deleted by its owner. The delete is a hard delete (no trash / soft delete). On deletion:
+
+- Child rows (Records, Laps, ActivityPeakPower) are removed via database CASCADE.
+- The owning Route's `ride_count` is decremented. If the activity was the last one on the Route, the Route is also deleted.
+- If the deleted Activity was the Route's `first_seen_activity_id`, that FK is set to NULL automatically (ON DELETE SET NULL).
+- A background job (`recalculate_after_delete_job`) recomputes the fitness model (CP model / FitnessHistory) and re-evaluates `is_breakthrough` flags on all remaining activities for that user. The DELETE endpoint returns 204 immediately; recalculation is asynchronous.
+
 ## Record
 
 A single data point within an Activity — one row per timestamp with lat/lon, HR, power, speed, altitude, etc.

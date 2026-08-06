@@ -171,6 +171,22 @@ Update activity (currently only title).
 { "title": "Epic Mountain Ride" }
 ```
 
+### DELETE /api/activities/:id
+
+Permanently delete an activity owned by the current user.
+
+Cascades to all child rows (Records, Laps, ActivityPeakPower). Route
+`ride_count` is decremented; if the deleted activity was the only one on its
+route the route is also removed. If the deleted activity was the
+`first_seen_activity_id` of a route, that field is set to `NULL` automatically
+(ON DELETE SET NULL). A background job then recomputes the fitness model and
+breakthrough flags asynchronously so the response is immediate.
+
+**Response:** `204 No Content`
+
+**Errors:**
+- `404 Not Found` — activity does not exist or is not owned by the current user
+
 ### POST /api/activities/:id/generate-title
 
 Auto-generate title using geocoding.

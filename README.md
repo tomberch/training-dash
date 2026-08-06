@@ -1,5 +1,15 @@
 # TrainDash
 
+[![Build](https://github.com/tomberch/training-dash/actions/workflows/ci.yml/badge.svg)](https://github.com/tomberch/training-dash/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
+[![React 19](https://img.shields.io/badge/react-19-61dafb.svg)](https://react.dev/)
+[![Docker](https://img.shields.io/badge/docker-compose-2496ed.svg)](https://docs.docker.com/compose/)
+
+> [!WARNING]
+> **This software is under heavy development. APIs are unstable and breaking changes happen without notice.**
+> It is vibe-coded — built fast with AI assistance — which means it works, but carries all the bugs and rough edges that implies. Use it for personal exploration, not production workloads.
+
 Self-hosted fitness analytics for cyclists and endurance athletes. Analyze your training data with interactive maps, performance charts, and personal records tracking.
 
 ![Dashboard](docs/images/dashboard.png)
@@ -12,6 +22,7 @@ Self-hosted fitness analytics for cyclists and endurance athletes. Analyze your 
 - Automatic sync from Xert
 - Activity list with route map thumbnails
 - Detailed activity view with interactive map and charts
+- Delete individual activities (with async fitness recalculation)
 
 **Performance Analytics**
 - **PMC (Performance Management Chart)** — Track CTL (fitness), ATL (fatigue), and TSB (form) over time with color-coded training zones
