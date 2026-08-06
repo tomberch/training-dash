@@ -11,6 +11,7 @@ import base64
 import os
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 from unittest import mock
 
 import pytest
@@ -77,7 +78,7 @@ class MockXertClient:
     async def get_xss(self, activity_id: str) -> float | None:
         return self.xss_values.get(activity_id, MOCK_XSS)
 
-    def get_last_synced_at(self, creds) -> None:
+    def get_last_synced_at(self, creds: Any) -> datetime | None:
         # Mock always returns None; last_synced_at is written by run_sync directly
         return None
 

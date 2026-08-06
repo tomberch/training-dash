@@ -184,24 +184,33 @@ async def run_sync(
     start_date, end_date, is_first_sync = _determine_sync_range(
         creds, provider, existing_refs
     )
-    
+
     log_prefix = f"sync_{provider.source_name}"
     if is_first_sync:
         sync_since = provider.get_sync_since(creds)
         if sync_since:
-            logger.info(f"{log_prefix}: First sync for user {user_id}, using sync_since {sync_since}")
+            logger.info(
+                "%s: First sync for user %s, using sync_since %s",
+                log_prefix, user_id, sync_since,
+            )
         else:
-            logger.info(f"{log_prefix}: First sync for user {user_id}, no sync_since set, using 90 days")
+            logger.info(
+                "%s: First sync for user %s, no sync_since set, using 90 days",
+                log_prefix, user_id,
+            )
     else:
         last_synced_at = provider.get_last_synced_at(creds)
         if last_synced_at:
             logger.info(
-                f"{log_prefix}: Incremental sync for user {user_id}, "
-                f"using last_synced_at {last_synced_at} - 4h"
+                "%s: Incremental sync for user %s, using last_synced_at %s - 4h",
+                log_prefix, user_id, last_synced_at,
             )
         else:
-            logger.info(f"{log_prefix}: Subsequent sync for user {user_id}, no last_synced_at, using 90 days")
-    
+            logger.info(
+                "%s: Subsequent sync for user %s, no last_synced_at, using 90 days",
+                log_prefix, user_id,
+            )
+
     # Connect to provider
     try:
         await provider.connect(provider.get_email(creds), password)
@@ -215,7 +224,14 @@ async def run_sync(
     
     try:
         # List activities
-        activities = await provider.list_activities(start_date, end_date)
+        try:
+            activities = await provider.list_activities(start_date, end_date)
+        except Exception as e:
+            logger.error(
+                "%s: Failed to list activities for user %s: %s",
+                log_prefix, user_id, e,
+            )
+            return SyncResult(success=False, user_id=user_id, error=str(e))
         
         # Filter to new activities (not already imported from this source)
         new_activities = [
@@ -226,7 +242,7 @@ async def run_sync(
         if not new_activities:
             logger.info(f"{log_prefix}: No new activities for user {user_id}")
             # Still update last_synced_at so the next sync uses a tight window
-            await _write_last_synced_at(db, creds, user_id)
+            await _write_last_synced_at(db, creds)
             return SyncResult(success=True, user_id=user_id)
         
         # Use batch mode if >10 activities to avoid notification spam
@@ -286,7 +302,7 @@ async def run_sync(
             await finalize_batch_import(db, user_id, synced)
 
         # Record the successful sync time so the next sync uses an incremental window
-        await _write_last_synced_at(db, creds, user_id)
+        await _write_last_synced_at(db, creds)
 
         return SyncResult(
             success=True,
@@ -302,21 +318,16 @@ async def run_sync(
 async def _write_last_synced_at(
     db: AsyncSession,
     creds: Any,
-    user_id: int,
 ) -> None:
     """
-    Write the current UTC time as last_synced_at on the credentials row.
+    Stamp last_synced_at = now(UTC) on the credentials row.
 
     Called after every successful sync (including no-new-activities runs) so
     that _determine_sync_range can use an incremental 4-hour window next time.
+    Uses ORM mutation rather than raw DDL so the session identity map stays
+    consistent.
     """
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
-    table = type(creds).__table__
-    await db.execute(
-        table.update()
-        .where(table.c.user_id == user_id)
-        .values(last_synced_at=now)
-    )
+    creds.last_synced_at = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.commit()
 
 
