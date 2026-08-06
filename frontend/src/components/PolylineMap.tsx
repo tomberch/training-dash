@@ -1,10 +1,11 @@
 /**
- * Lightweight SVG component for rendering GPS polylines with optional map background.
- * 
+ * Lightweight SVG component for rendering GPS polylines with a real tile map background.
+ *
  * Unlike MiniMap which uses Leaflet tiles, this renders the route as a
  * pure SVG path - much faster for list views with many activities.
- * 
- * When showMapBackground is true, displays a static map tile from CartoDB.
+ *
+ * When showMapBackground is true, displays a grid of CartoDB raster tiles
+ * composited behind the SVG route overlay.
  * Uses Positron (light) for latte theme and Dark Matter (dark) for mocha theme.
  */
 
@@ -185,34 +186,81 @@ function calculateZoom(
   return Math.min(latZoom, lonZoom, ZOOM_MAX);
 }
 
+/** Tile size in pixels (standard OSM/CartoDB tile size). */
+const TILE_SIZE = 256;
+
+/** Convert longitude to tile X at the given zoom level. */
+function lonToTileX(lon: number, zoom: number): number {
+  return ((lon + 180) / 360) * Math.pow(2, zoom);
+}
+
+/** Convert latitude to tile Y at the given zoom level. */
+function latToTileY(lat: number, zoom: number): number {
+  const rad = (lat * Math.PI) / 180;
+  return ((1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2) * Math.pow(2, zoom);
+}
+
 /**
- * Get static map URL for the given bounds using OpenStreetMap static service.
- * Note: This service doesn't support dark mode natively, so we use CSS filters for dark theme.
+ * Calculate the tile grid needed to fill a container of the given dimensions,
+ * centred on the provided lat/lon at the best-fit zoom level.
  */
-function getStaticMapUrl(
+function getTileGrid(
   minLat: number,
   maxLat: number,
   minLon: number,
   maxLon: number,
-  width: number,
-  height: number
-): string {
-  const centerLat = (minLat + maxLat) / 2;
-  const centerLon = (minLon + maxLon) / 2;
-  
-  // Add padding to bounds for better context
-  const latPadding = (maxLat - minLat) * 0.15;
-  const lonPadding = (maxLon - minLon) * 0.15;
-  
-  const paddedMinLat = minLat - latPadding;
-  const paddedMaxLat = maxLat + latPadding;
-  const paddedMinLon = minLon - lonPadding;
-  const paddedMaxLon = maxLon + lonPadding;
-  
-  const zoom = calculateZoom(paddedMinLat, paddedMaxLat, paddedMinLon, paddedMaxLon, width, height);
-  
-  // Use OpenStreetMap static map service
-  return `https://staticmap.openstreetmap.de/staticmap.php?center=${centerLat.toFixed(6)},${centerLon.toFixed(6)}&zoom=${Math.max(8, zoom - 1)}&size=${width}x${height}&maptype=osmarenderer`;
+  containerWidth: number,
+  containerHeight: number
+): { tiles: { tileX: number; tileY: number; left: number; top: number }[]; zoom: number } {
+  // Add 15 % padding around the route bounds
+  const latPad = (maxLat - minLat) * 0.2;
+  const lonPad = (maxLon - minLon) * 0.2;
+  const pMinLat = minLat - latPad;
+  const pMaxLat = maxLat + latPad;
+  const pMinLon = minLon - lonPad;
+  const pMaxLon = maxLon + lonPad;
+
+  const zoom = Math.max(1, Math.min(18, calculateZoom(pMinLat, pMaxLat, pMinLon, pMaxLon, containerWidth, containerHeight)));
+
+  const centerLat = (pMinLat + pMaxLat) / 2;
+  const centerLon = (pMinLon + pMaxLon) / 2;
+
+  // Fractional tile coordinates of the centre
+  const centerTileX = lonToTileX(centerLon, zoom);
+  const centerTileY = latToTileY(centerLat, zoom);
+
+  // Pixel position of the centre within the tile grid origin
+  const centerPixelX = centerTileX * TILE_SIZE;
+  const centerPixelY = centerTileY * TILE_SIZE;
+
+  // Top-left pixel of the container
+  const originPixelX = centerPixelX - containerWidth / 2;
+  const originPixelY = centerPixelY - containerHeight / 2;
+
+  // Integer tile range to cover the container
+  const startTileX = Math.floor(originPixelX / TILE_SIZE);
+  const startTileY = Math.floor(originPixelY / TILE_SIZE);
+  const endTileX = Math.ceil((originPixelX + containerWidth) / TILE_SIZE);
+  const endTileY = Math.ceil((originPixelY + containerHeight) / TILE_SIZE);
+
+  const maxTile = Math.pow(2, zoom) - 1;
+
+  const tiles: { tileX: number; tileY: number; left: number; top: number }[] = [];
+
+  for (let tx = startTileX; tx <= endTileX; tx++) {
+    for (let ty = startTileY; ty <= endTileY; ty++) {
+      // Clamp to valid tile range
+      const clampedTx = Math.max(0, Math.min(maxTile, tx));
+      const clampedTy = Math.max(0, Math.min(maxTile, ty));
+
+      const left = tx * TILE_SIZE - originPixelX;
+      const top = ty * TILE_SIZE - originPixelY;
+
+      tiles.push({ tileX: clampedTx, tileY: clampedTy, left, top });
+    }
+  }
+
+  return { tiles, zoom };
 }
 
 export function PolylineMap({
@@ -242,29 +290,55 @@ export function PolylineMap({
   const svgHeight = 100;
   const { path, startX, startY, endX, endY, bounds } = coordsToSvgPath(coords, svgWidth, svgHeight);
   
-  // Generate static map URL if background is enabled
-  const mapUrl = showMapBackground 
-    ? getStaticMapUrl(bounds.minLat, bounds.maxLat, bounds.minLon, bounds.maxLon, 300, 200)
+  // Generate tile grid if background is enabled
+  // Container dimensions in real pixels (2× the SVG viewBox to get crisper tiles)
+  const containerW = 300;
+  const containerH = 200;
+  const tileGrid = showMapBackground
+    ? getTileGrid(bounds.minLat, bounds.maxLat, bounds.minLon, bounds.maxLon, containerW, containerH)
     : null;
+
+  // CartoDB tile base URLs (same as ResizableMap)
+  const tileBase = isDark
+    ? "https://a.basemaps.cartocdn.com/dark_all"
+    : "https://a.basemaps.cartocdn.com/light_all";
 
   return (
     <div className={`relative rounded overflow-hidden ${className}`}>
-      {/* Static map background */}
-      {mapUrl && (
-        <img
-          src={mapUrl}
-          alt=""
-          className={`absolute inset-0 w-full h-full object-cover ${isDark ? "invert brightness-[0.85] hue-rotate-180" : ""}`}
-          loading="lazy"
-          onError={(e) => {
-            // Hide image on error, fallback to gray background
-            (e.target as HTMLImageElement).style.display = 'none';
-          }}
-        />
+      {/* Tile map background */}
+      {tileGrid && (
+        <div className="absolute inset-0 overflow-hidden">
+          {tileGrid.tiles.map(({ tileX, tileY, left, top }) => {
+            // Scale from container pixels to CSS pixels (50 % because containerW = 2 × svgWidth)
+            const cssLeft = (left / containerW) * 100;
+            const cssTop = (top / containerH) * 100;
+            const cssSize = (TILE_SIZE / containerW) * 100;
+            return (
+              <img
+                key={`${tileGrid.zoom}-${tileX}-${tileY}`}
+                src={`${tileBase}/${tileGrid.zoom}/${tileX}/${tileY}.png`}
+                alt=""
+                className="absolute block"
+                style={{
+                  left: `${cssLeft}%`,
+                  top: `${cssTop}%`,
+                  width: `${cssSize}%`,
+                  height: "auto",
+                  aspectRatio: "1",
+                  imageRendering: "auto",
+                }}
+                loading="lazy"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.visibility = "hidden";
+                }}
+              />
+            );
+          })}
+        </div>
       )}
-      {/* Fallback/loading background */}
-      <div className={`absolute inset-0 ${mapUrl ? 'bg-muted/50' : 'bg-muted'}`} />
-      
+      {/* Fallback background when no tiles */}
+      {!tileGrid && <div className="absolute inset-0 bg-muted" />}
+
       {/* SVG overlay with route */}
       <svg
         viewBox={`0 0 ${svgWidth} ${svgHeight}`}
