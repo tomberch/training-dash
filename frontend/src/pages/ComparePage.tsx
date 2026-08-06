@@ -17,6 +17,8 @@ import { ActivitySelector } from "../components/ActivitySelector";
 import { ResizableMap } from "../components/ResizableMap";
 import { useResizableMap } from "../hooks/useResizableMap";
 import { ChartErrorBoundary } from "../components/ErrorBoundary";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ChartSkeleton } from "@/components/ui/skeletons";
 import { formatDistance, formatSpeed, formatTime, formatElevation, formatActivityDate } from "../format";
 
 // Gap coloring thresholds
@@ -1007,13 +1009,30 @@ export function ComparePage() {
       {/* Comparison content area */}
       <div className="flex-1 min-h-0 p-4 pt-0 overflow-y-auto">
         {loading ? (
-          <div className="flex items-center justify-center h-64 bg-card rounded-lg border border-border">
-            <div className="flex items-center gap-3 text-muted-foreground">
-              <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-              Loading...
+          <div className="space-y-4">
+            {/* Activity summary skeletons */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-card rounded-lg border border-border p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Skeleton className="w-3 h-3 rounded-full" />
+                  <Skeleton className="h-3 w-12" />
+                </div>
+                <Skeleton className="h-6 w-48 mb-1" />
+                <Skeleton className="h-4 w-32" />
+              </div>
+              <div className="bg-card rounded-lg border border-border p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Skeleton className="w-3 h-3 rounded-full" />
+                  <Skeleton className="h-3 w-16" />
+                </div>
+                <Skeleton className="h-6 w-48 mb-1" />
+                <Skeleton className="h-4 w-32" />
+              </div>
+            </div>
+            {/* Comparison chart skeleton */}
+            <div className="bg-card rounded-lg border border-border p-4">
+              <Skeleton className="h-5 w-40 mb-4" />
+              <ChartSkeleton height="h-64" />
             </div>
           </div>
         ) : baseActivity && compareActivity ? (

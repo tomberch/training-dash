@@ -5,6 +5,7 @@ import { ApiError, fetchActivities } from "../api";
 import { formatDistance, formatTime, formatDate, formatElevation, formatSpeed } from "../format";
 import type { UnitSystem } from "../format";
 import { ErrorDisplay } from "../ErrorDisplay";
+import { EmptyState } from "@/components/ui/empty-state";
 
 type SortField = "date" | "distance" | "time" | "elevation" | "tss" | "power" | "hr";
 type SortDirection = "asc" | "desc";
@@ -12,7 +13,7 @@ type SortDirection = "asc" | "desc";
 // Sort icon component
 function SortIcon({ active, direction }: { active: boolean; direction: SortDirection }) {
   return (
-    <span className={`ml-1 inline-block ${active ? "text-indigo-600 dark:text-indigo-400" : "text-gray-400"}`}>
+    <span className={`ml-1 inline-block ${active ? "text-primary" : "text-muted-foreground"}`}>
       {active && direction === "asc" ? "↑" : active && direction === "desc" ? "↓" : "↕"}
     </span>
   );
@@ -36,7 +37,7 @@ function SortableHeader({
 }) {
   return (
     <th
-      className={`px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none ${className}`}
+      className={`px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer hover:bg-muted/50 select-none ${className}`}
       onClick={() => onSort(field)}
     >
       <span className="flex items-center">
@@ -82,7 +83,7 @@ function Pagination({
       <button
         onClick={() => onPageChange(page - 1)}
         disabled={page === 1}
-        className="px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        className="px-3 py-2 text-sm font-medium text-foreground bg-card border border-border rounded-lg hover:bg-muted/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
       >
         Previous
       </button>
@@ -90,7 +91,7 @@ function Pagination({
       <div className="flex items-center gap-1">
         {getPageNumbers().map((p, i) =>
           p === "..." ? (
-            <span key={`ellipsis-${i}`} className="px-2 text-gray-500">
+            <span key={`ellipsis-${i}`} className="px-2 text-muted-foreground">
               ...
             </span>
           ) : (
@@ -99,8 +100,8 @@ function Pagination({
               onClick={() => onPageChange(p)}
               className={`w-10 h-10 text-sm font-medium rounded-lg transition-colors ${
                 p === page
-                  ? "bg-indigo-600 text-white"
-                  : "text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-foreground bg-card border border-border hover:bg-muted/50"
               }`}
             >
               {p}
@@ -112,7 +113,7 @@ function Pagination({
       <button
         onClick={() => onPageChange(page + 1)}
         disabled={page === total_pages}
-        className="px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        className="px-3 py-2 text-sm font-medium text-foreground bg-card border border-border rounded-lg hover:bg-muted/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
       >
         Next
       </button>
@@ -197,10 +198,10 @@ export function ActivityTable({ unitSystem = "metric" }: { unitSystem?: UnitSyst
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-4">
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">Activity Table</h1>
+          <h1 className="text-xl font-bold text-foreground">Activity Table</h1>
           <button
             onClick={() => navigate("/activities")}
-            className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
+            className="text-sm text-primary hover:underline flex items-center gap-1"
             title="View as list"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -210,17 +211,17 @@ export function ActivityTable({ unitSystem = "metric" }: { unitSystem?: UnitSyst
           </button>
         </div>
         {pagination && (
-          <span className="text-sm text-gray-500 dark:text-gray-400">
+          <span className="text-sm text-muted-foreground">
             {pagination.total} {pagination.total === 1 ? "activity" : "activities"}
           </span>
         )}
       </div>
 
       {/* Table */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+      <div className="bg-card rounded-lg border border-border overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-            <thead className="bg-gray-50 dark:bg-gray-900">
+          <table className="min-w-full divide-y divide-border">
+            <thead className="bg-muted">
               <tr>
                 <SortableHeader
                   label="Date"
@@ -229,7 +230,7 @@ export function ActivityTable({ unitSystem = "metric" }: { unitSystem?: UnitSyst
                   currentDirection={sortDirection}
                   onSort={handleSort}
                 />
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Title
                 </th>
                 <SortableHeader
@@ -256,7 +257,7 @@ export function ActivityTable({ unitSystem = "metric" }: { unitSystem?: UnitSyst
                   onSort={handleSort}
                   className="text-right"
                 />
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Avg Speed
                 </th>
                 <SortableHeader
@@ -283,50 +284,50 @@ export function ActivityTable({ unitSystem = "metric" }: { unitSystem?: UnitSyst
                   onSort={handleSort}
                   className="text-right"
                 />
-                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   NP
                 </th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   IF
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+            <tbody className="bg-card divide-y divide-border">
               {loading
                 ? [...Array(10)].map((_, i) => (
                     <tr key={i} className="animate-pulse">
                       <td className="px-4 py-3">
-                        <div className="h-4 w-20 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                        <div className="h-4 w-20 bg-muted rounded"></div>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="h-4 w-32 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                        <div className="h-4 w-32 bg-muted rounded"></div>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="h-4 w-16 bg-gray-200 dark:bg-gray-700 rounded ml-auto"></div>
+                        <div className="h-4 w-16 bg-muted rounded ml-auto"></div>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="h-4 w-14 bg-gray-200 dark:bg-gray-700 rounded ml-auto"></div>
+                        <div className="h-4 w-14 bg-muted rounded ml-auto"></div>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="h-4 w-12 bg-gray-200 dark:bg-gray-700 rounded ml-auto"></div>
+                        <div className="h-4 w-12 bg-muted rounded ml-auto"></div>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="h-4 w-16 bg-gray-200 dark:bg-gray-700 rounded ml-auto"></div>
+                        <div className="h-4 w-16 bg-muted rounded ml-auto"></div>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="h-4 w-10 bg-gray-200 dark:bg-gray-700 rounded ml-auto"></div>
+                        <div className="h-4 w-10 bg-muted rounded ml-auto"></div>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="h-4 w-12 bg-gray-200 dark:bg-gray-700 rounded ml-auto"></div>
+                        <div className="h-4 w-12 bg-muted rounded ml-auto"></div>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="h-4 w-10 bg-gray-200 dark:bg-gray-700 rounded ml-auto"></div>
+                        <div className="h-4 w-10 bg-muted rounded ml-auto"></div>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="h-4 w-10 bg-gray-200 dark:bg-gray-700 rounded mx-auto"></div>
+                        <div className="h-4 w-10 bg-muted rounded mx-auto"></div>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="h-4 w-10 bg-gray-200 dark:bg-gray-700 rounded mx-auto"></div>
+                        <div className="h-4 w-10 bg-muted rounded mx-auto"></div>
                       </td>
                     </tr>
                   ))
@@ -334,15 +335,15 @@ export function ActivityTable({ unitSystem = "metric" }: { unitSystem?: UnitSyst
                     <tr
                       key={activity.id}
                       onClick={() => navigate(`/activities/${activity.id}`)}
-                      className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                      className="cursor-pointer hover:bg-muted/50 transition-colors"
                     >
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-foreground">
                         {formatDate(activity.started_at)}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-white max-w-xs truncate">
+                      <td className="px-4 py-3 text-sm text-foreground max-w-xs truncate">
                         <div className="flex items-center gap-2">
                           {activity.title || (
-                            <span className="text-gray-400 italic">Untitled</span>
+                            <span className="text-muted-foreground italic">Untitled</span>
                           )}
                           {activity.is_breakthrough && (
                             <span
@@ -354,31 +355,31 @@ export function ActivityTable({ unitSystem = "metric" }: { unitSystem?: UnitSyst
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-white text-right tabular-nums">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-foreground text-right tabular-nums">
                         {formatDistance(activity.total_distance_m, unitSystem)}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-white text-right tabular-nums">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-foreground text-right tabular-nums">
                         {formatTime(activity.moving_time_s)}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-white text-right tabular-nums">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-foreground text-right tabular-nums">
                         {formatElevation(activity.elevation_gain_m, unitSystem)}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-white text-right tabular-nums">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-foreground text-right tabular-nums">
                         {formatSpeed(activity.avg_speed_mps, unitSystem)}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-white text-right tabular-nums">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-foreground text-right tabular-nums">
                         {activity.tss != null ? Math.round(activity.tss) : "—"}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-white text-right tabular-nums">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-foreground text-right tabular-nums">
                         {activity.avg_power_w != null ? `${activity.avg_power_w} W` : "—"}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-white text-right tabular-nums">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-foreground text-right tabular-nums">
                         {activity.avg_hr_bpm != null ? activity.avg_hr_bpm : "—"}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 text-center tabular-nums">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-muted-foreground text-center tabular-nums">
                         {activity.np_power_w != null ? activity.np_power_w : "—"}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 text-center tabular-nums">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-muted-foreground text-center tabular-nums">
                         {activity.intensity_factor != null
                           ? activity.intensity_factor.toFixed(2)
                           : "—"}
@@ -391,11 +392,15 @@ export function ActivityTable({ unitSystem = "metric" }: { unitSystem?: UnitSyst
 
         {/* Empty state */}
         {!loading && activities.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-gray-500 dark:text-gray-400">
-              No activities yet. Upload a FIT file to get started.
-            </p>
-          </div>
+          <EmptyState
+            icon={
+              <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+              </svg>
+            }
+            title="No activities yet"
+            description="Upload a FIT file or connect your Xert account to start tracking your rides."
+          />
         )}
       </div>
 

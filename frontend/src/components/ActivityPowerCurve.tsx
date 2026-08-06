@@ -141,7 +141,7 @@ export function ActivityPowerCurve({ peaks, showAllTimeCurve: initialShowAllTime
             />
             <span>Show all-time curve</span>
             {loading && (
-              <span className="text-gray-400 dark:text-gray-500">Loading...</span>
+              <span className="text-muted-foreground">Loading...</span>
             )}
           </label>
         </div>
