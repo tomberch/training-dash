@@ -9,7 +9,7 @@ that handles the provider-specific authentication and activity fetching.
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Generic, TypeVar
 
 from sqlalchemy import select
@@ -77,6 +77,11 @@ class SyncProvider(ABC, Generic[TActivity]):
     @abstractmethod
     def get_sync_since(self, creds: Any) -> datetime | None:
         """Extract sync_since date from credentials model, if set."""
+        ...
+
+    @abstractmethod
+    def get_last_synced_at(self, creds: Any) -> datetime | None:
+        """Extract last_synced_at timestamp from credentials model, if set."""
         ...
     
     @abstractmethod
@@ -188,7 +193,14 @@ async def run_sync(
         else:
             logger.info(f"{log_prefix}: First sync for user {user_id}, no sync_since set, using 90 days")
     else:
-        logger.info(f"{log_prefix}: Subsequent sync for user {user_id}, using 90 days")
+        last_synced_at = provider.get_last_synced_at(creds)
+        if last_synced_at:
+            logger.info(
+                f"{log_prefix}: Incremental sync for user {user_id}, "
+                f"using last_synced_at {last_synced_at} - 4h"
+            )
+        else:
+            logger.info(f"{log_prefix}: Subsequent sync for user {user_id}, no last_synced_at, using 90 days")
     
     # Connect to provider
     try:
@@ -213,6 +225,8 @@ async def run_sync(
         
         if not new_activities:
             logger.info(f"{log_prefix}: No new activities for user {user_id}")
+            # Still update last_synced_at so the next sync uses a tight window
+            await _write_last_synced_at(db, creds, user_id)
             return SyncResult(success=True, user_id=user_id)
         
         # Use batch mode if >10 activities to avoid notification spam
@@ -270,7 +284,10 @@ async def run_sync(
         # Finalize batch import if needed
         if batch_mode and synced > 0:
             await finalize_batch_import(db, user_id, synced)
-        
+
+        # Record the successful sync time so the next sync uses an incremental window
+        await _write_last_synced_at(db, creds, user_id)
+
         return SyncResult(
             success=True,
             user_id=user_id,
@@ -280,6 +297,27 @@ async def run_sync(
         
     finally:
         await provider.close()
+
+
+async def _write_last_synced_at(
+    db: AsyncSession,
+    creds: Any,
+    user_id: int,
+) -> None:
+    """
+    Write the current UTC time as last_synced_at on the credentials row.
+
+    Called after every successful sync (including no-new-activities runs) so
+    that _determine_sync_range can use an incremental 4-hour window next time.
+    """
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    table = type(creds).__table__
+    await db.execute(
+        table.update()
+        .where(table.c.user_id == user_id)
+        .values(last_synced_at=now)
+    )
+    await db.commit()
 
 
 async def _get_credentials(
@@ -316,28 +354,36 @@ def _determine_sync_range(
     existing_refs: set[str],
 ) -> tuple[datetime, datetime, bool]:
     """
-    Determine sync date range based on whether this is first sync.
-    
-    Returns (start_date, end_date, is_first_sync)
+    Determine sync date range.
+
+    Priority order:
+      1. First sync (no existing activities): use sync_since if set, else 90 days.
+      2. Subsequent sync with last_synced_at: use last_synced_at - 4h (incremental).
+      3. Subsequent sync without last_synced_at: fall back to 90 days.
+
+    Returns (start_date, end_date, is_first_sync).
     """
-    from datetime import timezone
-    
     end_date = datetime.now(timezone.utc).replace(tzinfo=None)
     is_first_sync = len(existing_refs) == 0
-    
+
     if is_first_sync:
         sync_since = provider.get_sync_since(creds)
         if sync_since is not None:
-            # sync_since might be a date or datetime
-            if hasattr(sync_since, 'hour'):
+            # sync_since may be a date or a datetime
+            if hasattr(sync_since, "hour"):
                 start_date = sync_since
             else:
                 start_date = datetime.combine(sync_since, datetime.min.time())
         else:
-            # Default to 90 days
             start_date = end_date - timedelta(days=90)
     else:
-        # Subsequent sync: always use 90 days
-        start_date = end_date - timedelta(days=90)
-    
+        last_synced_at = provider.get_last_synced_at(creds)
+        if last_synced_at is not None:
+            # Incremental window: last sync time minus 4-hour buffer to catch
+            # activities that were still uploading when the last sync ran.
+            start_date = last_synced_at - timedelta(hours=4)
+        else:
+            # No last_synced_at recorded yet — fall back to 90 days
+            start_date = end_date - timedelta(days=90)
+
     return start_date, end_date, is_first_sync

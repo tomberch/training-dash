@@ -52,6 +52,9 @@ class XertSyncProvider(SyncProvider):
     def get_sync_since(self, creds: XertCredentials) -> datetime | None:
         return creds.sync_since
 
+    def get_last_synced_at(self, creds: XertCredentials) -> datetime | None:
+        return creds.last_synced_at
+
     async def connect(self, email: str, password: str) -> None:
         from trainingdash.xert import get_xert_client
 
@@ -158,6 +161,9 @@ class GarminSyncProvider(SyncProvider):
     
     def get_sync_since(self, creds: GarminCredentials) -> datetime | None:
         return creds.sync_since
+
+    def get_last_synced_at(self, creds: GarminCredentials) -> datetime | None:
+        return creds.last_synced_at
     
     async def connect(self, email: str, password: str) -> None:
         from trainingdash.garmin import get_garmin_client, GarminMFARequired

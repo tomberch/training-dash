@@ -77,6 +77,10 @@ class MockXertClient:
     async def get_xss(self, activity_id: str) -> float | None:
         return self.xss_values.get(activity_id, MOCK_XSS)
 
+    def get_last_synced_at(self, creds) -> None:
+        # Mock always returns None; last_synced_at is written by run_sync directly
+        return None
+
     async def close(self) -> None:
         pass
 
@@ -271,6 +275,88 @@ class TestSyncXertJob:
             )
             records = record_result.scalars().all()
             assert len(records) == 10
+
+    @pytest.mark.asyncio
+    async def test_sync_xert_writes_last_synced_at(
+        self, db_engine, user_with_xert_creds, mock_xert_client, encryption_key_env
+    ):
+        """A successful sync writes last_synced_at to xert_credentials."""
+        mock_xert_client.activities = [
+            XertActivity(
+                id="last-synced-test",
+                name="Test Ride",
+                started_at=datetime(2026, 8, 5, 7, 0, 0),
+                activity_type="Cycling",
+            ),
+        ]
+
+        mock_worker_db_session, session_factory = _make_worker_db_session_ctx(db_engine)
+
+        with _patch_pipeline():
+            with mock.patch("trainingdash.xert.get_xert_client", return_value=mock_xert_client):
+                with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
+                    from trainingdash.worker import sync_xert_job
+                    result = await sync_xert_job({}, user_with_xert_creds.id)
+
+        assert result["success"] is True
+
+        async with session_factory() as session:
+            creds_result = await session.execute(
+                select(XertCredentials).where(
+                    XertCredentials.user_id == user_with_xert_creds.id
+                )
+            )
+            creds = creds_result.scalar_one()
+            assert creds.last_synced_at is not None
+            # last_synced_at should be very recent (within 60 seconds of now)
+            delta = datetime.now(timezone.utc).replace(tzinfo=None) - creds.last_synced_at
+            assert abs(delta.total_seconds()) < 60
+
+    @pytest.mark.asyncio
+    async def test_sync_xert_no_new_activities_still_writes_last_synced_at(
+        self, db_engine, db_session, user_with_xert_creds, mock_xert_client, encryption_key_env
+    ):
+        """last_synced_at is updated even when there are no new activities to import."""
+        # Pre-populate so the list returns nothing new
+        existing = Activity(
+            user_id=user_with_xert_creds.id,
+            source="xert",
+            source_ref="xert:already-there",
+            started_at=datetime(2026, 8, 1, 7, 0, 0),
+            total_distance_m=10000,
+            moving_time_s=3600,
+            elapsed_time_s=3600,
+        )
+        db_session.add(existing)
+        await db_session.commit()
+
+        mock_xert_client.activities = [
+            XertActivity(
+                id="already-there",
+                name="Already Imported",
+                started_at=datetime(2026, 8, 1, 7, 0, 0),
+                activity_type="Cycling",
+            ),
+        ]
+
+        mock_worker_db_session, session_factory = _make_worker_db_session_ctx(db_engine)
+
+        with mock.patch("trainingdash.xert.get_xert_client", return_value=mock_xert_client):
+            with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
+                from trainingdash.worker import sync_xert_job
+                result = await sync_xert_job({}, user_with_xert_creds.id)
+
+        assert result["success"] is True
+        assert result["synced_activities"] == 0
+
+        async with session_factory() as session:
+            creds_result = await session.execute(
+                select(XertCredentials).where(
+                    XertCredentials.user_id == user_with_xert_creds.id
+                )
+            )
+            creds = creds_result.scalar_one()
+            assert creds.last_synced_at is not None
 
     @pytest.mark.asyncio
     async def test_sync_xert_activity_has_fit_fields(
