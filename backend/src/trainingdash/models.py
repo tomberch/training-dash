@@ -341,3 +341,29 @@ class Record(Base):
     geom: Mapped[object | None] = mapped_column(
         Geography("POINT", srid=4326, spatial_index=True), nullable=True
     )
+
+
+
+class RecalculationJob(Base):
+    """Tracks the status of an async metric recalculation job.
+
+    One row per user — upserted on each run. Status transitions:
+    pending → running → completed | failed.
+    """
+
+    __tablename__ = "recalculation_jobs"
+    __table_args__ = (
+        UniqueConstraint("user_id", name="uq_recalculation_job_user"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="pending"
+    )
+    started_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
+    completed_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    activities_updated: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)

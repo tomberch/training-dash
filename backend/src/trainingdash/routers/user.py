@@ -25,6 +25,7 @@ from trainingdash.models import (
 from trainingdash.routers.serializers import (
     hr_zone_response,
     power_zone_response,
+    recalculation_job_response,
     threshold_response,
     user_response,
 )
@@ -533,13 +534,26 @@ async def create_threshold(
             user.id,
         )
 
-    # Backfill metrics for activities that were computed before this threshold existed
+    # Enqueue async metric recalculation — observable via GET /me/recalculate-metrics
     try:
-        from trainingdash.ingest import backfill_activity_metrics
-        await backfill_activity_metrics(db, user.id)
+        from trainingdash.jobs import enqueue_recalculate_metrics_job
+        from trainingdash.models import RecalculationJob
+        from sqlalchemy.dialects.postgresql import insert as pg_insert
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        await db.execute(
+            pg_insert(RecalculationJob)
+            .values(user_id=user.id, status="pending", started_at=now)
+            .on_conflict_do_update(
+                index_elements=["user_id"],
+                set_={"status": "pending", "started_at": now, "completed_at": None, "error_message": None},
+            )
+        )
+        await db.commit()
+        await enqueue_recalculate_metrics_job(user.id)
     except Exception:
         logger.exception(
-            "Metric backfill failed after threshold save for user %s — metrics may be stale",
+            "Failed to enqueue metric recalculation for user %s after threshold save",
             user.id,
         )
 
@@ -1074,3 +1088,58 @@ async def has_password(user: CurrentUser) -> dict:
         Object with has_password boolean.
     """
     return {"has_password": user.password_hash is not None and user.password_hash != ""}
+
+
+
+# --- Metric recalculation ---
+
+
+@router.post("/me/recalculate-metrics")
+async def trigger_recalculate_metrics(db: DbSession, user: CurrentUser):
+    """Enqueue an async job to recompute training metrics for all activities.
+
+    Upserts a RecalculationJob row to status=pending and enqueues the ARQ
+    job. The job transitions to running → completed | failed asynchronously.
+    Poll GET /me/recalculate-metrics to observe progress.
+    """
+    from datetime import datetime, timezone
+
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+    from trainingdash.jobs import enqueue_recalculate_metrics_job
+    from trainingdash.models import RecalculationJob
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    await db.execute(
+        pg_insert(RecalculationJob)
+        .values(user_id=user.id, status="pending", started_at=now)
+        .on_conflict_do_update(
+            index_elements=["user_id"],
+            set_={"status": "pending", "started_at": now, "completed_at": None, "error_message": None},
+        )
+    )
+    await db.commit()
+
+    await enqueue_recalculate_metrics_job(user.id)
+
+    result = await db.execute(
+        select(RecalculationJob).where(RecalculationJob.user_id == user.id)
+    )
+    job = result.scalar_one()
+    return recalculation_job_response(job)
+
+
+@router.get("/me/recalculate-metrics")
+async def get_recalculate_metrics_status(db: DbSession, user: CurrentUser):
+    """Return the current recalculation job status for the authenticated user.
+
+    Returns null if no recalculation has ever been triggered.
+    """
+    from trainingdash.models import RecalculationJob
+
+    result = await db.execute(
+        select(RecalculationJob).where(RecalculationJob.user_id == user.id)
+    )
+    job = result.scalar_one_or_none()
+    if job is None:
+        return None
+    return recalculation_job_response(job)

@@ -583,6 +583,26 @@ export async function triggerXertSync(): Promise<{ success: boolean; job_id?: st
 }
 
 // ============================================================================
+// Metric Recalculation API
+// ============================================================================
+
+export interface RecalculationJob {
+  status: "pending" | "running" | "completed" | "failed";
+  started_at: string;
+  completed_at: string | null;
+  activities_updated: number | null;
+  error_message: string | null;
+}
+
+export async function triggerRecalculation(): Promise<RecalculationJob> {
+  return apiPost("/me/recalculate-metrics", undefined, "Failed to trigger metric recalculation");
+}
+
+export async function fetchRecalculationStatus(): Promise<RecalculationJob | null> {
+  return apiGet("/me/recalculate-metrics");
+}
+
+// ============================================================================
 // Thresholds and Zones API
 // ============================================================================
 

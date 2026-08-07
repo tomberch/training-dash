@@ -10,6 +10,7 @@ from trainingdash.models import (
     HrZone,
     PowerZone,
     Record,
+    RecalculationJob,
     ThresholdHistory,
     User,
 )
@@ -144,3 +145,15 @@ def records_to_geojson(records: list[Record], props_keys: list[str]) -> dict:
                 "properties": props,
             })
     return {"type": "FeatureCollection", "features": features}
+
+
+
+def recalculation_job_response(job: RecalculationJob) -> dict[str, Any]:
+    """Return a dict of recalculation job status for API responses."""
+    return {
+        "status": job.status,
+        "started_at": utc_str(job.started_at),
+        "completed_at": utc_str(job.completed_at) if job.completed_at else None,
+        "activities_updated": job.activities_updated,
+        "error_message": job.error_message,
+    }

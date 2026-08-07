@@ -482,6 +482,57 @@ class TestThresholdHistory:
         assert response.status_code == 401
 
 
+class TestRecalculateMetrics:
+    """Tests for POST/GET /me/recalculate-metrics."""
+
+    @pytest.mark.asyncio
+    async def test_get_recalculate_metrics_returns_null_when_never_run(self, auth_client):
+        """GET /me/recalculate-metrics returns null when no job has been triggered."""
+        response = await auth_client.get("/api/me/recalculate-metrics")
+        assert response.status_code == 200
+        assert response.json() is None
+
+    @pytest.mark.asyncio
+    async def test_post_recalculate_metrics_creates_pending_job(self, auth_client):
+        """POST /me/recalculate-metrics creates a pending job record and returns it."""
+        response = await auth_client.post("/api/me/recalculate-metrics")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "pending"
+        assert data["started_at"] is not None
+        assert data["completed_at"] is None
+        assert data["activities_updated"] is None
+        assert data["error_message"] is None
+
+    @pytest.mark.asyncio
+    async def test_get_recalculate_metrics_returns_job_after_trigger(self, auth_client):
+        """GET /me/recalculate-metrics returns the job after POST has been called."""
+        await auth_client.post("/api/me/recalculate-metrics")
+        response = await auth_client.get("/api/me/recalculate-metrics")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "pending"
+        assert data["started_at"] is not None
+
+    @pytest.mark.asyncio
+    async def test_post_recalculate_metrics_is_idempotent(self, auth_client):
+        """POST /me/recalculate-metrics can be called multiple times (upserts)."""
+        r1 = await auth_client.post("/api/me/recalculate-metrics")
+        r2 = await auth_client.post("/api/me/recalculate-metrics")
+        assert r1.status_code == 200
+        assert r2.status_code == 200
+        # Still one row — GET returns a single job
+        response = await auth_client.get("/api/me/recalculate-metrics")
+        assert response.status_code == 200
+        assert response.json()["status"] == "pending"
+
+    @pytest.mark.asyncio
+    async def test_recalculate_metrics_requires_auth(self, app_client):
+        """Recalculate metrics endpoints require authentication."""
+        assert (await app_client.get("/api/me/recalculate-metrics")).status_code == 401
+        assert (await app_client.post("/api/me/recalculate-metrics")).status_code == 401
+
+
 
 class TestZones:
     """Tests for power and HR zone management."""

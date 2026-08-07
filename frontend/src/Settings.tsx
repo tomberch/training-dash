@@ -16,6 +16,8 @@ import {
   deleteAvatar,
   triggerGarminSync,
   triggerXertSync,
+  triggerRecalculation,
+  fetchRecalculationStatus,
   fetchOAuthLinks,
   disconnectOAuthProvider,
   setPassword,
@@ -30,6 +32,7 @@ import type {
   PowerZone,
   HrZone,
   OAuthLink,
+  RecalculationJob,
 } from "./api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -465,7 +468,7 @@ function PreferencesSection({ user, onUserUpdate }: { user: User; onUserUpdate: 
 
 
 
-function ThresholdsSection() {
+function ThresholdsSection(): React.JSX.Element {
   const [thresholds, setThresholds] = useState<ThresholdEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -477,6 +480,8 @@ function ThresholdsSection() {
   });
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [recalcJob, setRecalcJob] = useState<RecalculationJob | null>(null);
+  const [recalcTriggering, setRecalcTriggering] = useState(false);
 
   useEffect(() => {
     fetchThresholds()
@@ -485,7 +490,49 @@ function ThresholdsSection() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Load recalculation job status on mount; poll while pending or running
+  useEffect(() => {
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    function isActive(job: RecalculationJob | null): boolean {
+      return job?.status === "pending" || job?.status === "running";
+    }
+
+    async function fetchStatus(): Promise<void> {
+      try {
+        const job = await fetchRecalculationStatus();
+        setRecalcJob(job);
+        if (!isActive(job) && intervalId !== null) {
+          clearInterval(intervalId);
+          intervalId = null;
+        }
+      } catch {
+        // ignore polling errors
+      }
+    }
+
+    fetchStatus();
+    intervalId = setInterval(fetchStatus, 3000);
+
+    return () => {
+      if (intervalId !== null) clearInterval(intervalId);
+    };
+  }, []);
+
   const currentThreshold = thresholds.length > 0 ? thresholds[0] : null;
+
+  async function handleRecalculate(): Promise<void> {
+    setRecalcTriggering(true);
+    try {
+      const job = await triggerRecalculation();
+      setRecalcJob(job);
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Failed to trigger recalculation";
+      setFeedback({ type: "error", message });
+    } finally {
+      setRecalcTriggering(false);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -663,6 +710,45 @@ function ThresholdsSection() {
         {thresholds.length === 0 && !showForm && (
           <p className="text-sm text-muted-foreground">No thresholds configured. Add your first threshold to enable zone calculations.</p>
         )}
+
+        {/* Recalculation status */}
+        <div className="flex items-center justify-between pt-2 border-t border-border">
+          <div className="text-sm">
+            {recalcJob === null ? (
+              <span className="text-muted-foreground">Metrics have never been recalculated</span>
+            ) : recalcJob.status === "pending" || recalcJob.status === "running" ? (
+              <span className="flex items-center gap-2 text-muted-foreground">
+                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Recalculating…
+              </span>
+            ) : recalcJob.status === "completed" ? (
+              <span className="text-muted-foreground">
+                Last recalculated{" "}
+                <span className="text-foreground font-medium">
+                  {new Date(recalcJob.completed_at!).toLocaleString()}
+                </span>
+                {recalcJob.activities_updated !== null && (
+                  <> — {recalcJob.activities_updated} {recalcJob.activities_updated === 1 ? "activity" : "activities"} updated</>
+                )}
+              </span>
+            ) : (
+              <span className="text-destructive text-sm">
+                Recalculation failed: {recalcJob.error_message ?? "unknown error"}
+              </span>
+            )}
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleRecalculate}
+            disabled={recalcTriggering || recalcJob?.status === "pending" || recalcJob?.status === "running"}
+          >
+            Recalculate
+          </Button>
+        </div>
 
         <FeedbackAlert feedback={feedback} />
       </CardContent>

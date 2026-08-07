@@ -51,6 +51,12 @@ A single workout session (ride, run, etc.) parsed from a FIT file. Belongs to on
 
 A single data point within an Activity — one row per timestamp with lat/lon, HR, power, speed, altitude, etc.
 
+## RecalculationJob
+
+A background job that recomputes training metrics (NP, IF, TSS, W'bal, zone times) for all of a user's activities that have power data. One row per user — upserted on each run. Triggered automatically when a user saves a new Threshold, and manually via Settings → Thresholds → Recalculate.
+
+Statuses: **pending** (enqueued, not yet started) → **running** (in progress) → **completed** (finished, `activities_updated` count recorded) | **failed** (`error_message` recorded).
+
 ## Route
 
 A cluster of Activities that follow the same geographic path, identified via Hausdorff distance on simplified polylines. Used for per-route PRs and ride comparison.

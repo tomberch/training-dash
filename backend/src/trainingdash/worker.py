@@ -256,11 +256,95 @@ async def hourly_sync_scheduler(ctx):
     return {"success": True, "garmin_queued": len(garmin_user_ids), "xert_queued": len(xert_user_ids)}
 
 
+async def recalculate_metrics_job(ctx, user_id: int) -> dict:
+    """
+    Recompute training metrics (NP, IF, TSS, W'bal, zone times) for all
+    activities with power data that are missing metrics.
+
+    Upserts a RecalculationJob row throughout:
+      pending → running → completed | failed
+
+    Returns a dict with success flag and count of activities updated.
+    """
+    from datetime import datetime, timezone
+
+    from sqlalchemy import select
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+    from trainingdash.models import RecalculationJob
+    from trainingdash.ingest import backfill_activity_metrics
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    async with worker_db_session() as db:
+        # Mark as running
+        await db.execute(
+            pg_insert(RecalculationJob)
+            .values(user_id=user_id, status="running", started_at=now)
+            .on_conflict_do_update(
+                index_elements=["user_id"],
+                set_={"status": "running", "started_at": now, "completed_at": None, "error_message": None},
+            )
+        )
+        await db.commit()
+
+        try:
+            count = await backfill_activity_metrics(db, user_id)
+            completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            await db.execute(
+                pg_insert(RecalculationJob)
+                .values(user_id=user_id, status="completed", started_at=now)
+                .on_conflict_do_update(
+                    index_elements=["user_id"],
+                    set_={
+                        "status": "completed",
+                        "completed_at": completed_at,
+                        "activities_updated": count,
+                        "error_message": None,
+                    },
+                )
+            )
+            await db.commit()
+            logger.info(
+                "recalculate_metrics_job: completed for user %s — %d activities updated",
+                user_id,
+                count,
+            )
+            return {"success": True, "user_id": user_id, "activities_updated": count}
+
+        except Exception as exc:
+            completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            error_msg = str(exc)[:500]
+            try:
+                await db.execute(
+                    pg_insert(RecalculationJob)
+                    .values(user_id=user_id, status="failed", started_at=now)
+                    .on_conflict_do_update(
+                        index_elements=["user_id"],
+                        set_={
+                            "status": "failed",
+                            "completed_at": completed_at,
+                            "error_message": error_msg,
+                        },
+                    )
+                )
+                await db.commit()
+            except Exception:
+                logger.exception(
+                    "recalculate_metrics_job: failed to persist failure state for user %s",
+                    user_id,
+                )
+            logger.exception(
+                "recalculate_metrics_job: failed for user %s", user_id
+            )
+            return {"success": False, "user_id": user_id, "error": error_msg}
+
+
 class WorkerSettings:
     functions = [
         ingest_job,
         match_route_job,
         recalculate_after_delete_job,
+        recalculate_metrics_job,
         sync_xert_job,
         sync_garmin_job,
         hourly_sync_scheduler,

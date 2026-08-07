@@ -97,3 +97,23 @@ async def enqueue_recalculate_after_delete_job(user_id: int) -> str | None:
         return job.job_id
     finally:
         await pool.aclose()
+
+
+
+async def enqueue_recalculate_metrics_job(user_id: int) -> str | None:
+    """
+    Enqueue a metric recalculation job for a user.
+
+    Recomputes NP, IF, TSS, W'bal, and zone times for all activities with
+    power data. Updates the RecalculationJob row with live status.
+
+    Returns job_id or None if Redis is not available.
+    """
+    if not redis_available():
+        return None
+    pool = await create_redis_pool()
+    try:
+        job = await pool.enqueue_job("recalculate_metrics_job", user_id=user_id)
+        return job.job_id
+    finally:
+        await pool.aclose()
