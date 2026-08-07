@@ -14,6 +14,9 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './e2e',
   
+  /* Global setup - seeds baseline users before tests run */
+  globalSetup: './e2e/global-setup.ts',
+  
   /* Run tests in files in parallel */
   fullyParallel: true,
   
