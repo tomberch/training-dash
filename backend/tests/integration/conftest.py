@@ -2,11 +2,13 @@ import os
 import socket
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 # Set up test environment before importing app
 os.environ.setdefault("TRAININGDASH_UPLOADS_DIR", tempfile.mkdtemp(prefix="traindash-test-uploads-"))
 
+import docker
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -23,9 +25,17 @@ from trainingdash.db import Base
 from trainingdash.models import User
 from tests.integration.fixtures import CACHED_HASH_TESTPASS
 
+# Dedicated test container settings
+TEST_CONTAINER_NAME = "traindash-test-db"
+TEST_CONTAINER_IMAGE = "postgis/postgis:16-3.4"
+TEST_CONTAINER_PORT = 5433
+TEST_DB_USER = "test"
+TEST_DB_PASSWORD = "test"
+TEST_DB_NAME = "test"
 
-def _is_local_postgres_available(host: str = "localhost", port: int = 5433) -> bool:
-    """Check if a local postgres is listening on the test port."""
+
+def _is_port_available(host: str = "localhost", port: int = TEST_CONTAINER_PORT) -> bool:
+    """Check if a service is listening on the given port."""
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.settimeout(0.5)
@@ -35,40 +45,129 @@ def _is_local_postgres_available(host: str = "localhost", port: int = 5433) -> b
         return False
 
 
+def _is_postgres_ready(host: str = "localhost", port: int = TEST_CONTAINER_PORT) -> bool:
+    """Check if postgres is actually ready to accept queries (not just TCP connections)."""
+    import subprocess
+    result = subprocess.run(
+        [
+            "docker", "exec", TEST_CONTAINER_NAME,
+            "pg_isready", "-h", "localhost", "-U", TEST_DB_USER
+        ],
+        capture_output=True,
+        timeout=5,
+    )
+    return result.returncode == 0
+
+
+def _wait_for_postgres(host: str = "localhost", port: int = TEST_CONTAINER_PORT, timeout: int = 30) -> bool:
+    """Wait for postgres to accept connections."""
+    start = time.time()
+    while time.time() - start < timeout:
+        # First check port is open
+        if _is_port_available(host, port):
+            # Then verify postgres is actually ready
+            try:
+                if _is_postgres_ready(host, port):
+                    return True
+            except Exception:
+                pass
+        time.sleep(0.5)
+    return False
+
+
+def _ensure_test_container_running() -> bool:
+    """
+    Ensure the dedicated test postgres container is running.
+    
+    Returns True if container is ready, False if we should fall back to testcontainers.
+    """
+    try:
+        client = docker.from_env()
+    except docker.errors.DockerException:
+        # Docker not available
+        return False
+    
+    try:
+        container = client.containers.get(TEST_CONTAINER_NAME)
+        if container.status == "running":
+            # Already running, just verify it's accepting connections
+            if _is_port_available(port=TEST_CONTAINER_PORT):
+                print(f"\n[pytest] Using existing container '{TEST_CONTAINER_NAME}' (instant startup)")
+                return True
+            # Container running but not accepting connections yet, wait
+            if _wait_for_postgres(port=TEST_CONTAINER_PORT, timeout=10):
+                print(f"\n[pytest] Using existing container '{TEST_CONTAINER_NAME}' (waited for ready)")
+                return True
+            return False
+        elif container.status in ("exited", "created"):
+            # Container exists but stopped, start it
+            print(f"\n[pytest] Starting stopped container '{TEST_CONTAINER_NAME}'...")
+            container.start()
+            if _wait_for_postgres(port=TEST_CONTAINER_PORT, timeout=15):
+                print(f"[pytest] Container '{TEST_CONTAINER_NAME}' ready")
+                return True
+            return False
+        else:
+            # Unknown state, let it fall through
+            return False
+    except docker.errors.NotFound:
+        # Container doesn't exist, create it
+        print(f"\n[pytest] Creating test container '{TEST_CONTAINER_NAME}'...")
+        try:
+            container = client.containers.run(
+                TEST_CONTAINER_IMAGE,
+                name=TEST_CONTAINER_NAME,
+                environment={
+                    "POSTGRES_USER": TEST_DB_USER,
+                    "POSTGRES_PASSWORD": TEST_DB_PASSWORD,
+                    "POSTGRES_DB": TEST_DB_NAME,
+                },
+                ports={"5432/tcp": TEST_CONTAINER_PORT},
+                detach=True,
+                # Keep container after tests for fast re-runs
+                remove=False,
+            )
+            if _wait_for_postgres(port=TEST_CONTAINER_PORT, timeout=30):
+                print(f"[pytest] Container '{TEST_CONTAINER_NAME}' ready")
+                return True
+            return False
+        except docker.errors.APIError as e:
+            print(f"[pytest] Failed to create container: {e}")
+            return False
+
+
 @pytest.fixture(scope="session")
 def pg_container():
     """
     Session-scoped postgres connection.
     
-    Uses local postgres on port 5433 if available (instant startup),
-    otherwise falls back to testcontainers (~6s startup).
+    Priority order:
+    1. TEST_DATABASE_URL environment variable (explicit override)
+    2. Dedicated test container 'traindash-test-db' on port 5433 (auto-managed)
+    3. Testcontainers fallback (~6s startup per session)
     
-    To use local postgres for tests:
-        docker run -d --name traindash-test-db -p 5433:5432 \\
-            -e POSTGRES_USER=test -e POSTGRES_PASSWORD=test -e POSTGRES_DB=test \\
-            postgis/postgis:16-3.4
+    The dedicated container persists between test runs for instant startup.
+    To reset it: docker rm -f traindash-test-db
     """
     # Check for TEST_DATABASE_URL override
     if os.environ.get("TEST_DATABASE_URL"):
-        # Return a mock object with get_connection_url method
         class LocalPg:
             def get_connection_url(self):
                 return os.environ["TEST_DATABASE_URL"]
         yield LocalPg()
         return
     
-    # Check if local test postgres is available on port 5433
-    if _is_local_postgres_available(port=5433):
+    # Try to use/start the dedicated test container
+    if _ensure_test_container_running():
         class LocalPg:
             def get_connection_url(self):
-                return "postgresql+asyncpg://test:test@localhost:5433/test"
-        print("\n[pytest] Using local postgres on port 5433 (fast mode)")
+                return f"postgresql+asyncpg://{TEST_DB_USER}:{TEST_DB_PASSWORD}@localhost:{TEST_CONTAINER_PORT}/{TEST_DB_NAME}"
         yield LocalPg()
         return
     
-    # Fall back to testcontainers
-    print("\n[pytest] Starting testcontainer (no local postgres on port 5433)")
-    with PostgresContainer("postgis/postgis:16-3.4", driver="asyncpg") as pg:
+    # Fall back to testcontainers (ephemeral, slower)
+    print("\n[pytest] Falling back to testcontainers (no dedicated container available)")
+    with PostgresContainer(TEST_CONTAINER_IMAGE, driver="asyncpg") as pg:
         yield pg
 
 
