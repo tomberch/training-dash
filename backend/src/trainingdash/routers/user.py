@@ -449,8 +449,6 @@ async def create_threshold(
                 status_code=400, detail="lthr_bpm cannot exceed hrmax_bpm"
             )
 
-    effective = request.effective_date or date.today()
-    
     # Get the most recent threshold to carry forward values
     result = await db.execute(
         select(ThresholdHistory)
@@ -459,6 +457,15 @@ async def create_threshold(
         .limit(1)
     )
     previous = result.scalar_one_or_none()
+
+    # When no explicit date is given and this is the user's very first threshold,
+    # set effective_date far in the past so all existing historical activities are covered.
+    if request.effective_date is not None:
+        effective = request.effective_date
+    elif previous is None:
+        effective = date(2000, 1, 1)
+    else:
+        effective = date.today()
     
     # Determine final values - use new value if provided, else carry forward
     # Note: Once a threshold value is set, it cannot be removed - only changed.
@@ -523,6 +530,16 @@ async def create_threshold(
     except Exception:
         logger.exception(
             "Zone regeneration failed after threshold save for user %s — zones may be stale",
+            user.id,
+        )
+
+    # Backfill metrics for activities that were computed before this threshold existed
+    try:
+        from trainingdash.ingest import backfill_activity_metrics
+        await backfill_activity_metrics(db, user.id)
+    except Exception:
+        logger.exception(
+            "Metric backfill failed after threshold save for user %s — metrics may be stale",
             user.id,
         )
 

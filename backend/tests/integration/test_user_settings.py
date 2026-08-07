@@ -348,6 +348,35 @@ class TestThresholdHistory:
         assert "id" in data
 
     @pytest.mark.asyncio
+    async def test_first_threshold_without_date_uses_sentinel(self, auth_client):
+        """First POST /me/thresholds without a date defaults to 2000-01-01."""
+        response = await auth_client.post(
+            "/api/me/thresholds",
+            json={"ftp_watts": 280, "lthr_bpm": 165, "hrmax_bpm": 185}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["effective_date"] == "2000-01-01"
+
+    @pytest.mark.asyncio
+    async def test_second_threshold_without_date_uses_today(self, auth_client):
+        """Subsequent POST /me/thresholds without a date defaults to today."""
+        from datetime import date
+        # First threshold (sentinel date)
+        await auth_client.post(
+            "/api/me/thresholds",
+            json={"effective_date": "2000-01-01", "ftp_watts": 250, "lthr_bpm": 160, "hrmax_bpm": 180}
+        )
+        # Second threshold with no date should use today
+        response = await auth_client.post(
+            "/api/me/thresholds",
+            json={"ftp_watts": 280, "lthr_bpm": 165, "hrmax_bpm": 185}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["effective_date"] == date.today().isoformat()
+
+    @pytest.mark.asyncio
     async def test_create_threshold_with_effective_date(self, auth_client):
         """POST /me/thresholds accepts custom effective_date."""
         response = await auth_client.post(
