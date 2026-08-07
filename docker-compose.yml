@@ -1,8 +1,8 @@
 services:
   db:
     image: postgis/postgis:16-3.4
-    ports:
-      - "5432:5432"
+    # No host port exposure - app/worker connect via Docker network
+    # For direct access, use: docker compose exec db psql -U trainingdash
     environment:
       POSTGRES_USER: trainingdash
       POSTGRES_PASSWORD: trainingdash
@@ -58,8 +58,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    # No host port exposure - worker connects via Docker network
 
 volumes:
   pgdata:
