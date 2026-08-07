@@ -332,6 +332,7 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
 
       {/* Desktop sidebar */}
       <aside
+        data-testid="sidebar"
         className={cn(
           "hidden md:flex flex-col h-screen bg-card border-r border-border transition-all duration-300",
           collapsed ? "w-16" : "w-56"
