@@ -8,8 +8,7 @@
 services:
   db:
     image: postgis/postgis:16-3.4
-    ports:
-      - "5433:5432"  # Different host port to avoid conflicts
+    # No host port exposure - app/worker connect via Docker network
     environment:
       POSTGRES_USER: trainingdash_e2e
       POSTGRES_PASSWORD: trainingdash_e2e
@@ -79,8 +78,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6380:6379"  # Different host port to avoid conflicts
+    # No host port exposure - worker connects via Docker network
 
 volumes:
   e2e-tilecache:
