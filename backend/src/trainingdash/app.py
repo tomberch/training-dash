@@ -16,7 +16,7 @@ from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from trainingdash.routers import activities, admin, analytics, auth, oauth, tiles, user
+from trainingdash.routers import activities, admin, analytics, auth, health, oauth, tiles, user
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +66,7 @@ def create_app() -> FastAPI:
         )
 
     # Mount routers
+    app.include_router(health.router)
     app.include_router(auth.router)
     app.include_router(oauth.router)
     app.include_router(user.router)

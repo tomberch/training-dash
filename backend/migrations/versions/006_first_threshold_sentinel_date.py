@@ -16,12 +16,15 @@ from alembic import op
 
 
 # revision identifiers, used by Alembic.
-revision = "006_first_threshold_sentinel_date"
+revision = "006_threshold_sentinel"
 down_revision = "005_threshold_unique_date"
 branch_labels = None
 depends_on = None
 
 SENTINEL = "2000-01-01"
+
+
+import sqlalchemy as sa
 
 
 def upgrade() -> None:
@@ -30,17 +33,19 @@ def upgrade() -> None:
     # The unique constraint on (user_id, effective_date) from migration 005
     # guarantees no collision — a user with one row cannot already have a
     # row on 2000-01-01 unless that row IS their only row (idempotent).
-    op.execute(f"""
-        UPDATE threshold_history
-        SET effective_date = '{SENTINEL}'
-        WHERE user_id IN (
-            SELECT user_id
-            FROM threshold_history
-            GROUP BY user_id
-            HAVING COUNT(*) = 1
-        )
-        AND effective_date != '{SENTINEL}'
-    """)
+    op.execute(
+        sa.text("""
+            UPDATE threshold_history
+            SET effective_date = :sentinel
+            WHERE user_id IN (
+                SELECT user_id
+                FROM threshold_history
+                GROUP BY user_id
+                HAVING COUNT(*) = 1
+            )
+            AND effective_date != :sentinel
+        """).bindparams(sentinel=SENTINEL)
+    )
 
 
 def downgrade() -> None:

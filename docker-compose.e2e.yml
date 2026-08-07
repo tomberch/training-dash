@@ -1,0 +1,86 @@
+# Docker Compose configuration for E2E testing
+# Uses port 8001 to avoid conflicts with dev environment (8000)
+#
+# Usage:
+#   docker compose -f docker-compose.e2e.yml up -d
+#   docker compose -f docker-compose.e2e.yml down -v  # tears down with volumes
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    ports:
+      - "5433:5432"  # Different host port to avoid conflicts
+    environment:
+      POSTGRES_USER: trainingdash_e2e
+      POSTGRES_PASSWORD: trainingdash_e2e
+      POSTGRES_DB: trainingdash_e2e
+    # No volume - fresh DB each run
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trainingdash_e2e"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8001:8000"  # E2E port
+    restart: on-failure:5
+    environment:
+      DATABASE_URL: postgresql+asyncpg://trainingdash_e2e:trainingdash_e2e@db:5432/trainingdash_e2e
+      SECRET_KEY: e2e-test-secret-key
+      ADMIN_PASSWORD: admin
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      TRAININGDASH_ENCRYPTION_KEY: D1prO+2rx2zmauRYJc8yKA2rbW0ABdAo5uf8ZJMoXSQ=
+      # Xert mock configuration (set by tests when needed)
+      # XERT_CLIENT_CLASS: tests.mocks.mock_xert.MockXertClient
+      # MOCK_XERT_FIXTURES_DIR: /app/e2e-fixtures
+    volumes:
+      - e2e-tilecache:/app/tile-cache
+      # Mount fixture files for mock Xert client (when tests provide them)
+      - ./frontend/e2e/fixtures:/app/e2e-fixtures:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+    command: sh -c "python -m trainingdash.init_db && uvicorn trainingdash.app:app --host 0.0.0.0 --port 8000"
+
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+asyncpg://trainingdash_e2e:trainingdash_e2e@db:5432/trainingdash_e2e
+      SECRET_KEY: e2e-test-secret-key
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      TRAININGDASH_ENCRYPTION_KEY: D1prO+2rx2zmauRYJc8yKA2rbW0ABdAo5uf8ZJMoXSQ=
+      # Xert mock configuration (mirrors app service)
+      # XERT_CLIENT_CLASS: tests.mocks.mock_xert.MockXertClient
+      # MOCK_XERT_FIXTURES_DIR: /app/e2e-fixtures
+    volumes:
+      - ./frontend/e2e/fixtures:/app/e2e-fixtures:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    command: arq trainingdash.worker.WorkerSettings
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"  # Different host port to avoid conflicts
+
+volumes:
+  e2e-tilecache:

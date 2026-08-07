@@ -15,7 +15,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "007_recalculation_jobs"
-down_revision = "006_first_threshold_sentinel_date"
+down_revision = "006_threshold_sentinel"
 branch_labels = None
 depends_on = None
 
