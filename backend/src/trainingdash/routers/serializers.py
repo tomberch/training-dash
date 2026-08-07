@@ -151,6 +151,8 @@ def records_to_geojson(records: list[Record], props_keys: list[str]) -> dict:
 def recalculation_job_response(job: RecalculationJob) -> dict[str, Any]:
     """Return a dict of recalculation job status for API responses."""
     return {
+        "id": job.id,
+        "user_id": job.user_id,
         "status": job.status,
         "started_at": utc_str(job.started_at),
         "completed_at": utc_str(job.completed_at) if job.completed_at else None,

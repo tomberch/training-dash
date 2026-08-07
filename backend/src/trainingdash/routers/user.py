@@ -13,15 +13,18 @@ from sqlalchemy import select, delete
 from trainingdash.auth import CurrentUser, DbSession, hash_password
 from trainingdash.crypto import encrypt, EncryptionError
 from trainingdash.garmin import get_garmin_client, GarminAPIError, GarminMFARequired
+from trainingdash.jobs import enqueue_recalculate_metrics_job
 from trainingdash.models import (
     GarminCredentials,
     HrZone,
     Notification,
     PowerZone,
+    RecalculationJob,
     ThresholdHistory,
     UserOAuthLink,
     XertCredentials,
 )
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from trainingdash.routers.serializers import (
     hr_zone_response,
     power_zone_response,
@@ -535,27 +538,39 @@ async def create_threshold(
         )
 
     # Enqueue async metric recalculation — observable via GET /me/recalculate-metrics
-    try:
-        from trainingdash.jobs import enqueue_recalculate_metrics_job
-        from trainingdash.models import RecalculationJob
-        from sqlalchemy.dialects.postgresql import insert as pg_insert
-        from datetime import datetime, timezone
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
-        await db.execute(
-            pg_insert(RecalculationJob)
-            .values(user_id=user.id, status="pending", started_at=now)
-            .on_conflict_do_update(
-                index_elements=["user_id"],
-                set_={"status": "pending", "started_at": now, "completed_at": None, "error_message": None},
-            )
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    await db.execute(
+        pg_insert(RecalculationJob)
+        .values(user_id=user.id, status="pending", started_at=now)
+        .on_conflict_do_update(
+            index_elements=["user_id"],
+            set_={"status": "pending", "started_at": now, "completed_at": None, "error_message": None},
         )
-        await db.commit()
+    )
+    await db.commit()
+
+    try:
         await enqueue_recalculate_metrics_job(user.id)
     except Exception:
         logger.exception(
             "Failed to enqueue metric recalculation for user %s after threshold save",
             user.id,
         )
+        # Mark job as failed so user sees accurate state
+        await db.execute(
+            pg_insert(RecalculationJob)
+            .values(user_id=user.id, status="failed", started_at=now)
+            .on_conflict_do_update(
+                index_elements=["user_id"],
+                set_={
+                    "status": "failed",
+                    "completed_at": now,
+                    "error_message": "Failed to enqueue job. Please try again.",
+                    "activities_updated": None,
+                },
+            )
+        )
+        await db.commit()
 
     return threshold_response(threshold)
 
@@ -1102,12 +1117,6 @@ async def trigger_recalculate_metrics(db: DbSession, user: CurrentUser):
     job. The job transitions to running → completed | failed asynchronously.
     Poll GET /me/recalculate-metrics to observe progress.
     """
-    from datetime import datetime, timezone
-
-    from sqlalchemy.dialects.postgresql import insert as pg_insert
-    from trainingdash.jobs import enqueue_recalculate_metrics_job
-    from trainingdash.models import RecalculationJob
-
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.execute(
         pg_insert(RecalculationJob)
@@ -1119,7 +1128,27 @@ async def trigger_recalculate_metrics(db: DbSession, user: CurrentUser):
     )
     await db.commit()
 
-    await enqueue_recalculate_metrics_job(user.id)
+    try:
+        await enqueue_recalculate_metrics_job(user.id)
+    except Exception:
+        logger.exception(
+            "Failed to enqueue metric recalculation for user %s", user.id
+        )
+        # Mark job as failed so user sees accurate state
+        await db.execute(
+            pg_insert(RecalculationJob)
+            .values(user_id=user.id, status="failed", started_at=now)
+            .on_conflict_do_update(
+                index_elements=["user_id"],
+                set_={
+                    "status": "failed",
+                    "completed_at": now,
+                    "error_message": "Failed to enqueue job. Please try again.",
+                    "activities_updated": None,
+                },
+            )
+        )
+        await db.commit()
 
     result = await db.execute(
         select(RecalculationJob).where(RecalculationJob.user_id == user.id)
@@ -1134,8 +1163,6 @@ async def get_recalculate_metrics_status(db: DbSession, user: CurrentUser):
 
     Returns null if no recalculation has ever been triggered.
     """
-    from trainingdash.models import RecalculationJob
-
     result = await db.execute(
         select(RecalculationJob).where(RecalculationJob.user_id == user.id)
     )

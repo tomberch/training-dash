@@ -587,6 +587,8 @@ export async function triggerXertSync(): Promise<{ success: boolean; job_id?: st
 // ============================================================================
 
 export interface RecalculationJob {
+  id: number;
+  user_id: number;
   status: "pending" | "running" | "completed" | "failed";
   started_at: string;
   completed_at: string | null;

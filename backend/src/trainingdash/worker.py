@@ -14,9 +14,13 @@ provider-specific implementations from sync_providers.py.
 import logging
 import os
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
 from arq.cron import cron
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from trainingdash.jobs import get_redis_settings, create_redis_pool
+from trainingdash.ingest import backfill_activity_metrics
+from trainingdash.models import RecalculationJob
 
 logger = logging.getLogger(__name__)
 
@@ -256,6 +260,24 @@ async def hourly_sync_scheduler(ctx):
     return {"success": True, "garmin_queued": len(garmin_user_ids), "xert_queued": len(xert_user_ids)}
 
 
+async def _upsert_recalculation_job(db, user_id: int, **fields) -> None:
+    """Upsert a RecalculationJob row for user_id with the given field values.
+
+    On INSERT, all supplied fields (including started_at) are written.
+    On UPDATE (conflict), started_at is preserved from the existing row;
+    only the other supplied fields are updated.
+    """
+    update_fields = {k: v for k, v in fields.items() if k != "started_at"}
+    await db.execute(
+        pg_insert(RecalculationJob)
+        .values(user_id=user_id, **fields)
+        .on_conflict_do_update(
+            index_elements=["user_id"],
+            set_=update_fields,
+        )
+    )
+
+
 async def recalculate_metrics_job(ctx, user_id: int) -> dict:
     """
     Recompute training metrics (NP, IF, TSS, W'bal, zone times) for all
@@ -266,42 +288,21 @@ async def recalculate_metrics_job(ctx, user_id: int) -> dict:
 
     Returns a dict with success flag and count of activities updated.
     """
-    from datetime import datetime, timezone
-
-    from sqlalchemy import select
-    from sqlalchemy.dialects.postgresql import insert as pg_insert
-    from trainingdash.models import RecalculationJob
-    from trainingdash.ingest import backfill_activity_metrics
-
     now = datetime.now(timezone.utc).replace(tzinfo=None)
 
     async with worker_db_session() as db:
-        # Mark as running
-        await db.execute(
-            pg_insert(RecalculationJob)
-            .values(user_id=user_id, status="running", started_at=now)
-            .on_conflict_do_update(
-                index_elements=["user_id"],
-                set_={"status": "running", "started_at": now, "completed_at": None, "error_message": None},
-            )
+        await _upsert_recalculation_job(
+            db, user_id, status="running", started_at=now,
+            completed_at=None, error_message=None,
         )
         await db.commit()
 
         try:
             count = await backfill_activity_metrics(db, user_id)
             completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
-            await db.execute(
-                pg_insert(RecalculationJob)
-                .values(user_id=user_id, status="completed", started_at=now)
-                .on_conflict_do_update(
-                    index_elements=["user_id"],
-                    set_={
-                        "status": "completed",
-                        "completed_at": completed_at,
-                        "activities_updated": count,
-                        "error_message": None,
-                    },
-                )
+            await _upsert_recalculation_job(
+                db, user_id, status="completed", started_at=now,
+                completed_at=completed_at, activities_updated=count, error_message=None,
             )
             await db.commit()
             logger.info(
@@ -315,17 +316,9 @@ async def recalculate_metrics_job(ctx, user_id: int) -> dict:
             completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
             error_msg = str(exc)[:500]
             try:
-                await db.execute(
-                    pg_insert(RecalculationJob)
-                    .values(user_id=user_id, status="failed", started_at=now)
-                    .on_conflict_do_update(
-                        index_elements=["user_id"],
-                        set_={
-                            "status": "failed",
-                            "completed_at": completed_at,
-                            "error_message": error_msg,
-                        },
-                    )
+                await _upsert_recalculation_job(
+                    db, user_id, status="failed", started_at=now,
+                    completed_at=completed_at, error_message=error_msg, activities_updated=None,
                 )
                 await db.commit()
             except Exception:

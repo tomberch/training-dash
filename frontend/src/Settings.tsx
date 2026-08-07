@@ -482,6 +482,27 @@ function ThresholdsSection(): React.JSX.Element {
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [recalcJob, setRecalcJob] = useState<RecalculationJob | null>(null);
   const [recalcTriggering, setRecalcTriggering] = useState(false);
+  const recalcIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  function isJobActive(job: RecalculationJob | null): boolean {
+    return job?.status === "pending" || job?.status === "running";
+  }
+
+  function startRecalcPolling(): void {
+    if (recalcIntervalRef.current !== null) return; // already polling
+    recalcIntervalRef.current = setInterval(async () => {
+      try {
+        const job = await fetchRecalculationStatus();
+        setRecalcJob(job);
+        if (!isJobActive(job) && recalcIntervalRef.current !== null) {
+          clearInterval(recalcIntervalRef.current);
+          recalcIntervalRef.current = null;
+        }
+      } catch {
+        // ignore transient polling errors
+      }
+    }, 3000);
+  }
 
   useEffect(() => {
     fetchThresholds()
@@ -490,33 +511,23 @@ function ThresholdsSection(): React.JSX.Element {
       .finally(() => setLoading(false));
   }, []);
 
-  // Load recalculation job status on mount; poll while pending or running
+  // On mount: fetch current status and start polling if already active
   useEffect(() => {
-    let intervalId: ReturnType<typeof setInterval> | null = null;
-
-    function isActive(job: RecalculationJob | null): boolean {
-      return job?.status === "pending" || job?.status === "running";
-    }
-
-    async function fetchStatus(): Promise<void> {
-      try {
-        const job = await fetchRecalculationStatus();
+    fetchRecalculationStatus()
+      .then((job) => {
         setRecalcJob(job);
-        if (!isActive(job) && intervalId !== null) {
-          clearInterval(intervalId);
-          intervalId = null;
-        }
-      } catch {
-        // ignore polling errors
-      }
-    }
-
-    fetchStatus();
-    intervalId = setInterval(fetchStatus, 3000);
+        if (isJobActive(job)) startRecalcPolling();
+      })
+      .catch(() => {/* ignore */});
 
     return () => {
-      if (intervalId !== null) clearInterval(intervalId);
+      if (recalcIntervalRef.current !== null) {
+        clearInterval(recalcIntervalRef.current);
+        recalcIntervalRef.current = null;
+      }
     };
+  // startRecalcPolling is stable (no deps); linter disable avoids spurious warning
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const currentThreshold = thresholds.length > 0 ? thresholds[0] : null;
@@ -526,6 +537,7 @@ function ThresholdsSection(): React.JSX.Element {
     try {
       const job = await triggerRecalculation();
       setRecalcJob(job);
+      startRecalcPolling();
     } catch (err) {
       const message = err instanceof ApiError ? err.message : "Failed to trigger recalculation";
       setFeedback({ type: "error", message });
@@ -728,7 +740,9 @@ function ThresholdsSection(): React.JSX.Element {
               <span className="text-muted-foreground">
                 Last recalculated{" "}
                 <span className="text-foreground font-medium">
-                  {new Date(recalcJob.completed_at!).toLocaleString()}
+                  {recalcJob.completed_at
+                    ? new Date(recalcJob.completed_at).toLocaleString()
+                    : "—"}
                 </span>
                 {recalcJob.activities_updated !== null && (
                   <> — {recalcJob.activities_updated} {recalcJob.activities_updated === 1 ? "activity" : "activities"} updated</>
