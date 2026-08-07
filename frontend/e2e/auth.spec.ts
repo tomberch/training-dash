@@ -29,6 +29,9 @@ test.describe('Auth Flows', () => {
   });
 
   test('invalid credentials show error message', async ({ page }) => {
+    // Clear any existing session from storageState
+    await page.context().clearCookies();
+    
     // Go to login page
     await page.goto('/');
     

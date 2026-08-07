@@ -21,6 +21,9 @@ test.describe('Smoke Tests', () => {
   });
 
   test('app loads and shows login page', async ({ page }) => {
+    // Clear any existing session from storageState
+    await page.context().clearCookies();
+    
     await page.goto('/');
     
     // Should redirect to login or show login form

@@ -28,3 +28,4 @@ dist-ssr
 /e2e-results/
 /playwright-report/
 /test-results/
+/.auth/
