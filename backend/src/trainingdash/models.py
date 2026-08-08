@@ -16,7 +16,7 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
-from sqlalchemy.dialects.postgresql import UUID as PgUUID
+from sqlalchemy.dialects.postgresql import ARRAY, UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from trainingdash.db import Base
@@ -320,6 +320,46 @@ class HrZone(Base):
     min_bpm: Mapped[int] = mapped_column(Integer, nullable=False)
     max_bpm: Mapped[int | None] = mapped_column(Integer, nullable=True)  # None = unlimited
     is_custom: Mapped[bool] = mapped_column(default=False)  # True if user customized
+
+
+class MetricType(Base):
+    """Defines available metric types (FTP, LTHR, weight, etc.)."""
+    __tablename__ = "metric_types"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    key: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    display_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    unit: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    category: Mapped[str] = mapped_column(String(50), nullable=False)  # threshold | body | fitness | recovery
+    data_type: Mapped[str] = mapped_column(String(20), nullable=False)  # integer | decimal
+    min_value: Mapped[Decimal | None] = mapped_column(Numeric, nullable=True)
+    max_value: Mapped[Decimal | None] = mapped_column(Numeric, nullable=True)
+    allowed_sources = mapped_column(ARRAY(Text), nullable=True)  # e.g. ["manual", "calculated", "device"]
+    recalc_targets = mapped_column(ARRAY(Text), nullable=True)  # e.g. ["power_zones", "tss"]
+    sort_order: Mapped[int] = mapped_column(Integer, server_default="0")
+
+
+class MetricEntry(Base):
+    """Historical metric values for a user (FTP on date X, weight on date Y, etc.)."""
+    __tablename__ = "metric_entries"
+    __table_args__ = (
+        UniqueConstraint("user_id", "metric_type_id", "effective_date", name="uq_metric_user_type_date"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    metric_type_id: Mapped[int] = mapped_column(
+        ForeignKey("metric_types.id"), nullable=False
+    )
+    effective_date: Mapped[date] = mapped_column(Date, nullable=False)
+    value: Mapped[Decimal] = mapped_column(Numeric, nullable=False)
+    source: Mapped[str] = mapped_column(String(20), nullable=False)  # manual | calculated | device
+    source_detail: Mapped[str | None] = mapped_column(String(50), nullable=True)  # ramp_test, garmin_sync, etc.
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
+    updated_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
 
 
 class Record(Base):
