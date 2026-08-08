@@ -22,6 +22,7 @@ const PowerCurveView = lazy(() => import("./pages/PowerCurveView").then(m => ({ 
 const ActivityTable = lazy(() => import("./pages/ActivityTable").then(m => ({ default: m.ActivityTable })));
 const AnalyzePage = lazy(() => import("./pages/AnalyzePage").then(m => ({ default: m.AnalyzePage })));
 const ComparePage = lazy(() => import("./pages/ComparePage").then(m => ({ default: m.ComparePage })));
+const AthletePage = lazy(() => import("./pages/AthletePage").then(m => ({ default: m.AthletePage })));
 
 // Page loading skeleton for Suspense fallback
 function PageLoadingSkeleton() {
@@ -124,6 +125,7 @@ function AppLayout({ user, onLogout, onUserUpdate }: {
               <Route path="/power-curve" element={<PowerCurveView />} />
               <Route path="/analyze" element={<AnalyzePage />} />
               <Route path="/compare" element={<ComparePage />} />
+              <Route path="/athlete" element={<AthletePage />} />
               <Route 
                 path="/records" 
                 element={

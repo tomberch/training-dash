@@ -8,16 +8,12 @@ import {
   saveMyGarminCredentials,
   completeGarminMfa,
   deleteMyGarminCredentials,
-  fetchThresholds,
-  createThreshold,
   fetchZones,
   updateZones,
   uploadAvatar,
   deleteAvatar,
   triggerGarminSync,
   triggerXertSync,
-  triggerRecalculation,
-  fetchRecalculationStatus,
   fetchOAuthLinks,
   disconnectOAuthProvider,
   setPassword,
@@ -28,11 +24,9 @@ import type {
   User, 
   XertCredentialsStatus, 
   GarminCredentialsStatus,
-  ThresholdEntry,
   PowerZone,
   HrZone,
   OAuthLink,
-  RecalculationJob,
 } from "./api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -141,7 +135,6 @@ export function Settings({ user, onBack, onUserUpdate }: SettingsProps) {
           <ProfileSection user={user} onUserUpdate={onUserUpdate} />
           <PreferencesSection user={user} onUserUpdate={onUserUpdate} />
           <ConnectedAccountsSection />
-          <ThresholdsSection />
           <ZonesSection />
           <IntegrationsSection />
         </div>
@@ -460,310 +453,6 @@ function PreferencesSection({ user, onUserUpdate }: { user: User; onUserUpdate: 
           </button>
         </div>
         
-        <FeedbackAlert feedback={feedback} />
-      </CardContent>
-    </Card>
-  );
-}
-
-
-
-function ThresholdsSection(): React.JSX.Element {
-  const [thresholds, setThresholds] = useState<ThresholdEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({
-    effective_date: new Date().toISOString().split("T")[0],
-    ftp_watts: "",
-    lthr_bpm: "",
-    hrmax_bpm: "",
-  });
-  const [saving, setSaving] = useState(false);
-  const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
-  const [recalcJob, setRecalcJob] = useState<RecalculationJob | null>(null);
-  const [recalcTriggering, setRecalcTriggering] = useState(false);
-  const recalcIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  function isJobActive(job: RecalculationJob | null): boolean {
-    return job?.status === "pending" || job?.status === "running";
-  }
-
-  function startRecalcPolling(): void {
-    if (recalcIntervalRef.current !== null) return; // already polling
-    recalcIntervalRef.current = setInterval(async () => {
-      try {
-        const job = await fetchRecalculationStatus();
-        setRecalcJob(job);
-        if (!isJobActive(job) && recalcIntervalRef.current !== null) {
-          clearInterval(recalcIntervalRef.current);
-          recalcIntervalRef.current = null;
-        }
-      } catch {
-        // ignore transient polling errors
-      }
-    }, 3000);
-  }
-
-  useEffect(() => {
-    fetchThresholds()
-      .then(setThresholds)
-      .catch(() => setThresholds([]))
-      .finally(() => setLoading(false));
-  }, []);
-
-  // On mount: fetch current status and start polling if already active
-  useEffect(() => {
-    fetchRecalculationStatus()
-      .then((job) => {
-        setRecalcJob(job);
-        if (isJobActive(job)) startRecalcPolling();
-      })
-      .catch(() => {/* ignore */});
-
-    return () => {
-      if (recalcIntervalRef.current !== null) {
-        clearInterval(recalcIntervalRef.current);
-        recalcIntervalRef.current = null;
-      }
-    };
-  // startRecalcPolling is stable (no deps); linter disable avoids spurious warning
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const currentThreshold = thresholds.length > 0 ? thresholds[0] : null;
-
-  async function handleRecalculate(): Promise<void> {
-    setRecalcTriggering(true);
-    try {
-      const job = await triggerRecalculation();
-      setRecalcJob(job);
-      startRecalcPolling();
-    } catch (err) {
-      const message = err instanceof ApiError ? err.message : "Failed to trigger recalculation";
-      setFeedback({ type: "error", message });
-    } finally {
-      setRecalcTriggering(false);
-    }
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    
-    // Check at least one value is provided
-    const hasFtp = formData.ftp_watts !== "";
-    const hasLthr = formData.lthr_bpm !== "";
-    const hasHrmax = formData.hrmax_bpm !== "";
-    
-    if (!hasFtp && !hasLthr && !hasHrmax) {
-      setFeedback({ type: "error", message: "Please enter at least one threshold value" });
-      return;
-    }
-    
-    setSaving(true);
-    setFeedback(null);
-    try {
-      const newThreshold = await createThreshold({
-        effective_date: formData.effective_date,
-        ftp_watts: hasFtp ? parseInt(formData.ftp_watts) : undefined,
-        lthr_bpm: hasLthr ? parseInt(formData.lthr_bpm) : undefined,
-        hrmax_bpm: hasHrmax ? parseInt(formData.hrmax_bpm) : undefined,
-      });
-      setThresholds([newThreshold, ...thresholds]);
-      setShowForm(false);
-      setFormData({
-        effective_date: new Date().toISOString().split("T")[0],
-        ftp_watts: "",
-        lthr_bpm: "",
-        hrmax_bpm: "",
-      });
-      setFeedback({ type: "success", message: "Threshold saved" });
-      setTimeout(() => setFeedback(null), 3000);
-    } catch (err) {
-      const message = err instanceof ApiError ? err.message : "Failed to save threshold";
-      setFeedback({ type: "error", message });
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  if (loading) {
-    return (
-      <Card>
-        <CardContent className="animate-pulse">
-          <div className="h-5 bg-muted rounded w-1/4 mb-4"></div>
-          <div className="h-20 bg-muted rounded"></div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Thresholds</CardTitle>
-        <CardAction>
-          <Button variant="ghost" size="sm" onClick={() => setShowForm(!showForm)}>
-            {showForm ? "Cancel" : currentThreshold ? "Update" : "+ Add"}
-          </Button>
-        </CardAction>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Current values */}
-        {currentThreshold && (
-          <div className="grid grid-cols-3 gap-4 p-4 bg-muted/50 rounded-lg">
-            <div>
-              <div className="text-xs text-muted-foreground uppercase tracking-wide">FTP</div>
-              <div className="text-xl font-bold text-foreground">
-                {currentThreshold.ftp_watts ? `${currentThreshold.ftp_watts}W` : "—"}
-              </div>
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground uppercase tracking-wide">LTHR</div>
-              <div className="text-xl font-bold text-foreground">
-                {currentThreshold.lthr_bpm ? `${currentThreshold.lthr_bpm} bpm` : "—"}
-              </div>
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground uppercase tracking-wide">HRmax</div>
-              <div className="text-xl font-bold text-foreground">
-                {currentThreshold.hrmax_bpm ? `${currentThreshold.hrmax_bpm} bpm` : "—"}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Add/Update form */}
-        {showForm && (
-          <form onSubmit={handleSubmit} className="p-4 bg-primary/5 rounded-lg space-y-3">
-            <p className="text-xs text-muted-foreground mb-2">
-              {currentThreshold 
-                ? "Enter values to update. Empty fields keep current values (previously set values cannot be removed)."
-                : "Enter at least one threshold value. You can add the others later."}
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Effective Date</Label>
-                <Input
-                  type="date"
-                  value={formData.effective_date}
-                  onChange={(e) => setFormData({ ...formData, effective_date: e.target.value })}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">FTP (watts)</Label>
-                <Input
-                  type="number"
-                  value={formData.ftp_watts}
-                  onChange={(e) => setFormData({ ...formData, ftp_watts: e.target.value })}
-                  placeholder={currentThreshold?.ftp_watts ? `Current: ${currentThreshold.ftp_watts}` : "e.g. 250"}
-                  min="50"
-                  max="600"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">LTHR (bpm)</Label>
-                <Input
-                  type="number"
-                  value={formData.lthr_bpm}
-                  onChange={(e) => setFormData({ ...formData, lthr_bpm: e.target.value })}
-                  placeholder={currentThreshold?.lthr_bpm ? `Current: ${currentThreshold.lthr_bpm}` : "e.g. 165"}
-                  min="80"
-                  max="220"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">HRmax (bpm)</Label>
-                <Input
-                  type="number"
-                  value={formData.hrmax_bpm}
-                  onChange={(e) => setFormData({ ...formData, hrmax_bpm: e.target.value })}
-                  placeholder={currentThreshold?.hrmax_bpm ? `Current: ${currentThreshold.hrmax_bpm}` : "e.g. 185"}
-                  min="100"
-                  max="250"
-                />
-              </div>
-            </div>
-            <Button type="submit" disabled={saving} className="w-full">
-              {saving ? "Saving..." : "Save Threshold"}
-            </Button>
-          </form>
-        )}
-
-
-
-        {/* History table */}
-        {thresholds.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs text-muted-foreground uppercase tracking-wide border-b border-border">
-                  <th className="pb-2">Date</th>
-                  <th className="pb-2 text-right">FTP</th>
-                  <th className="pb-2 text-right">LTHR</th>
-                  <th className="pb-2 text-right">HRmax</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {thresholds.map((t, i) => (
-                  <tr key={i} className={i === 0 ? "text-foreground font-medium" : "text-muted-foreground"}>
-                    <td className="py-2">{new Date(t.effective_date).toLocaleDateString()}</td>
-                    <td className="py-2 text-right">{t.ftp_watts ? `${t.ftp_watts}W` : "—"}</td>
-                    <td className="py-2 text-right">{t.lthr_bpm ? `${t.lthr_bpm} bpm` : "—"}</td>
-                    <td className="py-2 text-right">{t.hrmax_bpm ? `${t.hrmax_bpm} bpm` : "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {thresholds.length === 0 && !showForm && (
-          <p className="text-sm text-muted-foreground">No thresholds configured. Add your first threshold to enable zone calculations.</p>
-        )}
-
-        {/* Recalculation status */}
-        <div className="flex items-center justify-between pt-2 border-t border-border">
-          <div className="text-sm">
-            {recalcJob === null ? (
-              <span className="text-muted-foreground">Metrics have never been recalculated</span>
-            ) : recalcJob.status === "pending" || recalcJob.status === "running" ? (
-              <span className="flex items-center gap-2 text-muted-foreground">
-                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-                Recalculating…
-              </span>
-            ) : recalcJob.status === "completed" ? (
-              <span className="text-muted-foreground">
-                Last recalculated{" "}
-                <span className="text-foreground font-medium">
-                  {recalcJob.completed_at
-                    ? new Date(recalcJob.completed_at).toLocaleString()
-                    : "—"}
-                </span>
-                {recalcJob.activities_updated !== null && (
-                  <> — {recalcJob.activities_updated} {recalcJob.activities_updated === 1 ? "activity" : "activities"} updated</>
-                )}
-              </span>
-            ) : (
-              <span className="text-destructive text-sm">
-                Recalculation failed: {recalcJob.error_message ?? "unknown error"}
-              </span>
-            )}
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleRecalculate}
-            disabled={recalcTriggering || recalcJob?.status === "pending" || recalcJob?.status === "running"}
-          >
-            Recalculate
-          </Button>
-        </div>
-
         <FeedbackAlert feedback={feedback} />
       </CardContent>
     </Card>
