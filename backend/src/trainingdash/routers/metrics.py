@@ -12,7 +12,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from trainingdash.auth import CurrentUser, DbSession
 from trainingdash.jobs import enqueue_recalculate_metrics_job
-from trainingdash.models import Activity, MetricEntry, MetricType, RecalculationJob
+from trainingdash.repositories.postgres.models import Activity, MetricEntry, MetricType, RecalculationJob
 from trainingdash.routers.datetime_utils import utc_str
 
 logger = logging.getLogger(__name__)

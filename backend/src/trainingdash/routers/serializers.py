@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any
 
 from trainingdash.routers.datetime_utils import utc_str
-from trainingdash.models import (
+from trainingdash.repositories.postgres.models import (
     Activity,
     Record,
     RecalculationJob,

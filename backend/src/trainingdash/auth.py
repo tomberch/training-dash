@@ -9,8 +9,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from trainingdash.config import settings
-from trainingdash.db import async_session
-from trainingdash.models import User
+from trainingdash.repositories.postgres.db import async_session
+from trainingdash.repositories.postgres.models import User
 
 serializer = URLSafeSerializer(settings.secret_key, salt="session")
 

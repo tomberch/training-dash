@@ -14,7 +14,7 @@ from trainingdash.auth import CurrentUser, DbSession, hash_password
 from trainingdash.crypto import encrypt, EncryptionError
 from trainingdash.garmin import get_garmin_client, GarminAPIError, GarminMFARequired
 from trainingdash.jobs import enqueue_recalculate_metrics_job
-from trainingdash.models import (
+from trainingdash.repositories.postgres.models import (
     GarminCredentials,
     Notification,
     RecalculationJob,

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Query
 from sqlalchemy import select, func
 
 from trainingdash.auth import CurrentUser, DbSession
-from trainingdash.models import Activity, ActivityPeakPower, FitnessHistory
+from trainingdash.repositories.postgres.models import Activity, ActivityPeakPower, FitnessHistory
 from trainingdash.routers.datetime_utils import utc_str
 
 router = APIRouter(prefix="/api", tags=["analytics"])

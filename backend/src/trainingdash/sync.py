@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from trainingdash.crypto import decrypt, EncryptionError
 from trainingdash.ingest import is_duplicate_activity, finalize_batch_import
-from trainingdash.models import Activity
+from trainingdash.repositories.postgres.models import Activity
 
 logger = logging.getLogger(__name__)
 

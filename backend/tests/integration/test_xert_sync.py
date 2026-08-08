@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from trainingdash.models import Activity, Record, User, XertCredentials
+from trainingdash.repositories.postgres.models import Activity, Record, User, XertCredentials
 from trainingdash.xert import XertActivity, XertAPIError
 from tests.integration.fixtures import CACHED_HASH_TESTPASS, CACHED_HASH_PASS
 

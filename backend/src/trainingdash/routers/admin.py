@@ -6,7 +6,7 @@ from sqlalchemy import select, func, delete, update
 
 from trainingdash.auth import AdminUser, DbSession, hash_password
 from trainingdash.crypto import encrypt, EncryptionError
-from trainingdash.models import (
+from trainingdash.repositories.postgres.models import (
     Activity,
     ActivityPeakPower,
     AppSettings,

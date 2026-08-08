@@ -21,8 +21,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "tests" / "f
 from generate_fit import make_test_fit  # noqa: E402
 
 from trainingdash.app import create_app
-from trainingdash.db import Base
-from trainingdash.models import User
+from trainingdash.repositories.postgres.db import Base
+from trainingdash.repositories.postgres.models import User
 from tests.integration.fixtures import CACHED_HASH_TESTPASS
 
 
@@ -194,6 +194,11 @@ async def db_engine_session(pg_container):
     """
     Session-scoped database engine. Creates schema once at session start.
     This dramatically reduces test overhead by avoiding schema recreation per test.
+    
+    NOTE: pytest-xdist parallel execution is NOT supported due to PostGIS constraints.
+    The geography type is only available in the public schema where postgis extension
+    is installed. Schema-per-worker isolation doesn't work. Use sequential execution
+    or run test files in parallel with external orchestration.
     """
     url = pg_container.get_connection_url()
     engine = create_async_engine(url, poolclass=NullPool)
@@ -203,58 +208,59 @@ async def db_engine_session(pg_container):
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis"))
         await conn.run_sync(Base.metadata.create_all)
     
+    # Seed metric_types once at session start (reference data, never changes)
+    async with engine.begin() as conn:
+        # Use raw SQL for speed - avoid ORM overhead
+        await conn.execute(text("""
+            INSERT INTO metric_types (key, display_name, unit, category, data_type, min_value, max_value, allowed_sources, recalc_targets, sort_order)
+            VALUES 
+                ('ftp', 'Functional Threshold Power', 'W', 'threshold', 'integer', 50, 500, ARRAY['manual', 'calculated', 'device'], ARRAY['power_zones', 'tss', 'if'], 1),
+                ('lthr', 'Lactate Threshold HR', 'bpm', 'threshold', 'integer', 80, 220, ARRAY['manual', 'calculated', 'device'], ARRAY['hr_zones'], 2),
+                ('hrmax', 'Maximum Heart Rate', 'bpm', 'threshold', 'integer', 100, 250, ARRAY['manual', 'calculated', 'device'], ARRAY['hr_zones'], 3),
+                ('weight_kg', 'Weight', 'kg', 'body', 'decimal', 30, 200, ARRAY['manual', 'device'], ARRAY['vo2max', 'w_per_kg'], 4),
+                ('vo2max', 'VO2 Max', 'ml/kg/min', 'fitness', 'decimal', 20, 90, ARRAY['manual', 'calculated', 'device'], NULL, 5),
+                ('resting_hr', 'Resting Heart Rate', 'bpm', 'recovery', 'integer', 30, 100, ARRAY['manual', 'device'], NULL, 6),
+                ('hrv', 'Heart Rate Variability', 'ms', 'recovery', 'integer', 10, 200, ARRAY['manual', 'device'], NULL, 7)
+            ON CONFLICT (key) DO NOTHING
+        """))
+    
     yield engine
     await engine.dispose()
 
 
-METRIC_TYPES_SEED = [
-    {"key": "ftp", "display_name": "Functional Threshold Power", "unit": "W", "category": "threshold", "data_type": "integer", "min_value": 50, "max_value": 500, "allowed_sources": ["manual", "calculated", "device"], "recalc_targets": ["power_zones", "tss", "if"], "sort_order": 1},
-    {"key": "lthr", "display_name": "Lactate Threshold HR", "unit": "bpm", "category": "threshold", "data_type": "integer", "min_value": 80, "max_value": 220, "allowed_sources": ["manual", "calculated", "device"], "recalc_targets": ["hr_zones"], "sort_order": 2},
-    {"key": "hrmax", "display_name": "Maximum Heart Rate", "unit": "bpm", "category": "threshold", "data_type": "integer", "min_value": 100, "max_value": 250, "allowed_sources": ["manual", "calculated", "device"], "recalc_targets": ["hr_zones"], "sort_order": 3},
-    {"key": "weight_kg", "display_name": "Weight", "unit": "kg", "category": "body", "data_type": "decimal", "min_value": 30, "max_value": 200, "allowed_sources": ["manual", "device"], "recalc_targets": ["vo2max", "w_per_kg"], "sort_order": 4},
-    {"key": "vo2max", "display_name": "VO2 Max", "unit": "ml/kg/min", "category": "fitness", "data_type": "decimal", "min_value": 20, "max_value": 90, "allowed_sources": ["manual", "calculated", "device"], "recalc_targets": None, "sort_order": 5},
-    {"key": "resting_hr", "display_name": "Resting Heart Rate", "unit": "bpm", "category": "recovery", "data_type": "integer", "min_value": 30, "max_value": 100, "allowed_sources": ["manual", "device"], "recalc_targets": None, "sort_order": 6},
-    {"key": "hrv", "display_name": "Heart Rate Variability", "unit": "ms", "category": "recovery", "data_type": "integer", "min_value": 10, "max_value": 200, "allowed_sources": ["manual", "device"], "recalc_targets": None, "sort_order": 7},
-]
+# =============================================================================
+# DATABASE FIXTURES
+# =============================================================================
+# Default fixtures use TRUNCATE for test isolation. This is reliable and works
+# with all test patterns (HTTP clients, direct DB access, mixed usage).
+#
+# Transaction rollback is faster but only works when all DB access goes through
+# the same connection, which doesn't work with tests that mix HTTP clients
+# with direct ingest_fit() calls.
 
 
 @pytest_asyncio.fixture
 async def db_engine(db_engine_session):
     """
     Function-scoped fixture that cleans data between tests via TRUNCATE.
-    Much faster than DROP/CREATE schema (~10ms vs ~1000ms).
+    Excludes metric_types which is seeded once at session start.
     """
-    # Truncate all tables before each test (CASCADE handles FK constraints)
+    # Truncate all tables EXCEPT metric_types (reference data seeded at session start)
     async with db_engine_session.begin() as conn:
-        # Get all table names - use metadata.tables to avoid sort issues with circular FKs
-        tables = list(Base.metadata.tables.keys())
+        tables = [t for t in Base.metadata.tables.keys() if t != "metric_types"]
         if tables:
             table_list = ", ".join(f'"{t}"' for t in tables)
             await conn.execute(text(f"TRUNCATE {table_list} RESTART IDENTITY CASCADE"))
-    
-    # Seed metric_types (required for metrics API tests)
-    # Use merge to handle existing data from previous runs
-    session_factory = async_sessionmaker(db_engine_session, expire_on_commit=False)
-    async with session_factory() as session:
-        from trainingdash.models import MetricType
-        from sqlalchemy.dialects.postgresql import insert as pg_insert
-        
-        # Use upsert to handle existing metric_types
-        for mt_data in METRIC_TYPES_SEED:
-            stmt = pg_insert(MetricType).values(**mt_data)
-            stmt = stmt.on_conflict_do_nothing(index_elements=["key"])
-            await session.execute(stmt)
-        await session.commit()
     
     yield db_engine_session
 
 
 @pytest_asyncio.fixture
 async def db_session(db_engine):
+    """Database session for direct DB access in tests."""
     session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
     async with session_factory() as session:
         yield session
-        await session.rollback()
 
 
 @pytest_asyncio.fixture
@@ -272,6 +278,7 @@ async def seed_user(db_session):
 
 @pytest_asyncio.fixture
 async def app_client(db_engine, seed_user):
+    """App client for HTTP requests in tests."""
     import trainingdash.auth as authmod
 
     session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
@@ -307,3 +314,11 @@ async def http_client():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
+
+
+# Aliases for tests that explicitly want TRUNCATE (same as default now)
+truncate_db_engine = db_engine
+truncate_db_session = db_session
+truncate_seed_user = seed_user
+truncate_app_client = app_client
+truncate_auth_client = auth_client

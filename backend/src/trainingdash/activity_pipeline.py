@@ -24,7 +24,7 @@ from trainingdash.domain.metrics import (
     compute_tss,
 )
 from trainingdash.domain.zones import compute_zone_times
-from trainingdash.models import (
+from trainingdash.repositories.postgres.models import (
     Activity,
     ActivityPeakPower,
     FitnessHistory,

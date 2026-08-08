@@ -7,7 +7,7 @@ from geoalchemy2.functions import ST_SetSRID, ST_MakePoint
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from trainingdash.models import Activity, Lap, Record, ActivityPeakPower, FitnessHistory, Notification, User
+from trainingdash.repositories.postgres.models import Activity, Lap, Record, ActivityPeakPower, FitnessHistory, Notification, User
 from trainingdash.domain.polyline import generate_map_polyline
 from trainingdash.domain.metrics import (
     compute_normalized_power,
@@ -887,7 +887,7 @@ async def backfill_activity_metrics(
     Returns:
         Number of activities updated
     """
-    from trainingdash.models import Record
+    from trainingdash.repositories.postgres.models import Record
     
     # Find activities missing metrics (NP is the indicator - if NP is null but has power, needs backfill)
     if activity_ids:

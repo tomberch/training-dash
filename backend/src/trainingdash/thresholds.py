@@ -11,7 +11,7 @@ from decimal import Decimal
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from trainingdash.models import MetricEntry, MetricType, User
+from trainingdash.repositories.postgres.models import MetricEntry, MetricType, User
 
 
 # Cache metric type IDs to avoid repeated lookups

@@ -18,7 +18,7 @@ from fastapi_sso.sso.google import GoogleSSO
 from fastapi_sso.sso.base import SSOBase
 
 from trainingdash.auth import create_session_cookie, verify_session_cookie, DbSession
-from trainingdash.models import User, UserOAuthLink, AppSettings
+from trainingdash.repositories.postgres.models import User, UserOAuthLink, AppSettings
 
 router = APIRouter(prefix="/auth", tags=["OAuth"])
 

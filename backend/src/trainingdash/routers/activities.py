@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy import select, func
 
 from trainingdash.auth import CurrentUser, DbSession
-from trainingdash.models import Activity, ActivityPeakPower, Record
+from trainingdash.repositories.postgres.models import Activity, ActivityPeakPower, Record
 from trainingdash.thresholds import get_thresholds_for_date
 from trainingdash.routers.datetime_utils import utc_str
 from trainingdash.routers.serializers import (
@@ -528,7 +528,7 @@ async def delete_activity(
     deletion to avoid FK violations (routes.first_seen_activity_id has no ondelete).
     A background job then recomputes the fitness model and breakthrough flags.
     """
-    from trainingdash.models import Route
+    from trainingdash.repositories.postgres.models import Route
     from trainingdash.jobs import enqueue_recalculate_after_delete_job
 
     activity = await _get_owned_activity(db, user, activity_id)

@@ -32,7 +32,7 @@ class TestUserXertCredentials:
     async def test_get_xert_credentials_when_configured_shows_email_and_sync_since(
         self, auth_client, db_session, seed_user, encryption_key_env
     ):
-        from trainingdash.models import XertCredentials
+        from trainingdash.repositories.postgres.models import XertCredentials
         from trainingdash.crypto import encrypt
         from datetime import datetime
 
@@ -58,7 +58,7 @@ class TestUserXertCredentials:
 
     @pytest.mark.asyncio
     async def test_put_xert_credentials_validates_and_saves(self, auth_client, seed_user, db_session, encryption_key_env):
-        from trainingdash.models import XertCredentials
+        from trainingdash.repositories.postgres.models import XertCredentials
         from sqlalchemy import select
 
         # Mock the Xert client to simulate successful login
@@ -104,7 +104,7 @@ class TestUserXertCredentials:
 
     @pytest.mark.asyncio
     async def test_put_xert_credentials_with_custom_sync_since(self, auth_client, seed_user, db_session, encryption_key_env):
-        from trainingdash.models import XertCredentials
+        from trainingdash.repositories.postgres.models import XertCredentials
         from sqlalchemy import select
 
         with patch("trainingdash.routers.user.get_xert_client") as mock_get_client:
@@ -134,7 +134,7 @@ class TestUserXertCredentials:
     async def test_delete_xert_credentials_removes_credentials(
         self, auth_client, db_session, seed_user, encryption_key_env
     ):
-        from trainingdash.models import XertCredentials
+        from trainingdash.repositories.postgres.models import XertCredentials
         from trainingdash.crypto import encrypt
         from sqlalchemy import select
 

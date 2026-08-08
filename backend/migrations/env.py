@@ -35,7 +35,7 @@ import sys
 # Load models module without importing db.py
 spec = importlib.util.spec_from_file_location(
     "models_for_alembic",
-    os.path.join(os.path.dirname(__file__), "..", "src", "trainingdash", "models.py")
+    os.path.join(os.path.dirname(__file__), "..", "src", "trainingdash", "repositories", "postgres", "models.py")
 )
 
 # We need Base from db.py, but it's just a DeclarativeBase - recreate it
@@ -48,10 +48,10 @@ class Base(DeclarativeBase):
 class FakeDb:
     Base = Base
 
-sys.modules['trainingdash.db'] = FakeDb()
+sys.modules['trainingdash.repositories.postgres.db'] = FakeDb()
 
 # Now we can import models
-from trainingdash.models import (
+from trainingdash.repositories.postgres.models import (
     User, Activity, Record, Route,
     XertCredentials, GarminCredentials,
     ActivityPeakPower, FitnessHistory, Notification, EFModel,

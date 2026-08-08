@@ -28,7 +28,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine, AsyncEngine
 from trainingdash.jobs import get_redis_settings, create_redis_pool
 from trainingdash.ingest import backfill_activity_metrics
-from trainingdash.models import RecalculationJob
+from trainingdash.repositories.postgres.models import RecalculationJob
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +90,7 @@ async def ingest_job(ctx, user_id: int, fit_bytes: bytes, source: str, source_re
 async def match_route_job(ctx, activity_id: int, user_id: int):
     """Match an activity to a route cluster."""
     from sqlalchemy import select
-    from trainingdash.models import Activity, Record
+    from trainingdash.repositories.postgres.models import Activity, Record
     from trainingdash.route_matching import find_or_create_route_id
 
     async with worker_db_session(ctx) as db:
@@ -125,7 +125,7 @@ async def recalculate_after_delete_job(ctx, user_id: int) -> dict:
     from datetime import datetime, timezone
 
     from sqlalchemy import select, update
-    from trainingdash.models import Activity, ActivityPeakPower
+    from trainingdash.repositories.postgres.models import Activity, ActivityPeakPower
     from trainingdash.ingest import _update_fitness_model
     from trainingdash.domain.fitness import detect_breakthrough, get_all_time_bests
 
@@ -243,7 +243,7 @@ async def hourly_sync_scheduler(ctx):
     """
     from datetime import datetime, timezone
     from sqlalchemy import select
-    from trainingdash.models import GarminCredentials, XertCredentials, User
+    from trainingdash.repositories.postgres.models import GarminCredentials, XertCredentials, User
     
     current_hour = datetime.now(timezone.utc).hour
     logger.info(f"hourly_sync_scheduler: Running for hour {current_hour}")

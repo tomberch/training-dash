@@ -6,7 +6,7 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import select
 
-from trainingdash.models import Activity, MetricEntry, MetricType
+from trainingdash.repositories.postgres.models import Activity, MetricEntry, MetricType
 
 
 class TestListMetrics:

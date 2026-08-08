@@ -12,8 +12,8 @@ from testcontainers.redis import RedisContainer
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "tests" / "fixtures"))
 from generate_fit import make_test_fit  # noqa: E402
-from trainingdash.models import Activity, Record, User  # noqa: E402
-from trainingdash.db import Base  # noqa: E402
+from trainingdash.repositories.postgres.models import Activity, Record, User  # noqa: E402
+from trainingdash.repositories.postgres.db import Base  # noqa: E402
 from trainingdash.app import create_app  # noqa: E402
 
 from httpx import ASGITransport, AsyncClient

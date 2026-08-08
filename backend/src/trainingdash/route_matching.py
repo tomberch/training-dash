@@ -3,7 +3,7 @@ import math
 from sqlalchemy import text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from trainingdash.models import Activity, Record, Route
+from trainingdash.repositories.postgres.models import Activity, Record, Route
 
 HAUSDORFF_THRESHOLD_M = 100.0
 SIMPLIFY_TOLERANCE_M = 50.0

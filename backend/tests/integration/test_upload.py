@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "tests" / "fixtures"))
 from generate_fit import make_test_fit  # noqa: E402
-from trainingdash.models import Activity, Lap, Record  # noqa: E402
+from trainingdash.repositories.postgres.models import Activity, Lap, Record  # noqa: E402
 
 
 class TestUpload:
@@ -338,7 +338,7 @@ class TestPeakPowersOnIngest:
     @pytest.mark.asyncio
     async def test_upload_extracts_peak_powers(self, auth_client, db_session):
         """Upload with power data extracts peaks at standard durations."""
-        from trainingdash.models import ActivityPeakPower
+        from trainingdash.repositories.postgres.models import ActivityPeakPower
         
         # Upload FIT with 120 records (2 minutes of data)
         fit_data = make_test_fit(num_records=120)
@@ -375,7 +375,7 @@ class TestPeakPowersOnIngest:
     @pytest.mark.asyncio
     async def test_upload_only_stores_peaks_for_valid_durations(self, auth_client, db_session):
         """Peaks only stored for durations where ride was long enough."""
-        from trainingdash.models import ActivityPeakPower
+        from trainingdash.repositories.postgres.models import ActivityPeakPower
         
         # Upload FIT with only 30 records (30 seconds)
         fit_data = make_test_fit(num_records=30)

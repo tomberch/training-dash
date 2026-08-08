@@ -8,7 +8,7 @@ from sqlalchemy import select
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "tests" / "fixtures"))
 from generate_fit import make_test_fit  # noqa: E402
-from trainingdash.models import Activity, EFModel, User  # noqa: E402
+from trainingdash.repositories.postgres.models import Activity, EFModel, User  # noqa: E402
 from trainingdash.ingest import ingest_fit  # noqa: E402
 
 # Pre-generate FIT bytes once per module (FitFileBuilder is expensive)

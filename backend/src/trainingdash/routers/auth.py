@@ -13,7 +13,7 @@ from trainingdash.auth import (
     verify_password,
     hash_password,
 )
-from trainingdash.models import User, AppSettings
+from trainingdash.repositories.postgres.models import User, AppSettings
 from trainingdash.routers.serializers import user_response
 
 router = APIRouter(prefix="/api", tags=["auth"])

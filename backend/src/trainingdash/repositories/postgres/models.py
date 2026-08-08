@@ -19,7 +19,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from trainingdash.db import Base
+from trainingdash.repositories.postgres.db import Base
 
 
 class User(Base):
