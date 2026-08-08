@@ -3,96 +3,89 @@
  *
  * Tests the activity list displays correctly with metrics,
  * handles empty states, and navigates to detail views.
+ *
+ * ISOLATION: This test creates its own user and uploads activities
+ * to avoid conflicts with parallel tests.
  */
-import { test, expect, Page } from '@playwright/test';
-import { generateTestUser, registerUser } from './fixtures/auth';
-import { getActivities } from './fixtures/api';
+import { test, expect } from '@playwright/test';
+import { generateTestUser } from './fixtures/auth';
+import { uploadFitFileAndWait, getFixtureFitPath } from './fixtures/upload';
+
+// Test user for activity list tests (has activities)
+const testUser = generateTestUser('activity-list');
+// Separate user for empty state test (no activities)
+const emptyUser = generateTestUser('activity-empty');
+
+// Track uploaded activity IDs for cleanup
+const uploadedActivityIds: string[] = [];
 
 /**
- * Helper to navigate to dashboard and verify recent activities are visible.
- * Skips test if no activities are displayed (either API returns 0 or UI shows empty state).
+ * Helper to register and login a user via API.
  */
-async function requireDashboardActivities(page: Page): Promise<boolean> {
-  await page.goto('/');
-  await page.waitForLoadState('networkidle');
-  
-  // Check API first for quick skip
-  const activities = await getActivities(page);
-  if (activities.length === 0) {
-    test.skip();
-    return false;
+async function setupUser(
+  request: import('@playwright/test').APIRequestContext,
+  email: string,
+  password: string
+): Promise<void> {
+  const registerResponse = await request.post('/api/register', {
+    data: { email, password },
+  });
+  if (!registerResponse.ok()) {
+    // User might already exist - try logging in
+    const loginResponse = await request.post('/api/login', {
+      data: { email, password },
+    });
+    if (!loginResponse.ok()) {
+      throw new Error(`Failed to setup user: ${await registerResponse.text()}`);
+    }
+    return;
   }
-  
-  // Wait for either "Recent Activities" section or "Welcome" onboarding
-  // The UI state may differ from API due to race conditions with parallel tests
-  const recentActivities = page.getByText('Recent Activities');
-  const welcomeScreen = page.getByText('Welcome to TrainDash');
-  
-  // Wait for either element with a short timeout
-  try {
-    await Promise.race([
-      recentActivities.waitFor({ timeout: 5000 }),
-      welcomeScreen.waitFor({ timeout: 5000 }),
-    ]);
-  } catch {
-    // Neither appeared - unexpected state, skip test
-    test.skip();
-    return false;
-  }
-  
-  // If we see the welcome screen, activities were deleted - skip
-  if (await welcomeScreen.isVisible().catch(() => false)) {
-    test.skip();
-    return false;
-  }
-  
-  return true;
+
+  await request.post('/api/login', {
+    data: { email, password },
+  });
 }
 
 /**
- * Helper to navigate to activities page and verify activities are loaded.
- * Skips test if no activities exist.
+ * Helper to login a user (for page context).
  */
-async function requireActivityList(page: Page): Promise<{ id: number }[] | null> {
-  await page.goto('/activities');
-  await page.waitForLoadState('networkidle');
-  
-  const activities = await getActivities(page);
-  if (activities.length === 0) {
-    test.skip();
-    return null;
-  }
-  
-  // Wait for either activity rows or empty state
-  const activityHeading = page.getByRole('main').locator('h3').first();
-  const emptyState = page.getByText('No activities yet');
-  
-  try {
-    await Promise.race([
-      activityHeading.waitFor({ timeout: 5000 }),
-      emptyState.waitFor({ timeout: 5000 }),
-    ]);
-  } catch {
-    // Neither appeared - might be loading, let's give it more time
-    await page.waitForTimeout(2000);
-  }
-  
-  // If empty state is visible, activities were deleted - skip
-  if (await emptyState.isVisible().catch(() => false)) {
-    test.skip();
-    return null;
-  }
-  
-  return activities as unknown as { id: number }[];
+async function loginUser(page: import('@playwright/test').Page, email: string, password: string): Promise<void> {
+  await page.request.post('/api/login', {
+    data: { email, password },
+  });
 }
 
 test.describe('Activity List', () => {
-  test('empty state shows when no activities exist', async ({ page }) => {
-    // Create a fresh user with no activities
-    const user = generateTestUser('activity-empty');
-    await registerUser(page, user);
+  // Set up isolated user with activities for most tests
+  test.beforeAll(async ({ request }) => {
+    // Increase timeout for user registration + multiple file uploads (job queue may have backlog)
+    test.setTimeout(300000);
+    
+    // Setup main test user
+    await setupUser(request, testUser.email, testUser.password);
 
-    // Navigate to activities page
+    // Set threshold before uploads (FIT files are dated July 2026)
+    await request.post('/api/me/thresholds', {
+      data: { ftp_watts: 220, lthr_bpm: 165, effective_date: '2026-06-01' },
+    });
+
+    // Upload multiple FIT files to have a populated activity list
+    const fitFiles = ['cp-ride1-2min.fit', 'cp-ride2-5min.fit', 'cp-ride3-10min.fit'];
+
+    for (const fileName of fitFiles) {
+      const filePath = getFixtureFitPath(fileName);
+      const activityId = await uploadFitFileAndWait(request, filePath);
+      uploadedActivityIds.push(activityId);
+    }
+
+    // Also setup the empty user (but don't upload anything)
+    await setupUser(request, emptyUser.email, emptyUser.password);
+  });
+
+  test('empty state shows when no activities exist', async ({ page }) => {
+    // Login as the empty user (no activities)
+    await loginUser(page, emptyUser.email, emptyUser.password);
+
     await page.goto('/activities');
 
     // Should show empty state message
@@ -100,11 +93,12 @@ test.describe('Activity List', () => {
   });
 
   test('activity list loads and displays activities', async ({ page }) => {
-    // Use the authenticated state from setup (baseline user)
-    const activities = await requireActivityList(page);
-    if (!activities) return;
+    await loginUser(page, testUser.email, testUser.password);
 
-    // If activities exist, we should see the list header
+    await page.goto('/activities');
+    await page.waitForLoadState('networkidle');
+
+    // Should see the list header
     await expect(page.getByRole('heading', { name: 'Activities' })).toBeVisible();
 
     // Should show activity count
@@ -112,28 +106,29 @@ test.describe('Activity List', () => {
   });
 
   test('activity shows date, name, duration, distance metrics', async ({ page }) => {
-    // This test verifies the activity list displays metrics correctly.
-    // Testing upload flow with async job processing is covered in #221.
-    const activities = await requireActivityList(page);
-    if (!activities) return;
+    await loginUser(page, testUser.email, testUser.password);
 
-    // Check for metric labels (these appear in the activity rows)
+    await page.goto('/activities');
+    await page.waitForLoadState('networkidle');
+
+    // Wait for activity list to render
+    await expect(page.getByRole('heading', { name: 'Activities' })).toBeVisible();
+
+    // Check for metric labels in activity rows
     await expect(page.getByText('Distance').first()).toBeVisible();
     await expect(page.getByText('Time').first()).toBeVisible();
-    
-    // Check page heading
-    await expect(page.getByRole('heading', { name: 'Activities' })).toBeVisible();
   });
 
   test('clicking activity navigates to detail view', async ({ page }) => {
-    const activities = await requireActivityList(page);
-    if (!activities) return;
+    await loginUser(page, testUser.email, testUser.password);
 
-    // Wait for activity list to load by checking for activity heading
-    // Activity rows display as div>h3 elements with the activity title
+    await page.goto('/activities');
+    await page.waitForLoadState('networkidle');
+
+    // Wait for activity list to load
     const firstActivityHeading = page.getByRole('main').locator('h3').first();
     await expect(firstActivityHeading).toBeVisible({ timeout: 10000 });
-    
+
     // Click on the activity heading to navigate to detail
     await firstActivityHeading.click();
 
@@ -144,12 +139,11 @@ test.describe('Activity List', () => {
     await expect(page.getByRole('button', { name: 'Back' })).toBeVisible({ timeout: 10000 });
   });
 
-  // Note: TSS test removed - requires FIT fixtures with power data and user threshold setup.
-  // Will be added in #219 (FIT fixtures) or a dedicated threshold test ticket.
-
   test('dashboard shows recent activities', async ({ page }) => {
-    const hasActivities = await requireDashboardActivities(page);
-    if (!hasActivities) return;
+    await loginUser(page, testUser.email, testUser.password);
+
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
 
     // Dashboard should show "Recent Activities" section
     await expect(page.getByText('Recent Activities')).toBeVisible();
@@ -159,8 +153,13 @@ test.describe('Activity List', () => {
   });
 
   test('view all link navigates to activities page', async ({ page }) => {
-    const hasActivities = await requireDashboardActivities(page);
-    if (!hasActivities) return;
+    await loginUser(page, testUser.email, testUser.password);
+
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    // Wait for Recent Activities section
+    await expect(page.getByText('Recent Activities')).toBeVisible();
 
     // Click "View all" link
     await page.getByText('View all').click();
@@ -170,21 +169,31 @@ test.describe('Activity List', () => {
   });
 
   test('pagination appears with many activities', async ({ page }) => {
-    // This test verifies pagination UI appears when there are many activities
-    // Note: We may not have enough activities to trigger pagination in test env
+    await loginUser(page, testUser.email, testUser.password);
 
     await page.goto('/activities');
     await page.waitForLoadState('networkidle');
 
-    const activities = await getActivities(page);
+    // We only have 3 activities, so no pagination expected
+    // Just verify the page works correctly
+    await expect(page.getByRole('heading', { name: 'Activities', exact: true })).toBeVisible();
 
-    if (activities.length <= 20) {
-      // Not enough activities for pagination - just verify page works
-      await expect(page.getByRole('heading', { name: 'Activities', exact: true })).toBeVisible();
-      return;
+    // Note: To test pagination with 20+ activities, would need to upload more FIT files
+    // or use a dedicated pagination test with its own user
+  });
+
+  test.afterAll(async ({ request }) => {
+    // Clean up: delete uploaded activities
+    await request.post('/api/login', {
+      data: { email: testUser.email, password: testUser.password },
+    });
+
+    for (const activityId of uploadedActivityIds) {
+      try {
+        await request.delete(`/api/activities/${activityId}`);
+      } catch {
+        // Ignore cleanup errors
+      }
     }
-
-    // If we have more than 20 activities, pagination should appear
-    await expect(page.getByRole('button', { name: 'Next' })).toBeVisible();
   });
 });

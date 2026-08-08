@@ -9,20 +9,18 @@
  * See the README.md in that directory for the formula and expected values.
  *
  * TSS calculation requires FTP threshold to be set first.
+ *
+ * ISOLATION: This test creates its own user to avoid conflicts with parallel tests.
  */
 import { test, expect, APIRequestContext } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { generateTestUser } from './fixtures/auth';
+import { uploadFitFileAndWait } from './fixtures/upload';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-// Test user credentials (created by globalSetup)
-const TEST_USER = {
-  email: 'testuser@example.com',
-  password: 'testpass',
-};
 
 // Expected values from cp-ride*.fit fixture files
 const EXPECTED_CP_WATTS = 220;
@@ -55,6 +53,24 @@ const TSS_TOLERANCE = 0.5; // TSS points
 const NP_TOLERANCE = 1; // watts (rounding differences)
 
 /**
+ * Helper to register a new user via API.
+ */
+async function registerUser(
+  request: APIRequestContext,
+  email: string,
+  password: string
+): Promise<{ id: number }> {
+  const response = await request.post('/api/register', {
+    data: { email, password },
+  });
+  if (!response.ok()) {
+    const body = await response.text();
+    throw new Error(`Register failed: ${response.status()} ${body}`);
+  }
+  return response.json();
+}
+
+/**
  * Helper to login via API.
  */
 async function loginUser(
@@ -72,64 +88,6 @@ async function loginUser(
 }
 
 /**
- * Helper to upload a FIT file and wait for processing.
- */
-async function uploadFitFileAndWait(
-  request: APIRequestContext,
-  filePath: string,
-  timeoutMs = 30000
-): Promise<string> {
-  const fileName = path.basename(filePath);
-  const fileBuffer = fs.readFileSync(filePath);
-
-  const response = await request.post('/api/upload', {
-    multipart: {
-      file: {
-        name: fileName,
-        mimeType: 'application/octet-stream',
-        buffer: fileBuffer,
-      },
-    },
-  });
-
-  if (!response.ok() && response.status() !== 202) {
-    const body = await response.text();
-    throw new Error(`Upload failed: ${response.status()} ${body}`);
-  }
-
-  const result = await response.json();
-
-  // Sync response - activity created immediately
-  if (result.id) {
-    return result.id;
-  }
-
-  // Async response - wait for job
-  if (result.job_id) {
-    const startTime = Date.now();
-    while (Date.now() - startTime < timeoutMs) {
-      const jobResponse = await request.get(`/api/jobs/${result.job_id}`);
-      if (jobResponse.ok()) {
-        const jobData = await jobResponse.json();
-        if (jobData.status === 'complete') {
-          if (jobData.result?.success && jobData.result?.activity_id) {
-            return String(jobData.result.activity_id);
-          }
-          throw new Error(`Job completed but failed: ${JSON.stringify(jobData.result)}`);
-        }
-        if (jobData.status === 'failed' || jobData.status === 'not_found') {
-          throw new Error(`Job failed: ${JSON.stringify(jobData)}`);
-        }
-      }
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    }
-    throw new Error(`Job ${result.job_id} did not complete after ${timeoutMs}ms`);
-  }
-
-  throw new Error('Upload returned neither id nor job_id');
-}
-
-/**
  * Helper to get list of FIT fixture files.
  */
 function getCpRideFitFiles(): string[] {
@@ -141,37 +99,27 @@ function getCpRideFitFiles(): string[] {
     .sort();
 }
 
-/**
- * Helper to delete all activities for the current user.
- */
-async function deleteAllActivities(request: APIRequestContext): Promise<void> {
-  const response = await request.get('/api/activities');
-  if (!response.ok()) return;
-
-  const data = await response.json();
-  const activities = data.activities || [];
-
-  for (const activity of activities) {
-    await request.delete(`/api/activities/${activity.id}`);
-  }
-
-  // Wait for recalculation jobs to complete
-  await new Promise((resolve) => setTimeout(resolve, 2000));
-}
-
 test.describe.serial('Fitness Calculations', () => {
   const uploadedActivityIds: string[] = [];
+  // Create isolated user for this test suite
+  const testUser = generateTestUser('fitness-calc');
 
   test.beforeAll(async ({ request }) => {
-    // Login as test user
-    await loginUser(request, TEST_USER.email, TEST_USER.password);
-
-    // Clean up any existing activities to get a fresh start
-    await deleteAllActivities(request);
+    // Increase timeout for registration + 5 file uploads
+    test.setTimeout(300000);
+    
+    // Register and login as isolated test user
+    await registerUser(request, testUser.email, testUser.password);
+    await loginUser(request, testUser.email, testUser.password);
 
     // Set FTP threshold (needed for TSS calculation)
+    // Use effective_date before July 2026 (when FIT files are dated)
     await request.post('/api/me/thresholds', {
-      data: { ftp_watts: EXPECTED_CP_WATTS, lthr_bpm: 165 },
+      data: { 
+        ftp_watts: EXPECTED_CP_WATTS, 
+        lthr_bpm: 165,
+        effective_date: '2026-06-01',
+      },
     });
   });
 
@@ -335,6 +283,9 @@ test.describe.serial('Fitness Calculations', () => {
   });
 
   test.afterAll(async ({ request }) => {
+    // Login as our test user to clean up
+    await loginUser(request, testUser.email, testUser.password);
+    
     // Clean up: delete uploaded activities
     for (const activityId of uploadedActivityIds) {
       try {
