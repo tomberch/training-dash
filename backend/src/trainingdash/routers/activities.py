@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy import select, func
 
 from trainingdash.auth import CurrentUser, DbSession
-from trainingdash.dependencies import ActivityRepoD
+from trainingdash.dependencies import ActivityRepoD, DeleteActivityD
 from trainingdash.repositories.postgres.models import Activity, ActivityPeakPower, Record
 from trainingdash.thresholds import get_thresholds_for_date
 from trainingdash.routers.datetime_utils import utc_str
@@ -497,9 +497,9 @@ async def get_job_status(user: CurrentUser, job_id: str):
 
 @router.delete("/activities/{activity_id}", status_code=204)
 async def delete_activity(
-    repo: ActivityRepoD,
     user: CurrentUser,
     activity_id: UUID,
+    delete_use_case: DeleteActivityD,
 ):
     """
     Permanently delete an activity owned by the current user.
@@ -509,13 +509,8 @@ async def delete_activity(
     deletion to avoid FK violations (routes.first_seen_activity_id has no ondelete).
     A background job then recomputes the fitness model and breakthrough flags.
     """
-    from trainingdash.jobs import enqueue_recalculate_after_delete_job
-
-    deleted = await repo.delete(activity_id, user.id)
+    deleted = await delete_use_case.execute(user.id, activity_id)
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Activity not found"
         )
-
-    # --- Enqueue async recalculation (fitness model + breakthrough flags) ---
-    await enqueue_recalculate_after_delete_job(user.id)

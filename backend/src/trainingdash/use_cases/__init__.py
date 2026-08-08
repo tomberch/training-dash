@@ -22,5 +22,6 @@ Example:
 """
 
 from trainingdash.use_cases.ingest_activity import IngestActivity
+from trainingdash.use_cases.delete_activity import DeleteActivity
 
-__all__ = ["IngestActivity"]
+__all__ = ["IngestActivity", "DeleteActivity"]

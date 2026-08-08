@@ -99,6 +99,7 @@ OAuthLinkRepoD = Annotated[PostgresOAuthLinkRepo, Depends(get_oauth_link_repo)]
 # --- Use Cases ---
 
 from trainingdash.use_cases.ingest_activity import IngestActivity
+from trainingdash.use_cases.delete_activity import DeleteActivity
 
 
 async def get_ingest_activity_use_case(db: DbSession) -> IngestActivity:
@@ -106,4 +107,12 @@ async def get_ingest_activity_use_case(db: DbSession) -> IngestActivity:
     return IngestActivity(db)
 
 
+async def get_delete_activity_use_case(
+    activity_repo: ActivityRepoD,
+) -> DeleteActivity:
+    """Create a DeleteActivity use case with its dependencies."""
+    return DeleteActivity(activity_repo)
+
+
 IngestActivityD = Annotated[IngestActivity, Depends(get_ingest_activity_use_case)]
+DeleteActivityD = Annotated[DeleteActivity, Depends(get_delete_activity_use_case)]
