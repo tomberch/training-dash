@@ -1,18 +1,21 @@
 """Metrics endpoints: /me/metrics/* for managing historical metric entries."""
 
+import logging
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from trainingdash.auth import CurrentUser, DbSession
 from trainingdash.jobs import enqueue_recalculate_metrics_job
 from trainingdash.models import Activity, MetricEntry, MetricType, RecalculationJob
 from trainingdash.routers.datetime_utils import utc_str
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["metrics"])
 
@@ -21,7 +24,12 @@ router = APIRouter(prefix="/api", tags=["metrics"])
 
 
 class MetricEntryCreate(BaseModel):
-    """Schema for creating a metric entry."""
+    """Schema for creating a metric entry.
+    
+    Note: source="device" is allowed here for sync integrations that push data.
+    However, device-sourced entries cannot be modified via PATCH to preserve
+    sync integrity - corrections should come from the source system.
+    """
     metric_type: str = Field(..., description="Metric type key (ftp, lthr, weight_kg, etc.)")
     effective_date: date
     value: float
@@ -35,30 +43,6 @@ class MetricEntryUpdate(BaseModel):
     value: float | None = None
     effective_date: date | None = None
     notes: str | None = None
-
-
-class MetricEntryRead(BaseModel):
-    """Schema for reading a metric entry."""
-    id: int
-    metric_type: str
-    metric_type_display: str
-    unit: str | None
-    category: str
-    effective_date: date
-    value: float
-    source: str
-    source_detail: str | None
-    notes: str | None
-    created_at: str
-    updated_at: str
-
-    model_config = {"from_attributes": True}
-
-
-class RecalcPreview(BaseModel):
-    """Preview of recalculation impact."""
-    affected_activities: int
-    recalc_targets: list[str]
 
 
 # --- Helper Functions ---
@@ -129,7 +113,9 @@ async def _trigger_recalculation(db: DbSession, user_id: int) -> None:
     try:
         await enqueue_recalculate_metrics_job(user_id)
     except Exception:
-        pass  # Job enqueueing failure is non-blocking
+        # Job enqueueing failure is non-blocking - the job row exists
+        # and can be picked up by a periodic sweep if Redis is unavailable
+        logger.exception("Failed to enqueue recalculation job for user %s", user_id)
 
 
 # --- Endpoints ---
@@ -369,23 +355,48 @@ async def get_current_metrics(
     result = await db.execute(
         select(MetricType).order_by(MetricType.sort_order)
     )
-    all_types = result.scalars().all()
+    all_types = {mt.id: mt for mt in result.scalars().all()}
     
-    # For each type, get most recent entry
-    response = {}
-    for mt in all_types:
-        result = await db.execute(
-            select(MetricEntry)
-            .where(
-                MetricEntry.user_id == user.id,
-                MetricEntry.metric_type_id == mt.id,
-            )
-            .order_by(MetricEntry.effective_date.desc())
-            .limit(1)
+    # Single query using DISTINCT ON to get most recent entry per metric type
+    from sqlalchemy.dialects.postgresql import aggregate_order_by
+    from sqlalchemy import literal_column
+    
+    # Use a subquery with row_number to get the most recent entry per type
+    subq = (
+        select(
+            MetricEntry,
+            func.row_number().over(
+                partition_by=MetricEntry.metric_type_id,
+                order_by=MetricEntry.effective_date.desc()
+            ).label("rn")
         )
-        entry = result.scalar_one_or_none()
-        
-        if entry:
+        .where(MetricEntry.user_id == user.id)
+        .subquery()
+    )
+    
+    result = await db.execute(
+        select(subq).where(literal_column("rn") == 1)
+    )
+    entries_by_type = {row.metric_type_id: row for row in result.all()}
+    
+    # Build response with all types, null for missing
+    response = {}
+    for mt_id, mt in all_types.items():
+        entry_row = entries_by_type.get(mt_id)
+        if entry_row:
+            # Reconstruct MetricEntry from row
+            entry = MetricEntry(
+                id=entry_row.id,
+                user_id=entry_row.user_id,
+                metric_type_id=entry_row.metric_type_id,
+                effective_date=entry_row.effective_date,
+                value=entry_row.value,
+                source=entry_row.source,
+                source_detail=entry_row.source_detail,
+                notes=entry_row.notes,
+                created_at=entry_row.created_at,
+                updated_at=entry_row.updated_at,
+            )
             response[mt.key] = _entry_to_read(entry, mt)
         else:
             response[mt.key] = None
@@ -404,6 +415,8 @@ async def get_effective_metrics(
     
     Returns the most recent entry for each metric type where effective_date <= target_date.
     """
+    from sqlalchemy import literal_column
+    
     # Get metric types to query
     if metric_types:
         type_keys = [k.strip() for k in metric_types.split(",")]
@@ -417,24 +430,50 @@ async def get_effective_metrics(
             select(MetricType).order_by(MetricType.sort_order)
         )
     
-    types_to_query = result.scalars().all()
+    types_to_query = {mt.id: mt for mt in result.scalars().all()}
     
-    # For each type, get most recent entry <= target_date
-    response = {}
-    for mt in types_to_query:
-        result = await db.execute(
-            select(MetricEntry)
-            .where(
-                MetricEntry.user_id == user.id,
-                MetricEntry.metric_type_id == mt.id,
-                MetricEntry.effective_date <= target_date,
-            )
-            .order_by(MetricEntry.effective_date.desc())
-            .limit(1)
+    if not types_to_query:
+        return {}
+    
+    # Single query using row_number to get most recent entry per type <= target_date
+    subq = (
+        select(
+            MetricEntry,
+            func.row_number().over(
+                partition_by=MetricEntry.metric_type_id,
+                order_by=MetricEntry.effective_date.desc()
+            ).label("rn")
         )
-        entry = result.scalar_one_or_none()
-        
-        if entry:
+        .where(
+            MetricEntry.user_id == user.id,
+            MetricEntry.metric_type_id.in_(types_to_query.keys()),
+            MetricEntry.effective_date <= target_date,
+        )
+        .subquery()
+    )
+    
+    result = await db.execute(
+        select(subq).where(literal_column("rn") == 1)
+    )
+    entries_by_type = {row.metric_type_id: row for row in result.all()}
+    
+    # Build response with all requested types, null for missing
+    response = {}
+    for mt_id, mt in types_to_query.items():
+        entry_row = entries_by_type.get(mt_id)
+        if entry_row:
+            entry = MetricEntry(
+                id=entry_row.id,
+                user_id=entry_row.user_id,
+                metric_type_id=entry_row.metric_type_id,
+                effective_date=entry_row.effective_date,
+                value=entry_row.value,
+                source=entry_row.source,
+                source_detail=entry_row.source_detail,
+                notes=entry_row.notes,
+                created_at=entry_row.created_at,
+                updated_at=entry_row.updated_at,
+            )
             response[mt.key] = _entry_to_read(entry, mt)
         else:
             response[mt.key] = None

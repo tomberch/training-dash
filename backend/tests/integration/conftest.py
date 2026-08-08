@@ -215,11 +215,17 @@ async def db_engine(db_engine_session):
             await conn.execute(text(f"TRUNCATE {table_list} RESTART IDENTITY CASCADE"))
     
     # Seed metric_types (required for metrics API tests)
+    # Use merge to handle existing data from previous runs
     session_factory = async_sessionmaker(db_engine_session, expire_on_commit=False)
     async with session_factory() as session:
         from trainingdash.models import MetricType
+        from sqlalchemy.dialects.postgresql import insert as pg_insert
+        
+        # Use upsert to handle existing metric_types
         for mt_data in METRIC_TYPES_SEED:
-            session.add(MetricType(**mt_data))
+            stmt = pg_insert(MetricType).values(**mt_data)
+            stmt = stmt.on_conflict_do_nothing(index_elements=["key"])
+            await session.execute(stmt)
         await session.commit()
     
     yield db_engine_session
