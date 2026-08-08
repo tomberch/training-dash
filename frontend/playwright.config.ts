@@ -66,6 +66,17 @@ export default defineConfig({
         storageState: '.auth/user.json',
       },
       dependencies: ['setup'],
+      // Exclude auth-approval tests - they need fresh browser state
+      testIgnore: /auth-approval\.spec\.ts/,
+    },
+    // Unauthenticated project for auth flow tests
+    {
+      name: 'chromium-no-auth',
+      use: {
+        ...devices['Desktop Chrome'],
+        // No storageState - tests handle their own auth
+      },
+      testMatch: /auth-approval\.spec\.ts/,
     },
     // Uncomment to add more browsers:
     // {
