@@ -295,6 +295,18 @@ class RecalculationJobRepo(Protocol):
         """Create or update job to failed status."""
         ...
 
+    async def mark_running(self, user_id: int) -> None:
+        """Mark job as running."""
+        ...
+
+    async def mark_completed(self, user_id: int, activities_updated: int) -> None:
+        """Mark job as completed with count of updated activities."""
+        ...
+
+    async def mark_failed(self, user_id: int, error_message: str) -> None:
+        """Mark job as failed with error message."""
+        ...
+
 
 class OAuthLinkRepo(Protocol):
     """

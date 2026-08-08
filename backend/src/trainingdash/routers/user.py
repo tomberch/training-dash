@@ -9,7 +9,6 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from trainingdash.auth import CurrentUser, DbSession, hash_password
 from trainingdash.crypto import encrypt, EncryptionError
@@ -25,7 +24,6 @@ from trainingdash.jobs import enqueue_recalculate_metrics_job
 from trainingdash.repositories.postgres.models import (
     GarminCredentials,
     Notification,
-    RecalculationJob,
     XertCredentials,
 )
 from trainingdash.routers.serializers import (
@@ -382,7 +380,10 @@ class CreateThresholdRequest(BaseModel):
 
 @router.post("/me/thresholds")
 async def create_threshold(
-    db: DbSession, user: CurrentUser, request: CreateThresholdRequest
+    db: DbSession,
+    user: CurrentUser,
+    recalculation_job_repo: RecalculationJobRepoD,
+    request: CreateThresholdRequest,
 ):
     """Create a new threshold entry for the current user.
     
@@ -479,15 +480,7 @@ async def create_threshold(
     await db.commit()
 
     # Enqueue async metric recalculation — observable via GET /me/recalculate-metrics
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
-    await db.execute(
-        pg_insert(RecalculationJob)
-        .values(user_id=user.id, status="pending", started_at=now)
-        .on_conflict_do_update(
-            index_elements=["user_id"],
-            set_={"status": "pending", "started_at": now, "completed_at": None, "error_message": None},
-        )
-    )
+    await recalculation_job_repo.upsert_pending(user.id)
     await db.commit()
 
     try:
@@ -498,18 +491,8 @@ async def create_threshold(
             user.id,
         )
         # Mark job as failed so user sees accurate state
-        await db.execute(
-            pg_insert(RecalculationJob)
-            .values(user_id=user.id, status="failed", started_at=now)
-            .on_conflict_do_update(
-                index_elements=["user_id"],
-                set_={
-                    "status": "failed",
-                    "completed_at": now,
-                    "error_message": "Failed to enqueue job. Please try again.",
-                    "activities_updated": None,
-                },
-            )
+        await recalculation_job_repo.mark_failed(
+            user.id, "Failed to enqueue job. Please try again."
         )
         await db.commit()
 

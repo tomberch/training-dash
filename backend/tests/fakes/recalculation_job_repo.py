@@ -45,6 +45,57 @@ class FakeRecalculationJobRepo:
         self._jobs[user_id] = job
         return job
 
+    async def mark_running(self, user_id: int) -> None:
+        """Mark job as running."""
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        job = self._jobs.get(user_id)
+        if job is None:
+            job = RecalculationJob(user_id=user_id, status="running", started_at=now)
+        else:
+            job.status = "running"
+            job.started_at = now
+            job.completed_at = None
+            job.error_message = None
+        self._jobs[user_id] = job
+
+    async def mark_completed(self, user_id: int, activities_updated: int) -> None:
+        """Mark job as completed with count of updated activities."""
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        job = self._jobs.get(user_id)
+        if job is None:
+            job = RecalculationJob(
+                user_id=user_id,
+                status="completed",
+                started_at=now,
+                completed_at=now,
+                activities_updated=activities_updated,
+            )
+        else:
+            job.status = "completed"
+            job.completed_at = now
+            job.activities_updated = activities_updated
+            job.error_message = None
+        self._jobs[user_id] = job
+
+    async def mark_failed(self, user_id: int, error_message: str) -> None:
+        """Mark job as failed with error message."""
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        job = self._jobs.get(user_id)
+        if job is None:
+            job = RecalculationJob(
+                user_id=user_id,
+                status="failed",
+                started_at=now,
+                completed_at=now,
+                error_message=error_message,
+            )
+        else:
+            job.status = "failed"
+            job.completed_at = now
+            job.error_message = error_message
+            job.activities_updated = None
+        self._jobs[user_id] = job
+
     # --- Test helper methods ---
 
     def clear(self) -> None:

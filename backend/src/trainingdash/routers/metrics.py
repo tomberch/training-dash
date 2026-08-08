@@ -8,11 +8,12 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select, func
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from trainingdash.auth import CurrentUser, DbSession
+from trainingdash.dependencies import RecalculationJobRepoD
 from trainingdash.jobs import enqueue_recalculate_metrics_job
-from trainingdash.repositories.postgres.models import Activity, MetricEntry, MetricType, RecalculationJob
+from trainingdash.repositories.postgres.models import Activity, MetricEntry, MetricType
+from trainingdash.repositories.protocols import RecalculationJobRepo
 from trainingdash.routers.datetime_utils import utc_str
 
 logger = logging.getLogger(__name__)
@@ -97,17 +98,13 @@ def _entry_to_read(entry: MetricEntry, metric_type: MetricType) -> dict:
     }
 
 
-async def _trigger_recalculation(db: DbSession, user_id: int) -> None:
+async def _trigger_recalculation(
+    db: DbSession,
+    user_id: int,
+    recalculation_job_repo: RecalculationJobRepo,
+) -> None:
     """Trigger metric recalculation job for the user."""
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
-    await db.execute(
-        pg_insert(RecalculationJob)
-        .values(user_id=user_id, status="pending", started_at=now)
-        .on_conflict_do_update(
-            index_elements=["user_id"],
-            set_={"status": "pending", "started_at": now, "completed_at": None, "error_message": None},
-        )
-    )
+    await recalculation_job_repo.upsert_pending(user_id)
     await db.commit()
     
     try:
@@ -169,6 +166,7 @@ async def list_metrics(
 async def create_metric(
     db: DbSession,
     user: CurrentUser,
+    recalculation_job_repo: RecalculationJobRepoD,
     body: MetricEntryCreate,
 ):
     """Create or upsert a metric entry.
@@ -236,7 +234,7 @@ async def create_metric(
     
     # Trigger recalculation if this metric affects computed values
     if metric_type.recalc_targets:
-        await _trigger_recalculation(db, user.id)
+        await _trigger_recalculation(db, user.id, recalculation_job_repo)
     
     return _entry_to_read(entry, metric_type)
 
@@ -245,6 +243,7 @@ async def create_metric(
 async def update_metric(
     db: DbSession,
     user: CurrentUser,
+    recalculation_job_repo: RecalculationJobRepoD,
     entry_id: int,
     body: MetricEntryUpdate,
 ):
@@ -312,7 +311,7 @@ async def update_metric(
     
     # Trigger recalculation if value or date changed
     if needs_recalc and metric_type.recalc_targets:
-        await _trigger_recalculation(db, user.id)
+        await _trigger_recalculation(db, user.id, recalculation_job_repo)
     
     return _entry_to_read(entry, metric_type)
 
@@ -321,6 +320,7 @@ async def update_metric(
 async def delete_metric(
     db: DbSession,
     user: CurrentUser,
+    recalculation_job_repo: RecalculationJobRepoD,
     entry_id: int,
 ):
     """Delete a metric entry."""
@@ -337,7 +337,7 @@ async def delete_metric(
     
     # Trigger recalculation
     if metric_type.recalc_targets:
-        await _trigger_recalculation(db, user.id)
+        await _trigger_recalculation(db, user.id, recalculation_job_repo)
     
     return None
 
