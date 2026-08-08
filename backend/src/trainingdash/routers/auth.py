@@ -3,7 +3,7 @@
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr
-from sqlalchemy import select, func
+from sqlalchemy import select
 
 from trainingdash.auth import (
     CurrentUser,
@@ -13,6 +13,7 @@ from trainingdash.auth import (
     verify_password,
     hash_password,
 )
+from trainingdash.dependencies import UserRepoD
 from trainingdash.repositories.postgres.models import User, AppSettings
 from trainingdash.routers.serializers import user_response
 
@@ -25,19 +26,17 @@ class RegisterRequest(BaseModel):
 
 
 @router.post("/register")
-async def register(db: DbSession, request: RegisterRequest):
+async def register(db: DbSession, user_repo: UserRepoD, request: RegisterRequest):
     """Register a new user. First user becomes admin automatically."""
     # Check if email already exists
-    result = await db.execute(select(User).where(User.email == request.email))
-    if result.scalar_one_or_none():
+    if await user_repo.exists_by_email(request.email):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, 
             detail="Email already registered"
         )
     
     # Check if this is the first user
-    count_result = await db.execute(select(func.count()).select_from(User))
-    user_count = count_result.scalar()
+    user_count = await user_repo.count()
     is_first_user = user_count == 0
     
     # Check if approval is required (not for first user)
@@ -57,9 +56,7 @@ async def register(db: DbSession, request: RegisterRequest):
         is_admin=is_first_user,
         is_approved=is_approved,
     )
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
+    user = await user_repo.save(user)
     
     # Auto-login the user
     cookie = create_session_cookie(user.id)
@@ -69,10 +66,9 @@ async def register(db: DbSession, request: RegisterRequest):
 
 
 @router.post("/login")
-async def login(db: DbSession, request: LoginRequest):
+async def login(user_repo: UserRepoD, request: LoginRequest):
     """Authenticate user and set session cookie."""
-    result = await db.execute(select(User).where(User.email == request.email))
-    user = result.scalar_one_or_none()
+    user = await user_repo.get_by_email(request.email)
     if user is None or not verify_password(request.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"

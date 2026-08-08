@@ -6,7 +6,7 @@ wired to the current database session. Routers use these as FastAPI
 dependencies via Annotated types.
 
 Example usage in a router:
-    from trainingdash.dependencies import ActivityRepoD
+    from trainingdash.dependencies import ActivityRepoD, UserRepoD
 
     @router.get("/activities/{activity_id}")
     async def get_activity(repo: ActivityRepoD, activity_id: UUID):
@@ -19,6 +19,7 @@ from fastapi import Depends
 
 from trainingdash.auth import DbSession
 from trainingdash.repositories.postgres.activity_repo import PostgresActivityRepo
+from trainingdash.repositories.postgres.user_repo import PostgresUserRepo
 
 
 async def get_activity_repo(db: DbSession) -> PostgresActivityRepo:
@@ -26,5 +27,11 @@ async def get_activity_repo(db: DbSession) -> PostgresActivityRepo:
     return PostgresActivityRepo(db)
 
 
-# Annotated type for use in router function signatures
+async def get_user_repo(db: DbSession) -> PostgresUserRepo:
+    """Create a UserRepo bound to the current session."""
+    return PostgresUserRepo(db)
+
+
+# Annotated types for use in router function signatures
 ActivityRepoD = Annotated[PostgresActivityRepo, Depends(get_activity_repo)]
+UserRepoD = Annotated[PostgresUserRepo, Depends(get_user_repo)]

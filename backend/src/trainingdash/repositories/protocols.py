@@ -91,3 +91,61 @@ class ActivityRepo(Protocol):
             List of Activity objects ordered by started_at descending
         """
         ...
+
+
+
+
+class UserRepo(Protocol):
+    """
+    Repository protocol for User entities.
+
+    All methods that modify data are assumed to handle their own commits
+    or work within an externally-managed transaction scope.
+    """
+
+    async def get_by_id(self, user_id: int) -> "User | None":
+        """Fetch a user by ID. Returns None if not found."""
+        ...
+
+    async def get_by_email(self, email: str) -> "User | None":
+        """Fetch a user by email (case-insensitive). Returns None if not found."""
+        ...
+
+    async def exists_by_email(self, email: str) -> bool:
+        """Check if a user with the given email exists."""
+        ...
+
+    async def list_all(self) -> list["User"]:
+        """List all users ordered by ID."""
+        ...
+
+    async def list_pending_approval(self) -> list["User"]:
+        """List all users pending approval, ordered by created_at."""
+        ...
+
+    async def count(self) -> int:
+        """Count total users."""
+        ...
+
+    async def save(self, user: "User") -> "User":
+        """
+        Persist a user (insert or update).
+
+        Returns the saved user with any DB-generated fields populated.
+        """
+        ...
+
+    async def delete(self, user_id: int) -> bool:
+        """
+        Delete a user by ID.
+
+        Returns True if deleted, False if not found.
+        """
+        ...
+
+
+# Import User for type hints (avoid circular import at runtime)
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from trainingdash.repositories.postgres.models import User
