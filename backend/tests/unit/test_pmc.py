@@ -8,7 +8,7 @@ class TestPMCComputation:
 
     def test_compute_pmc_empty_tss(self):
         """PMC with no TSS data returns all zeros."""
-        from trainingdash.pmc import compute_pmc
+        from trainingdash.domain.pmc import compute_pmc
 
         start = date(2024, 1, 1)
         end = date(2024, 1, 7)
@@ -23,7 +23,7 @@ class TestPMCComputation:
 
     def test_compute_pmc_single_activity(self):
         """PMC with single activity shows ATL spike."""
-        from trainingdash.pmc import compute_pmc
+        from trainingdash.domain.pmc import compute_pmc
 
         activity_date = date(2024, 1, 5)
         daily_tss = {activity_date: 100.0}  # 100 TSS
@@ -46,7 +46,7 @@ class TestPMCComputation:
 
     def test_compute_pmc_atl_decays_faster_than_ctl(self):
         """ATL decays faster than CTL after activity."""
-        from trainingdash.pmc import compute_pmc
+        from trainingdash.domain.pmc import compute_pmc
 
         activity_date = date(2024, 1, 1)
         daily_tss = {activity_date: 100.0}
@@ -73,7 +73,7 @@ class TestPMCComputation:
 
     def test_aggregate_daily_tss(self):
         """Aggregates multiple activities on same day."""
-        from trainingdash.pmc import aggregate_daily_tss
+        from trainingdash.domain.pmc import aggregate_daily_tss
 
         activities = [
             {"started_at": datetime(2024, 1, 5, 8, 0), "tss": 50.0},
@@ -88,7 +88,7 @@ class TestPMCComputation:
 
     def test_aggregate_daily_tss_skips_none(self):
         """Aggregation skips activities without TSS."""
-        from trainingdash.pmc import aggregate_daily_tss
+        from trainingdash.domain.pmc import aggregate_daily_tss
 
         activities = [
             {"started_at": datetime(2024, 1, 5, 8, 0), "tss": 50.0},
@@ -103,7 +103,7 @@ class TestPMCComputation:
 
     def test_ewma_factor(self):
         """EWMA factor is correct for time constants."""
-        from trainingdash.pmc import compute_ewma_factor
+        from trainingdash.domain.pmc import compute_ewma_factor
 
         # 7-day: factor ≈ 0.857
         assert abs(compute_ewma_factor(7) - (1 - 1/7)) < 0.001

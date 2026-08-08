@@ -1,5 +1,5 @@
 import pytest
-from trainingdash.resampler import compute_time_gap_series, resample_by_distance
+from trainingdash.domain.resampler import compute_time_gap_series, resample_by_distance
 
 
 class TestResampler:

@@ -252,7 +252,7 @@ async def get_activity_wbal(db: DbSession, user: CurrentUser, activity_id: UUID)
     records = result.scalars().all()
 
     # Compute W'bal series using differential equation model
-    from trainingdash.wbal import compute_wbal_series
+    from trainingdash.domain.wbal import compute_wbal_series
 
     power_values = [r.power_w for r in records]
     first_ts = records[0].timestamp if records else None
@@ -460,7 +460,7 @@ async def compare_activities(
             for r in records
         ]
 
-    from trainingdash.resampler import compute_time_gap_series
+    from trainingdash.domain.resampler import compute_time_gap_series
 
     gap_series = compute_time_gap_series(
         to_resample_input(records_a, first_ts_a),

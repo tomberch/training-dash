@@ -1,7 +1,7 @@
 """Unit tests for training metrics computation functions."""
 
 import pytest
-from trainingdash.metrics import (
+from trainingdash.domain.metrics import (
     compute_normalized_power,
     compute_intensity_factor,
     compute_tss,

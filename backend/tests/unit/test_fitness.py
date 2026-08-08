@@ -8,7 +8,7 @@ class TestFitnessModelUnit:
 
     def test_detect_breakthrough_first_activity(self):
         """First activity is always a breakthrough."""
-        from trainingdash.fitness import detect_breakthrough
+        from trainingdash.domain.fitness import detect_breakthrough
 
         activity_peaks = {5: 400, 60: 350, 300: 280, 1200: 250}
         all_time_bests = {}  # No previous data
@@ -17,7 +17,7 @@ class TestFitnessModelUnit:
 
     def test_detect_breakthrough_new_pr(self):
         """Activity with new PR at key duration is breakthrough."""
-        from trainingdash.fitness import detect_breakthrough
+        from trainingdash.domain.fitness import detect_breakthrough
 
         activity_peaks = {5: 450, 60: 350, 300: 280, 1200: 250}  # 5s PR
         all_time_bests = {5: 400, 60: 360, 300: 290, 1200: 260}
@@ -26,7 +26,7 @@ class TestFitnessModelUnit:
 
     def test_detect_breakthrough_no_pr(self):
         """Activity without PRs at key durations is not breakthrough."""
-        from trainingdash.fitness import detect_breakthrough
+        from trainingdash.domain.fitness import detect_breakthrough
 
         activity_peaks = {5: 380, 60: 340, 300: 270, 1200: 240}  # All below best
         all_time_bests = {5: 400, 60: 360, 300: 290, 1200: 260}
@@ -35,7 +35,7 @@ class TestFitnessModelUnit:
 
     def test_fit_cp_model_insufficient_data(self):
         """Model returns None with insufficient data."""
-        from trainingdash.fitness import fit_cp_model
+        from trainingdash.domain.fitness import fit_cp_model
 
         # Less than 3 points
         result = fit_cp_model([{5: 400, 60: 350}])
@@ -43,7 +43,7 @@ class TestFitnessModelUnit:
 
     def test_fit_cp_model_basic(self):
         """Model fits with sufficient data."""
-        from trainingdash.fitness import fit_cp_model
+        from trainingdash.domain.fitness import fit_cp_model
 
         peak_powers = [
             {1: 800, 5: 600, 60: 400, 300: 320, 1200: 280},
@@ -59,7 +59,7 @@ class TestFitnessModelUnit:
 
     def test_decay_weight(self):
         """Decay weight is higher for recent activities."""
-        from trainingdash.fitness import compute_decay_weight
+        from trainingdash.domain.fitness import compute_decay_weight
 
         reference = datetime(2024, 6, 1)
         recent = datetime(2024, 5, 25)  # 7 days ago
@@ -73,7 +73,7 @@ class TestFitnessModelUnit:
 
     def test_get_all_time_bests(self):
         """Get all-time bests aggregates across activities."""
-        from trainingdash.fitness import get_all_time_bests
+        from trainingdash.domain.fitness import get_all_time_bests
 
         peak_powers = [
             {5: 400, 60: 350},

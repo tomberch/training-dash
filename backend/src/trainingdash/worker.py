@@ -127,7 +127,7 @@ async def recalculate_after_delete_job(ctx, user_id: int) -> dict:
     from sqlalchemy import select, update
     from trainingdash.models import Activity, ActivityPeakPower
     from trainingdash.ingest import _update_fitness_model
-    from trainingdash.fitness import detect_breakthrough, get_all_time_bests
+    from trainingdash.domain.fitness import detect_breakthrough, get_all_time_bests
 
     logger = logging.getLogger(__name__)
 

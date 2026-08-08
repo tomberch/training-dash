@@ -33,7 +33,7 @@ from trainingdash.thresholds import (
     get_thresholds_for_date,
     create_threshold_entries,
 )
-from trainingdash.zones import compute_power_zones, compute_hr_zones
+from trainingdash.domain.zones import compute_power_zones, compute_hr_zones
 from trainingdash.xert import get_xert_client, XertAPIError
 
 logger = logging.getLogger(__name__)

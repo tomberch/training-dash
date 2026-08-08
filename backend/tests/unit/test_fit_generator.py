@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "tests" / "f
 from generate_fit import make_test_fit_with_profile  # noqa: E402
 
 from trainingdash.ingest import parse_records  # noqa: E402
-from trainingdash.peaks import extract_peak_powers  # noqa: E402
+from trainingdash.domain.peaks import extract_peak_powers  # noqa: E402
 
 
 class TestMakeTestFitWithProfile:

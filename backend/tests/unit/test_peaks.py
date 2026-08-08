@@ -2,7 +2,7 @@
 
 import pytest
 import time
-from trainingdash.peaks import (
+from trainingdash.domain.peaks import (
     extract_peak_powers,
     extract_peak_power_with_index,
     compute_power_curve,

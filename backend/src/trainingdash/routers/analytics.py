@@ -80,7 +80,7 @@ async def get_pmc(
     ATL: 7-day exponentially weighted moving average of TSS (fatigue)
     TSB: CTL - ATL (form indicator, positive = fresh, negative = tired)
     """
-    from trainingdash.pmc import aggregate_daily_tss, compute_pmc
+    from trainingdash.domain.pmc import aggregate_daily_tss, compute_pmc
 
     # Default to last 12 weeks if not specified
     if end is None:

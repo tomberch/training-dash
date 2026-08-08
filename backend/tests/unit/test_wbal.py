@@ -1,7 +1,7 @@
 """Unit tests for W'bal computation."""
 
 import pytest
-from trainingdash.wbal import compute_wbal_series, estimate_w_prime
+from trainingdash.domain.wbal import compute_wbal_series, estimate_w_prime
 
 
 class TestWbalSeries:
