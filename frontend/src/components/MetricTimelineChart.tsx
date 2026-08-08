@@ -163,7 +163,7 @@ function CustomTooltip({ active, payload, unit }: TooltipProps) {
       </div>
       {entry.notes && (
         <p className="text-xs text-muted-foreground mt-2 line-clamp-2">
-          {entry.notes.length > 50 ? entry.notes.slice(0, 50) + "…" : entry.notes}
+          {entry.notes}
         </p>
       )}
     </div>
@@ -178,10 +178,12 @@ interface TimeRangeSelectorProps {
 
 function TimeRangeSelector({ value, onChange }: TimeRangeSelectorProps) {
   return (
-    <div className="inline-flex rounded-md bg-muted p-1 gap-0.5">
+    <div className="inline-flex rounded-md bg-muted p-1 gap-0.5" role="group" aria-label="Time range">
       {TIME_RANGES.map((range) => (
         <button
           key={range.value}
+          type="button"
+          aria-pressed={value === range.value}
           onClick={() => onChange(range.value)}
           className={cn(
             "px-3 py-1 text-sm font-medium rounded transition-colors",
