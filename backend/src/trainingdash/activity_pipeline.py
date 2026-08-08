@@ -22,15 +22,13 @@ from trainingdash.metrics import (
     compute_normalized_power,
     compute_intensity_factor,
     compute_tss,
-    compute_zone_times,
 )
+from trainingdash.zones import compute_zone_times
 from trainingdash.models import (
     Activity,
     ActivityPeakPower,
     FitnessHistory,
-    HrZone,
     Notification,
-    PowerZone,
     ThresholdHistory,
     User,
 )
@@ -266,18 +264,16 @@ class ActivityPipeline:
                     result.tss = tss
                     result.training_load = tss
         
-        # Compute power zone times
-        power_zones = await self._get_power_zones()
-        if power_zones:
-            zones_list = [
-                {
-                    "zone_number": z.zone_number,
-                    "min_watts": z.min_watts,
-                    "max_watts": z.max_watts,
-                }
-                for z in power_zones
-            ]
-            result.power_zone_times = compute_zone_times(power_array, zones_list)
+        # Compute power zone times using computed zones (not table lookup)
+        if threshold.ftp_watts and threshold.ftp_watts > 0:
+            user = await self._get_user()
+            hr_array = [r.get("hr_bpm") for r in self.records]
+            power_zone_times, _ = compute_zone_times(
+                power_array,
+                threshold.ftp_watts,
+                power_zone_pct=user.power_zone_percentages if user else None,
+            )
+            result.power_zone_times = power_zone_times
         
         # Compute W'bal
         w_prime_joules = threshold.ftp_watts * 60  # Simple estimate
@@ -289,45 +285,27 @@ class ActivityPipeline:
         
         return result
 
-    async def _get_power_zones(self) -> list[PowerZone]:
-        """Get power zones for the user."""
-        query = await self.db.execute(
-            select(PowerZone)
-            .where(PowerZone.user_id == self.activity.user_id)
-            .order_by(PowerZone.zone_number)
-        )
-        return list(query.scalars().all())
-
     async def _compute_hr_metrics(
         self,
         hr_array: list,
         result: MetricsResult,
     ) -> MetricsResult:
         """Compute HR zone times."""
-        hr_zones = await self._get_hr_zones()
-        if hr_zones:
-            zones_list = [
-                {
-                    "zone_number": z.zone_number,
-                    "min_bpm": z.min_bpm,
-                    "max_bpm": z.max_bpm,
-                }
-                for z in hr_zones
-            ]
-            result.hr_zone_times = compute_zone_times(
-                hr_array, zones_list,
-                value_key_min="min_bpm", value_key_max="max_bpm"
+        # Get threshold to get LTHR
+        activity_date = self.activity.started_at.date()
+        threshold = await self._get_threshold_for_date(activity_date)
+        
+        if threshold and threshold.lthr_bpm and threshold.lthr_bpm > 0:
+            user = await self._get_user()
+            _, hr_zone_times = compute_zone_times(
+                [],  # no power data needed
+                None,  # no FTP needed
+                hr_array,
+                threshold.lthr_bpm,
+                hr_zone_pct=user.hr_zone_percentages if user else None,
             )
+            result.hr_zone_times = hr_zone_times
         return result
-
-    async def _get_hr_zones(self) -> list[HrZone]:
-        """Get HR zones for the user."""
-        query = await self.db.execute(
-            select(HrZone)
-            .where(HrZone.user_id == self.activity.user_id)
-            .order_by(HrZone.zone_number)
-        )
-        return list(query.scalars().all())
 
     async def _apply_metrics_to_activity(self, metrics: MetricsResult) -> None:
         """Apply computed metrics to the activity model."""

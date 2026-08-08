@@ -16,9 +16,7 @@ from trainingdash.garmin import get_garmin_client, GarminAPIError, GarminMFARequ
 from trainingdash.jobs import enqueue_recalculate_metrics_job
 from trainingdash.models import (
     GarminCredentials,
-    HrZone,
     Notification,
-    PowerZone,
     RecalculationJob,
     ThresholdHistory,
     UserOAuthLink,
@@ -26,20 +24,15 @@ from trainingdash.models import (
 )
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from trainingdash.routers.serializers import (
-    hr_zone_response,
-    power_zone_response,
     recalculation_job_response,
     threshold_response,
     user_response,
 )
 from trainingdash.routers.datetime_utils import utc_str
 from trainingdash.thresholds import (
-    compute_hr_zones,
-    compute_power_zones,
     ensure_default_thresholds,
-    ensure_zones_exist,
-    regenerate_zones_from_threshold,
 )
+from trainingdash.zones import compute_power_zones, compute_hr_zones
 from trainingdash.xert import get_xert_client, XertAPIError
 
 logger = logging.getLogger(__name__)
@@ -604,143 +597,55 @@ async def create_threshold(
 
 @router.get("/me/zones")
 async def get_my_zones(db: DbSession, user: CurrentUser):
-    """Get the current user's power and HR zones."""
-    zones_exist = await ensure_zones_exist(db, user)
-
-    if not zones_exist:
-        return {"power_zones": [], "hr_zones": []}
-
-    power_result = await db.execute(
-        select(PowerZone)
-        .where(PowerZone.user_id == user.id)
-        .order_by(PowerZone.zone_number)
+    """Get the current user's power and HR zones (computed from thresholds)."""
+    # Get current threshold
+    result = await db.execute(
+        select(ThresholdHistory)
+        .where(ThresholdHistory.user_id == user.id)
+        .order_by(ThresholdHistory.effective_date.desc())
+        .limit(1)
     )
-    power_zones = power_result.scalars().all()
+    threshold = result.scalar_one_or_none()
 
-    hr_result = await db.execute(
-        select(HrZone).where(HrZone.user_id == user.id).order_by(HrZone.zone_number)
-    )
-    hr_zones = hr_result.scalars().all()
+    power_zones = []
+    hr_zones = []
+
+    if threshold:
+        if threshold.ftp_watts:
+            power_zones = compute_power_zones(threshold.ftp_watts, user.power_zone_percentages)
+        if threshold.lthr_bpm:
+            hr_zones = compute_hr_zones(threshold.lthr_bpm, user.hr_zone_percentages)
 
     return {
-        "power_zones": [power_zone_response(z) for z in power_zones],
-        "hr_zones": [hr_zone_response(z) for z in hr_zones],
+        "power_zones": power_zones,
+        "hr_zones": hr_zones,
     }
 
 
-class ZoneUpdate(BaseModel):
-    zone_number: int
-    name: str | None = None
-    min_value: int | None = None
-    max_value: int | None = None
-
-
-class UpdateZonesRequest(BaseModel):
-    power_zones: list[ZoneUpdate] | None = None
-    hr_zones: list[ZoneUpdate] | None = None
-    reset_to_defaults: bool = False
+class UpdateZonePercentagesRequest(BaseModel):
+    """Update custom zone percentages. Set to null to reset to defaults."""
+    power_zone_percentages: dict | None = None
+    hr_zone_percentages: dict | None = None
+    reset_power_zones: bool = False
+    reset_hr_zones: bool = False
 
 
 @router.put("/me/zones")
-async def update_my_zones(db: DbSession, user: CurrentUser, request: UpdateZonesRequest):
-    """Update the current user's zones or reset to defaults."""
+async def update_my_zones(db: DbSession, user: CurrentUser, request: UpdateZonePercentagesRequest):
+    """Update the current user's zone percentages or reset to defaults."""
 
-    if request.reset_to_defaults:
-        # Get current threshold
-        result = await db.execute(
-            select(ThresholdHistory)
-            .where(ThresholdHistory.user_id == user.id)
-            .order_by(ThresholdHistory.effective_date.desc())
-            .limit(1)
-        )
-        threshold = result.scalar_one_or_none()
-        if threshold is None:
-            raise HTTPException(
-                status_code=400, detail="No thresholds configured, cannot reset zones"
-            )
+    if request.reset_power_zones:
+        user.power_zone_percentages = None
+    elif request.power_zone_percentages is not None:
+        user.power_zone_percentages = request.power_zone_percentages
 
-        # Delete all zones and recreate
-        await db.execute(delete(PowerZone).where(PowerZone.user_id == user.id))
-        await db.execute(delete(HrZone).where(HrZone.user_id == user.id))
-
-        for zone_data in compute_power_zones(threshold.ftp_watts):
-            zone = PowerZone(
-                user_id=user.id,
-                zone_number=zone_data["zone_number"],
-                name=zone_data["name"],
-                min_watts=zone_data["min_watts"],
-                max_watts=zone_data["max_watts"],
-                is_custom=False,
-            )
-            db.add(zone)
-
-        for zone_data in compute_hr_zones(threshold.lthr_bpm):
-            zone = HrZone(
-                user_id=user.id,
-                zone_number=zone_data["zone_number"],
-                name=zone_data["name"],
-                min_bpm=zone_data["min_bpm"],
-                max_bpm=zone_data["max_bpm"],
-                is_custom=False,
-            )
-            db.add(zone)
-
-        await db.commit()
-        return await get_my_zones(db, user)
-
-    # Ensure zones exist first
-    zones_exist = await ensure_zones_exist(db, user)
-    if not zones_exist:
-        raise HTTPException(
-            status_code=400, detail="No thresholds configured, cannot update zones"
-        )
-
-    # Update power zones
-    if request.power_zones:
-        for update in request.power_zones:
-            result = await db.execute(
-                select(PowerZone).where(
-                    PowerZone.user_id == user.id,
-                    PowerZone.zone_number == update.zone_number,
-                )
-            )
-            zone = result.scalar_one_or_none()
-            if zone is None:
-                raise HTTPException(
-                    status_code=400, detail=f"Power zone {update.zone_number} not found"
-                )
-
-            if update.name is not None:
-                zone.name = update.name
-            if update.min_value is not None:
-                zone.min_watts = update.min_value
-            if update.max_value is not None:
-                zone.max_watts = update.max_value
-            zone.is_custom = True
-
-    # Update HR zones
-    if request.hr_zones:
-        for update in request.hr_zones:
-            result = await db.execute(
-                select(HrZone).where(
-                    HrZone.user_id == user.id, HrZone.zone_number == update.zone_number
-                )
-            )
-            zone = result.scalar_one_or_none()
-            if zone is None:
-                raise HTTPException(
-                    status_code=400, detail=f"HR zone {update.zone_number} not found"
-                )
-
-            if update.name is not None:
-                zone.name = update.name
-            if update.min_value is not None:
-                zone.min_bpm = update.min_value
-            if update.max_value is not None:
-                zone.max_bpm = update.max_value
-            zone.is_custom = True
+    if request.reset_hr_zones:
+        user.hr_zone_percentages = None
+    elif request.hr_zone_percentages is not None:
+        user.hr_zone_percentages = request.hr_zone_percentages
 
     await db.commit()
+    await db.refresh(user)
     return await get_my_zones(db, user)
 
 

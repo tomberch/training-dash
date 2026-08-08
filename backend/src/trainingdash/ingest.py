@@ -7,14 +7,14 @@ from geoalchemy2.functions import ST_SetSRID, ST_MakePoint
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from trainingdash.models import Activity, Lap, Record, ThresholdHistory, PowerZone, HrZone, ActivityPeakPower, FitnessHistory, Notification, User
+from trainingdash.models import Activity, Lap, Record, ThresholdHistory, ActivityPeakPower, FitnessHistory, Notification, User
 from trainingdash.polyline import generate_map_polyline
 from trainingdash.metrics import (
     compute_normalized_power,
     compute_intensity_factor,
     compute_tss,
-    compute_zone_times,
 )
+from trainingdash.zones import compute_zone_times
 from trainingdash.wbal import compute_wbal_series
 from trainingdash.peaks import extract_peak_powers
 from trainingdash.fitness import detect_breakthrough, get_all_time_bests, fit_cp_model
@@ -973,29 +973,11 @@ async def backfill_activity_metrics(
     if not thresholds:
         return 0
     
-    # Pre-fetch power zones
-    power_zones_result = await db.execute(
-        select(PowerZone)
-        .where(PowerZone.user_id == user_id)
-        .order_by(PowerZone.zone_number)
+    # Get user for zone percentages
+    user_result = await db.execute(
+        select(User).where(User.id == user_id)
     )
-    power_zones = power_zones_result.scalars().all()
-    power_zones_list = [
-        {"zone_number": z.zone_number, "min_watts": z.min_watts, "max_watts": z.max_watts}
-        for z in power_zones
-    ] if power_zones else []
-    
-    # Pre-fetch HR zones
-    hr_zones_result = await db.execute(
-        select(HrZone)
-        .where(HrZone.user_id == user_id)
-        .order_by(HrZone.zone_number)
-    )
-    hr_zones = hr_zones_result.scalars().all()
-    hr_zones_list = [
-        {"zone_number": z.zone_number, "min_bpm": z.min_bpm, "max_bpm": z.max_bpm}
-        for z in hr_zones
-    ] if hr_zones else []
+    user = user_result.scalar_one_or_none()
     
     updated_count = 0
     
@@ -1046,11 +1028,15 @@ async def backfill_activity_metrics(
                         activity.tss = tss
                         activity.training_load = tss
             
-            # Compute power zone times
-            if power_zones_list:
-                zone_times = compute_zone_times(power_array, power_zones_list)
-                if zone_times:
-                    activity.power_zone_times = json.dumps(zone_times)
+            # Compute power zone times using computed zones
+            if threshold.ftp_watts and threshold.ftp_watts > 0:
+                power_zone_times, _ = compute_zone_times(
+                    power_array,
+                    threshold.ftp_watts,
+                    power_zone_pct=user.power_zone_percentages if user else None,
+                )
+                if power_zone_times:
+                    activity.power_zone_times = json.dumps(power_zone_times)
             
             # Compute W'bal
             w_prime_joules = threshold.ftp_watts * 60
@@ -1060,13 +1046,16 @@ async def backfill_activity_metrics(
                 activity.wbal_min_joules = wbal_result["min_wbal"]
                 activity.wbal_min_pct = wbal_result["min_wbal_pct"]
         
-        if has_hr and hr_zones_list:
-            zone_times = compute_zone_times(
-                hr_array, hr_zones_list,
-                value_key_min="min_bpm", value_key_max="max_bpm"
+        if has_hr and threshold.lthr_bpm and threshold.lthr_bpm > 0:
+            _, hr_zone_times = compute_zone_times(
+                [],  # no power data needed
+                None,  # no FTP needed
+                hr_array,
+                threshold.lthr_bpm,
+                hr_zone_pct=user.hr_zone_percentages if user else None,
             )
-            if zone_times:
-                activity.hr_zone_times = json.dumps(zone_times)
+            if hr_zone_times:
+                activity.hr_zone_times = json.dumps(hr_zone_times)
         
         updated_count += 1
     

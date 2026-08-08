@@ -14,10 +14,8 @@ from trainingdash.models import (
     EFModel,
     FitnessHistory,
     GarminCredentials,
-    HrZone,
     Lap,
     Notification,
-    PowerZone,
     Record,
     Route,
     ThresholdHistory,
@@ -324,8 +322,6 @@ async def admin_nuke_preview(db: DbSession, admin: AdminUser, user_id: int):
         },
         "account": {
             "thresholds": counts["thresholds"],
-            "power_zones": counts["power_zones"],
-            "hr_zones": counts["hr_zones"],
             "ef_model": counts["ef_model"],
         },
     }
@@ -397,14 +393,6 @@ async def _get_user_data_counts(db: DbSession, user_id: int) -> dict:
         select(func.count()).select_from(ThresholdHistory).where(ThresholdHistory.user_id == user_id)
     )).scalar() or 0
     
-    power_zones_count = (await db.execute(
-        select(func.count()).select_from(PowerZone).where(PowerZone.user_id == user_id)
-    )).scalar() or 0
-    
-    hr_zones_count = (await db.execute(
-        select(func.count()).select_from(HrZone).where(HrZone.user_id == user_id)
-    )).scalar() or 0
-    
     ef_model_count = (await db.execute(
         select(func.count()).select_from(EFModel).where(EFModel.user_id == user_id)
     )).scalar() or 0
@@ -420,8 +408,6 @@ async def _get_user_data_counts(db: DbSession, user_id: int) -> dict:
         "garmin": garmin_count,
         "xert": xert_count,
         "thresholds": thresholds_count,
-        "power_zones": power_zones_count,
-        "hr_zones": hr_zones_count,
         "ef_model": ef_model_count,
     }
 

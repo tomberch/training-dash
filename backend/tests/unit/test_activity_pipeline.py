@@ -262,12 +262,12 @@ class TestComputeMetrics:
         # Mock threshold
         mock_threshold = MagicMock()
         mock_threshold.ftp_watts = 250
+        mock_threshold.lthr_bpm = 170
 
-        # Mock power zones
-        mock_zone = MagicMock()
-        mock_zone.zone_number = 1
-        mock_zone.min_watts = 0
-        mock_zone.max_watts = 150
+        # Mock user
+        mock_user = MagicMock()
+        mock_user.power_zone_percentages = None
+        mock_user.hr_zone_percentages = None
 
         call_count = [0]
         
@@ -275,11 +275,11 @@ class TestComputeMetrics:
         async def mock_execute(query):
             result = MagicMock()
             call_count[0] += 1
-            # First call is threshold query, subsequent are zone queries
-            if call_count[0] == 1:
+            # Calls: 1=threshold, 2=user, 3=threshold again (for HR), 4=user again
+            if call_count[0] in (1, 3):
                 result.scalar_one_or_none.return_value = mock_threshold
-            elif call_count[0] == 2:
-                result.scalars.return_value.all.return_value = [mock_zone]
+            elif call_count[0] in (2, 4):
+                result.scalar_one_or_none.return_value = mock_user
             else:
                 result.scalars.return_value.all.return_value = []
             return result

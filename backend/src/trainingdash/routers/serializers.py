@@ -7,8 +7,6 @@ from typing import Any
 from trainingdash.routers.datetime_utils import utc_str
 from trainingdash.models import (
     Activity,
-    HrZone,
-    PowerZone,
     Record,
     RecalculationJob,
     ThresholdHistory,
@@ -57,28 +55,6 @@ def threshold_response(t: ThresholdHistory) -> dict:
         "ftp_watts": t.ftp_watts,
         "lthr_bpm": t.lthr_bpm,
         "hrmax_bpm": t.hrmax_bpm,
-    }
-
-
-def power_zone_response(z: PowerZone) -> dict:
-    """Return a dict of power zone info for API responses."""
-    return {
-        "zone_number": z.zone_number,
-        "name": z.name,
-        "min_watts": z.min_watts,
-        "max_watts": z.max_watts,
-        "is_custom": z.is_custom,
-    }
-
-
-def hr_zone_response(z: HrZone) -> dict:
-    """Return a dict of HR zone info for API responses."""
-    return {
-        "zone_number": z.zone_number,
-        "name": z.name,
-        "min_bpm": z.min_bpm,
-        "max_bpm": z.max_bpm,
-        "is_custom": z.is_custom,
     }
 
 

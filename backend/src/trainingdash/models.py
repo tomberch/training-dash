@@ -296,36 +296,6 @@ class ThresholdHistory(Base):
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
 
 
-class PowerZone(Base):
-    """Coggan 7-zone power zones based on FTP."""
-    __tablename__ = "power_zones"
-
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    )
-    zone_number: Mapped[int] = mapped_column(Integer, nullable=False)  # 1-7
-    name: Mapped[str] = mapped_column(String(50), nullable=False)
-    min_watts: Mapped[int] = mapped_column(Integer, nullable=False)
-    max_watts: Mapped[int | None] = mapped_column(Integer, nullable=True)  # None = unlimited
-    is_custom: Mapped[bool] = mapped_column(default=False)  # True if user customized
-
-
-class HrZone(Base):
-    """Friel 5-zone HR zones based on LTHR."""
-    __tablename__ = "hr_zones"
-
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    )
-    zone_number: Mapped[int] = mapped_column(Integer, nullable=False)  # 1-5
-    name: Mapped[str] = mapped_column(String(50), nullable=False)
-    min_bpm: Mapped[int] = mapped_column(Integer, nullable=False)
-    max_bpm: Mapped[int | None] = mapped_column(Integer, nullable=True)  # None = unlimited
-    is_custom: Mapped[bool] = mapped_column(default=False)  # True if user customized
-
-
 class MetricType(Base):
     """Defines available metric types (FTP, LTHR, weight, etc.)."""
     __tablename__ = "metric_types"
