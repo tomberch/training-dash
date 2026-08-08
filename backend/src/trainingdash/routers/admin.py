@@ -6,7 +6,12 @@ from sqlalchemy import select, func, delete, update
 
 from trainingdash.auth import AdminUser, DbSession, hash_password
 from trainingdash.crypto import encrypt, EncryptionError
-from trainingdash.dependencies import UserRepoD
+from trainingdash.dependencies import (
+    AuditLogRepoD,
+    GarminCredentialsRepoD,
+    UserRepoD,
+    XertCredentialsRepoD,
+)
 from trainingdash.repositories.postgres.models import (
     Activity,
     ActivityPeakPower,
@@ -89,7 +94,13 @@ async def admin_reset_password(
 
 
 @router.post("/users/{user_id}/sync")
-async def admin_trigger_sync(db: DbSession, user_repo: UserRepoD, admin: AdminUser, user_id: int):
+async def admin_trigger_sync(
+    xert_repo: XertCredentialsRepoD,
+    garmin_repo: GarminCredentialsRepoD,
+    user_repo: UserRepoD,
+    admin: AdminUser,
+    user_id: int,
+):
     """Trigger sync for a user (admin only). Triggers both Xert and Garmin if configured."""
     await _get_user_or_404(user_repo, user_id)
 
@@ -98,19 +109,13 @@ async def admin_trigger_sync(db: DbSession, user_repo: UserRepoD, admin: AdminUs
     job_ids = {}
 
     # Check if user has Xert credentials and trigger sync
-    xert_result = await db.execute(
-        select(XertCredentials).where(XertCredentials.user_id == user_id)
-    )
-    if xert_result.scalar_one_or_none() is not None:
+    if await xert_repo.exists(user_id):
         job_id = await enqueue_sync_xert_job(user_id)
         if job_id:
             job_ids["xert"] = job_id
 
     # Check if user has Garmin credentials and trigger sync
-    garmin_result = await db.execute(
-        select(GarminCredentials).where(GarminCredentials.user_id == user_id)
-    )
-    if garmin_result.scalar_one_or_none() is not None:
+    if await garmin_repo.exists(user_id):
         job_id = await enqueue_sync_garmin_job(user_id)
         if job_id:
             job_ids["garmin"] = job_id
@@ -133,13 +138,12 @@ class XertCredentialsRequest(BaseModel):
 
 
 @router.get("/users/{user_id}/xert-credentials")
-async def admin_get_xert_credentials(db: DbSession, user_repo: UserRepoD, admin: AdminUser, user_id: int):
+async def admin_get_xert_credentials(
+    xert_repo: XertCredentialsRepoD, user_repo: UserRepoD, admin: AdminUser, user_id: int
+):
     """Get Xert credentials status for a user (admin only). Never returns the password."""
     await _get_user_or_404(user_repo, user_id)
-    result = await db.execute(
-        select(XertCredentials).where(XertCredentials.user_id == user_id)
-    )
-    creds = result.scalar_one_or_none()
+    creds = await xert_repo.get_by_user_id(user_id)
     if creds is None:
         return {"configured": False, "xert_email": None}
     return {"configured": True, "xert_email": creds.xert_email}
@@ -147,7 +151,11 @@ async def admin_get_xert_credentials(db: DbSession, user_repo: UserRepoD, admin:
 
 @router.put("/users/{user_id}/xert-credentials")
 async def admin_set_xert_credentials(
-    db: DbSession, user_repo: UserRepoD, admin: AdminUser, user_id: int, request: XertCredentialsRequest
+    xert_repo: XertCredentialsRepoD,
+    user_repo: UserRepoD,
+    admin: AdminUser,
+    user_id: int,
+    request: XertCredentialsRequest,
 ):
     """Set or update Xert credentials for a user (admin only). Password is encrypted at rest."""
     await _get_user_or_404(user_repo, user_id)
@@ -159,37 +167,21 @@ async def admin_set_xert_credentials(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
         )
 
-    result = await db.execute(
-        select(XertCredentials).where(XertCredentials.user_id == user_id)
+    await xert_repo.save(
+        user_id=user_id,
+        xert_email=request.xert_email,
+        encrypted_password=encrypted_password,
     )
-    creds = result.scalar_one_or_none()
-
-    if creds is None:
-        creds = XertCredentials(
-            user_id=user_id,
-            xert_email=request.xert_email,
-            encrypted_password=encrypted_password,
-        )
-        db.add(creds)
-    else:
-        creds.xert_email = request.xert_email
-        creds.encrypted_password = encrypted_password
-
-    await db.commit()
     return {"success": True, "xert_email": request.xert_email}
 
 
 @router.delete("/users/{user_id}/xert-credentials")
-async def admin_delete_xert_credentials(db: DbSession, user_repo: UserRepoD, admin: AdminUser, user_id: int):
+async def admin_delete_xert_credentials(
+    xert_repo: XertCredentialsRepoD, user_repo: UserRepoD, admin: AdminUser, user_id: int
+):
     """Delete Xert credentials for a user (admin only)."""
     await _get_user_or_404(user_repo, user_id)
-    result = await db.execute(
-        select(XertCredentials).where(XertCredentials.user_id == user_id)
-    )
-    creds = result.scalar_one_or_none()
-    if creds is not None:
-        await db.delete(creds)
-        await db.commit()
+    await xert_repo.delete(user_id)
     return {"success": True}
 
 
