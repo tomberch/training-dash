@@ -7,6 +7,7 @@ import {
   type MetricEntry,
   type TimeRange,
 } from "@/components/MetricTimelineChart";
+import { cn } from "@/lib/utils";
 import {
   MetricEntryModal,
   type MetricType,
@@ -77,7 +78,10 @@ function SourceBadge({ source }: { source: string }) {
   };
 
   return (
-    <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${colors[source] || "bg-muted text-muted-foreground"}`}>
+    <span className={cn(
+      "px-2 py-0.5 text-xs font-medium rounded-full",
+      colors[source] || "bg-muted text-muted-foreground"
+    )}>
       {source}
     </span>
   );
@@ -107,8 +111,11 @@ function CurrentMetricCard({ metricType, entry, onAdd, onClick }: CurrentMetricC
 
   return (
     <Card
-      className="flex-1 cursor-pointer hover:bg-muted/50 transition-colors"
+      className="flex-1 cursor-pointer hover:bg-muted/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       onClick={onClick}
+      onKeyDown={(e) => e.key === "Enter" && onClick()}
+      tabIndex={0}
+      role="button"
     >
       <CardContent className="py-4 text-center">
         <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
