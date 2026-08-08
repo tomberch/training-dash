@@ -11,6 +11,9 @@ from generate_fit import make_test_fit  # noqa: E402
 from trainingdash.models import Activity, EFModel, User  # noqa: E402
 from trainingdash.ingest import ingest_fit  # noqa: E402
 
+# Pre-generate FIT bytes once per module (FitFileBuilder is expensive)
+FIT_300 = make_test_fit(num_records=300)
+
 
 class TestHRDerivedPowerSetting:
     """Tests for hr_derived_power_enabled user setting."""
@@ -88,7 +91,7 @@ class TestEFModelStatus:
         
         # Upload 5 dual-sensor rides (minimum for model)
         for i in range(5):
-            fit_data = make_test_fit(num_records=300)
+            fit_data = FIT_300
             await auth_client.post(
                 "/api/upload",
                 files={"file": ("test.fit", fit_data, "application/octet-stream")},
@@ -127,7 +130,7 @@ class TestDualSensorRideUpdatesModel:
         
         # Upload dual-sensor rides
         for i in range(5):
-            fit_data = make_test_fit(num_records=300)
+            fit_data = FIT_300
             await auth_client.post(
                 "/api/upload",
                 files={"file": ("test.fit", fit_data, "application/octet-stream")},
@@ -157,7 +160,7 @@ class TestDualSensorRideUpdatesModel:
         
         # Upload 4 rides - not enough
         for i in range(4):
-            fit_data = make_test_fit(num_records=300)
+            fit_data = FIT_300
             await auth_client.post(
                 "/api/upload",
                 files={"file": ("test.fit", fit_data, "application/octet-stream")},
@@ -167,7 +170,7 @@ class TestDualSensorRideUpdatesModel:
         assert len(result.scalars().all()) == 0
         
         # Upload 5th ride
-        fit_data = make_test_fit(num_records=300)
+        fit_data = FIT_300
         await auth_client.post(
             "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
@@ -197,7 +200,7 @@ class TestDualSensorRideUpdatesModel:
         )
         
         # Upload dual-sensor ride
-        fit_data = make_test_fit(num_records=300)
+        fit_data = FIT_300
         response = await auth_client.post(
             "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
@@ -234,7 +237,7 @@ class TestHROnlyRideEstimation:
         
         # Build model with 5 dual-sensor rides
         for i in range(5):
-            fit_data = make_test_fit(num_records=300)
+            fit_data = FIT_300
             await auth_client.post(
                 "/api/upload",
                 files={"file": ("test.fit", fit_data, "application/octet-stream")},
@@ -246,7 +249,7 @@ class TestHROnlyRideEstimation:
         assert model is not None
         
         # Upload HR-only ride (no power data)
-        fit_data = make_test_fit(num_records=300, include_gps=True)
+        fit_data = FIT_300
         
         # Create HR-only activity by directly ingesting with modified data
         # For this test, we'll verify the activity detail endpoint returns estimated metrics
@@ -280,7 +283,7 @@ class TestActivityDetailWithEstimatedPower:
         )
         
         # Upload activity
-        fit_data = make_test_fit(num_records=300)
+        fit_data = FIT_300
         response = await auth_client.post(
             "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},

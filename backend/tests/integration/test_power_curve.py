@@ -10,6 +10,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "tests" / "f
 from generate_fit import make_test_fit  # noqa: E402
 from trainingdash.models import ActivityPeakPower  # noqa: E402
 
+# Pre-generate FIT bytes once per module (FitFileBuilder is expensive)
+FIT_120 = make_test_fit(num_records=120)
+FIT_300 = make_test_fit(num_records=300)
+
 
 class TestPowerCurveEndpoint:
     """Tests for GET /power-curve endpoint."""
@@ -28,7 +32,7 @@ class TestPowerCurveEndpoint:
     async def test_power_curve_with_activity(self, auth_client):
         """GET /power-curve returns curve data after upload."""
         # Upload a FIT file with power data
-        fit_data = make_test_fit(num_records=120)  # 2 minutes
+        fit_data = FIT_120  # 2 minutes
         await auth_client.post(
             "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
@@ -51,7 +55,7 @@ class TestPowerCurveEndpoint:
     @pytest.mark.asyncio
     async def test_power_curve_sorted_by_duration(self, auth_client):
         """Power curve is sorted by duration."""
-        fit_data = make_test_fit(num_records=120)
+        fit_data = FIT_120
         await auth_client.post(
             "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
@@ -67,7 +71,7 @@ class TestPowerCurveEndpoint:
     async def test_power_curve_with_date_range(self, auth_client):
         """Power curve respects date range params."""
         # Upload a FIT file (test FIT date is 2024-03-15)
-        fit_data = make_test_fit(num_records=120)
+        fit_data = FIT_120
         await auth_client.post(
             "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
@@ -89,7 +93,7 @@ class TestPowerCurveEndpoint:
     async def test_power_curve_achieved_date_correct(self, auth_client):
         """Achieved date matches activity date."""
         # Upload a FIT file (test FIT date is 2024-03-15)
-        fit_data = make_test_fit(num_records=120)
+        fit_data = FIT_120
         await auth_client.post(
             "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
@@ -106,7 +110,7 @@ class TestPowerCurveEndpoint:
     async def test_power_curve_days_ago_positive(self, auth_client):
         """Days ago is positive for past activities."""
         # Upload a FIT file from 2024-03-15
-        fit_data = make_test_fit(num_records=120)
+        fit_data = FIT_120
         await auth_client.post(
             "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
@@ -123,14 +127,14 @@ class TestPowerCurveEndpoint:
     async def test_power_curve_picks_best_across_activities(self, auth_client, db_session):
         """Power curve picks best watts across multiple activities."""
         # Upload first activity
-        fit_data1 = make_test_fit(num_records=120)
+        fit_data1 = FIT_120
         await auth_client.post(
             "/api/upload",
             files={"file": ("first.fit", fit_data1, "application/octet-stream")},
         )
         
         # Upload second activity with same power pattern
-        fit_data2 = make_test_fit(num_records=120)
+        fit_data2 = FIT_120
         await auth_client.post(
             "/api/upload",
             files={"file": ("second.fit", fit_data2, "application/octet-stream")},
@@ -156,7 +160,7 @@ class TestPowerCurveEndpoint:
     @pytest.mark.asyncio
     async def test_power_curve_watts_positive(self, auth_client):
         """All power values are positive."""
-        fit_data = make_test_fit(num_records=120)
+        fit_data = FIT_120
         await auth_client.post(
             "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
@@ -171,7 +175,7 @@ class TestPowerCurveEndpoint:
     @pytest.mark.asyncio
     async def test_power_curve_shorter_durations_higher_power(self, auth_client):
         """Generally, shorter durations have higher power."""
-        fit_data = make_test_fit(num_records=300)  # 5 minutes
+        fit_data = FIT_300  # 5 minutes
         await auth_client.post(
             "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
