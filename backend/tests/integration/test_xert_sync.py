@@ -21,7 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from trainingdash.repositories.postgres.models import Activity, Record, User, XertCredentials
-from trainingdash.xert import XertActivity, XertAPIError
+from trainingdash.integrations.xert import XertActivity, XertAPIError
 from tests.integration.fixtures import CACHED_HASH_TESTPASS, CACHED_HASH_PASS
 
 # Load .env.test if it exists (for local Xert API testing)
@@ -671,7 +671,7 @@ class TestXertClientRealAPI:
     @pytest_asyncio.fixture
     async def live_client(self):
         """Authenticated XertClient connected to the real API."""
-        from trainingdash.xert import XertClient
+        from trainingdash.integrations.xert import XertClient
 
         client = XertClient()
         await client.login(
@@ -731,7 +731,7 @@ class TestXertClientRealAPI:
     @pytest.mark.asyncio
     async def test_real_xert_invalid_credentials(self):
         """Invalid credentials raise XertAPIError."""
-        from trainingdash.xert import XertClient, XertAPIError
+        from trainingdash.integrations.xert import XertClient, XertAPIError
 
         client = XertClient()
         try:

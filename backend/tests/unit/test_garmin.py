@@ -14,7 +14,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from trainingdash.garmin import (
+from trainingdash.integrations.garmin import (
     GarminActivity,
     GarminAPIError,
     GarminClient,
@@ -29,7 +29,7 @@ class TestGarminLogin:
         """Successful login without MFA returns True."""
         client = GarminClient()
 
-        with patch("trainingdash.garmin.Garmin") as mock_garmin:
+        with patch("trainingdash.integrations.garmin.client.Garmin") as mock_garmin:
             mock_instance = MagicMock()
             mock_garmin.return_value = mock_instance
 
@@ -43,7 +43,7 @@ class TestGarminLogin:
         """Login requiring MFA raises GarminMFARequired."""
         client = GarminClient()
 
-        with patch("trainingdash.garmin.Garmin") as mock_garmin:
+        with patch("trainingdash.integrations.garmin.client.Garmin") as mock_garmin:
             mock_instance = MagicMock()
             mock_garmin.return_value = mock_instance
             # Simulate MFA callback being triggered
@@ -58,7 +58,7 @@ class TestGarminLogin:
         """Invalid credentials raise GarminAPIError with clear message."""
         client = GarminClient()
 
-        with patch("trainingdash.garmin.Garmin") as mock_garmin:
+        with patch("trainingdash.integrations.garmin.client.Garmin") as mock_garmin:
             mock_instance = MagicMock()
             mock_garmin.return_value = mock_instance
             mock_instance.login.side_effect = Exception("Invalid credentials provided")
@@ -70,7 +70,7 @@ class TestGarminLogin:
         """Other login errors raise GarminAPIError with details."""
         client = GarminClient()
 
-        with patch("trainingdash.garmin.Garmin") as mock_garmin:
+        with patch("trainingdash.integrations.garmin.client.Garmin") as mock_garmin:
             mock_instance = MagicMock()
             mock_garmin.return_value = mock_instance
             mock_instance.login.side_effect = Exception("Network timeout")
@@ -82,7 +82,7 @@ class TestGarminLogin:
         """Error messages containing 'mfa' trigger MFA flow."""
         client = GarminClient()
 
-        with patch("trainingdash.garmin.Garmin") as mock_garmin:
+        with patch("trainingdash.integrations.garmin.client.Garmin") as mock_garmin:
             mock_instance = MagicMock()
             mock_garmin.return_value = mock_instance
             mock_instance.login.side_effect = Exception("MFA verification required")
@@ -100,7 +100,7 @@ class TestGarminMFA:
         """Valid MFA code completes authentication."""
         client = GarminClient()
 
-        with patch("trainingdash.garmin.Garmin") as mock_garmin:
+        with patch("trainingdash.integrations.garmin.client.Garmin") as mock_garmin:
             mock_instance = MagicMock()
             mock_garmin.return_value = mock_instance
 
@@ -122,7 +122,7 @@ class TestGarminMFA:
         """Invalid MFA code raises GarminAPIError."""
         client = GarminClient()
 
-        with patch("trainingdash.garmin.Garmin") as mock_garmin:
+        with patch("trainingdash.integrations.garmin.client.Garmin") as mock_garmin:
             mock_instance = MagicMock()
             mock_garmin.return_value = mock_instance
 
@@ -148,7 +148,7 @@ class TestGarminMFA:
         """Calling complete_mfa after successful login raises error."""
         client = GarminClient()
 
-        with patch("trainingdash.garmin.Garmin") as mock_garmin:
+        with patch("trainingdash.integrations.garmin.client.Garmin") as mock_garmin:
             mock_instance = MagicMock()
             mock_garmin.return_value = mock_instance
 
@@ -166,7 +166,7 @@ class TestGarminListActivities:
         """Activities are parsed correctly from API response."""
         client = GarminClient()
 
-        with patch("trainingdash.garmin.Garmin") as mock_garmin:
+        with patch("trainingdash.integrations.garmin.client.Garmin") as mock_garmin:
             mock_instance = MagicMock()
             mock_garmin.return_value = mock_instance
 
@@ -218,7 +218,7 @@ class TestGarminListActivities:
         """Empty activity list is handled correctly."""
         client = GarminClient()
 
-        with patch("trainingdash.garmin.Garmin") as mock_garmin:
+        with patch("trainingdash.integrations.garmin.client.Garmin") as mock_garmin:
             mock_instance = MagicMock()
             mock_garmin.return_value = mock_instance
 
@@ -235,7 +235,7 @@ class TestGarminListActivities:
         """Activities with missing optional fields are handled gracefully."""
         client = GarminClient()
 
-        with patch("trainingdash.garmin.Garmin") as mock_garmin:
+        with patch("trainingdash.integrations.garmin.client.Garmin") as mock_garmin:
             mock_instance = MagicMock()
             mock_garmin.return_value = mock_instance
 
@@ -264,7 +264,7 @@ class TestGarminListActivities:
         """Null distance values are converted to 0."""
         client = GarminClient()
 
-        with patch("trainingdash.garmin.Garmin") as mock_garmin:
+        with patch("trainingdash.integrations.garmin.client.Garmin") as mock_garmin:
             mock_instance = MagicMock()
             mock_garmin.return_value = mock_instance
 
@@ -296,7 +296,7 @@ class TestGarminListActivities:
         """API errors are wrapped in GarminAPIError."""
         client = GarminClient()
 
-        with patch("trainingdash.garmin.Garmin") as mock_garmin:
+        with patch("trainingdash.integrations.garmin.client.Garmin") as mock_garmin:
             mock_instance = MagicMock()
             mock_garmin.return_value = mock_instance
 
@@ -322,7 +322,7 @@ class TestGarminDownloadFit:
         client = GarminClient()
         fit_content = b"\x0e\x10\x00\x00.FIT file content..."
 
-        with patch("trainingdash.garmin.Garmin") as mock_garmin:
+        with patch("trainingdash.integrations.garmin.client.Garmin") as mock_garmin:
             mock_instance = MagicMock()
             mock_garmin.return_value = mock_instance
 
@@ -346,7 +346,7 @@ class TestGarminDownloadFit:
         client = GarminClient()
         fit_content = b"FIT data"
 
-        with patch("trainingdash.garmin.Garmin") as mock_garmin:
+        with patch("trainingdash.integrations.garmin.client.Garmin") as mock_garmin:
             mock_instance = MagicMock()
             mock_garmin.return_value = mock_instance
 
@@ -363,7 +363,7 @@ class TestGarminDownloadFit:
         """ZIP without FIT file raises GarminAPIError."""
         client = GarminClient()
 
-        with patch("trainingdash.garmin.Garmin") as mock_garmin:
+        with patch("trainingdash.integrations.garmin.client.Garmin") as mock_garmin:
             mock_instance = MagicMock()
             mock_garmin.return_value = mock_instance
 
@@ -389,7 +389,7 @@ class TestGarminDownloadFit:
         """Download errors are wrapped in GarminAPIError."""
         client = GarminClient()
 
-        with patch("trainingdash.garmin.Garmin") as mock_garmin:
+        with patch("trainingdash.integrations.garmin.client.Garmin") as mock_garmin:
             mock_instance = MagicMock()
             mock_garmin.return_value = mock_instance
 
@@ -405,14 +405,14 @@ class TestGarminClientFactory:
 
     def test_get_garmin_client_returns_instance(self):
         """get_garmin_client returns a GarminClient instance."""
-        from trainingdash.garmin import get_garmin_client
+        from trainingdash.integrations.garmin import get_garmin_client
 
         client = get_garmin_client()
         assert isinstance(client, GarminClient)
 
     def test_set_garmin_client_factory_replaces_default(self):
         """set_garmin_client_factory allows injecting mock client."""
-        from trainingdash.garmin import (
+        from trainingdash.integrations.garmin import (
             get_garmin_client,
             set_garmin_client_factory,
         )

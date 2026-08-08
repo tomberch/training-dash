@@ -48,7 +48,8 @@ class GeocodedPlace:
             "country": self.country,
             "state": self.state,
         }
-    
+
+
     @classmethod
     def from_dict(cls, data: dict) -> "GeocodedPlace":
         return cls(
@@ -108,7 +109,8 @@ class GeocodingService:
         self._http: Optional[httpx.AsyncClient] = None
         self._last_request_time: float = 0
         self._lock = asyncio.Lock()
-    
+
+
     async def initialize(self):
         """Initialize Redis and HTTP connections."""
         redis_host = os.environ.get("REDIS_HOST", "localhost")
@@ -166,7 +168,8 @@ class GeocodingService:
         
         # Rate limit before API call
         await self._rate_limit()
-        
+
+
         # Call Photon API
         try:
             response = await self._http.get(
@@ -221,7 +224,8 @@ class GeocodingService:
                 place_name = props[ptype]
                 place_type = ptype
                 break
-        
+
+
         # Fallback to name if available (but skip POI-like names)
         if not place_name and "name" in props:
             name = props["name"]

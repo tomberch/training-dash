@@ -52,7 +52,7 @@ class XertSyncProvider(SyncProvider):
         )
 
     async def connect(self, email: str, password: str) -> None:
-        from trainingdash.xert import get_xert_client
+        from trainingdash.integrations.xert import get_xert_client
 
         self._client = get_xert_client()
         # login() establishes both the OAuth2 token and the web session cookie
@@ -95,7 +95,7 @@ class XertSyncProvider(SyncProvider):
         3. Fetch XSS from JSON summary and store as training_load
         """
         from trainingdash.ingest import ingest_fit
-        from trainingdash.xert import XertAPIError
+        from trainingdash.integrations.xert import XertAPIError
 
         source_ref = self.make_source_ref(activity.id)
 
@@ -158,7 +158,7 @@ class GarminSyncProvider(SyncProvider):
         )
 
     async def connect(self, email: str, password: str) -> None:
-        from trainingdash.garmin import get_garmin_client, GarminMFARequired
+        from trainingdash.integrations.garmin import get_garmin_client, GarminMFARequired
         
         self._client = get_garmin_client()
         try:
@@ -196,7 +196,7 @@ class GarminSyncProvider(SyncProvider):
     ) -> Activity | None:
         """Ingest a Garmin activity via FIT file download."""
         from trainingdash.ingest import ingest_fit
-        from trainingdash.garmin import GarminAPIError
+        from trainingdash.integrations.garmin import GarminAPIError
         
         source_ref = self.make_source_ref(activity.id)
         

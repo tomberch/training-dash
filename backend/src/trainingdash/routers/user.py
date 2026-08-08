@@ -12,7 +12,7 @@ from sqlalchemy import select, delete
 
 from trainingdash.auth import CurrentUser, DbSession, hash_password
 from trainingdash.crypto import encrypt, EncryptionError
-from trainingdash.garmin import get_garmin_client, GarminAPIError, GarminMFARequired
+from trainingdash.integrations.garmin import get_garmin_client, GarminAPIError, GarminMFARequired
 from trainingdash.jobs import enqueue_recalculate_metrics_job
 from trainingdash.repositories.postgres.models import (
     GarminCredentials,
@@ -34,7 +34,7 @@ from trainingdash.thresholds import (
     create_threshold_entries,
 )
 from trainingdash.domain.zones import compute_power_zones, compute_hr_zones
-from trainingdash.xert import get_xert_client, XertAPIError
+from trainingdash.integrations.xert import get_xert_client, XertAPIError
 
 logger = logging.getLogger(__name__)
 

@@ -86,7 +86,7 @@ class TestUserXertCredentials:
 
     @pytest.mark.asyncio
     async def test_put_xert_credentials_rejects_invalid_credentials(self, auth_client, encryption_key_env):
-        from trainingdash.xert import XertAPIError
+        from trainingdash.integrations.xert import XertAPIError
 
         # Mock the Xert client to simulate failed login
         with patch("trainingdash.routers.user.get_xert_client") as mock_get_client:

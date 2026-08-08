@@ -15,7 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from trainingdash.geocoding import (
+from trainingdash.integrations.geocoding import (
     GeocodedPlace,
     GeocodingService,
     get_geocoding_service,
