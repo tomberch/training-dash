@@ -25,6 +25,24 @@ from trainingdash.db import Base
 from trainingdash.models import User
 from tests.integration.fixtures import CACHED_HASH_TESTPASS
 
+
+@pytest.fixture(autouse=True)
+def _mock_geocoding(monkeypatch):
+    """Skip reverse geocoding in integration tests.
+
+    generate_activity_title normally calls out to photon.komoot.io with a
+    1-second rate-limit sleep per request (3-12 per upload). Patching it out
+    eliminates the sleep tax without losing coverage — the real title logic is
+    untested today (see #259) and is independent of the integration suite.
+    """
+    async def _fake_title(records, activity_date=None):
+        return "Test Ride"
+
+    monkeypatch.setattr(
+        "trainingdash.title_generator.generate_activity_title", _fake_title
+    )
+
+
 # Dedicated test container settings
 TEST_CONTAINER_NAME = "traindash-test-db"
 TEST_CONTAINER_IMAGE = "postgis/postgis:16-3.4"
