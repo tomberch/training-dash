@@ -7,67 +7,17 @@
  * Uses admin API to approve user in case require_approval is enabled.
  */
 import { test, expect } from '@playwright/test';
-import { generateTestUser } from './fixtures/auth';
-
-// Admin credentials for approval
-const ADMIN_USER = {
-  email: 'admin@example.com',
-  password: 'admin',
-};
+import { generateTestUser, registerAndApproveUser, loginViaApi } from './fixtures/auth';
 
 const testUser = generateTestUser('settings');
 
-/**
- * Helper to register, approve (if needed), and login a user via API.
- */
-async function setupTestUser(request: import('@playwright/test').APIRequestContext): Promise<void> {
-  // Register the user
-  const registerResponse = await request.post('/api/register', {
-    data: { email: testUser.email, password: testUser.password },
-  });
-  
-  if (!registerResponse.ok()) {
-    // User might already exist, try to login
-    const loginResponse = await request.post('/api/login', {
-      data: { email: testUser.email, password: testUser.password },
-    });
-    if (!loginResponse.ok()) {
-      throw new Error(`Failed to setup test user: ${await registerResponse.text()}`);
-    }
-    return;
-  }
-
-  // Get the user ID from registration response
-  const userData = await registerResponse.json();
-  const userId = userData.id;
-
-  // Login as admin to approve the user (in case require_approval is enabled)
-  await request.post('/api/login', {
-    data: { email: ADMIN_USER.email, password: ADMIN_USER.password },
-  });
-
-  // Approve the user (will succeed even if already approved)
-  await request.post(`/api/admin/users/${userId}/approve`);
-
-  // Login as the test user
-  await request.post('/api/login', {
-    data: { email: testUser.email, password: testUser.password },
-  });
-}
-
-async function loginTestUser(page: import('@playwright/test').Page): Promise<void> {
-  await page.request.post('/api/login', {
-    data: { email: testUser.email, password: testUser.password },
-  });
-}
-
 test.describe('Settings', () => {
   test.beforeAll(async ({ request }) => {
-    await setupTestUser(request);
+    await registerAndApproveUser(request, testUser);
   });
 
   test('settings page loads with all sections', async ({ page }) => {
-    await loginTestUser(page);
+    await loginViaApi(page, testUser);
     await page.goto('/settings');
 
     // Should show Settings heading
@@ -80,7 +30,7 @@ test.describe('Settings', () => {
   });
 
   test('unit system toggle switches between metric and imperial', async ({ page }) => {
-    await loginTestUser(page);
+    await loginViaApi(page, testUser);
     await page.goto('/settings');
 
     // Wait for preferences section to load
@@ -97,10 +47,7 @@ test.describe('Settings', () => {
     // Click to toggle
     await unitToggle.click();
 
-    // Wait for the toggle to complete (API call)
-    await page.waitForTimeout(500);
-
-    // Should show success feedback
+    // Should show success feedback (indicates API call completed)
     await expect(page.getByText('Preferences saved')).toBeVisible();
 
     // Verify the toggle changed
@@ -114,7 +61,7 @@ test.describe('Settings', () => {
   });
 
   test('theme selector allows choosing light, dark, or system', async ({ page }) => {
-    await loginTestUser(page);
+    await loginViaApi(page, testUser);
     await page.goto('/settings');
 
     // Wait for preferences section
@@ -142,7 +89,7 @@ test.describe('Settings', () => {
   });
 
   test('profile section shows email and allows display name edit', async ({ page }) => {
-    await loginTestUser(page);
+    await loginViaApi(page, testUser);
     await page.goto('/settings');
 
     // Should show Profile section (CardTitle uses data-slot="card-title")
@@ -168,7 +115,7 @@ test.describe('Settings', () => {
   });
 
   test('thresholds section allows adding FTP', async ({ page }) => {
-    await loginTestUser(page);
+    await loginViaApi(page, testUser);
     await page.goto('/settings');
 
     // Wait for thresholds section (CardTitle uses data-slot="card-title")
@@ -196,7 +143,7 @@ test.describe('Settings', () => {
   });
 
   test('back button navigates away from settings', async ({ page }) => {
-    await loginTestUser(page);
+    await loginViaApi(page, testUser);
 
     // Start from dashboard
     await page.goto('/');

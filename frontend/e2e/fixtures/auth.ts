@@ -89,6 +89,70 @@ export const BASELINE_USER: TestUser = {
   password: 'testpass',
 };
 
+// Seed admin user (created by globalSetup/init_db)
+export const ADMIN_USER: TestUser = {
+  email: 'admin@example.com',
+  password: 'admin',
+};
+
+/**
+ * Register a user, approve them via admin API (handles require_approval setting),
+ * and login as the user. This ensures the user can access the dashboard regardless
+ * of whether require_approval is enabled.
+ * 
+ * @param request - Playwright API request context
+ * @param user - User credentials to register
+ */
+export async function registerAndApproveUser(
+  request: import('@playwright/test').APIRequestContext,
+  user: TestUser
+): Promise<void> {
+  // Register the user
+  const registerResponse = await request.post('/api/register', {
+    data: { email: user.email, password: user.password },
+  });
+  
+  if (!registerResponse.ok()) {
+    // User might already exist, try to login
+    const loginResponse = await request.post('/api/login', {
+      data: { email: user.email, password: user.password },
+    });
+    if (!loginResponse.ok()) {
+      throw new Error(`Failed to setup test user: ${await registerResponse.text()}`);
+    }
+    return;
+  }
+
+  // Get the user ID from registration response
+  const userData = await registerResponse.json();
+  const userId = userData.id;
+
+  // Login as admin to approve the user (in case require_approval is enabled)
+  await request.post('/api/login', {
+    data: { email: ADMIN_USER.email, password: ADMIN_USER.password },
+  });
+
+  // Approve the user (will succeed even if already approved)
+  await request.post(`/api/admin/users/${userId}/approve`);
+
+  // Login as the test user
+  await request.post('/api/login', {
+    data: { email: user.email, password: user.password },
+  });
+}
+
+/**
+ * Login a user via page's request context.
+ */
+export async function loginViaApi(
+  page: import('@playwright/test').Page,
+  user: TestUser
+): Promise<void> {
+  await page.request.post('/api/login', {
+    data: { email: user.email, password: user.password },
+  });
+}
+
 /**
  * Extended test fixture with authenticated user.
  */

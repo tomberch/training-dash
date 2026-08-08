@@ -10,66 +10,18 @@
  * ISOLATION: Uses seed admin for admin tests, generates own user for non-admin tests.
  */
 import { test, expect } from '@playwright/test';
-import { generateTestUser } from './fixtures/auth';
-
-// Seed admin user from global-setup
-const ADMIN_USER = {
-  email: 'admin@example.com',
-  password: 'admin',
-};
+import { generateTestUser, registerAndApproveUser, loginViaApi, ADMIN_USER } from './fixtures/auth';
 
 // Non-admin test user
 const regularUser = generateTestUser('admintest');
 
-async function loginAsAdmin(page: import('@playwright/test').Page): Promise<void> {
-  await page.request.post('/api/login', {
-    data: { email: ADMIN_USER.email, password: ADMIN_USER.password },
-  });
-}
-
-async function loginAsRegularUser(page: import('@playwright/test').Page): Promise<void> {
-  await page.request.post('/api/login', {
-    data: { email: regularUser.email, password: regularUser.password },
-  });
-}
-
-async function setupRegularUser(request: import('@playwright/test').APIRequestContext): Promise<void> {
-  // Register the user
-  const registerResponse = await request.post('/api/register', {
-    data: { email: regularUser.email, password: regularUser.password },
-  });
-  
-  if (!registerResponse.ok()) {
-    // User might already exist, try to login
-    const loginResponse = await request.post('/api/login', {
-      data: { email: regularUser.email, password: regularUser.password },
-    });
-    if (!loginResponse.ok()) {
-      throw new Error(`Failed to setup regular test user: ${await registerResponse.text()}`);
-    }
-    return;
-  }
-
-  // Get the user ID from registration response
-  const userData = await registerResponse.json();
-  const userId = userData.id;
-
-  // Login as admin to approve the user (in case require_approval is enabled)
-  await request.post('/api/login', {
-    data: { email: ADMIN_USER.email, password: ADMIN_USER.password },
-  });
-
-  // Approve the user (will succeed even if already approved)
-  await request.post(`/api/admin/users/${userId}/approve`);
-}
-
 test.describe('Admin Panel', () => {
   test.beforeAll(async ({ request }) => {
-    await setupRegularUser(request);
+    await registerAndApproveUser(request, regularUser);
   });
 
   test('admin can access admin panel', async ({ page }) => {
-    await loginAsAdmin(page);
+    await loginViaApi(page, ADMIN_USER);
     await page.goto('/admin');
 
     // Should show Admin Panel heading
@@ -82,7 +34,7 @@ test.describe('Admin Panel', () => {
   });
 
   test('admin sees users table with correct columns', async ({ page }) => {
-    await loginAsAdmin(page);
+    await loginViaApi(page, ADMIN_USER);
     await page.goto('/admin');
 
     // Wait for users table to load
@@ -101,7 +53,7 @@ test.describe('Admin Panel', () => {
   });
 
   test('admin can create a new user', async ({ page }) => {
-    await loginAsAdmin(page);
+    await loginViaApi(page, ADMIN_USER);
     await page.goto('/admin');
 
     // Fill in create user form
@@ -120,7 +72,7 @@ test.describe('Admin Panel', () => {
   });
 
   test('admin can toggle registration approval setting', async ({ page }) => {
-    await loginAsAdmin(page);
+    await loginViaApi(page, ADMIN_USER);
     await page.goto('/admin');
 
     // Find the toggle button for require approval
@@ -133,15 +85,15 @@ test.describe('Admin Panel', () => {
     const initialClass = await toggleButton.getAttribute('class');
     await toggleButton.click();
 
-    // Wait for toggle to update
-    await page.waitForTimeout(500);
+    // Wait for toggle class to change (indicates state update)
+    await expect(toggleButton).not.toHaveClass(initialClass!);
 
     // Toggle back to restore state
     await toggleButton.click();
   });
 
   test('admin sees action buttons for each user', async ({ page }) => {
-    await loginAsAdmin(page);
+    await loginViaApi(page, ADMIN_USER);
     await page.goto('/admin');
 
     // Wait for users table to load
@@ -161,7 +113,7 @@ test.describe('Admin Panel', () => {
   });
 
   test('non-admin user is denied access to admin panel', async ({ page }) => {
-    await loginAsRegularUser(page);
+    await loginViaApi(page, regularUser);
 
     // Try to access admin panel directly
     await page.goto('/admin');
@@ -172,7 +124,7 @@ test.describe('Admin Panel', () => {
   });
 
   test('admin can access password reset UI', async ({ page }) => {
-    await loginAsAdmin(page);
+    await loginViaApi(page, ADMIN_USER);
     await page.goto('/admin');
 
     // Wait for users table to load
@@ -197,7 +149,7 @@ test.describe('Admin Panel', () => {
   });
 
   test('admin back button navigates away', async ({ page }) => {
-    await loginAsAdmin(page);
+    await loginViaApi(page, ADMIN_USER);
     await page.goto('/admin');
 
     // Verify we're on admin page

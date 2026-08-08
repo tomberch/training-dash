@@ -11,69 +11,19 @@
  * (empty state before uploading, populated state after).
  */
 import { test, expect } from '@playwright/test';
-import { generateTestUser } from './fixtures/auth';
+import { generateTestUser, registerAndApproveUser, loginViaApi } from './fixtures/auth';
 import { uploadFitFileAndWait, getFixtureFitPath } from './fixtures/upload';
 
-// Admin credentials for approval
-const ADMIN_USER = {
-  email: 'admin@example.com',
-  password: 'admin',
-};
-
 const testUser = generateTestUser('records');
-
-/**
- * Helper to register, approve (if needed), and login a user via API.
- */
-async function setupTestUser(request: import('@playwright/test').APIRequestContext): Promise<void> {
-  // Register the user
-  const registerResponse = await request.post('/api/register', {
-    data: { email: testUser.email, password: testUser.password },
-  });
-  
-  if (!registerResponse.ok()) {
-    // User might already exist, try to login
-    const loginResponse = await request.post('/api/login', {
-      data: { email: testUser.email, password: testUser.password },
-    });
-    if (!loginResponse.ok()) {
-      throw new Error(`Failed to setup test user: ${await registerResponse.text()}`);
-    }
-    return;
-  }
-
-  // Get the user ID from registration response
-  const userData = await registerResponse.json();
-  const userId = userData.id;
-
-  // Login as admin to approve the user (in case require_approval is enabled)
-  await request.post('/api/login', {
-    data: { email: ADMIN_USER.email, password: ADMIN_USER.password },
-  });
-
-  // Approve the user (will succeed even if already approved)
-  await request.post(`/api/admin/users/${userId}/approve`);
-
-  // Login as the test user
-  await request.post('/api/login', {
-    data: { email: testUser.email, password: testUser.password },
-  });
-}
-
-async function loginTestUser(page: import('@playwright/test').Page): Promise<void> {
-  await page.request.post('/api/login', {
-    data: { email: testUser.email, password: testUser.password },
-  });
-}
 
 // Run tests serially to ensure empty state is tested before uploads
 test.describe.serial('Records', () => {
   test.beforeAll(async ({ request }) => {
-    await setupTestUser(request);
+    await registerAndApproveUser(request, testUser);
   });
 
   test('records page shows empty state for new user', async ({ page }) => {
-    await loginTestUser(page);
+    await loginViaApi(page, testUser);
     await page.goto('/records');
 
     // Should show Records heading (exact match to avoid matching empty state title)
@@ -95,7 +45,7 @@ test.describe.serial('Records', () => {
     await uploadFitFileAndWait(request, fitPath);
 
     // Now view records page
-    await loginTestUser(page);
+    await loginViaApi(page, testUser);
     await page.goto('/records');
 
     // Should show Records heading
@@ -111,7 +61,7 @@ test.describe.serial('Records', () => {
 
   test('PR tiles display correctly formatted values', async ({ page }) => {
     // User already has data from previous test
-    await loginTestUser(page);
+    await loginViaApi(page, testUser);
     await page.goto('/records');
 
     // Wait for PRs to load - look for the section heading (h2)
@@ -131,7 +81,7 @@ test.describe.serial('Records', () => {
   });
 
   test('records page navigation from dashboard', async ({ page }) => {
-    await loginTestUser(page);
+    await loginViaApi(page, testUser);
 
     // Start from dashboard
     await page.goto('/');
@@ -149,5 +99,22 @@ test.describe.serial('Records', () => {
       await page.goto('/records');
       await expect(page.getByRole('heading', { name: 'Records', exact: true })).toBeVisible();
     }
+  });
+
+  test('power curve page renders chart with data', async ({ page }) => {
+    // User has activities from previous upload tests
+    await loginViaApi(page, testUser);
+    await page.goto('/power-curve');
+
+    // Should show Power Curve heading
+    await expect(page.getByRole('heading', { name: /Power Curve/i })).toBeVisible({ timeout: 10000 });
+
+    // Should render the chart (Recharts renders an SVG)
+    const chart = page.locator('.recharts-wrapper');
+    await expect(chart).toBeVisible({ timeout: 15000 });
+
+    // Chart should have line elements (the power curve line)
+    const chartLine = page.locator('.recharts-line');
+    await expect(chartLine.first()).toBeVisible();
   });
 });
