@@ -71,6 +71,8 @@ vi.mock("./api", () => ({
   fetchMe: vi.fn(),
   logout: vi.fn().mockResolvedValue(undefined),
   fetchThresholds: vi.fn().mockResolvedValue([]),
+  fetchActivities: vi.fn().mockResolvedValue({ activities: [], pagination: { page: 1, per_page: 1, total: 0, total_pages: 0 } }),
+  fetchCurrentMetrics: vi.fn().mockResolvedValue({}),
 }));
 
 import { fetchMe } from "./api";
