@@ -475,9 +475,10 @@ async def upload_activity(
             content={"job_id": job_id, "source_ref": source_ref},
         )
 
-    from trainingdash.ingest import ingest_fit
+    from trainingdash.use_cases import IngestActivity
 
-    activity = await ingest_fit(db, user.id, fit_bytes, "upload", source_ref)
+    use_case = IngestActivity(db)
+    activity = await use_case.execute(user.id, fit_bytes, "upload", source_ref)
     if activity is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to parse FIT file"

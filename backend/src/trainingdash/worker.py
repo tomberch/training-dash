@@ -71,10 +71,11 @@ async def worker_db_session(ctx: dict):
 
 async def ingest_job(ctx, user_id: int, fit_bytes: bytes, source: str, source_ref: str):
     """Ingest a FIT file and enqueue route matching."""
-    from trainingdash.ingest import ingest_fit
+    from trainingdash.use_cases import IngestActivity
 
     async with worker_db_session(ctx) as db:
-        activity = await ingest_fit(db, user_id, fit_bytes, source, source_ref)
+        use_case = IngestActivity(db)
+        activity = await use_case.execute(user_id, fit_bytes, source, source_ref)
         if activity is None:
             return {"success": False, "activity_id": None}
 

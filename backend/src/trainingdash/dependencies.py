@@ -94,3 +94,16 @@ RecalculationJobRepoD = Annotated[
     PostgresRecalculationJobRepo, Depends(get_recalculation_job_repo)
 ]
 OAuthLinkRepoD = Annotated[PostgresOAuthLinkRepo, Depends(get_oauth_link_repo)]
+
+
+# --- Use Cases ---
+
+from trainingdash.use_cases.ingest_activity import IngestActivity
+
+
+async def get_ingest_activity_use_case(db: DbSession) -> IngestActivity:
+    """Create an IngestActivity use case bound to the current session."""
+    return IngestActivity(db)
+
+
+IngestActivityD = Annotated[IngestActivity, Depends(get_ingest_activity_use_case)]

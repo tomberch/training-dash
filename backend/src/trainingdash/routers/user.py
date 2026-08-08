@@ -9,6 +9,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from trainingdash.auth import CurrentUser, DbSession, hash_password
 from trainingdash.crypto import encrypt, EncryptionError
@@ -24,6 +25,7 @@ from trainingdash.jobs import enqueue_recalculate_metrics_job
 from trainingdash.repositories.postgres.models import (
     GarminCredentials,
     Notification,
+    RecalculationJob,
     XertCredentials,
 )
 from trainingdash.routers.serializers import (
