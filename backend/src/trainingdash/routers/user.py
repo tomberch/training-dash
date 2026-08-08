@@ -70,6 +70,10 @@ class UpdateMeRequest(BaseModel):
     sync_hour: int | None = None
     date_of_birth: date | None = None
     weight_kg: float | None = None
+    height_cm: int | None = None
+    gender: str | None = None
+    power_zone_percentages: dict | None = None
+    hr_zone_percentages: dict | None = None
     hr_derived_power_enabled: bool | None = None
 
 
@@ -115,6 +119,26 @@ async def update_me(db: DbSession, user: CurrentUser, request: UpdateMeRequest):
                 status_code=400, detail="weight_kg must be realistic (max 500)"
             )
         user.weight_kg = request.weight_kg
+
+    if request.height_cm is not None:
+        if request.height_cm < 100 or request.height_cm > 250:
+            raise HTTPException(
+                status_code=400, detail="height_cm must be between 100 and 250"
+            )
+        user.height_cm = request.height_cm
+
+    if request.gender is not None:
+        if request.gender not in ("male", "female"):
+            raise HTTPException(
+                status_code=400, detail="gender must be 'male' or 'female'"
+            )
+        user.gender = request.gender
+
+    if request.power_zone_percentages is not None:
+        user.power_zone_percentages = request.power_zone_percentages
+
+    if request.hr_zone_percentages is not None:
+        user.hr_zone_percentages = request.hr_zone_percentages
 
     if request.hr_derived_power_enabled is not None:
         user.hr_derived_power_enabled = request.hr_derived_power_enabled

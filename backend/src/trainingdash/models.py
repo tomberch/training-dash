@@ -16,7 +16,7 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, UUID as PgUUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from trainingdash.db import Base
@@ -36,6 +36,10 @@ class User(Base):
     sync_hour: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     date_of_birth: Mapped[date | None] = mapped_column(Date, nullable=True)
     weight_kg: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
+    height_cm: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    gender: Mapped[str | None] = mapped_column(String(10), nullable=True)  # male | female | null
+    power_zone_percentages = mapped_column(JSONB, nullable=True)  # custom zone % overrides
+    hr_zone_percentages = mapped_column(JSONB, nullable=True)  # custom zone % overrides
     hr_derived_power_enabled: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
 

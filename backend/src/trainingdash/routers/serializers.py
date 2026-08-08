@@ -29,6 +29,10 @@ def user_response(user: User) -> dict:
         "sync_hour": user.sync_hour,
         "date_of_birth": user.date_of_birth.isoformat() if user.date_of_birth else None,
         "weight_kg": float(user.weight_kg) if user.weight_kg else None,
+        "height_cm": user.height_cm,
+        "gender": user.gender,
+        "power_zone_percentages": user.power_zone_percentages,
+        "hr_zone_percentages": user.hr_zone_percentages,
         "hr_derived_power_enabled": user.hr_derived_power_enabled,
     }
 
