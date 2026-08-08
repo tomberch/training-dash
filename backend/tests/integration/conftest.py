@@ -189,6 +189,17 @@ async def db_engine_session(pg_container):
     await engine.dispose()
 
 
+METRIC_TYPES_SEED = [
+    {"key": "ftp", "display_name": "Functional Threshold Power", "unit": "W", "category": "threshold", "data_type": "integer", "min_value": 50, "max_value": 500, "allowed_sources": ["manual", "calculated", "device"], "recalc_targets": ["power_zones", "tss", "if"], "sort_order": 1},
+    {"key": "lthr", "display_name": "Lactate Threshold HR", "unit": "bpm", "category": "threshold", "data_type": "integer", "min_value": 80, "max_value": 220, "allowed_sources": ["manual", "calculated", "device"], "recalc_targets": ["hr_zones"], "sort_order": 2},
+    {"key": "hrmax", "display_name": "Maximum Heart Rate", "unit": "bpm", "category": "threshold", "data_type": "integer", "min_value": 100, "max_value": 250, "allowed_sources": ["manual", "calculated", "device"], "recalc_targets": ["hr_zones"], "sort_order": 3},
+    {"key": "weight_kg", "display_name": "Weight", "unit": "kg", "category": "body", "data_type": "decimal", "min_value": 30, "max_value": 200, "allowed_sources": ["manual", "device"], "recalc_targets": ["vo2max", "w_per_kg"], "sort_order": 4},
+    {"key": "vo2max", "display_name": "VO2 Max", "unit": "ml/kg/min", "category": "fitness", "data_type": "decimal", "min_value": 20, "max_value": 90, "allowed_sources": ["manual", "calculated", "device"], "recalc_targets": None, "sort_order": 5},
+    {"key": "resting_hr", "display_name": "Resting Heart Rate", "unit": "bpm", "category": "recovery", "data_type": "integer", "min_value": 30, "max_value": 100, "allowed_sources": ["manual", "device"], "recalc_targets": None, "sort_order": 6},
+    {"key": "hrv", "display_name": "Heart Rate Variability", "unit": "ms", "category": "recovery", "data_type": "integer", "min_value": 10, "max_value": 200, "allowed_sources": ["manual", "device"], "recalc_targets": None, "sort_order": 7},
+]
+
+
 @pytest_asyncio.fixture
 async def db_engine(db_engine_session):
     """
@@ -202,6 +213,14 @@ async def db_engine(db_engine_session):
         if tables:
             table_list = ", ".join(f'"{t}"' for t in tables)
             await conn.execute(text(f"TRUNCATE {table_list} RESTART IDENTITY CASCADE"))
+    
+    # Seed metric_types (required for metrics API tests)
+    session_factory = async_sessionmaker(db_engine_session, expire_on_commit=False)
+    async with session_factory() as session:
+        from trainingdash.models import MetricType
+        for mt_data in METRIC_TYPES_SEED:
+            session.add(MetricType(**mt_data))
+        await session.commit()
     
     yield db_engine_session
 

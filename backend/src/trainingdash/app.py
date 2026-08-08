@@ -16,7 +16,7 @@ from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from trainingdash.routers import activities, admin, analytics, auth, health, oauth, tiles, user
+from trainingdash.routers import activities, admin, analytics, auth, health, metrics, oauth, tiles, user
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +73,7 @@ def create_app() -> FastAPI:
     app.include_router(admin.router)
     app.include_router(activities.router)
     app.include_router(analytics.router)
+    app.include_router(metrics.router)
     app.include_router(tiles.router)
 
     # Serve frontend static files if the dist directory exists
