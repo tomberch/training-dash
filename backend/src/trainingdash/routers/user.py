@@ -18,19 +18,20 @@ from trainingdash.models import (
     GarminCredentials,
     Notification,
     RecalculationJob,
-    ThresholdHistory,
     UserOAuthLink,
     XertCredentials,
 )
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from trainingdash.routers.serializers import (
     recalculation_job_response,
-    threshold_response,
     user_response,
 )
 from trainingdash.routers.datetime_utils import utc_str
 from trainingdash.thresholds import (
     ensure_default_thresholds,
+    get_all_threshold_entries,
+    get_thresholds_for_date,
+    create_threshold_entries,
 )
 from trainingdash.zones import compute_power_zones, compute_hr_zones
 from trainingdash.xert import get_xert_client, XertAPIError
@@ -409,13 +410,8 @@ async def get_my_thresholds(db: DbSession, user: CurrentUser):
     # Ensure defaults exist if user has DOB
     await ensure_default_thresholds(db, user)
 
-    result = await db.execute(
-        select(ThresholdHistory)
-        .where(ThresholdHistory.user_id == user.id)
-        .order_by(ThresholdHistory.effective_date.desc())
-    )
-    thresholds = result.scalars().all()
-    return [threshold_response(t) for t in thresholds]
+    thresholds = await get_all_threshold_entries(db, user.id)
+    return thresholds
 
 
 class CreateThresholdRequest(BaseModel):
@@ -470,14 +466,9 @@ async def create_threshold(
                 status_code=400, detail="lthr_bpm cannot exceed hrmax_bpm"
             )
 
-    # Get the most recent threshold to carry forward values
-    result = await db.execute(
-        select(ThresholdHistory)
-        .where(ThresholdHistory.user_id == user.id)
-        .order_by(ThresholdHistory.effective_date.desc())
-        .limit(1)
-    )
-    previous = result.scalar_one_or_none()
+    # Get the most recent thresholds to carry forward values
+    all_thresholds = await get_all_threshold_entries(db, user.id)
+    previous = all_thresholds[0] if all_thresholds else None
 
     # When no explicit date is given and this is the user's very first threshold,
     # set effective_date far in the past so all existing historical activities are covered.
@@ -491,9 +482,9 @@ async def create_threshold(
     # Determine final values - use new value if provided, else carry forward
     # Note: Once a threshold value is set, it cannot be removed - only changed.
     # Omitting a field preserves the previous value.
-    final_ftp = request.ftp_watts if request.ftp_watts is not None else (previous.ftp_watts if previous else None)
-    final_lthr = request.lthr_bpm if request.lthr_bpm is not None else (previous.lthr_bpm if previous else None)
-    final_hrmax = request.hrmax_bpm if request.hrmax_bpm is not None else (previous.hrmax_bpm if previous else None)
+    final_ftp = request.ftp_watts if request.ftp_watts is not None else (previous.get("ftp_watts") if previous else None)
+    final_lthr = request.lthr_bpm if request.lthr_bpm is not None else (previous.get("lthr_bpm") if previous else None)
+    final_hrmax = request.hrmax_bpm if request.hrmax_bpm is not None else (previous.get("hrmax_bpm") if previous else None)
     
     # If user has previous thresholds but provided no new values, reject
     # (they should use the existing values or provide updates)
@@ -516,43 +507,17 @@ async def create_threshold(
                 status_code=400, detail="lthr_bpm cannot exceed hrmax_bpm"
             )
 
-    # Upsert: check if there's already a threshold for this user on this date
-    existing_result = await db.execute(
-        select(ThresholdHistory).where(
-            ThresholdHistory.user_id == user.id,
-            ThresholdHistory.effective_date == effective,
-        )
+    # Create threshold metric entries
+    await create_threshold_entries(
+        db,
+        user.id,
+        effective,
+        ftp_watts=final_ftp,
+        lthr_bpm=final_lthr,
+        hrmax_bpm=final_hrmax,
+        source="manual",
     )
-    existing = existing_result.scalar_one_or_none()
-
-    if existing:
-        # Update existing row for today
-        existing.ftp_watts = final_ftp
-        existing.lthr_bpm = final_lthr
-        existing.hrmax_bpm = final_hrmax
-        threshold = existing
-    else:
-        # Create new row
-        threshold = ThresholdHistory(
-            user_id=user.id,
-            effective_date=effective,
-            ftp_watts=final_ftp,
-            lthr_bpm=final_lthr,
-            hrmax_bpm=final_hrmax,
-        )
-        db.add(threshold)
-
     await db.commit()
-    await db.refresh(threshold)
-
-    # Regenerate zones if they exist and are not custom (best-effort)
-    try:
-        await regenerate_zones_from_threshold(db, user.id, threshold)
-    except Exception:
-        logger.exception(
-            "Zone regeneration failed after threshold save for user %s — zones may be stale",
-            user.id,
-        )
 
     # Enqueue async metric recalculation — observable via GET /me/recalculate-metrics
     now = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -589,7 +554,14 @@ async def create_threshold(
         )
         await db.commit()
 
-    return threshold_response(threshold)
+    # Return the new thresholds for this date
+    return {
+        "effective_date": effective.isoformat(),
+        "ftp_watts": final_ftp,
+        "lthr_bpm": final_lthr,
+        "hrmax_bpm": final_hrmax,
+        "source": "manual",
+    }
 
 
 # --- Zones ---
@@ -598,14 +570,8 @@ async def create_threshold(
 @router.get("/me/zones")
 async def get_my_zones(db: DbSession, user: CurrentUser):
     """Get the current user's power and HR zones (computed from thresholds)."""
-    # Get current threshold
-    result = await db.execute(
-        select(ThresholdHistory)
-        .where(ThresholdHistory.user_id == user.id)
-        .order_by(ThresholdHistory.effective_date.desc())
-        .limit(1)
-    )
-    threshold = result.scalar_one_or_none()
+    # Get current thresholds
+    threshold = await get_thresholds_for_date(db, user.id, date.today())
 
     power_zones = []
     hr_zones = []
@@ -707,24 +673,20 @@ async def accept_notification(
         suggested_ftp = payload.get("suggested_ftp")
 
         if suggested_ftp:
-            # Get current threshold to copy LTHR and HRmax
-            result = await db.execute(
-                select(ThresholdHistory)
-                .where(ThresholdHistory.user_id == user.id)
-                .order_by(ThresholdHistory.effective_date.desc())
-                .limit(1)
-            )
-            current = result.scalar_one_or_none()
+            # Get current thresholds to copy LTHR and HRmax
+            current = await get_thresholds_for_date(db, user.id, date.today())
 
-            # Create new threshold with suggested FTP
-            new_threshold = ThresholdHistory(
-                user_id=user.id,
-                effective_date=date.today(),
+            # Create new threshold entries with suggested FTP
+            await create_threshold_entries(
+                db,
+                user.id,
+                date.today(),
                 ftp_watts=suggested_ftp,
                 lthr_bpm=current.lthr_bpm if current else 165,
                 hrmax_bpm=current.hrmax_bpm if current else 185,
+                source="calculated",
+                source_detail="ftp_suggestion_accepted",
             )
-            db.add(new_threshold)
 
     # Mark notification as accepted
     notification.status = "accepted"

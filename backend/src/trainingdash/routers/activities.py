@@ -8,7 +8,8 @@ from pydantic import BaseModel
 from sqlalchemy import select, func
 
 from trainingdash.auth import CurrentUser, DbSession
-from trainingdash.models import Activity, ActivityPeakPower, Record, ThresholdHistory
+from trainingdash.models import Activity, ActivityPeakPower, Record
+from trainingdash.thresholds import get_thresholds_for_date
 from trainingdash.routers.datetime_utils import utc_str
 from trainingdash.routers.serializers import (
     activity_detail,
@@ -234,18 +235,9 @@ async def get_activity_wbal(db: DbSession, user: CurrentUser, activity_id: UUID)
 
     # Get threshold effective at activity date
     activity_date = activity.started_at.date()
-    result = await db.execute(
-        select(ThresholdHistory)
-        .where(
-            ThresholdHistory.user_id == user.id,
-            ThresholdHistory.effective_date <= activity_date,
-        )
-        .order_by(ThresholdHistory.effective_date.desc())
-        .limit(1)
-    )
-    threshold = result.scalar_one_or_none()
+    threshold = await get_thresholds_for_date(db, user.id, activity_date)
 
-    if threshold is None:
+    if threshold is None or threshold.ftp_watts is None:
         return {"wbal_series": [], "w_prime_joules": None, "ftp_watts": None}
 
     ftp = threshold.ftp_watts

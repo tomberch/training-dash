@@ -52,7 +52,7 @@ sys.modules['trainingdash.db'] = FakeDb()
 
 # Now we can import models
 from trainingdash.models import (
-    User, Activity, Record, Route, ThresholdHistory,
+    User, Activity, Record, Route,
     XertCredentials, GarminCredentials,
     ActivityPeakPower, FitnessHistory, Notification, EFModel,
     MetricType, MetricEntry,

@@ -277,25 +277,6 @@ class GarminCredentials(Base):
     )
 
 
-class ThresholdHistory(Base):
-    """Tracks FTP, LTHR, and HRmax over time with effective dates."""
-    __tablename__ = "threshold_history"
-    __table_args__ = (
-        UniqueConstraint("user_id", "effective_date", name="uq_threshold_user_date"),
-    )
-
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    )
-    effective_date: Mapped[date] = mapped_column(Date, nullable=False)
-    ftp_watts: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    lthr_bpm: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    hrmax_bpm: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    is_auto_calculated: Mapped[bool] = mapped_column(default=False)
-    created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
-
-
 class MetricType(Base):
     """Defines available metric types (FTP, LTHR, weight, etc.)."""
     __tablename__ = "metric_types"

@@ -7,7 +7,7 @@ from geoalchemy2.functions import ST_SetSRID, ST_MakePoint
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from trainingdash.models import Activity, Lap, Record, ThresholdHistory, ActivityPeakPower, FitnessHistory, Notification, User
+from trainingdash.models import Activity, Lap, Record, ActivityPeakPower, FitnessHistory, Notification, User
 from trainingdash.polyline import generate_map_polyline
 from trainingdash.metrics import (
     compute_normalized_power,
@@ -15,6 +15,12 @@ from trainingdash.metrics import (
     compute_tss,
 )
 from trainingdash.zones import compute_zone_times
+from trainingdash.thresholds import (
+    get_thresholds_for_date,
+    get_ftp_for_date,
+    create_threshold_entries,
+    get_all_threshold_entries,
+)
 from trainingdash.wbal import compute_wbal_series
 from trainingdash.peaks import extract_peak_powers
 from trainingdash.fitness import detect_breakthrough, get_all_time_bests, fit_cp_model
@@ -519,19 +525,13 @@ async def _check_ftp_notification(
     """
     Check if CP diverges from current FTP by >5% and create notification.
     """
-    # Get current threshold
-    result = await db.execute(
-        select(ThresholdHistory)
-        .where(ThresholdHistory.user_id == user_id)
-        .order_by(ThresholdHistory.effective_date.desc())
-        .limit(1)
-    )
-    threshold = result.scalar_one_or_none()
+    from datetime import date as date_type
     
-    if threshold is None:
+    # Get current FTP
+    current_ftp = await get_ftp_for_date(db, user_id, date_type.today())
+    
+    if current_ftp is None:
         return
-    
-    current_ftp = threshold.ftp_watts
     
     # Check for >5% divergence
     ratio = cp_watts / current_ftp
@@ -661,7 +661,7 @@ async def _auto_create_threshold_if_needed(
     This ensures activities imported before any manual threshold was set
     still get their metrics calculated.
     """
-    from trainingdash.thresholds import compute_power_zones, compute_hr_zones
+    from datetime import date as date_type
     
     if not activities:
         return
@@ -670,28 +670,15 @@ async def _auto_create_threshold_if_needed(
     earliest_date = min(a.started_at.date() for a in activities)
     
     # Check if there's already a threshold covering the earliest activity
-    result = await db.execute(
-        select(ThresholdHistory)
-        .where(
-            ThresholdHistory.user_id == user_id,
-            ThresholdHistory.effective_date <= earliest_date,
-        )
-        .limit(1)
-    )
-    existing_threshold = result.scalar_one_or_none()
+    existing_ftp = await get_ftp_for_date(db, user_id, earliest_date)
     
-    if existing_threshold is not None:
+    if existing_ftp is not None:
         # Already have coverage for historical activities
         return
     
     # Check if there's any threshold at all (user may have set one for "today")
-    result = await db.execute(
-        select(ThresholdHistory)
-        .where(ThresholdHistory.user_id == user_id)
-        .order_by(ThresholdHistory.effective_date.asc())
-        .limit(1)
-    )
-    any_threshold = result.scalar_one_or_none()
+    all_thresholds = await get_all_threshold_entries(db, user_id)
+    any_threshold = all_thresholds[0] if all_thresholds else None
     
     # Build peak powers list for CP model
     peak_powers = list(peaks_by_activity.values())
@@ -711,52 +698,24 @@ async def _auto_create_threshold_if_needed(
     lthr_bpm, hrmax_bpm = _estimate_hr_thresholds(activities)
     
     # If user has a manual threshold, copy HR values from it
-    if any_threshold is not None and not any_threshold.is_auto_calculated:
-        lthr_bpm = any_threshold.lthr_bpm
-        hrmax_bpm = any_threshold.hrmax_bpm
+    if any_threshold is not None:
+        if any_threshold.get("lthr_bpm"):
+            lthr_bpm = any_threshold["lthr_bpm"]
+        if any_threshold.get("hrmax_bpm"):
+            hrmax_bpm = any_threshold["hrmax_bpm"]
     
-    # Create auto-calculated threshold for historical activities
-    auto_threshold = ThresholdHistory(
-        user_id=user_id,
-        effective_date=earliest_date,
+    # Create auto-calculated threshold entries for historical activities
+    await create_threshold_entries(
+        db,
+        user_id,
+        earliest_date,
         ftp_watts=cp_watts,
         lthr_bpm=lthr_bpm,
         hrmax_bpm=hrmax_bpm,
-        is_auto_calculated=True,
+        source="calculated",
+        source_detail="auto_from_cp_model",
     )
-    db.add(auto_threshold)
     await db.commit()
-    
-    # Create zones if none exist
-    result = await db.execute(
-        select(PowerZone).where(PowerZone.user_id == user_id).limit(1)
-    )
-    if result.scalar_one_or_none() is None:
-        # Create power zones
-        for zone_data in compute_power_zones(cp_watts):
-            zone = PowerZone(
-                user_id=user_id,
-                zone_number=zone_data["zone_number"],
-                name=zone_data["name"],
-                min_watts=zone_data["min_watts"],
-                max_watts=zone_data["max_watts"],
-                is_custom=False,
-            )
-            db.add(zone)
-        
-        # Create HR zones
-        for zone_data in compute_hr_zones(lthr_bpm):
-            zone = HrZone(
-                user_id=user_id,
-                zone_number=zone_data["zone_number"],
-                name=zone_data["name"],
-                min_bpm=zone_data["min_bpm"],
-                max_bpm=zone_data["max_bpm"],
-                is_custom=False,
-            )
-            db.add(zone)
-        
-        await db.commit()
 
 
 def _estimate_hr_thresholds(activities: list[Activity]) -> tuple[int, int]:
@@ -861,19 +820,13 @@ async def _check_ftp_notification_batch(
     """
     Check if CP diverges from current FTP and create a batch summary notification.
     """
-    # Get current threshold
-    result = await db.execute(
-        select(ThresholdHistory)
-        .where(ThresholdHistory.user_id == user_id)
-        .order_by(ThresholdHistory.effective_date.desc())
-        .limit(1)
-    )
-    threshold = result.scalar_one_or_none()
+    from datetime import date as date_type
     
-    if threshold is None:
+    # Get current FTP
+    current_ftp = await get_ftp_for_date(db, user_id, date_type.today())
+    
+    if current_ftp is None:
         return
-    
-    current_ftp = threshold.ftp_watts
     
     # Check for >5% divergence
     ratio = cp_watts / current_ftp
@@ -934,6 +887,8 @@ async def backfill_activity_metrics(
     Returns:
         Number of activities updated
     """
+    from trainingdash.models import Record
+    
     # Find activities missing metrics (NP is the indicator - if NP is null but has power, needs backfill)
     if activity_ids:
         result = await db.execute(
@@ -962,17 +917,6 @@ async def backfill_activity_metrics(
     if not activities:
         return 0
     
-    # Pre-fetch all thresholds for this user (ordered by effective_date desc)
-    thresholds_result = await db.execute(
-        select(ThresholdHistory)
-        .where(ThresholdHistory.user_id == user_id)
-        .order_by(ThresholdHistory.effective_date.desc())
-    )
-    thresholds = thresholds_result.scalars().all()
-    
-    if not thresholds:
-        return 0
-    
     # Get user for zone percentages
     user_result = await db.execute(
         select(User).where(User.id == user_id)
@@ -982,15 +926,11 @@ async def backfill_activity_metrics(
     updated_count = 0
     
     for activity in activities:
-        # Find applicable threshold (most recent with effective_date <= activity date)
+        # Get thresholds effective at activity date
         activity_date = activity.started_at.date()
-        threshold = None
-        for t in thresholds:
-            if t.effective_date <= activity_date:
-                threshold = t
-                break
+        threshold = await get_thresholds_for_date(db, user_id, activity_date)
         
-        if threshold is None:
+        if threshold is None or threshold.ftp_watts is None:
             continue
         
         # Load records for this activity

@@ -15,10 +15,11 @@ from trainingdash.models import (
     FitnessHistory,
     GarminCredentials,
     Lap,
+    MetricEntry,
+    MetricType,
     Notification,
     Record,
     Route,
-    ThresholdHistory,
     User,
     XertCredentials,
 )
@@ -389,9 +390,20 @@ async def _get_user_data_counts(db: DbSession, user_id: int) -> dict:
         select(func.count()).select_from(XertCredentials).where(XertCredentials.user_id == user_id)
     )).scalar() or 0
     
-    thresholds_count = (await db.execute(
-        select(func.count()).select_from(ThresholdHistory).where(ThresholdHistory.user_id == user_id)
-    )).scalar() or 0
+    # Count threshold metrics (ftp, lthr, hrmax)
+    ftp_type_result = await db.execute(
+        select(MetricType.id).where(MetricType.key == 'ftp')
+    )
+    ftp_type_id = ftp_type_result.scalar_one_or_none()
+    
+    thresholds_count = 0
+    if ftp_type_id:
+        thresholds_count = (await db.execute(
+            select(func.count()).select_from(MetricEntry).where(
+                MetricEntry.user_id == user_id,
+                MetricEntry.metric_type_id == ftp_type_id
+            )
+        )).scalar() or 0
     
     ef_model_count = (await db.execute(
         select(func.count()).select_from(EFModel).where(EFModel.user_id == user_id)

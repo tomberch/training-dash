@@ -8,7 +8,7 @@ from sqlalchemy import select
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "tests" / "fixtures"))
 from generate_fit import make_test_fit  # noqa: E402
-from trainingdash.models import Activity, Notification, FitnessHistory, ThresholdHistory  # noqa: E402
+from trainingdash.models import Activity, Notification, FitnessHistory  # noqa: E402
 from trainingdash.ingest import ingest_fit, finalize_batch_import  # noqa: E402
 
 

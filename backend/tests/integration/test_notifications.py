@@ -7,7 +7,8 @@ from sqlalchemy import select
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "tests" / "fixtures"))
 from generate_fit import make_test_fit  # noqa: E402
-from trainingdash.models import Notification, ThresholdHistory  # noqa: E402
+from trainingdash.models import Notification, MetricEntry, MetricType  # noqa: E402
+from trainingdash.thresholds import create_threshold_entries  # noqa: E402
 
 
 class TestNotificationsEndpoint:
@@ -108,15 +109,17 @@ class TestAcceptNotification:
         """Accepting FTP suggestion creates a new threshold."""
         from datetime import date as date_type
         
-        # Create existing threshold
-        threshold = ThresholdHistory(
+        # Create existing threshold using metric_entries
+        await create_threshold_entries(
+            db_session,
             user_id=1,
             effective_date=date_type(2024, 1, 1),
             ftp_watts=250,
             lthr_bpm=165,
             hrmax_bpm=185,
+            source="manual",
         )
-        db_session.add(threshold)
+        await db_session.commit()
         
         # Create FTP suggestion
         notification = Notification(
@@ -134,18 +137,23 @@ class TestAcceptNotification:
         response = await auth_client.post(f"/api/me/notifications/{notification.id}/accept")
         assert response.status_code == 200
         
-        # Verify new threshold was created
-        result = await db_session.execute(
-            select(ThresholdHistory)
-            .where(ThresholdHistory.user_id == 1)
-            .order_by(ThresholdHistory.effective_date.desc())
+        # Verify new FTP metric entry was created
+        ftp_type_result = await db_session.execute(
+            select(MetricType.id).where(MetricType.key == "ftp")
         )
-        thresholds = result.scalars().all()
+        ftp_type_id = ftp_type_result.scalar_one()
         
-        # Should have 2 thresholds now
-        assert len(thresholds) == 2
+        result = await db_session.execute(
+            select(MetricEntry)
+            .where(MetricEntry.user_id == 1, MetricEntry.metric_type_id == ftp_type_id)
+            .order_by(MetricEntry.effective_date.desc())
+        )
+        entries = result.scalars().all()
+        
+        # Should have 2 FTP entries now (original + accepted suggestion)
+        assert len(entries) == 2
         # Latest should have suggested FTP
-        assert thresholds[0].ftp_watts == 280
+        assert int(entries[0].value) == 280
 
     @pytest.mark.asyncio
     async def test_accept_not_found(self, auth_client):

@@ -29,10 +29,10 @@ from trainingdash.models import (
     ActivityPeakPower,
     FitnessHistory,
     Notification,
-    ThresholdHistory,
     User,
 )
 from trainingdash.peaks import extract_peak_powers
+from trainingdash.thresholds import get_thresholds_for_date, ThresholdValues
 from trainingdash.wbal import compute_wbal_series
 from trainingdash.fitness import detect_breakthrough, get_all_time_bests, fit_cp_model
 
@@ -205,7 +205,7 @@ class ActivityPipeline:
         activity_date = self.activity.started_at.date()
         threshold = await self._get_threshold_for_date(activity_date)
         
-        if threshold is None:
+        if threshold is None or threshold.ftp_watts is None:
             return result
         
         # Extract power and HR arrays
@@ -228,23 +228,16 @@ class ActivityPipeline:
         
         return result
 
-    async def _get_threshold_for_date(self, activity_date) -> ThresholdHistory | None:
+    async def _get_threshold_for_date(self, activity_date) -> ThresholdValues | None:
         """Get the threshold effective at the given date."""
-        query = await self.db.execute(
-            select(ThresholdHistory)
-            .where(
-                ThresholdHistory.user_id == self.activity.user_id,
-                ThresholdHistory.effective_date <= activity_date,
-            )
-            .order_by(ThresholdHistory.effective_date.desc())
-            .limit(1)
+        return await get_thresholds_for_date(
+            self.db, self.activity.user_id, activity_date
         )
-        return query.scalar_one_or_none()
 
     async def _compute_power_metrics(
         self,
         power_array: list,
-        threshold: ThresholdHistory,
+        threshold: ThresholdValues,
         result: MetricsResult,
     ) -> MetricsResult:
         """Compute power-based metrics: NP, IF, TSS, zones, W'bal."""

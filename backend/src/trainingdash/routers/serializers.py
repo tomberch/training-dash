@@ -9,7 +9,6 @@ from trainingdash.models import (
     Activity,
     Record,
     RecalculationJob,
-    ThresholdHistory,
     User,
 )
 
@@ -44,17 +43,6 @@ def user_summary(user: User) -> dict:
         "is_admin": user.is_admin,
         "is_approved": user.is_approved,
         "created_at": utc_str(user.created_at),
-    }
-
-
-def threshold_response(t: ThresholdHistory) -> dict:
-    """Return a dict of threshold info for API responses."""
-    return {
-        "id": t.id,
-        "effective_date": t.effective_date.isoformat(),
-        "ftp_watts": t.ftp_watts,
-        "lthr_bpm": t.lthr_bpm,
-        "hrmax_bpm": t.hrmax_bpm,
     }
 
 
