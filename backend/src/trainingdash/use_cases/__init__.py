@@ -23,5 +23,6 @@ Example:
 
 from trainingdash.use_cases.ingest_activity import IngestActivity
 from trainingdash.use_cases.delete_activity import DeleteActivity
+from trainingdash.use_cases.sync_from_provider import SyncFromProvider, SyncResult
 
-__all__ = ["IngestActivity", "DeleteActivity"]
+__all__ = ["IngestActivity", "DeleteActivity", "SyncFromProvider", "SyncResult"]

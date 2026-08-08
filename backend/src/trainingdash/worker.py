@@ -191,16 +191,17 @@ async def sync_xert_job(ctx, user_id: int):
     """
     Sync activities from Xert for a user.
     
-    Uses the common sync orchestration with XertSyncProvider.
+    Uses the SyncFromProvider use case with XertSyncProvider.
     Activities are ingested via session_data (not FIT files) and
     routed through the full metric pipeline.
     """
-    from trainingdash.sync import run_sync
+    from trainingdash.use_cases import SyncFromProvider
     from trainingdash.sync_providers import XertSyncProvider
     
     async with worker_db_session(ctx) as db:
         provider = XertSyncProvider()
-        result = await run_sync(db, user_id, provider)
+        use_case = SyncFromProvider(db)
+        result = await use_case.execute(user_id, provider)
         
         return {
             "success": result.success,
@@ -215,16 +216,17 @@ async def sync_garmin_job(ctx, user_id: int):
     """
     Sync activities from Garmin Connect for a user.
     
-    Uses the common sync orchestration with GarminSyncProvider.
+    Uses the SyncFromProvider use case with GarminSyncProvider.
     Activities are ingested via FIT file download through the
     standard ingest pipeline.
     """
-    from trainingdash.sync import run_sync
+    from trainingdash.use_cases import SyncFromProvider
     from trainingdash.sync_providers import GarminSyncProvider
     
     async with worker_db_session(ctx) as db:
         provider = GarminSyncProvider()
-        result = await run_sync(db, user_id, provider)
+        use_case = SyncFromProvider(db)
+        result = await use_case.execute(user_id, provider)
         
         return {
             "success": result.success,
