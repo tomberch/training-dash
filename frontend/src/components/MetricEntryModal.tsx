@@ -143,7 +143,7 @@ export function MetricEntryModal({
         setEffectiveDate(entry.effective_date);
         setValue(String(entry.value));
         setSource(entry.source);
-        setSourceDetail("");
+        setSourceDetail(entry.source_detail || "");
         setNotes(entry.notes || "");
       } else {
         setEffectiveDate(new Date().toISOString().split("T")[0]);

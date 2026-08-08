@@ -17,6 +17,7 @@ export interface MetricEntry {
   effective_date: string;
   value: number;
   source: MetricSource;
+  source_detail?: string;
   notes?: string;
 }
 
