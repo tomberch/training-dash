@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardHeader, CardTitle, CardContent, CardAction } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -77,13 +77,13 @@ function ProfileEditModal({ open, onClose, profile, onSave }: ProfileEditModalPr
   const [error, setError] = useState<string | null>(null);
 
   // Reset form when modal opens
-  useState(() => {
+  useEffect(() => {
     if (open) {
       setHeight(profile.height_cm?.toString() || "");
       setGender(profile.gender || "");
       setError(null);
     }
-  });
+  }, [open, profile.height_cm, profile.gender]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
