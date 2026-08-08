@@ -100,6 +100,8 @@ async def run_worker_briefly(redis_host, redis_port, timeout=10):
         WorkerSettings.functions,
         redis_settings=RedisSettings(host=redis_host, port=redis_port),
         burst=True,
+        on_startup=WorkerSettings.on_startup,
+        on_shutdown=WorkerSettings.on_shutdown,
     )
     try:
         await asyncio.wait_for(worker.async_run(), timeout=timeout)
@@ -220,3 +222,71 @@ class TestArqIngest:
                 )
                 records = records_result.scalars().all()
                 assert len(records) == 30
+
+
+
+    @pytest.mark.asyncio
+    async def test_concurrent_uploads_no_interface_error(self, arq_engine, arq_user, redis_container):
+        """
+        Test that multiple concurrent job submissions don't cause asyncpg InterfaceError.
+        
+        This is a regression test for issue #237 where creating a new engine per job
+        led to connection conflicts under concurrent load.
+        """
+        redis_host, redis_port = redis_container
+        num_concurrent_uploads = 5
+
+        session_factory = async_sessionmaker(arq_engine, expire_on_commit=False)
+        import trainingdash.auth as authmod
+
+        async def override_get_db():
+            async with session_factory() as session:
+                yield session
+
+        app = create_app()
+        app.dependency_overrides[authmod.get_db] = override_get_db
+        transport = ASGITransport(app=app)
+        
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            # Login
+            resp = await client.post("/api/login", json={"email": "testuser@example.com", "password": "testpass"})
+            assert resp.status_code == 200
+
+            # Submit multiple uploads concurrently
+            job_ids = []
+            for i in range(num_concurrent_uploads):
+                fit_data = make_test_fit(num_records=20 + i * 5)  # Vary sizes slightly
+                resp = await client.post(
+                    "/api/upload",
+                    files={"file": (f"concurrent_{i}.fit", fit_data, "application/octet-stream")},
+                )
+                assert resp.status_code == 202
+                data = resp.json()
+                job_ids.append(data["job_id"])
+
+            assert len(job_ids) == num_concurrent_uploads
+
+        # Run worker to process all jobs concurrently
+        # The worker processes jobs concurrently by default - this is where the bug would manifest
+        await run_worker_briefly(redis_host, redis_port, timeout=30)
+
+        # Verify all activities were created successfully (no InterfaceError)
+        async with session_factory() as session:
+            result = await session.execute(
+                select(Activity).where(Activity.source_ref.like("concurrent_%"))
+            )
+            activities = result.scalars().all()
+            
+            # All uploads should have succeeded
+            assert len(activities) == num_concurrent_uploads, (
+                f"Expected {num_concurrent_uploads} activities, got {len(activities)}. "
+                "Some jobs may have failed due to connection conflicts."
+            )
+            
+            # Verify each has records
+            for activity in activities:
+                records_result = await session.execute(
+                    select(Record).where(Record.activity_id == activity.id)
+                )
+                records = records_result.scalars().all()
+                assert len(records) > 0, f"Activity {activity.id} has no records"

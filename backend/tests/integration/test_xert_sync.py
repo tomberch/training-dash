@@ -130,7 +130,8 @@ def _make_worker_db_session_ctx(db_engine):
     session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
 
     @asynccontextmanager
-    async def mock_worker_db_session():
+    async def mock_worker_db_session(ctx):
+        """Mock worker_db_session that ignores ctx and uses test engine directly."""
         async with session_factory() as session:
             yield session
 

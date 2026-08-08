@@ -9,6 +9,13 @@ This module defines arq worker jobs for:
 
 The sync jobs use the common orchestration pattern from sync.py with
 provider-specific implementations from sync_providers.py.
+
+Engine lifecycle:
+- A single SQLAlchemy async engine is created at worker startup via on_startup hook
+- All jobs share this engine through the worker context (ctx)
+- The engine is disposed at worker shutdown via on_shutdown hook
+- This avoids the asyncpg InterfaceError that occurs when multiple engines
+  share underlying connections under concurrent load
 """
 
 import logging
@@ -18,6 +25,7 @@ from datetime import datetime, timezone
 
 from arq.cron import cron
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine, AsyncEngine
 from trainingdash.jobs import get_redis_settings, create_redis_pool
 from trainingdash.ingest import backfill_activity_metrics
 from trainingdash.models import RecalculationJob
@@ -25,26 +33,47 @@ from trainingdash.models import RecalculationJob
 logger = logging.getLogger(__name__)
 
 
-@asynccontextmanager
-async def worker_db_session():
-    """Create a database session for worker jobs."""
-    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-
+async def on_startup(ctx: dict) -> None:
+    """Create a shared database engine at worker startup."""
     db_url = os.environ.get("DATABASE_URL")
-    engine = create_async_engine(db_url)
-    session_factory = async_sessionmaker(engine, expire_on_commit=False)
-    try:
-        async with session_factory() as session:
-            yield session
-    finally:
+    if not db_url:
+        raise RuntimeError("DATABASE_URL environment variable not set")
+    
+    engine = create_async_engine(
+        db_url,
+        pool_size=5,
+        max_overflow=10,
+        pool_pre_ping=True,
+    )
+    ctx["db_engine"] = engine
+    ctx["db_session_factory"] = async_sessionmaker(engine, expire_on_commit=False)
+    logger.info("Worker started: database engine created")
+
+
+async def on_shutdown(ctx: dict) -> None:
+    """Dispose the shared database engine at worker shutdown."""
+    engine: AsyncEngine | None = ctx.get("db_engine")
+    if engine is not None:
         await engine.dispose()
+        logger.info("Worker shutdown: database engine disposed")
+
+
+@asynccontextmanager
+async def worker_db_session(ctx: dict):
+    """Create a database session using the shared engine from worker context."""
+    session_factory = ctx.get("db_session_factory")
+    if session_factory is None:
+        raise RuntimeError("Database session factory not initialized. Was on_startup called?")
+    
+    async with session_factory() as session:
+        yield session
 
 
 async def ingest_job(ctx, user_id: int, fit_bytes: bytes, source: str, source_ref: str):
     """Ingest a FIT file and enqueue route matching."""
     from trainingdash.ingest import ingest_fit
 
-    async with worker_db_session() as db:
+    async with worker_db_session(ctx) as db:
         activity = await ingest_fit(db, user_id, fit_bytes, source, source_ref)
         if activity is None:
             return {"success": False, "activity_id": None}
@@ -64,7 +93,7 @@ async def match_route_job(ctx, activity_id: int, user_id: int):
     from trainingdash.models import Activity, Record
     from trainingdash.route_matching import find_or_create_route_id
 
-    async with worker_db_session() as db:
+    async with worker_db_session(ctx) as db:
         result = await db.execute(select(Activity).where(Activity.id == activity_id))
         activity = result.scalar_one_or_none()
         if activity is None:
@@ -102,7 +131,7 @@ async def recalculate_after_delete_job(ctx, user_id: int) -> dict:
 
     logger = logging.getLogger(__name__)
 
-    async with worker_db_session() as db:
+    async with worker_db_session(ctx) as db:
         # Step 1: Recompute fitness model (FitnessHistory snapshot)
         try:
             await _update_fitness_model(db, user_id)
@@ -168,7 +197,7 @@ async def sync_xert_job(ctx, user_id: int):
     from trainingdash.sync import run_sync
     from trainingdash.sync_providers import XertSyncProvider
     
-    async with worker_db_session() as db:
+    async with worker_db_session(ctx) as db:
         provider = XertSyncProvider()
         result = await run_sync(db, user_id, provider)
         
@@ -192,7 +221,7 @@ async def sync_garmin_job(ctx, user_id: int):
     from trainingdash.sync import run_sync
     from trainingdash.sync_providers import GarminSyncProvider
     
-    async with worker_db_session() as db:
+    async with worker_db_session(ctx) as db:
         provider = GarminSyncProvider()
         result = await run_sync(db, user_id, provider)
         
@@ -219,7 +248,7 @@ async def hourly_sync_scheduler(ctx):
     current_hour = datetime.now(timezone.utc).hour
     logger.info(f"hourly_sync_scheduler: Running for hour {current_hour}")
     
-    async with worker_db_session() as db:
+    async with worker_db_session(ctx) as db:
         # Find users with this sync_hour who have Garmin credentials
         garmin_result = await db.execute(
             select(GarminCredentials.user_id)
@@ -290,7 +319,7 @@ async def recalculate_metrics_job(ctx, user_id: int) -> dict:
     """
     now = datetime.now(timezone.utc).replace(tzinfo=None)
 
-    async with worker_db_session() as db:
+    async with worker_db_session(ctx) as db:
         await _upsert_recalculation_job(
             db, user_id, status="running", started_at=now,
             completed_at=None, error_message=None,
@@ -346,6 +375,10 @@ class WorkerSettings:
     max_tries = 3
     retry_delay = 10  # seconds between retries
     job_timeout = 300  # 5 minutes max per job
+    
+    # Lifecycle hooks for shared database engine
+    on_startup = on_startup
+    on_shutdown = on_shutdown
     
     # Cron schedule: run the sync scheduler at the top of every hour
     cron_jobs = [
