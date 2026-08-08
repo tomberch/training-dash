@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { Link } from "react-router-dom";
 import {
   updatePreferences,
   fetchMyXertCredentials,
@@ -8,8 +9,6 @@ import {
   saveMyGarminCredentials,
   completeGarminMfa,
   deleteMyGarminCredentials,
-  fetchZones,
-  updateZones,
   uploadAvatar,
   deleteAvatar,
   triggerGarminSync,
@@ -24,8 +23,6 @@ import type {
   User, 
   XertCredentialsStatus, 
   GarminCredentialsStatus,
-  PowerZone,
-  HrZone,
   OAuthLink,
 } from "./api";
 import { Button } from "@/components/ui/button";
@@ -34,6 +31,13 @@ import { Label } from "@/components/ui/label";
 import { Card, CardHeader, CardTitle, CardContent, CardAction } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import {
+  DEFAULT_POWER_ZONES,
+  DEFAULT_HR_ZONES,
+  computePowerZones,
+  computeHrZones,
+  type ZonePercentages,
+} from "@/lib/zones";
 import { useTheme } from "./hooks/useTheme";
 import type { Theme } from "./hooks/useTheme";
 import { SunIcon, MoonIcon, MonitorIcon } from "./components/icons/ThemeIcons";
@@ -135,7 +139,7 @@ export function Settings({ user, onBack, onUserUpdate }: SettingsProps) {
           <ProfileSection user={user} onUserUpdate={onUserUpdate} />
           <PreferencesSection user={user} onUserUpdate={onUserUpdate} />
           <ConnectedAccountsSection />
-          <ZonesSection />
+          <ZonesSection user={user} onUserUpdate={onUserUpdate} />
           <IntegrationsSection />
         </div>
       </div>
@@ -461,60 +465,50 @@ function PreferencesSection({ user, onUserUpdate }: { user: User; onUserUpdate: 
 
 
 
-function ZonesSection() {
-  const [powerZones, setPowerZones] = useState<PowerZone[]>([]);
-  const [hrZones, setHrZones] = useState<HrZone[]>([]);
-  const [loading, setLoading] = useState(true);
+function ZonesSection({ user, onUserUpdate }: { user: User; onUserUpdate: (user: User) => void }) {
+  // Mock thresholds - will be replaced when metrics API is integrated
+  const mockFtp = 265;
+  const mockLthr = 165;
+  
+  const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
-  const [editMode, setEditMode] = useState(false);
-  const [editedPowerZones, setEditedPowerZones] = useState<PowerZone[]>([]);
-  const [editedHrZones, setEditedHrZones] = useState<HrZone[]>([]);
-
-  useEffect(() => {
-    fetchZones()
-      .then(({ power_zones, hr_zones }) => {
-        setPowerZones(power_zones);
-        setHrZones(hr_zones);
-      })
-      .catch(() => {
-        setPowerZones([]);
-        setHrZones([]);
-      })
-      .finally(() => setLoading(false));
-  }, []);
-
+  
+  // Current percentages from user or defaults
+  const powerPercentages = user.power_zone_percentages ?? DEFAULT_POWER_ZONES;
+  const hrPercentages = user.hr_zone_percentages ?? DEFAULT_HR_ZONES;
+  
+  // Edited percentages (only used in edit mode)
+  const [editedPowerPct, setEditedPowerPct] = useState<ZonePercentages>(powerPercentages);
+  const [editedHrPct, setEditedHrPct] = useState<ZonePercentages>(hrPercentages);
+  
+  // Compute zones from percentages and thresholds
+  const powerZones = computePowerZones(mockFtp, editMode ? editedPowerPct : powerPercentages);
+  const hrZones = computeHrZones(mockLthr, editMode ? editedHrPct : hrPercentages);
+  
   function startEdit() {
-    setEditedPowerZones([...powerZones]);
-    setEditedHrZones([...hrZones]);
+    setEditedPowerPct({ ...powerPercentages });
+    setEditedHrPct({ ...hrPercentages });
     setEditMode(true);
+    setFeedback(null);
   }
-
+  
   function cancelEdit() {
     setEditMode(false);
     setFeedback(null);
   }
-
+  
   async function handleSave() {
     setSaving(true);
     setFeedback(null);
     try {
-      const result = await updateZones({
-        power_zones: editedPowerZones.map(z => ({
-          zone_number: z.zone_number,
-          min_value: z.min_watts,
-          max_value: z.max_watts ?? undefined,
-        })),
-        hr_zones: editedHrZones.map(z => ({
-          zone_number: z.zone_number,
-          min_value: z.min_bpm,
-          max_value: z.max_bpm ?? undefined,
-        })),
+      const updated = await updatePreferences({
+        power_zone_percentages: editedPowerPct,
+        hr_zone_percentages: editedHrPct,
       });
-      setPowerZones(result.power_zones);
-      setHrZones(result.hr_zones);
+      onUserUpdate(updated);
       setEditMode(false);
-      setFeedback({ type: "success", message: "Zones saved" });
+      setFeedback({ type: "success", message: "Zone percentages saved" });
       setTimeout(() => setFeedback(null), 3000);
     } catch (err) {
       const message = err instanceof ApiError ? err.message : "Failed to save zones";
@@ -523,17 +517,17 @@ function ZonesSection() {
       setSaving(false);
     }
   }
-
-
-
+  
   async function handleReset() {
-    if (!confirm("Reset all zones to defaults based on current thresholds?")) return;
+    if (!confirm("Reset zone percentages to defaults?")) return;
     setSaving(true);
     setFeedback(null);
     try {
-      const result = await updateZones({ reset_to_defaults: true });
-      setPowerZones(result.power_zones);
-      setHrZones(result.hr_zones);
+      const updated = await updatePreferences({
+        power_zone_percentages: null,
+        hr_zone_percentages: null,
+      });
+      onUserUpdate(updated);
       setEditMode(false);
       setFeedback({ type: "success", message: "Zones reset to defaults" });
       setTimeout(() => setFeedback(null), 3000);
@@ -544,44 +538,30 @@ function ZonesSection() {
       setSaving(false);
     }
   }
-
-  function updatePowerZone(index: number, field: "min_watts" | "max_watts", value: string) {
-    const updated = [...editedPowerZones];
+  
+  function updatePowerPct(zone: string, field: "min" | "max", value: string) {
     const numVal = parseInt(value) || 0;
-    if (field === "max_watts") {
-      updated[index] = { ...updated[index], [field]: value === "" ? null : numVal };
-    } else {
-      updated[index] = { ...updated[index], [field]: numVal };
-    }
-    setEditedPowerZones(updated);
+    setEditedPowerPct(prev => ({
+      ...prev,
+      [zone]: field === "min" 
+        ? [numVal, prev[zone][1]]
+        : [prev[zone][0], value === "" ? null : numVal],
+    }));
   }
-
-  function updateHrZone(index: number, field: "min_bpm" | "max_bpm", value: string) {
-    const updated = [...editedHrZones];
+  
+  function updateHrPct(zone: string, field: "min" | "max", value: string) {
     const numVal = parseInt(value) || 0;
-    if (field === "max_bpm") {
-      updated[index] = { ...updated[index], [field]: value === "" ? null : numVal };
-    } else {
-      updated[index] = { ...updated[index], [field]: numVal };
-    }
-    setEditedHrZones(updated);
+    setEditedHrPct(prev => ({
+      ...prev,
+      [zone]: field === "min"
+        ? [numVal, prev[zone][1]]
+        : [prev[zone][0], value === "" ? null : numVal],
+    }));
   }
-
-  if (loading) {
-    return (
-      <Card>
-        <CardContent className="animate-pulse">
-          <div className="h-5 bg-muted rounded w-1/4 mb-4"></div>
-          <div className="h-32 bg-muted rounded"></div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  const displayPowerZones = editMode ? editedPowerZones : powerZones;
-  const displayHrZones = editMode ? editedHrZones : hrZones;
-
-
+  
+  // Check if user has thresholds set (using mock for now)
+  const hasFtp = mockFtp > 0;
+  const hasLthr = mockLthr > 0;
 
   return (
     <Card>
@@ -600,10 +580,10 @@ function ZonesSection() {
               </>
             ) : (
               <>
-                <Button variant="ghost" size="sm" onClick={handleReset} disabled={saving || powerZones.length === 0}>
+                <Button variant="ghost" size="sm" onClick={handleReset} disabled={saving}>
                   Reset
                 </Button>
-                <Button variant="ghost" size="sm" onClick={startEdit} disabled={powerZones.length === 0}>
+                <Button variant="ghost" size="sm" onClick={startEdit}>
                   Edit
                 </Button>
               </>
@@ -612,109 +592,137 @@ function ZonesSection() {
         </CardAction>
       </CardHeader>
       <CardContent>
-        {powerZones.length === 0 && hrZones.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Add thresholds first to generate training zones.</p>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Power Zones */}
-            <div>
-              <h3 className="text-sm font-medium text-foreground mb-2">Power Zones</h3>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-muted-foreground uppercase tracking-wide border-b border-border">
-                    <th className="pb-2 w-8">Zone</th>
-                    <th className="pb-2">Name</th>
-                    <th className="pb-2 text-right">Min</th>
-                    <th className="pb-2 text-right">Max</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {displayPowerZones.map((z, i) => (
-                    <tr key={z.zone_number}>
-                      <td className="py-2 font-medium text-foreground">Z{z.zone_number}</td>
-                      <td className="py-2 text-muted-foreground">{z.name}</td>
-                      <td className="py-2 text-right">
-                        {editMode ? (
-                          <Input
-                            type="number"
-                            value={z.min_watts}
-                            onChange={(e) => updatePowerZone(i, "min_watts", e.target.value)}
-                            className="w-16 text-right"
-                          />
-                        ) : (
-                          <span className="text-foreground">{z.min_watts}W</span>
-                        )}
-                      </td>
-                      <td className="py-2 text-right">
-                        {editMode ? (
-                          <Input
-                            type="number"
-                            value={z.max_watts ?? ""}
-                            onChange={(e) => updatePowerZone(i, "max_watts", e.target.value)}
-                            placeholder="∞"
-                            className="w-16 text-right"
-                          />
-                        ) : (
-                          <span className="text-foreground">{z.max_watts ? `${z.max_watts}W` : "∞"}</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-
-
-            {/* HR Zones */}
-            <div>
-              <h3 className="text-sm font-medium text-foreground mb-2">Heart Rate Zones</h3>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-muted-foreground uppercase tracking-wide border-b border-border">
-                    <th className="pb-2 w-8">Zone</th>
-                    <th className="pb-2">Name</th>
-                    <th className="pb-2 text-right">Min</th>
-                    <th className="pb-2 text-right">Max</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {displayHrZones.map((z, i) => (
-                    <tr key={z.zone_number}>
-                      <td className="py-2 font-medium text-foreground">Z{z.zone_number}</td>
-                      <td className="py-2 text-muted-foreground">{z.name}</td>
-                      <td className="py-2 text-right">
-                        {editMode ? (
-                          <Input
-                            type="number"
-                            value={z.min_bpm}
-                            onChange={(e) => updateHrZone(i, "min_bpm", e.target.value)}
-                            className="w-16 text-right"
-                          />
-                        ) : (
-                          <span className="text-foreground">{z.min_bpm} bpm</span>
-                        )}
-                      </td>
-                      <td className="py-2 text-right">
-                        {editMode ? (
-                          <Input
-                            type="number"
-                            value={z.max_bpm ?? ""}
-                            onChange={(e) => updateHrZone(i, "max_bpm", e.target.value)}
-                            placeholder="∞"
-                            className="w-16 text-right"
-                          />
-                        ) : (
-                          <span className="text-foreground">{z.max_bpm ? `${z.max_bpm} bpm` : "∞"}</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+        {/* No threshold warning */}
+        {!hasFtp && !hasLthr && (
+          <div className="mb-4 p-3 rounded-lg bg-warning/10 border border-warning/20">
+            <p className="text-sm text-warning">
+              Set your FTP and LTHR thresholds to see computed zones.{" "}
+              <Link to="/athlete?tab=thresholds" className="underline hover:no-underline">
+                Go to Athlete → Thresholds
+              </Link>
+            </p>
           </div>
         )}
+        
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Power Zones */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-medium text-foreground">Power Zones</h3>
+              {hasFtp && (
+                <span className="text-xs text-muted-foreground">Based on FTP: {mockFtp} W</span>
+              )}
+            </div>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-muted-foreground uppercase tracking-wide border-b border-border">
+                  <th className="pb-2 w-8">Zone</th>
+                  <th className="pb-2">Name</th>
+                  <th className="pb-2 text-right">%FTP</th>
+                  <th className="pb-2 text-right">Watts</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {powerZones.map((z) => (
+                  <tr key={z.zone}>
+                    <td className="py-2 font-medium text-foreground">Z{z.zone}</td>
+                    <td className="py-2 text-muted-foreground">{z.name}</td>
+                    <td className="py-2 text-right">
+                      {editMode ? (
+                        <div className="flex items-center justify-end gap-1">
+                          <Input
+                            type="number"
+                            value={editedPowerPct[z.zone.toString()][0]}
+                            onChange={(e) => updatePowerPct(z.zone.toString(), "min", e.target.value)}
+                            className="w-14 text-right text-xs h-7"
+                          />
+                          <span className="text-muted-foreground">-</span>
+                          <Input
+                            type="number"
+                            value={editedPowerPct[z.zone.toString()][1] ?? ""}
+                            onChange={(e) => updatePowerPct(z.zone.toString(), "max", e.target.value)}
+                            placeholder="∞"
+                            className="w-14 text-right text-xs h-7"
+                          />
+                        </div>
+                      ) : (
+                        <span className="text-foreground">
+                          {z.minPct}-{z.maxPct ?? "∞"}%
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2 text-right text-muted-foreground">
+                      {hasFtp ? (
+                        <span>{z.minValue}-{z.maxValue ?? "∞"}</span>
+                      ) : (
+                        <span>—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* HR Zones */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-medium text-foreground">Heart Rate Zones</h3>
+              {hasLthr && (
+                <span className="text-xs text-muted-foreground">Based on LTHR: {mockLthr} bpm</span>
+              )}
+            </div>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-muted-foreground uppercase tracking-wide border-b border-border">
+                  <th className="pb-2 w-8">Zone</th>
+                  <th className="pb-2">Name</th>
+                  <th className="pb-2 text-right">%LTHR</th>
+                  <th className="pb-2 text-right">BPM</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {hrZones.map((z) => (
+                  <tr key={z.zone}>
+                    <td className="py-2 font-medium text-foreground">Z{z.zone}</td>
+                    <td className="py-2 text-muted-foreground">{z.name}</td>
+                    <td className="py-2 text-right">
+                      {editMode ? (
+                        <div className="flex items-center justify-end gap-1">
+                          <Input
+                            type="number"
+                            value={editedHrPct[z.zone.toString()][0]}
+                            onChange={(e) => updateHrPct(z.zone.toString(), "min", e.target.value)}
+                            className="w-14 text-right text-xs h-7"
+                          />
+                          <span className="text-muted-foreground">-</span>
+                          <Input
+                            type="number"
+                            value={editedHrPct[z.zone.toString()][1] ?? ""}
+                            onChange={(e) => updateHrPct(z.zone.toString(), "max", e.target.value)}
+                            placeholder="∞"
+                            className="w-14 text-right text-xs h-7"
+                          />
+                        </div>
+                      ) : (
+                        <span className="text-foreground">
+                          {z.minPct}-{z.maxPct ?? "∞"}%
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2 text-right text-muted-foreground">
+                      {hasLthr ? (
+                        <span>{z.minValue}-{z.maxValue ?? "∞"}</span>
+                      ) : (
+                        <span>—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
 
         <FeedbackAlert feedback={feedback} />
       </CardContent>

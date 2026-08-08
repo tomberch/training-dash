@@ -53,6 +53,13 @@ const mockUser: User = {
   is_approved: true,
   unit_system: "metric",
   sync_hour: 3,
+  date_of_birth: null,
+  weight_kg: null,
+  height_cm: null,
+  gender: null,
+  power_zone_percentages: null,
+  hr_zone_percentages: null,
+  hr_derived_power_enabled: false,
 };
 
 describe("Settings", () => {

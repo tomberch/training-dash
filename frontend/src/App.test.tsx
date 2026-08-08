@@ -75,6 +75,16 @@ vi.mock("./api", () => ({
 
 import { fetchMe } from "./api";
 
+const baseUser = {
+  date_of_birth: null,
+  weight_kg: null,
+  height_cm: null,
+  gender: null as "male" | "female" | null,
+  power_zone_percentages: null,
+  hr_zone_percentages: null,
+  hr_derived_power_enabled: false,
+};
+
 describe("App", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -91,7 +101,7 @@ describe("App", () => {
 
   it("shows admin link when logged in as admin", async () => {
     vi.mocked(fetchMe).mockRejectedValueOnce(new Error("Unauthorized"));
-    vi.mocked(fetchMe).mockResolvedValueOnce({ id: 1, email: "admin@test.com", display_name: null, avatar_path: null, is_admin: true, is_approved: true, unit_system: "metric", sync_hour: 3 });
+    vi.mocked(fetchMe).mockResolvedValueOnce({ ...baseUser, id: 1, email: "admin@test.com", display_name: null, avatar_path: null, is_admin: true, is_approved: true, unit_system: "metric", sync_hour: 3 });
     
     render(<App />);
 
@@ -110,7 +120,7 @@ describe("App", () => {
 
   it("does not show admin link when logged in as non-admin", async () => {
     vi.mocked(fetchMe).mockRejectedValueOnce(new Error("Unauthorized"));
-    vi.mocked(fetchMe).mockResolvedValueOnce({ id: 1, email: "user@test.com", display_name: null, avatar_path: null, is_admin: false, is_approved: true, unit_system: "metric", sync_hour: 3 });
+    vi.mocked(fetchMe).mockResolvedValueOnce({ ...baseUser, id: 1, email: "user@test.com", display_name: null, avatar_path: null, is_admin: false, is_approved: true, unit_system: "metric", sync_hour: 3 });
     
     render(<App />);
 
@@ -129,7 +139,7 @@ describe("App", () => {
 
   it("navigates to admin view when admin clicks admin link", async () => {
     vi.mocked(fetchMe).mockRejectedValueOnce(new Error("Unauthorized"));
-    vi.mocked(fetchMe).mockResolvedValueOnce({ id: 1, email: "admin@test.com", display_name: null, avatar_path: null, is_admin: true, is_approved: true, unit_system: "metric", sync_hour: 3 });
+    vi.mocked(fetchMe).mockResolvedValueOnce({ ...baseUser, id: 1, email: "admin@test.com", display_name: null, avatar_path: null, is_admin: true, is_approved: true, unit_system: "metric", sync_hour: 3 });
     
     render(<App />);
 

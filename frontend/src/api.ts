@@ -166,6 +166,13 @@ export interface User {
   is_approved: boolean;
   unit_system: "metric" | "imperial";
   sync_hour: number;
+  date_of_birth: string | null;
+  weight_kg: number | null;
+  height_cm: number | null;
+  gender: "male" | "female" | null;
+  power_zone_percentages: Record<string, [number, number | null]> | null;
+  hr_zone_percentages: Record<string, [number, number | null]> | null;
+  hr_derived_power_enabled: boolean;
 }
 
 export interface XertCredentialsStatus {
@@ -531,6 +538,10 @@ export async function updatePreferences(prefs: {
   sync_hour?: number;
   date_of_birth?: string;
   weight_kg?: number;
+  height_cm?: number;
+  gender?: "male" | "female" | null;
+  power_zone_percentages?: Record<string, [number, number | null]> | null;
+  hr_zone_percentages?: Record<string, [number, number | null]> | null;
   hr_derived_power_enabled?: boolean;
 }): Promise<User> {
   return apiPatch<User>("/me", prefs, "Failed to update preferences");
