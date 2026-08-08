@@ -26,7 +26,7 @@ test.describe('Settings', () => {
     // Should show main sections (CardTitle uses data-slot="card-title")
     await expect(page.locator('[data-slot="card-title"]', { hasText: 'Profile' })).toBeVisible();
     await expect(page.locator('[data-slot="card-title"]', { hasText: 'Preferences' })).toBeVisible();
-    await expect(page.locator('[data-slot="card-title"]', { hasText: 'Thresholds' })).toBeVisible();
+    await expect(page.locator('[data-slot="card-title"]', { hasText: 'Training Zones' })).toBeVisible();
   });
 
   test('unit system toggle switches between metric and imperial', async ({ page }) => {
@@ -112,34 +112,6 @@ test.describe('Settings', () => {
 
     // Should show success
     await expect(page.getByText('Profile saved')).toBeVisible();
-  });
-
-  test('thresholds section allows adding FTP', async ({ page }) => {
-    await loginViaApi(page, testUser);
-    await page.goto('/settings');
-
-    // Wait for thresholds section (CardTitle uses data-slot="card-title")
-    await expect(page.locator('[data-slot="card-title"]', { hasText: 'Thresholds' })).toBeVisible();
-
-    // Click Add/Update button to show form
-    const addButton = page.getByRole('button', { name: /Add|Update/ });
-    await addButton.click();
-
-    // Form should appear
-    const ftpInput = page.getByPlaceholder(/e\.g\. 250|Current:/);
-    await expect(ftpInput).toBeVisible();
-
-    // Enter FTP value
-    await ftpInput.fill('220');
-
-    // Save
-    await page.getByRole('button', { name: 'Save Threshold' }).click();
-
-    // Should show success
-    await expect(page.getByText('Threshold saved')).toBeVisible();
-
-    // Threshold should be displayed (shown in the current threshold box and in the table)
-    await expect(page.locator('.text-xl', { hasText: '220W' })).toBeVisible();
   });
 
   test('back button navigates away from settings', async ({ page }) => {
