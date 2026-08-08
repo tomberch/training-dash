@@ -1,11 +1,24 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { MetricEntry } from "@/components/MetricTimelineChart";
+import { fetchMetrics, type MetricEntryResponse, type User } from "@/api";
 
-// Mock data - will be replaced with API calls
+// Convert API response to MetricEntry
+function toMetricEntry(resp: MetricEntryResponse): MetricEntry {
+  return {
+    id: String(resp.id),
+    effective_date: resp.effective_date,
+    value: resp.value,
+    source: resp.source,
+    source_detail: resp.source_detail ?? undefined,
+    notes: resp.notes ?? undefined,
+  };
+}
+
+// Metrics we display in the overview
 interface CurrentMetrics {
   ftp: MetricEntry | null;
   ftp_previous: MetricEntry | null;
@@ -22,33 +35,6 @@ interface CurrentMetrics {
   hrv: MetricEntry | null;
   hrv_previous: MetricEntry | null;
 }
-
-interface UserProfile {
-  height_cm: number | null;
-  gender: string | null;
-}
-
-const MOCK_CURRENT_METRICS: CurrentMetrics = {
-  ftp: { id: "1", effective_date: "2026-07-01", value: 265, source: "manual" },
-  ftp_previous: { id: "2", effective_date: "2026-05-10", value: 260, source: "calculated" },
-  lthr: { id: "3", effective_date: "2026-06-15", value: 168, source: "calculated" },
-  lthr_previous: { id: "4", effective_date: "2026-01-15", value: 165, source: "manual" },
-  hrmax: { id: "5", effective_date: "2026-01-01", value: 186, source: "manual" },
-  hrmax_previous: null,
-  weight: { id: "6", effective_date: "2026-07-15", value: 72.5, source: "device" },
-  weight_previous: { id: "7", effective_date: "2026-06-01", value: 73.0, source: "manual" },
-  vo2max: { id: "8", effective_date: "2026-07-15", value: 52.3, source: "device" },
-  vo2max_previous: { id: "9", effective_date: "2026-05-20", value: 51.1, source: "device" },
-  resting_hr: { id: "10", effective_date: "2026-08-01", value: 52, source: "device" },
-  resting_hr_previous: { id: "11", effective_date: "2026-07-15", value: 54, source: "device" },
-  hrv: { id: "12", effective_date: "2026-08-01", value: 65, source: "device" },
-  hrv_previous: { id: "13", effective_date: "2026-07-15", value: 62, source: "device" },
-};
-
-const MOCK_USER_PROFILE: UserProfile = {
-  height_cm: 178,
-  gender: "male",
-};
 
 // Format date for display
 function formatDate(dateStr: string): string {
@@ -104,13 +90,13 @@ function MetricSummaryCard({ name, current, previous, unit, decimals = 0, onClic
             </p>
             <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
               {trend === "up" && (
-                <span className="text-success">↗ +{decimals > 0 ? Math.abs(diff!).toFixed(decimals) : Math.abs(diff!)}</span>
+                <span className="text-success">+{decimals > 0 ? Math.abs(diff!).toFixed(decimals) : Math.abs(diff!)}</span>
               )}
               {trend === "down" && (
-                <span className="text-destructive">↘ -{decimals > 0 ? Math.abs(diff!).toFixed(decimals) : Math.abs(diff!)}</span>
+                <span className="text-destructive">-{decimals > 0 ? Math.abs(diff!).toFixed(decimals) : Math.abs(diff!)}</span>
               )}
-              {trend === "same" && <span>—</span>}
-              {trend === null && <span>—</span>}
+              {trend === "same" && <span></span>}
+              {trend === null && <span></span>}
               <span>{formatDate(current.effective_date)}</span>
             </p>
           </>
@@ -195,13 +181,77 @@ function LoadingSkeleton() {
   );
 }
 
-export function AthleteOverview() {
-  // In a real implementation, these would come from API queries
-  const [loading] = useState(false);
-  const [metrics] = useState<CurrentMetrics>(MOCK_CURRENT_METRICS);
-  const [userProfile] = useState<UserProfile>(MOCK_USER_PROFILE);
+// Helper to get current and previous from sorted entries
+function getCurrentAndPrevious(entries: MetricEntryResponse[]): { current: MetricEntry | null; previous: MetricEntry | null } {
+  if (entries.length === 0) {
+    return { current: null, previous: null };
+  }
+  // Entries come sorted descending by date
+  const current = toMetricEntry(entries[0]);
+  const previous = entries.length > 1 ? toMetricEntry(entries[1]) : null;
+  return { current, previous };
+}
+
+interface AthleteOverviewProps {
+  user: User;
+}
+
+export function AthleteOverview({ user }: AthleteOverviewProps) {
+  const [loading, setLoading] = useState(true);
+  const [metrics, setMetrics] = useState<CurrentMetrics>({
+    ftp: null, ftp_previous: null,
+    lthr: null, lthr_previous: null,
+    hrmax: null, hrmax_previous: null,
+    weight: null, weight_previous: null,
+    vo2max: null, vo2max_previous: null,
+    resting_hr: null, resting_hr_previous: null,
+    hrv: null, hrv_previous: null,
+  });
 
   const [, setSearchParams] = useSearchParams();
+
+  // Fetch all metrics and organize by type
+  const loadMetrics = useCallback(async () => {
+    try {
+      const data = await fetchMetrics({ limit: 500 });
+      
+      // Group by metric type (API returns sorted by date desc)
+      const grouped: Record<string, MetricEntryResponse[]> = {};
+      for (const entry of data) {
+        if (!grouped[entry.metric_type]) {
+          grouped[entry.metric_type] = [];
+        }
+        grouped[entry.metric_type].push(entry);
+      }
+      
+      // Extract current and previous for each metric
+      const ftp = getCurrentAndPrevious(grouped["ftp"] || []);
+      const lthr = getCurrentAndPrevious(grouped["lthr"] || []);
+      const hrmax = getCurrentAndPrevious(grouped["hrmax"] || []);
+      const weight = getCurrentAndPrevious(grouped["weight_kg"] || []);
+      const vo2max = getCurrentAndPrevious(grouped["vo2max"] || []);
+      const restingHr = getCurrentAndPrevious(grouped["resting_hr"] || []);
+      const hrv = getCurrentAndPrevious(grouped["hrv"] || []);
+      
+      setMetrics({
+        ftp: ftp.current, ftp_previous: ftp.previous,
+        lthr: lthr.current, lthr_previous: lthr.previous,
+        hrmax: hrmax.current, hrmax_previous: hrmax.previous,
+        weight: weight.current, weight_previous: weight.previous,
+        vo2max: vo2max.current, vo2max_previous: vo2max.previous,
+        resting_hr: restingHr.current, resting_hr_previous: restingHr.previous,
+        hrv: hrv.current, hrv_previous: hrv.previous,
+      });
+    } catch (err) {
+      console.error("Failed to load metrics:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadMetrics();
+  }, [loadMetrics]);
 
   // Navigate to a specific tab
   function navigateToTab(tab: string) {
@@ -256,13 +306,13 @@ export function AthleteOverview() {
           />
           <StaticValueCard
             name="Height"
-            value={userProfile.height_cm}
+            value={user.height_cm}
             unit="cm"
             onClick={() => navigateToTab("body")}
           />
           <StaticValueCard
             name="Gender"
-            value={userProfile.gender}
+            value={user.gender}
             onClick={() => navigateToTab("body")}
           />
         </div>

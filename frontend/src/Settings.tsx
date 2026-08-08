@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "react-router-dom";
 import {
   updatePreferences,
@@ -17,6 +17,7 @@ import {
   disconnectOAuthProvider,
   setPassword,
   hasPassword,
+  fetchCurrentMetrics,
   ApiError,
 } from "./api";
 import type { 
@@ -466,9 +467,26 @@ function PreferencesSection({ user, onUserUpdate }: { user: User; onUserUpdate: 
 
 
 function ZonesSection({ user, onUserUpdate }: { user: User; onUserUpdate: (user: User) => void }) {
-  // Mock thresholds - will be replaced when metrics API is integrated
-  const mockFtp = 265;
-  const mockLthr = 165;
+  // Fetch current FTP and LTHR from metrics API
+  const [ftp, setFtp] = useState<number | null>(null);
+  const [lthr, setLthr] = useState<number | null>(null);
+  const [loadingThresholds, setLoadingThresholds] = useState(true);
+  
+  const loadThresholds = useCallback(async () => {
+    try {
+      const currentMetrics = await fetchCurrentMetrics();
+      setFtp(currentMetrics.ftp?.value ?? null);
+      setLthr(currentMetrics.lthr?.value ?? null);
+    } catch (err) {
+      console.error("Failed to load thresholds:", err);
+    } finally {
+      setLoadingThresholds(false);
+    }
+  }, []);
+  
+  useEffect(() => {
+    loadThresholds();
+  }, [loadThresholds]);
   
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -483,8 +501,8 @@ function ZonesSection({ user, onUserUpdate }: { user: User; onUserUpdate: (user:
   const [editedHrPct, setEditedHrPct] = useState<ZonePercentages>(hrPercentages);
   
   // Compute zones from percentages and thresholds
-  const powerZones = computePowerZones(mockFtp, editMode ? editedPowerPct : powerPercentages);
-  const hrZones = computeHrZones(mockLthr, editMode ? editedHrPct : hrPercentages);
+  const powerZones = ftp ? computePowerZones(ftp, editMode ? editedPowerPct : powerPercentages) : [];
+  const hrZones = lthr ? computeHrZones(lthr, editMode ? editedHrPct : hrPercentages) : [];
   
   function startEdit() {
     setEditedPowerPct({ ...powerPercentages });
@@ -559,9 +577,22 @@ function ZonesSection({ user, onUserUpdate }: { user: User; onUserUpdate: (user:
     }));
   }
   
-  // Check if user has thresholds set (using mock for now)
-  const hasFtp = mockFtp > 0;
-  const hasLthr = mockLthr > 0;
+  // Check if user has thresholds set
+  const hasFtp = ftp !== null && ftp > 0;
+  const hasLthr = lthr !== null && lthr > 0;
+
+  if (loadingThresholds) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Training Zones</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Skeleton className="h-[200px] w-full" />
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>
@@ -610,7 +641,7 @@ function ZonesSection({ user, onUserUpdate }: { user: User; onUserUpdate: (user:
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-sm font-medium text-foreground">Power Zones</h3>
               {hasFtp && (
-                <span className="text-xs text-muted-foreground">Based on FTP: {mockFtp} W</span>
+                <span className="text-xs text-muted-foreground">Based on FTP: {ftp} W</span>
               )}
             </div>
             <table className="w-full text-sm">
@@ -669,7 +700,7 @@ function ZonesSection({ user, onUserUpdate }: { user: User; onUserUpdate: (user:
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-sm font-medium text-foreground">Heart Rate Zones</h3>
               {hasLthr && (
-                <span className="text-xs text-muted-foreground">Based on LTHR: {mockLthr} bpm</span>
+                <span className="text-xs text-muted-foreground">Based on LTHR: {lthr} bpm</span>
               )}
             </div>
             <table className="w-full text-sm">

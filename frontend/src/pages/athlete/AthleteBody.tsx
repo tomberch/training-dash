@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardHeader, CardTitle, CardContent, CardAction } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,15 @@ import {
   type MetricEntryCreate,
   type MetricEntryUpdate,
 } from "@/components/MetricEntryModal";
+import {
+  fetchMetrics,
+  createMetric,
+  updateMetric,
+  deleteMetric,
+  updatePreferences,
+  type MetricEntryResponse,
+  type User,
+} from "@/api";
 
 // Weight metric type definition
 const WEIGHT_METRIC_TYPE: MetricType = {
@@ -35,26 +44,17 @@ const WEIGHT_METRIC_TYPE: MetricType = {
   has_recalc: false,
 };
 
-// Mock user profile data
-interface UserProfile {
-  height_cm: number | null;
-  gender: string | null;
+// Convert API response to MetricEntry for chart
+function toMetricEntry(resp: MetricEntryResponse): MetricEntry {
+  return {
+    id: String(resp.id),
+    effective_date: resp.effective_date,
+    value: resp.value,
+    source: resp.source,
+    source_detail: resp.source_detail ?? undefined,
+    notes: resp.notes ?? undefined,
+  };
 }
-
-const MOCK_USER_PROFILE: UserProfile = {
-  height_cm: 178,
-  gender: "male",
-};
-
-// Mock weight history
-const MOCK_WEIGHT_HISTORY: MetricEntry[] = [
-  { id: "w1", effective_date: "2026-01-05", value: 74.2, source: "manual" },
-  { id: "w2", effective_date: "2026-02-01", value: 73.8, source: "device", source_detail: "garmin_scale" },
-  { id: "w3", effective_date: "2026-03-15", value: 73.1, source: "manual" },
-  { id: "w4", effective_date: "2026-04-20", value: 72.8, source: "device", source_detail: "garmin_scale" },
-  { id: "w5", effective_date: "2026-06-01", value: 72.3, source: "manual" },
-  { id: "w6", effective_date: "2026-07-15", value: 72.5, source: "device", source_detail: "garmin_scale" },
-];
 
 // Format date for display
 function formatDate(dateStr: string): string {
@@ -66,24 +66,25 @@ function formatDate(dateStr: string): string {
 interface ProfileEditModalProps {
   open: boolean;
   onClose: () => void;
-  profile: UserProfile;
-  onSave: (data: { height_cm: number | null; gender: string | null }) => Promise<void>;
+  heightCm: number | null;
+  gender: "male" | "female" | null;
+  onSave: (data: { height_cm: number | null; gender: "male" | "female" | null }) => Promise<void>;
 }
 
-function ProfileEditModal({ open, onClose, profile, onSave }: ProfileEditModalProps) {
-  const [height, setHeight] = useState(profile.height_cm?.toString() || "");
-  const [gender, setGender] = useState(profile.gender || "");
+function ProfileEditModal({ open, onClose, heightCm, gender, onSave }: ProfileEditModalProps) {
+  const [height, setHeight] = useState(heightCm?.toString() || "");
+  const [genderValue, setGenderValue] = useState<string>(gender || "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Reset form when modal opens
   useEffect(() => {
     if (open) {
-      setHeight(profile.height_cm?.toString() || "");
-      setGender(profile.gender || "");
+      setHeight(heightCm?.toString() || "");
+      setGenderValue(gender || "");
       setError(null);
     }
-  }, [open, profile.height_cm, profile.gender]);
+  }, [open, heightCm, gender]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -99,7 +100,7 @@ function ProfileEditModal({ open, onClose, profile, onSave }: ProfileEditModalPr
     try {
       await onSave({
         height_cm: heightNum,
-        gender: gender || null,
+        gender: (genderValue as "male" | "female") || null,
       });
       onClose();
     } catch (err) {
@@ -134,8 +135,8 @@ function ProfileEditModal({ open, onClose, profile, onSave }: ProfileEditModalPr
             <Label htmlFor="gender">Gender</Label>
             <select
               id="gender"
-              value={gender}
-              onChange={(e) => setGender(e.target.value)}
+              value={genderValue}
+              onChange={(e) => setGenderValue(e.target.value)}
               className={cn(
                 "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors",
                 "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
@@ -221,11 +222,14 @@ function LoadingSkeleton() {
   );
 }
 
-export function AthleteBody() {
-  // In a real implementation, these would come from API queries
-  const [loading] = useState(false);
-  const [userProfile, setUserProfile] = useState<UserProfile>(MOCK_USER_PROFILE);
-  const [weightHistory, setWeightHistory] = useState<MetricEntry[]>(MOCK_WEIGHT_HISTORY);
+interface AthleteBodyProps {
+  user: User;
+  onUserUpdate: (user: User) => void;
+}
+
+export function AthleteBody({ user, onUserUpdate }: AthleteBodyProps) {
+  const [loading, setLoading] = useState(true);
+  const [weightHistory, setWeightHistory] = useState<MetricEntry[]>([]);
 
   // Time range state
   const [timeRange, setTimeRange] = useState<TimeRange>("1Y");
@@ -235,13 +239,35 @@ export function AthleteBody() {
   const [weightModalOpen, setWeightModalOpen] = useState(false);
   const [selectedWeightEntry, setSelectedWeightEntry] = useState<MetricEntry | undefined>(undefined);
 
+  // Fetch weight history
+  const loadWeightHistory = useCallback(async () => {
+    try {
+      const data = await fetchMetrics({ metric_type: "weight_kg" });
+      const entries = data.map(toMetricEntry).sort(
+        (a, b) => new Date(a.effective_date).getTime() - new Date(b.effective_date).getTime()
+      );
+      setWeightHistory(entries);
+    } catch (err) {
+      console.error("Failed to load weight history:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadWeightHistory();
+  }, [loadWeightHistory]);
+
   // Get current weight (most recent)
   const currentWeight = weightHistory.length > 0 ? weightHistory[weightHistory.length - 1] : null;
 
   // Profile save handler
-  async function handleProfileSave(data: { height_cm: number | null; gender: string | null }) {
-    // In a real implementation, this would call the API
-    setUserProfile(data);
+  async function handleProfileSave(data: { height_cm: number | null; gender: "male" | "female" | null }) {
+    const updated = await updatePreferences({
+      height_cm: data.height_cm ?? undefined,
+      gender: data.gender,
+    });
+    onUserUpdate(updated);
   }
 
   // Weight modal handlers
@@ -256,36 +282,42 @@ export function AthleteBody() {
   }
 
   async function handleWeightSave(data: MetricEntryCreate | MetricEntryUpdate) {
-    const isUpdate = "id" in data;
-
-    if (isUpdate) {
-      const updateData = data as MetricEntryUpdate;
-      setWeightHistory(
-        weightHistory.map((e) =>
-          e.id === updateData.id
-            ? { ...e, ...updateData, value: updateData.value ?? e.value }
-            : e
-        )
-      );
-    } else {
-      const createData = data as MetricEntryCreate;
-      const newEntry: MetricEntry = {
-        id: String(Date.now()),
-        effective_date: createData.effective_date,
-        value: createData.value,
-        source: createData.source,
-        source_detail: createData.source_detail,
-        notes: createData.notes,
-      };
-      const updated = [...weightHistory, newEntry].sort(
-        (a, b) => new Date(a.effective_date).getTime() - new Date(b.effective_date).getTime()
-      );
-      setWeightHistory(updated);
+    try {
+      if (selectedWeightEntry) {
+        const updateData = data as MetricEntryUpdate;
+        await updateMetric(parseInt(selectedWeightEntry.id), {
+          value: updateData.value,
+          effective_date: updateData.effective_date,
+          notes: updateData.notes,
+        });
+      } else {
+        const createData = data as MetricEntryCreate;
+        await createMetric({
+          metric_type: "weight_kg",
+          effective_date: createData.effective_date,
+          value: createData.value,
+          source: createData.source,
+          source_detail: createData.source_detail,
+          notes: createData.notes,
+        });
+      }
+      await loadWeightHistory();
+      setWeightModalOpen(false);
+    } catch (err) {
+      console.error("Failed to save weight:", err);
+      throw err;
     }
   }
 
   async function handleWeightDelete(id: string) {
-    setWeightHistory(weightHistory.filter((e) => e.id !== id));
+    try {
+      await deleteMetric(parseInt(id));
+      await loadWeightHistory();
+      setWeightModalOpen(false);
+    } catch (err) {
+      console.error("Failed to delete weight:", err);
+      throw err;
+    }
   }
 
   if (loading) {
@@ -308,11 +340,11 @@ export function AthleteBody() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 divide-y sm:divide-y-0 sm:divide-x divide-border">
             <ProfileCard
               label="Height"
-              value={userProfile.height_cm ? `${userProfile.height_cm} cm` : null}
+              value={user.height_cm ? `${user.height_cm} cm` : null}
             />
             <ProfileCard
               label="Gender"
-              value={userProfile.gender ? userProfile.gender.charAt(0).toUpperCase() + userProfile.gender.slice(1) : null}
+              value={user.gender ? user.gender.charAt(0).toUpperCase() + user.gender.slice(1) : null}
             />
             <ProfileCard
               label="Weight"
@@ -358,7 +390,8 @@ export function AthleteBody() {
       <ProfileEditModal
         open={profileModalOpen}
         onClose={() => setProfileModalOpen(false)}
-        profile={userProfile}
+        heightCm={user.height_cm}
+        gender={user.gender}
         onSave={handleProfileSave}
       />
 

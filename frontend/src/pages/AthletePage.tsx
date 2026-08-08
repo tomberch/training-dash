@@ -7,6 +7,7 @@ import {
   AthleteFitness,
   AthleteRecovery,
 } from "./athlete";
+import type { User } from "@/api";
 
 const TABS = [
   { value: "overview", label: "Overview" },
@@ -22,7 +23,12 @@ function isValidTab(tab: string | null): tab is TabValue {
   return TABS.some((t) => t.value === tab);
 }
 
-export function AthletePage() {
+interface AthletePageProps {
+  user: User;
+  onUserUpdate: (user: User) => void;
+}
+
+export function AthletePage({ user, onUserUpdate }: AthletePageProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get("tab");
   const currentTab = isValidTab(tabParam) ? tabParam : "overview";
@@ -51,13 +57,13 @@ export function AthletePage() {
         </TabsList>
 
         <TabsContent value="overview">
-          <AthleteOverview />
+          <AthleteOverview user={user} />
         </TabsContent>
         <TabsContent value="thresholds">
           <AthleteThresholds />
         </TabsContent>
         <TabsContent value="body">
-          <AthleteBody />
+          <AthleteBody user={user} onUserUpdate={onUserUpdate} />
         </TabsContent>
         <TabsContent value="fitness">
           <AthleteFitness />

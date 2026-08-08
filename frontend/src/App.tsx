@@ -125,7 +125,7 @@ function AppLayout({ user, onLogout, onUserUpdate }: {
               <Route path="/power-curve" element={<PowerCurveView />} />
               <Route path="/analyze" element={<AnalyzePage />} />
               <Route path="/compare" element={<ComparePage />} />
-              <Route path="/athlete" element={<AthletePage />} />
+              <Route path="/athlete" element={<AthletePage user={user} onUserUpdate={onUserUpdate} />} />
               <Route 
                 path="/records" 
                 element={

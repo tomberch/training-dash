@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardHeader, CardTitle, CardContent, CardAction } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -14,6 +14,13 @@ import {
   type MetricEntryCreate,
   type MetricEntryUpdate,
 } from "@/components/MetricEntryModal";
+import {
+  fetchMetrics,
+  createMetric,
+  updateMetric,
+  deleteMetric,
+  type MetricEntryResponse,
+} from "@/api";
 
 // Metric type definitions for thresholds
 const METRIC_TYPES: Record<string, MetricType> = {
@@ -46,22 +53,17 @@ const METRIC_TYPES: Record<string, MetricType> = {
   },
 };
 
-// Mock data - will be replaced with API calls
-const MOCK_FTP_HISTORY: MetricEntry[] = [
-  { id: "1", effective_date: "2026-01-15", value: 245, source: "manual", notes: "Initial FTP test" },
-  { id: "2", effective_date: "2026-03-01", value: 255, source: "calculated", source_detail: "ramp_test" },
-  { id: "3", effective_date: "2026-05-10", value: 262, source: "device", source_detail: "garmin_sync" },
-  { id: "4", effective_date: "2026-07-01", value: 265, source: "manual", notes: "Post training block" },
-];
-
-const MOCK_LTHR_HISTORY: MetricEntry[] = [
-  { id: "10", effective_date: "2026-01-15", value: 165, source: "manual" },
-  { id: "11", effective_date: "2026-06-15", value: 168, source: "calculated", source_detail: "drift_test" },
-];
-
-const MOCK_HRMAX_HISTORY: MetricEntry[] = [
-  { id: "20", effective_date: "2026-01-01", value: 186, source: "manual", notes: "Field test max" },
-];
+// Convert API response to MetricEntry for chart
+function toMetricEntry(resp: MetricEntryResponse): MetricEntry {
+  return {
+    id: String(resp.id),
+    effective_date: resp.effective_date,
+    value: resp.value,
+    source: resp.source,
+    source_detail: resp.source_detail ?? undefined,
+    notes: resp.notes ?? undefined,
+  };
+}
 
 // Format date for display
 function formatDate(dateStr: string): string {
@@ -216,11 +218,10 @@ function LoadingSkeleton() {
 }
 
 export function AthleteThresholds() {
-  // In a real implementation, these would come from API queries
-  const [loading] = useState(false);
-  const [ftpHistory, setFtpHistory] = useState<MetricEntry[]>(MOCK_FTP_HISTORY);
-  const [lthrHistory, setLthrHistory] = useState<MetricEntry[]>(MOCK_LTHR_HISTORY);
-  const [hrmaxHistory, setHrmaxHistory] = useState<MetricEntry[]>(MOCK_HRMAX_HISTORY);
+  const [loading, setLoading] = useState(true);
+  const [ftpHistory, setFtpHistory] = useState<MetricEntry[]>([]);
+  const [lthrHistory, setLthrHistory] = useState<MetricEntry[]>([]);
+  const [hrmaxHistory, setHrmaxHistory] = useState<MetricEntry[]>([]);
 
   // Time range state for each chart
   const [ftpTimeRange, setFtpTimeRange] = useState<TimeRange>("1Y");
@@ -231,6 +232,43 @@ export function AthleteThresholds() {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<MetricEntry | undefined>(undefined);
   const [selectedMetricKey, setSelectedMetricKey] = useState<string>("ftp");
+
+  // Fetch all threshold metrics
+  const loadMetrics = useCallback(async () => {
+    try {
+      const data = await fetchMetrics({ category: "threshold" });
+      
+      // Group by metric type and sort by date ascending
+      const ftp: MetricEntry[] = [];
+      const lthr: MetricEntry[] = [];
+      const hrmax: MetricEntry[] = [];
+      
+      for (const entry of data) {
+        const converted = toMetricEntry(entry);
+        switch (entry.metric_type) {
+          case "ftp": ftp.push(converted); break;
+          case "lthr": lthr.push(converted); break;
+          case "hrmax": hrmax.push(converted); break;
+        }
+      }
+      
+      // Sort ascending by date for charts
+      const sortByDate = (a: MetricEntry, b: MetricEntry) =>
+        new Date(a.effective_date).getTime() - new Date(b.effective_date).getTime();
+      
+      setFtpHistory(ftp.sort(sortByDate));
+      setLthrHistory(lthr.sort(sortByDate));
+      setHrmaxHistory(hrmax.sort(sortByDate));
+    } catch (err) {
+      console.error("Failed to load threshold metrics:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadMetrics();
+  }, [loadMetrics]);
 
   // Get current (most recent) values
   const currentFtp = ftpHistory.length > 0 ? ftpHistory[ftpHistory.length - 1] : null;
@@ -251,64 +289,44 @@ export function AthleteThresholds() {
   }
 
   async function handleSave(data: MetricEntryCreate | MetricEntryUpdate) {
-    // In a real implementation, this would call the API
-    // For now, update local state
-    const isUpdate = "id" in data;
-    const getHistory = () => {
-      switch (selectedMetricKey) {
-        case "ftp": return ftpHistory;
-        case "lthr": return lthrHistory;
-        case "hrmax": return hrmaxHistory;
-        default: return [];
+    try {
+      if (selectedEntry) {
+        // Update existing entry
+        const updateData = data as MetricEntryUpdate;
+        await updateMetric(parseInt(selectedEntry.id), {
+          value: updateData.value,
+          effective_date: updateData.effective_date,
+          notes: updateData.notes,
+        });
+      } else {
+        // Create new entry
+        const createData = data as MetricEntryCreate;
+        await createMetric({
+          metric_type: selectedMetricKey,
+          effective_date: createData.effective_date,
+          value: createData.value,
+          source: createData.source,
+          source_detail: createData.source_detail,
+          notes: createData.notes,
+        });
       }
-    };
-    const setHistory = (entries: MetricEntry[]) => {
-      switch (selectedMetricKey) {
-        case "ftp": setFtpHistory(entries); break;
-        case "lthr": setLthrHistory(entries); break;
-        case "hrmax": setHrmaxHistory(entries); break;
-      }
-    };
-
-    if (isUpdate) {
-      const updateData = data as MetricEntryUpdate;
-      setHistory(
-        getHistory().map((e) =>
-          e.id === updateData.id
-            ? { ...e, ...updateData, value: updateData.value ?? e.value }
-            : e
-        )
-      );
-    } else {
-      const createData = data as MetricEntryCreate;
-      const newEntry: MetricEntry = {
-        id: String(Date.now()),
-        effective_date: createData.effective_date,
-        value: createData.value,
-        source: createData.source,
-        source_detail: createData.source_detail,
-        notes: createData.notes,
-      };
-      // Sort by date after adding
-      const updated = [...getHistory(), newEntry].sort(
-        (a, b) => new Date(a.effective_date).getTime() - new Date(b.effective_date).getTime()
-      );
-      setHistory(updated);
+      // Reload metrics after save
+      await loadMetrics();
+      setModalOpen(false);
+    } catch (err) {
+      console.error("Failed to save metric:", err);
+      throw err; // Let modal handle the error
     }
   }
 
   async function handleDelete(id: string) {
-    // In a real implementation, this would call the API
-    switch (selectedMetricKey) {
-      case "ftp":
-        setFtpHistory(ftpHistory.filter((e) => e.id !== id));
-        break;
-      case "lthr":
-        setLthrHistory(lthrHistory.filter((e) => e.id !== id));
-        break;
-      case "hrmax":
-        setHrmaxHistory(hrmaxHistory.filter((e) => e.id !== id));
-        break;
+    try {
+      await deleteMetric(parseInt(id));
+      await loadMetrics();
+      setModalOpen(false);
+    } catch (err) {
+      console.error("Failed to delete metric:", err);
+      throw err;
     }
   }
 

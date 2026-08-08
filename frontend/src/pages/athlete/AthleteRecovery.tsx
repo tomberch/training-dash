@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardHeader, CardTitle, CardContent, CardAction } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -14,6 +14,13 @@ import {
   type MetricEntryCreate,
   type MetricEntryUpdate,
 } from "@/components/MetricEntryModal";
+import {
+  fetchMetrics,
+  createMetric,
+  updateMetric,
+  deleteMetric,
+  type MetricEntryResponse,
+} from "@/api";
 
 // Metric type definitions
 const METRIC_TYPES: Record<string, MetricType> = {
@@ -37,22 +44,17 @@ const METRIC_TYPES: Record<string, MetricType> = {
   },
 };
 
-// Mock data
-const MOCK_RESTING_HR_HISTORY: MetricEntry[] = [
-  { id: "rhr1", effective_date: "2026-06-01", value: 54, source: "device", source_detail: "garmin_sync" },
-  { id: "rhr2", effective_date: "2026-06-15", value: 53, source: "device", source_detail: "garmin_sync" },
-  { id: "rhr3", effective_date: "2026-07-01", value: 52, source: "device", source_detail: "garmin_sync" },
-  { id: "rhr4", effective_date: "2026-07-15", value: 51, source: "device", source_detail: "garmin_sync" },
-  { id: "rhr5", effective_date: "2026-08-01", value: 52, source: "device", source_detail: "garmin_sync" },
-];
-
-const MOCK_HRV_HISTORY: MetricEntry[] = [
-  { id: "hrv1", effective_date: "2026-06-01", value: 58, source: "device", source_detail: "garmin_sync" },
-  { id: "hrv2", effective_date: "2026-06-15", value: 62, source: "device", source_detail: "garmin_sync" },
-  { id: "hrv3", effective_date: "2026-07-01", value: 60, source: "device", source_detail: "garmin_sync" },
-  { id: "hrv4", effective_date: "2026-07-15", value: 64, source: "device", source_detail: "garmin_sync" },
-  { id: "hrv5", effective_date: "2026-08-01", value: 65, source: "device", source_detail: "garmin_sync" },
-];
+// Convert API response to MetricEntry for chart
+function toMetricEntry(resp: MetricEntryResponse): MetricEntry {
+  return {
+    id: String(resp.id),
+    effective_date: resp.effective_date,
+    value: resp.value,
+    source: resp.source,
+    source_detail: resp.source_detail ?? undefined,
+    notes: resp.notes ?? undefined,
+  };
+}
 
 // Format date for display
 function formatDate(dateStr: string): string {
@@ -75,7 +77,7 @@ function CurrentMetricCard({ metricType, entry, onAdd, onClick }: CurrentMetricC
         <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
           {metricType.display_name}
         </p>
-        <p className="text-2xl font-bold text-muted-foreground mb-2">—</p>
+        <p className="text-2xl font-bold text-muted-foreground mb-2"></p>
         <Button variant="outline" size="sm" onClick={onAdd}>
           Add
         </Button>
@@ -142,10 +144,9 @@ function LoadingSkeleton() {
 }
 
 export function AthleteRecovery() {
-  // In a real implementation, these would come from API queries
-  const [loading] = useState(false);
-  const [restingHrHistory, setRestingHrHistory] = useState<MetricEntry[]>(MOCK_RESTING_HR_HISTORY);
-  const [hrvHistory, setHrvHistory] = useState<MetricEntry[]>(MOCK_HRV_HISTORY);
+  const [loading, setLoading] = useState(true);
+  const [restingHrHistory, setRestingHrHistory] = useState<MetricEntry[]>([]);
+  const [hrvHistory, setHrvHistory] = useState<MetricEntry[]>([]);
 
   // Time range state
   const [restingHrTimeRange, setRestingHrTimeRange] = useState<TimeRange>("6M");
@@ -155,6 +156,40 @@ export function AthleteRecovery() {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<MetricEntry | undefined>(undefined);
   const [selectedMetricKey, setSelectedMetricKey] = useState<string>("resting_hr");
+
+  // Fetch recovery metrics
+  const loadMetrics = useCallback(async () => {
+    try {
+      const data = await fetchMetrics({ category: "recovery" });
+      
+      // Group by metric type and sort by date ascending
+      const restingHr: MetricEntry[] = [];
+      const hrv: MetricEntry[] = [];
+      
+      for (const entry of data) {
+        const converted = toMetricEntry(entry);
+        switch (entry.metric_type) {
+          case "resting_hr": restingHr.push(converted); break;
+          case "hrv": hrv.push(converted); break;
+        }
+      }
+      
+      // Sort ascending by date for charts
+      const sortByDate = (a: MetricEntry, b: MetricEntry) =>
+        new Date(a.effective_date).getTime() - new Date(b.effective_date).getTime();
+      
+      setRestingHrHistory(restingHr.sort(sortByDate));
+      setHrvHistory(hrv.sort(sortByDate));
+    } catch (err) {
+      console.error("Failed to load recovery metrics:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadMetrics();
+  }, [loadMetrics]);
 
   // Get current (most recent) values
   const currentRestingHr = restingHrHistory.length > 0 ? restingHrHistory[restingHrHistory.length - 1] : null;
@@ -174,41 +209,41 @@ export function AthleteRecovery() {
   }
 
   async function handleSave(data: MetricEntryCreate | MetricEntryUpdate) {
-    const isUpdate = "id" in data;
-    const getHistory = () => selectedMetricKey === "resting_hr" ? restingHrHistory : hrvHistory;
-    const setHistory = selectedMetricKey === "resting_hr" ? setRestingHrHistory : setHrvHistory;
-
-    if (isUpdate) {
-      const updateData = data as MetricEntryUpdate;
-      setHistory(
-        getHistory().map((e) =>
-          e.id === updateData.id
-            ? { ...e, ...updateData, value: updateData.value ?? e.value }
-            : e
-        )
-      );
-    } else {
-      const createData = data as MetricEntryCreate;
-      const newEntry: MetricEntry = {
-        id: String(Date.now()),
-        effective_date: createData.effective_date,
-        value: createData.value,
-        source: createData.source,
-        source_detail: createData.source_detail,
-        notes: createData.notes,
-      };
-      const updated = [...getHistory(), newEntry].sort(
-        (a, b) => new Date(a.effective_date).getTime() - new Date(b.effective_date).getTime()
-      );
-      setHistory(updated);
+    try {
+      if (selectedEntry) {
+        const updateData = data as MetricEntryUpdate;
+        await updateMetric(parseInt(selectedEntry.id), {
+          value: updateData.value,
+          effective_date: updateData.effective_date,
+          notes: updateData.notes,
+        });
+      } else {
+        const createData = data as MetricEntryCreate;
+        await createMetric({
+          metric_type: selectedMetricKey,
+          effective_date: createData.effective_date,
+          value: createData.value,
+          source: createData.source,
+          source_detail: createData.source_detail,
+          notes: createData.notes,
+        });
+      }
+      await loadMetrics();
+      setModalOpen(false);
+    } catch (err) {
+      console.error("Failed to save metric:", err);
+      throw err;
     }
   }
 
   async function handleDelete(id: string) {
-    if (selectedMetricKey === "resting_hr") {
-      setRestingHrHistory(restingHrHistory.filter((e) => e.id !== id));
-    } else {
-      setHrvHistory(hrvHistory.filter((e) => e.id !== id));
+    try {
+      await deleteMetric(parseInt(id));
+      await loadMetrics();
+      setModalOpen(false);
+    } catch (err) {
+      console.error("Failed to delete metric:", err);
+      throw err;
     }
   }
 
@@ -316,8 +351,8 @@ export function AthleteRecovery() {
       {/* Info banner */}
       <div className="p-4 rounded-lg bg-muted/50 border border-border text-sm">
         <p className="text-muted-foreground">
-          <span className="font-medium text-foreground">ℹ️ Recovery metrics</span>
-          {" "}— Resting heart rate and HRV can be synced from Garmin or entered manually. Automatic device sync coming soon.
+          <span className="font-medium text-foreground">Recovery metrics</span>
+          {" "} Resting heart rate and HRV can be synced from Garmin or entered manually. Automatic device sync coming soon.
         </p>
       </div>
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardHeader, CardTitle, CardContent, CardAction } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,6 +13,13 @@ import {
   type MetricEntryCreate,
   type MetricEntryUpdate,
 } from "@/components/MetricEntryModal";
+import {
+  fetchMetrics,
+  createMetric,
+  updateMetric,
+  deleteMetric,
+  type MetricEntryResponse,
+} from "@/api";
 
 // VO2max metric type definition
 const VO2MAX_METRIC_TYPE: MetricType = {
@@ -25,13 +32,17 @@ const VO2MAX_METRIC_TYPE: MetricType = {
   has_recalc: false,
 };
 
-// Mock VO2max history
-const MOCK_VO2MAX_HISTORY: MetricEntry[] = [
-  { id: "v1", effective_date: "2026-01-10", value: 48.5, source: "device", source_detail: "garmin_sync" },
-  { id: "v2", effective_date: "2026-03-15", value: 50.1, source: "device", source_detail: "garmin_sync" },
-  { id: "v3", effective_date: "2026-05-20", value: 51.8, source: "device", source_detail: "garmin_sync" },
-  { id: "v4", effective_date: "2026-07-15", value: 52.3, source: "device", source_detail: "garmin_sync" },
-];
+// Convert API response to MetricEntry for chart
+function toMetricEntry(resp: MetricEntryResponse): MetricEntry {
+  return {
+    id: String(resp.id),
+    effective_date: resp.effective_date,
+    value: resp.value,
+    source: resp.source,
+    source_detail: resp.source_detail ?? undefined,
+    notes: resp.notes ?? undefined,
+  };
+}
 
 // Format date for display
 function formatDate(dateStr: string): string {
@@ -73,9 +84,8 @@ function LoadingSkeleton() {
 }
 
 export function AthleteFitness() {
-  // In a real implementation, these would come from API queries
-  const [loading] = useState(false);
-  const [vo2maxHistory, setVo2maxHistory] = useState<MetricEntry[]>(MOCK_VO2MAX_HISTORY);
+  const [loading, setLoading] = useState(true);
+  const [vo2maxHistory, setVo2maxHistory] = useState<MetricEntry[]>([]);
 
   // Time range state
   const [timeRange, setTimeRange] = useState<TimeRange>("1Y");
@@ -83,6 +93,25 @@ export function AthleteFitness() {
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<MetricEntry | undefined>(undefined);
+
+  // Fetch VO2max history
+  const loadHistory = useCallback(async () => {
+    try {
+      const data = await fetchMetrics({ metric_type: "vo2max" });
+      const entries = data.map(toMetricEntry).sort(
+        (a, b) => new Date(a.effective_date).getTime() - new Date(b.effective_date).getTime()
+      );
+      setVo2maxHistory(entries);
+    } catch (err) {
+      console.error("Failed to load VO2max history:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadHistory();
+  }, [loadHistory]);
 
   // Get current (most recent) value
   const currentVo2max = vo2maxHistory.length > 0 ? vo2maxHistory[vo2maxHistory.length - 1] : null;
@@ -99,36 +128,42 @@ export function AthleteFitness() {
   }
 
   async function handleSave(data: MetricEntryCreate | MetricEntryUpdate) {
-    const isUpdate = "id" in data;
-
-    if (isUpdate) {
-      const updateData = data as MetricEntryUpdate;
-      setVo2maxHistory(
-        vo2maxHistory.map((e) =>
-          e.id === updateData.id
-            ? { ...e, ...updateData, value: updateData.value ?? e.value }
-            : e
-        )
-      );
-    } else {
-      const createData = data as MetricEntryCreate;
-      const newEntry: MetricEntry = {
-        id: String(Date.now()),
-        effective_date: createData.effective_date,
-        value: createData.value,
-        source: createData.source,
-        source_detail: createData.source_detail,
-        notes: createData.notes,
-      };
-      const updated = [...vo2maxHistory, newEntry].sort(
-        (a, b) => new Date(a.effective_date).getTime() - new Date(b.effective_date).getTime()
-      );
-      setVo2maxHistory(updated);
+    try {
+      if (selectedEntry) {
+        const updateData = data as MetricEntryUpdate;
+        await updateMetric(parseInt(selectedEntry.id), {
+          value: updateData.value,
+          effective_date: updateData.effective_date,
+          notes: updateData.notes,
+        });
+      } else {
+        const createData = data as MetricEntryCreate;
+        await createMetric({
+          metric_type: "vo2max",
+          effective_date: createData.effective_date,
+          value: createData.value,
+          source: createData.source,
+          source_detail: createData.source_detail,
+          notes: createData.notes,
+        });
+      }
+      await loadHistory();
+      setModalOpen(false);
+    } catch (err) {
+      console.error("Failed to save VO2max:", err);
+      throw err;
     }
   }
 
   async function handleDelete(id: string) {
-    setVo2maxHistory(vo2maxHistory.filter((e) => e.id !== id));
+    try {
+      await deleteMetric(parseInt(id));
+      await loadHistory();
+      setModalOpen(false);
+    } catch (err) {
+      console.error("Failed to delete VO2max:", err);
+      throw err;
+    }
   }
 
   if (loading) {
@@ -209,8 +244,8 @@ export function AthleteFitness() {
       {/* Info banner */}
       <div className="p-4 rounded-lg bg-muted/50 border border-border text-sm">
         <p className="text-muted-foreground">
-          <span className="font-medium text-foreground">ℹ️ About VO2 Max</span>
-          {" "}— VO2 Max estimates can be synced automatically from Garmin devices. Manual entry is also supported for data from other sources.
+          <span className="font-medium text-foreground">About VO2 Max</span>
+          {" "} VO2 Max estimates can be synced automatically from Garmin devices. Manual entry is also supported for data from other sources.
         </p>
       </div>
 

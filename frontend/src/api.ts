@@ -616,6 +616,85 @@ export async function fetchRecalculationStatus(): Promise<RecalculationJob | nul
 }
 
 // ============================================================================
+// Athlete Metrics API
+// ============================================================================
+
+export interface MetricEntryResponse {
+  id: number;
+  metric_type: string;
+  metric_type_display: string;
+  unit: string;
+  category: "threshold" | "body" | "fitness" | "recovery";
+  effective_date: string;
+  value: number;
+  source: "manual" | "calculated" | "device";
+  source_detail: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MetricEntryCreate {
+  metric_type: string;
+  effective_date: string;
+  value: number;
+  source?: "manual" | "calculated" | "device";
+  source_detail?: string;
+  notes?: string;
+}
+
+export interface MetricEntryUpdate {
+  value?: number;
+  effective_date?: string;
+  notes?: string;
+}
+
+export type CurrentMetricsResponse = Record<string, MetricEntryResponse | null>;
+
+export async function fetchMetrics(params?: {
+  metric_type?: string;
+  category?: string;
+  from_date?: string;
+  to_date?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<MetricEntryResponse[]> {
+  const searchParams = new URLSearchParams();
+  if (params?.metric_type) searchParams.set("metric_type", params.metric_type);
+  if (params?.category) searchParams.set("category", params.category);
+  if (params?.from_date) searchParams.set("from_date", params.from_date);
+  if (params?.to_date) searchParams.set("to_date", params.to_date);
+  if (params?.limit) searchParams.set("limit", params.limit.toString());
+  if (params?.offset) searchParams.set("offset", params.offset.toString());
+  
+  const query = searchParams.toString();
+  return apiGet<MetricEntryResponse[]>(`/me/metrics${query ? `?${query}` : ""}`);
+}
+
+export async function createMetric(entry: MetricEntryCreate): Promise<MetricEntryResponse> {
+  return apiPost<MetricEntryResponse>("/me/metrics", entry, "Failed to create metric entry");
+}
+
+export async function updateMetric(entryId: number, update: MetricEntryUpdate): Promise<MetricEntryResponse> {
+  return apiPatch<MetricEntryResponse>(`/me/metrics/${entryId}`, update, "Failed to update metric entry");
+}
+
+export async function deleteMetric(entryId: number): Promise<void> {
+  return apiDelete(`/me/metrics/${entryId}`, "Failed to delete metric entry");
+}
+
+export async function fetchCurrentMetrics(): Promise<CurrentMetricsResponse> {
+  return apiGet<CurrentMetricsResponse>("/me/metrics/current");
+}
+
+export async function fetchEffectiveMetrics(date: string, metricTypes?: string[]): Promise<CurrentMetricsResponse> {
+  const searchParams = new URLSearchParams();
+  searchParams.set("date", date);
+  if (metricTypes?.length) searchParams.set("metric_types", metricTypes.join(","));
+  return apiGet<CurrentMetricsResponse>(`/me/metrics/effective?${searchParams.toString()}`);
+}
+
+// ============================================================================
 // Thresholds and Zones API
 // ============================================================================
 
