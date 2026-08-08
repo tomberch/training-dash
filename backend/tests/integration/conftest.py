@@ -294,3 +294,16 @@ async def auth_client(app_client, seed_user):
     )
     assert response.status_code == 200
     return app_client
+
+
+@pytest_asyncio.fixture
+async def http_client():
+    """Lightweight app client with no database dependency.
+
+    For tests that only hit unauthenticated HTTP endpoints (e.g. tile proxy).
+    Avoids the db_engine TRUNCATE and seed_user bcrypt login overhead.
+    """
+    app = create_app()
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        yield client
