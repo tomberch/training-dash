@@ -11,8 +11,83 @@ Concrete implementations:
 """
 
 from typing import Protocol
+from uuid import UUID
 
-# Repository protocols will be added in subsequent tickets:
-# - #263: ActivityRepo
-# - #264: UserRepo
-# - #265: RouteRepo, CredentialsRepo, AuditLogRepo, etc.
+from trainingdash.repositories.postgres.models import Activity
+
+
+class ActivityRepo(Protocol):
+    """
+    Repository protocol for Activity entities.
+
+    All methods that modify data are assumed to handle their own commits
+    or work within an externally-managed transaction scope.
+    """
+
+    async def get_by_id(self, activity_id: UUID, user_id: int) -> Activity | None:
+        """
+        Fetch an activity by ID, scoped to the given user.
+
+        Returns None if not found or not owned by user.
+        """
+        ...
+
+    async def list_for_user(
+        self,
+        user_id: int,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> list[Activity]:
+        """
+        List activities for a user, ordered by started_at descending.
+
+        Args:
+            user_id: Owner's user ID
+            limit: Maximum number of activities to return
+            offset: Number of activities to skip (for pagination)
+
+        Returns:
+            List of Activity objects
+        """
+        ...
+
+    async def count_for_user(self, user_id: int) -> int:
+        """Count total activities for a user."""
+        ...
+
+    async def save(self, activity: Activity) -> Activity:
+        """
+        Persist an activity (insert or update).
+
+        Returns the saved activity with any DB-generated fields populated.
+        """
+        ...
+
+    async def delete(self, activity_id: UUID, user_id: int) -> bool:
+        """
+        Delete an activity owned by the given user.
+
+        Handles cascade cleanup (records, laps, peaks) and route maintenance.
+
+        Returns True if deleted, False if not found.
+        """
+        ...
+
+    async def list_by_route(
+        self,
+        route_id: int,
+        user_id: int,
+        exclude_activity_id: UUID | None = None,
+    ) -> list[Activity]:
+        """
+        List activities on a specific route for a user.
+
+        Args:
+            route_id: Route ID to filter by
+            user_id: Owner's user ID
+            exclude_activity_id: Optional activity ID to exclude from results
+
+        Returns:
+            List of Activity objects ordered by started_at descending
+        """
+        ...
