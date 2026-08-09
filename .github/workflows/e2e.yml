@@ -54,14 +54,28 @@ jobs:
         env:
           CI: true
 
-      - name: Upload test artifacts
+      - name: Generate test summary
+        if: always()
+        working-directory: frontend
+        run: |
+          echo "## :performing_arts: E2E Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          node scripts/format-test-summary.js >> $GITHUB_STEP_SUMMARY || echo "No results to summarize" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-html-report
+          path: frontend/e2e-report/
+          retention-days: 14
+
+      - name: Upload test artifacts (on failure)
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
-          path: |
-            frontend/e2e-report/
-            frontend/e2e-results/
+          name: playwright-traces
+          path: frontend/e2e-results/
           retention-days: 7
 
       - name: Stop Docker Compose stack

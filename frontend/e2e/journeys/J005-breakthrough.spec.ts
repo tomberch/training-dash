@@ -14,13 +14,13 @@
  * REQUIRES: MOCK_XERT_ENABLED=true in docker-compose.e2e.yml (enabled by default)
  */
 import { test, expect } from '@playwright/test';
-import { generateTestUser, registerAndApproveUser, loginViaApi } from './fixtures/auth';
-import { getFixtureFitPath } from './fixtures/upload';
+import { generateTestUser, registerAndApproveUser, loginViaApi } from '../fixtures/auth';
+import { getFixtureFitPath } from '../fixtures/upload';
 
 const testUser = generateTestUser('breakthrough');
 
 // Run tests serially - they depend on each other
-test.describe.serial('Breakthrough Upload Flow', () => {
+test.describe.serial('J005: Breakthrough Upload Flow', () => {
   test.beforeAll(async ({ request }) => {
     await registerAndApproveUser(request, testUser);
   });

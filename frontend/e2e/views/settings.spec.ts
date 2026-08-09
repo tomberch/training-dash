@@ -7,7 +7,7 @@
  * Uses admin API to approve user in case require_approval is enabled.
  */
 import { test, expect } from '@playwright/test';
-import { generateTestUser, registerAndApproveUser, loginViaApi } from './fixtures/auth';
+import { generateTestUser, registerAndApproveUser, loginViaApi } from '../fixtures/auth';
 
 const testUser = generateTestUser('settings');
 

@@ -8,8 +8,8 @@
  * to avoid conflicts with parallel tests.
  */
 import { test, expect } from '@playwright/test';
-import { generateTestUser } from './fixtures/auth';
-import { uploadFitFileAndWait, getFixtureFitPath } from './fixtures/upload';
+import { generateTestUser } from '../fixtures/auth';
+import { uploadFitFileAndWait, getFixtureFitPath } from '../fixtures/upload';
 
 // Test user for activity list tests (has activities)
 const testUser = generateTestUser('activity-list');

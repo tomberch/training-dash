@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
-import { generateTestUser, registerUser, loginUser, logoutUser, isLoggedIn } from './fixtures/auth';
+import { generateTestUser, registerUser, loginUser, logoutUser, isLoggedIn } from '../fixtures/auth';
 
-test.describe('Auth Flows', () => {
+test.describe('J002: Auth Flows', () => {
   test('valid login redirects to dashboard', async ({ page }) => {
     // Create a fresh user for this test
     const user = generateTestUser('auth-login');

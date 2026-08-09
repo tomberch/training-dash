@@ -16,8 +16,8 @@ import { test, expect, APIRequestContext } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import { generateTestUser } from './fixtures/auth';
-import { uploadFitFileAndWait } from './fixtures/upload';
+import { generateTestUser } from '../fixtures/auth';
+import { uploadFitFileAndWait } from '../fixtures/upload';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

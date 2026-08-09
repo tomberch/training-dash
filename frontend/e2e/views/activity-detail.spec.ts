@@ -13,8 +13,8 @@
  * to avoid conflicts with parallel tests.
  */
 import { test, expect } from '@playwright/test';
-import { generateTestUser } from './fixtures/auth';
-import { uploadFitFileAndWait, getFixtureFitPath } from './fixtures/upload';
+import { generateTestUser } from '../fixtures/auth';
+import { uploadFitFileAndWait, getFixtureFitPath } from '../fixtures/upload';
 
 // Shared state for serial tests
 let sharedActivityId: string | null = null;

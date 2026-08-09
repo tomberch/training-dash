@@ -13,13 +13,13 @@
  * REQUIRES: MOCK_XERT_ENABLED=true in docker-compose.e2e.yml (enabled by default)
  */
 import { test, expect } from '@playwright/test';
-import { generateTestUser, registerAndApproveUser, loginViaApi } from './fixtures/auth';
-import { MOCK_ACTIVITY_IDS } from './fixtures/xert';
+import { generateTestUser, registerAndApproveUser, loginViaApi } from '../fixtures/auth';
+import { MOCK_ACTIVITY_IDS } from '../fixtures/xert';
 
 const testUser = generateTestUser('xertsync');
 
 // Run tests serially - they depend on each other
-test.describe.serial('Xert Sync Flow', () => {
+test.describe.serial('J004: Xert Sync Flow', () => {
   test.beforeAll(async ({ request }) => {
     await registerAndApproveUser(request, testUser);
   });

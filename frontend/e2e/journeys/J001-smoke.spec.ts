@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { createAndLoginUser, registerUser, loginUser, generateTestUser } from './fixtures';
+import { createAndLoginUser, registerUser, loginUser, generateTestUser } from '../fixtures';
 
 /**
  * Smoke tests to verify the E2E infrastructure is working correctly.
@@ -10,7 +10,7 @@ import { createAndLoginUser, registerUser, loginUser, generateTestUser } from '.
  * - Basic navigation works
  */
 
-test.describe('Smoke Tests', () => {
+test.describe('J001: Smoke Tests', () => {
   test('health endpoint returns healthy', async ({ request }) => {
     const response = await request.get('/api/health');
     expect(response.ok()).toBeTruthy();

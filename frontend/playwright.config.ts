@@ -30,10 +30,16 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   
   /* Reporter to use */
-  reporter: [
-    ['html', { outputFolder: 'e2e-report' }],
-    ['list'],
-  ],
+  reporter: process.env.CI
+    ? [
+        ['github'],  // PR annotations on failures
+        ['html', { outputFolder: 'e2e-report', open: 'never' }],
+        ['json', { outputFile: 'e2e-results/results.json' }],  // For job summary
+      ]
+    : [
+        ['html', { outputFolder: 'e2e-report', open: 'on-failure' }],
+        ['list'],
+      ],
   
   /* Shared settings for all projects */
   use: {
@@ -66,17 +72,17 @@ export default defineConfig({
         storageState: '.auth/user.json',
       },
       dependencies: ['setup'],
-      // Exclude auth-approval tests - they need fresh browser state
-      testIgnore: /auth-approval\.spec\.ts/,
+      // Exclude admin-approval journey - needs fresh browser state
+      testIgnore: /J006-admin-approval\.spec\.ts/,
     },
-    // Unauthenticated project for auth flow tests
+    // Unauthenticated project for admin approval journey
     {
       name: 'chromium-no-auth',
       use: {
         ...devices['Desktop Chrome'],
         // No storageState - tests handle their own auth
       },
-      testMatch: /auth-approval\.spec\.ts/,
+      testMatch: /J006-admin-approval\.spec\.ts/,
     },
     // Uncomment to add more browsers:
     // {

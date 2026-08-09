@@ -11,8 +11,8 @@
  * (empty state before uploading, populated state after).
  */
 import { test, expect } from '@playwright/test';
-import { generateTestUser, registerAndApproveUser, loginViaApi } from './fixtures/auth';
-import { uploadFitFileAndWait, getFixtureFitPath } from './fixtures/upload';
+import { generateTestUser, registerAndApproveUser, loginViaApi } from '../fixtures/auth';
+import { uploadFitFileAndWait, getFixtureFitPath } from '../fixtures/upload';
 
 const testUser = generateTestUser('records');
 

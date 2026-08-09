@@ -17,12 +17,12 @@ import { test, expect } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import { generateTestUser, registerUser } from './fixtures/auth';
+import { generateTestUser, registerUser } from '../fixtures/auth';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-test.describe('Manual Onboarding Flow', () => {
+test.describe('J003: Manual Onboarding Flow', () => {
   // TODO: Update these tests to use the new Athlete > Thresholds page
   // instead of the old Settings > Thresholds section
   test.skip('register → set FTP → upload → verify metrics', async ({ page }) => {

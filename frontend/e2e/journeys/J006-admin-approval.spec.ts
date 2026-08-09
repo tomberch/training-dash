@@ -107,7 +107,7 @@ async function approveUser(
 }
 
 // Use a dedicated test describe block with serial mode to control order
-test.describe.serial('User Registration and Admin Approval Flow', () => {
+test.describe.serial('J006: Admin Approval Flow', () => {
   let pendingUserId: number;
 
   test('seed admin user is admin', async ({ request }) => {

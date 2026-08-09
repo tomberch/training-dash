@@ -10,7 +10,7 @@
  * ISOLATION: Uses seed admin for admin tests, generates own user for non-admin tests.
  */
 import { test, expect } from '@playwright/test';
-import { generateTestUser, registerAndApproveUser, loginViaApi, ADMIN_USER } from './fixtures/auth';
+import { generateTestUser, registerAndApproveUser, loginViaApi, ADMIN_USER } from '../fixtures/auth';
 
 // Non-admin test user
 const regularUser = generateTestUser('admintest');
