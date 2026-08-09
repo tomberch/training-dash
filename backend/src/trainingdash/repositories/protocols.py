@@ -394,6 +394,39 @@ class GeocodingCacheRepo(Protocol):
         ...
 
 
+class ThresholdRepo(Protocol):
+    """
+    Repository protocol for threshold metric entries (FTP, LTHR, HRmax).
+
+    All methods are read-only or flush-only; the caller owns the transaction.
+    """
+
+    async def get_for_date(self, user_id: int, target_date: "date") -> "ThresholdValues":
+        """Threshold values (FTP, LTHR, HRmax) effective on ``target_date``."""
+        ...
+
+    async def get_history(self, user_id: int) -> "list[ThresholdHistoryEntry]":
+        """All threshold entries, grouped by effective_date (descending)."""
+        ...
+
+    async def create(
+        self,
+        user_id: int,
+        effective_date: "date",
+        ftp_watts: int | None = None,
+        lthr_bpm: int | None = None,
+        hrmax_bpm: int | None = None,
+        source: str = "manual",
+        source_detail: str | None = None,
+    ) -> None:
+        """Create threshold entries for the provided values. Flushes; caller commits."""
+        ...
+
+    async def has_any_threshold(self, user_id: int) -> bool:
+        """True if the user has at least one FTP threshold entry."""
+        ...
+
+
 class AnalyticsRepo(Protocol):
     """
     Read-only repository protocol for analytics / dashboard queries.
@@ -434,6 +467,7 @@ from datetime import date, datetime
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from trainingdash.domain.thresholds import ThresholdHistoryEntry, ThresholdValues
     from trainingdash.repositories.postgres.analytics_repo import RecordsView
     from trainingdash.repositories.postgres.models import (
         Activity,

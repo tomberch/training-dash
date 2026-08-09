@@ -17,8 +17,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from trainingdash.domain.fitness import fit_cp_model
-from trainingdash.domain.thresholds import get_ftp_for_date
 from trainingdash.repositories.postgres.models import Activity, ActivityPeakPower, FitnessHistory, Notification
+from trainingdash.repositories.postgres.threshold_repo import PostgresThresholdRepo
 
 
 class FitnessModelUpdater:
@@ -99,7 +99,9 @@ class FitnessModelUpdater:
         ``batch_import: True`` and ``activity_count``). Otherwise dedupes by
         updating an existing pending notification in place.
         """
-        current_ftp = await get_ftp_for_date(self._db, user_id, date.today())
+        current_ftp = (
+            await PostgresThresholdRepo(self._db).get_for_date(user_id, date.today())
+        ).ftp_watts
 
         if current_ftp is None:
             return
