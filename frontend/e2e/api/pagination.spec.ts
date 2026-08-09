@@ -10,13 +10,13 @@
 import { test, expect, APIRequestContext } from '@playwright/test';
 
 // Admin user for seeding data
-const ADMIN_USER = {
+const _ADMIN_USER = {
   email: 'admin@example.com',
   password: 'admin',
 };
 
 // Test user for pagination tests
-const PAGINATION_USER = {
+const _PAGINATION_USER = {
   email: `pagination-${Date.now()}@test.com`,
   password: 'PaginationTest123!',
 };
@@ -41,7 +41,7 @@ async function loginUser(
 /**
  * Helper to register via API.
  */
-async function registerUser(
+async function _registerUser(
   request: APIRequestContext,
   email: string,
   password: string

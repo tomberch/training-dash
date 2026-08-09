@@ -155,12 +155,16 @@ export async function loginViaApi(
 
 /**
  * Extended test fixture with authenticated user.
+ * 
+ * Note: Playwright fixtures use a `use()` callback pattern that oxlint
+ * incorrectly flags as a React hook violation. The eslint-disable comments
+ * suppress these false positives.
  */
+/* eslint-disable react-hooks/rules-of-hooks, no-empty-pattern */
 export const test = base.extend<{
   authenticatedPage: Page;
   testUser: TestUser;
 }>({
-  // Provides a page with a freshly registered and logged-in user
   testUser: async ({}, use) => {
     const user = generateTestUser();
     await use(user);
@@ -172,5 +176,6 @@ export const test = base.extend<{
     await use(page);
   },
 });
+/* eslint-enable react-hooks/rules-of-hooks, no-empty-pattern */
 
 export { expect };

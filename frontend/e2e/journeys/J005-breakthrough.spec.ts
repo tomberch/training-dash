@@ -25,7 +25,7 @@ test.describe.serial('J005: Breakthrough Upload Flow', () => {
     await registerAndApproveUser(request, testUser);
   });
 
-  test('establish baseline: connect Xert and sync activities (CP ≈ 220W)', async ({ page, request }) => {
+  test('establish baseline: connect Xert and sync activities (CP ≈ 220W)', async ({ page }) => {
     await loginViaApi(page, testUser);
     await page.goto('/settings');
 
@@ -121,7 +121,7 @@ test.describe.serial('J005: Breakthrough Upload Flow', () => {
 
     // The breakthrough ride should be in the list
     // Look for activity with high power (295W area)
-    const pageContent = await page.content();
+    const _pageContent = await page.content();
 
     // Should have multiple activities (original sync + breakthrough)
     const count = await activityItems.count();

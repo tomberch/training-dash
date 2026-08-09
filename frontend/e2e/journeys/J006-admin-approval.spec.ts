@@ -12,7 +12,7 @@
  * The first user (seed admin) is already admin. We test the approval
  * flow by enabling require_approval and registering a new user.
  */
-import { test, expect, Page, APIRequestContext } from '@playwright/test';
+import { test, expect, APIRequestContext } from '@playwright/test';
 
 // Use the seed admin user created by init_db
 const ADMIN_USER = {

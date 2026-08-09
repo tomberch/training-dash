@@ -143,10 +143,10 @@ test.describe('J003: Manual Onboarding Flow', () => {
 
     // Get the actual values and verify they're reasonable
     // We use regex to find numeric values near the labels
-    const metricsSection = page.locator('text=Training Metrics').locator('..').locator('..');
+    const _metricsSection = page.locator('text=Training Metrics').locator('..').locator('..');
     
     // NP should be displayed and > 200W
-    const pageContent = await page.content();
+    const _pageContent = await page.content();
     
     // Verify IF is displayed (should show a value like 1.08)
     // The IF label should have a numeric value near it

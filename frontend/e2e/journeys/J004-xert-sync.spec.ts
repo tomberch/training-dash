@@ -14,7 +14,7 @@
  */
 import { test, expect } from '@playwright/test';
 import { generateTestUser, registerAndApproveUser, loginViaApi } from '../fixtures/auth';
-import { MOCK_ACTIVITY_IDS } from '../fixtures/xert';
+// MOCK_ACTIVITY_IDS removed - not currently used
 
 const testUser = generateTestUser('xertsync');
 
@@ -136,10 +136,10 @@ test.describe.serial('J004: Xert Sync Flow', () => {
 
     // Look for TSS value - it should be populated (not empty or zero)
     // TSS might be shown as "TSS: 85" or in a metrics section
-    const tssElement = page.locator('[data-testid="tss-value"], :text-matches("TSS[:\\s]*\\d+", "i")');
+    const _tssElement = page.locator('[data-testid="tss-value"], :text-matches("TSS[:\\s]*\\d+", "i")');
     
     // Alternatively, check the metrics display
-    const metricsSection = page.locator('[data-testid="activity-metrics"], .metrics, [class*="metric"]');
+    const _metricsSection = page.locator('[data-testid="activity-metrics"], .metrics, [class*="metric"]');
     
     // One of these should show TSS > 0
     const pageContent = await page.content();
