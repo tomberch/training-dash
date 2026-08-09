@@ -1,0 +1,52 @@
+# Latest (release) compose configuration
+# Uses the latest tagged release image from GitHub Container Registry
+#
+# Usage:
+#   docker compose -f compose/latest.yml up -d
+#   docker compose -f compose/latest.yml down
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: trainingdash
+      POSTGRES_PASSWORD: trainingdash
+      POSTGRES_DB: trainingdash
+    volumes:
+      - pgdata-latest:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trainingdash"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    image: ghcr.io/tomberch/training-dash:latest
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://trainingdash:trainingdash@db:5432/trainingdash
+      SECRET_KEY: prod-secret-change-me
+      ADMIN_PASSWORD: admin
+      TRAININGDASH_ENCRYPTION_KEY: D1prO+2rx2zmauRYJc8yKA2rbW0ABdAo5uf8ZJMoXSQ=
+    volumes:
+      - tilecache-latest:/app/tile-cache
+    depends_on:
+      db:
+        condition: service_healthy
+    command: sh -c "python -m trainingdash.init_db && uvicorn trainingdash.app:app --host 0.0.0.0 --port 8000"
+
+  worker:
+    image: ghcr.io/tomberch/training-dash:latest
+    environment:
+      DATABASE_URL: postgresql+asyncpg://trainingdash:trainingdash@db:5432/trainingdash
+      SECRET_KEY: prod-secret-change-me
+      TRAININGDASH_ENCRYPTION_KEY: D1prO+2rx2zmauRYJc8yKA2rbW0ABdAo5uf8ZJMoXSQ=
+    depends_on:
+      db:
+        condition: service_healthy
+    command: saq trainingdash.worker.settings
+
+volumes:
+  pgdata-latest:
+  tilecache-latest:

@@ -4,12 +4,12 @@ import { defineConfig, devices } from '@playwright/test';
  * Playwright configuration for E2E tests.
  *
  * Local development:
- *   - Start stack manually: docker compose -f ../docker-compose.e2e.yml up -d
+ *   - Start stack manually: make e2e (or docker compose -f compose/e2e.yml up -d --build)
  *   - Run tests: npm run test:e2e (reuses running server)
  *
  * CI:
  *   - Playwright starts the stack via webServer command
- *   - Fresh DB each run (no volumes in docker-compose.e2e.yml)
+ *   - Fresh DB each run (no volumes in compose/e2e.yml)
  */
 export default defineConfig({
   testDir: './e2e',
@@ -99,7 +99,7 @@ export default defineConfig({
 
   /* Run your local dev server before starting the tests */
   webServer: {
-    command: 'docker compose -f ../docker-compose.e2e.yml up --build',
+    command: 'docker compose -f ../compose/e2e.yml up --build',
     url: 'http://localhost:8001/api/health',
     // In CI, the workflow starts Docker Compose before running tests, so reuse it.
     // Locally, reuse if already running (for faster iteration), otherwise start it.

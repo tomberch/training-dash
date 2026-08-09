@@ -1,14 +1,14 @@
-# Docker Compose configuration for E2E testing
+# E2E testing compose configuration
 # Uses port 8001 to avoid conflicts with dev environment (8000)
+# Fresh DB each run (no persistent volume)
 #
 # Usage:
-#   docker compose -f docker-compose.e2e.yml up -d
-#   docker compose -f docker-compose.e2e.yml down -v  # tears down with volumes
+#   docker compose -f compose/e2e.yml up -d --build
+#   docker compose -f compose/e2e.yml down -v
 
 services:
   db:
     image: postgis/postgis:16-3.4
-    # No host port exposure - app/worker connect via Docker network
     environment:
       POSTGRES_USER: trainingdash_e2e
       POSTGRES_PASSWORD: trainingdash_e2e
@@ -22,23 +22,21 @@ services:
 
   app:
     build:
-      context: .
+      context: ..
       dockerfile: backend/Dockerfile
     ports:
-      - "8001:8000"  # E2E port
+      - "8001:8000"
     restart: on-failure:5
     environment:
       DATABASE_URL: postgresql+asyncpg://trainingdash_e2e:trainingdash_e2e@db:5432/trainingdash_e2e
       SECRET_KEY: e2e-test-secret-key
       ADMIN_PASSWORD: admin
       TRAININGDASH_ENCRYPTION_KEY: D1prO+2rx2zmauRYJc8yKA2rbW0ABdAo5uf8ZJMoXSQ=
-      # Xert mock configuration - enabled by default for E2E tests
       MOCK_XERT_ENABLED: "true"
       MOCK_XERT_FIXTURES_DIR: /app/e2e-fixtures/fit-files
     volumes:
       - e2e-tilecache:/app/tile-cache
-      # Mount fixture files for mock Xert client (when tests provide them)
-      - ./frontend/e2e/fixtures:/app/e2e-fixtures:ro
+      - ../frontend/e2e/fixtures:/app/e2e-fixtures:ro
     depends_on:
       db:
         condition: service_healthy
@@ -52,17 +50,16 @@ services:
 
   worker:
     build:
-      context: .
+      context: ..
       dockerfile: backend/Dockerfile
     environment:
       DATABASE_URL: postgresql+asyncpg://trainingdash_e2e:trainingdash_e2e@db:5432/trainingdash_e2e
       SECRET_KEY: e2e-test-secret-key
       TRAININGDASH_ENCRYPTION_KEY: D1prO+2rx2zmauRYJc8yKA2rbW0ABdAo5uf8ZJMoXSQ=
-      # Xert mock configuration - enabled by default for E2E tests
       MOCK_XERT_ENABLED: "true"
       MOCK_XERT_FIXTURES_DIR: /app/e2e-fixtures/fit-files
     volumes:
-      - ./frontend/e2e/fixtures:/app/e2e-fixtures:ro
+      - ../frontend/e2e/fixtures:/app/e2e-fixtures:ro
     depends_on:
       db:
         condition: service_healthy

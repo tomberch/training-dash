@@ -1,0 +1,15 @@
+# Base compose configuration - shared services and settings
+# This file is extended by other compose files via `include`
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: trainingdash
+      POSTGRES_PASSWORD: trainingdash
+      POSTGRES_DB: trainingdash
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trainingdash"]
+      interval: 5s
+      timeout: 5s
+      retries: 5

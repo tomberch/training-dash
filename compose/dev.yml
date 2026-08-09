@@ -1,8 +1,13 @@
+# Development compose configuration
+# Builds from local source code
+#
+# Usage:
+#   docker compose -f compose/dev.yml up -d --build
+#   docker compose -f compose/dev.yml down
+
 services:
   db:
     image: postgis/postgis:16-3.4
-    # No host port exposure - app/worker connect via Docker network
-    # For direct access, use: docker compose exec db psql -U trainingdash
     environment:
       POSTGRES_USER: trainingdash
       POSTGRES_PASSWORD: trainingdash
@@ -17,12 +22,12 @@ services:
 
   app:
     build:
-      context: .
+      context: ..
       dockerfile: backend/Dockerfile
     ports:
       - "8000:8000"
     env_file:
-      - backend/.env
+      - ../backend/.env
     environment:
       DATABASE_URL: postgresql+asyncpg://trainingdash:trainingdash@db:5432/trainingdash
       SECRET_KEY: dev-secret-change-me
@@ -37,7 +42,7 @@ services:
 
   worker:
     build:
-      context: .
+      context: ..
       dockerfile: backend/Dockerfile
     environment:
       DATABASE_URL: postgresql+asyncpg://trainingdash:trainingdash@db:5432/trainingdash
