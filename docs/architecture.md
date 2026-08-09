@@ -55,46 +55,73 @@ flowchart TB
 
 ## Backend Structure
 
+The backend follows a Clean Architecture pattern (see [ADR-0002](adr/0002-clean-architecture.md)) with clear separation between layers:
+
 ```
 backend/src/trainingdash/
 ├── app.py              # FastAPI application setup, middleware, static files
 ├── config.py           # Environment configuration (Settings class)
-├── db.py               # Database session management
-├── models.py           # SQLAlchemy ORM models
 ├── auth.py             # Authentication (JWT sessions, password hashing)
 ├── crypto.py           # Credential encryption (Fernet)
 │
-├── routers/            # API endpoints organized by domain
-│   ├── auth.py         # /api/auth/* (login, logout, me)
+├── domain/             # Pure business logic (no I/O dependencies)
+│   ├── fitness.py      # TSS, IF, NP calculations
+│   ├── pmc.py          # Performance Management Chart (CTL/ATL/TSB)
+│   ├── peaks.py        # Peak power detection algorithms
+│   ├── metrics.py      # Training metrics computation
+│   ├── wbal.py         # W'bal (anaerobic capacity) tracking
+│   ├── zones.py        # HR/power zone calculations
+│   ├── polyline.py     # Google polyline encoding
+│   └── resampler.py    # Time-series resampling
+│
+├── repositories/       # Data access abstractions
+│   ├── protocols.py    # Repository interfaces (ActivityRepo, UserRepo, etc.)
+│   └── postgres/       # PostgreSQL implementations
+│       ├── activity_repo.py
+│       ├── user_repo.py
+│       ├── models.py   # SQLAlchemy ORM models
+│       └── db.py       # Database session management
+│
+├── use_cases/          # Application business operations
+│   ├── ingest_activity.py    # FIT file parsing and storage
+│   ├── delete_activity.py    # Activity deletion with cleanup
+│   ├── sync_from_provider.py # External provider sync
+│   └── recalculate_metrics.py # Batch metric recalculation
+│
+├── routers/            # HTTP API endpoints
 │   ├── activities.py   # /api/activities/* (CRUD, upload, detail)
 │   ├── analytics.py    # /api/analytics/* (PMC, power curve, records)
-│   ├── admin.py        # /api/admin/* (user management, nuke, sync)
-│   ├── user.py         # /api/user/* (preferences, integrations)
-│   └── serializers.py  # Pydantic response models
+│   ├── admin.py        # /api/admin/* (user management, sync)
+│   ├── auth.py         # /api/auth/* (login, logout)
+│   ├── user.py         # /api/me/* (preferences, integrations)
+│   ├── metrics.py      # /api/me/metrics/* (thresholds, zones)
+│   └── serializers.py  # Pydantic request/response models
 │
-├── ingest.py           # FIT file parsing and activity creation
-├── fitness.py          # TSS, IF, NP calculations
-├── pmc.py              # Performance Management Chart (CTL/ATL/TSB)
-├── peaks.py            # Peak power detection
-├── metrics.py          # Activity metrics computation
-├── hr_power.py         # HR zones, power zones
-├── wbal.py             # W'bal (anaerobic capacity) tracking
-├── thresholds.py       # FTP/LTHR management
-├── route_matching.py   # GPS route similarity (Hausdorff distance)
-├── polyline.py         # Google polyline encoding for map thumbnails
-├── resampler.py        # Time-series resampling for charts
-├── geocoding.py        # Reverse geocoding for activity locations
-├── title_generator.py  # Auto-generate activity titles
+├── integrations/       # External service clients
+│   ├── protocols.py    # SyncProvider interface
+│   ├── xert.py         # Xert API client
+│   └── garmin.py       # Garmin Connect client
 │
-├── garmin.py           # Garmin Connect client
-├── xert.py             # Xert API client
-├── sync.py             # Sync orchestration
-├── sync_providers.py   # Provider abstraction
-│
+├── dependencies.py     # FastAPI dependency injection factories
+├── ingest.py           # FIT parsing and legacy ingest functions
+├── sync_providers.py   # Provider implementations (XertSyncProvider, etc.)
+├── jobs.py             # Job enqueue helpers
 ├── worker.py           # arq worker settings and job definitions
-├── jobs.py             # Background job implementations
 └── init_db.py          # Database initialization script
 ```
+
+### Layer Dependencies
+
+```
+routers → use_cases → repositories (protocols)
+              ↓              ↓
+           domain      postgres (implementations)
+```
+
+- **Routers** call use cases, never repositories directly
+- **Use cases** depend on repository protocols (interfaces), not implementations
+- **Domain** modules are pure functions with no I/O
+- **Repositories** implement protocols and handle database operations
 
 ## Frontend Structure
 
@@ -182,6 +209,14 @@ PostGIS is used for:
 See [docs/adr/](adr/) for Architecture Decision Records:
 
 - **ADR-0001**: Hard delete for nuke actions (no soft delete or trash)
+- **ADR-0002**: Clean Architecture — separates domain, use cases, repositories, and routers
+
+### Why Clean Architecture?
+
+The codebase needed clearer boundaries as it grew. Clean Architecture provides:
+- **Testability**: Use cases can be tested with fake repositories (no database)
+- **Maintainability**: Changes to database don't affect business logic
+- **AI-navigability**: Clear conventions for where code belongs
 
 ### Why PostGIS?
 
