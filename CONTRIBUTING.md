@@ -115,10 +115,16 @@ function ActivityCard({ activity, onClick }: ActivityCardProps): JSX.Element {
 traindash/
 ├── backend/
 │   ├── src/trainingdash/    # Python package
+│   │   ├── domain/          # Pure business logic (no I/O)
+│   │   ├── repositories/    # Data access (protocols + postgres/)
+│   │   ├── use_cases/       # Application workflows
+│   │   ├── integrations/    # External API clients
 │   │   ├── routers/         # API endpoints
-│   │   ├── models.py        # SQLAlchemy models
-│   │   └── ...
+│   │   └── dependencies.py  # Dependency injection
 │   ├── tests/               # pytest tests
+│   │   ├── unit/            # Fast tests (domain/, use_cases/)
+│   │   ├── integration/     # Tests requiring Postgres/Redis
+│   │   └── fakes/           # Fake repository implementations
 │   └── migrations/          # Alembic migrations
 ├── frontend/
 │   ├── src/
@@ -128,6 +134,8 @@ traindash/
 │   └── ...
 └── docs/
 ```
+
+See `docs/architecture.md` and `docs/adr/0002-clean-architecture-refactor.md` for detailed backend structure.
 
 ## Making Changes
 

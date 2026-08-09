@@ -346,6 +346,36 @@ class OAuthLinkRepo(Protocol):
         ...
 
 
+class RouteRepo(Protocol):
+    """
+    Repository protocol for Route entities.
+    
+    Note: Complex spatial operations (find_or_create with Hausdorff distance)
+    remain in route_matching.py due to PostGIS dependency. This protocol
+    covers simpler route operations.
+    """
+
+    async def get_by_id(self, route_id: int) -> "Route | None":
+        """Fetch a route by ID."""
+        ...
+
+    async def list_for_user(self, user_id: int) -> list["Route"]:
+        """List all routes for a user, ordered by ride_count descending."""
+        ...
+
+    async def increment_ride_count(self, route_id: int) -> None:
+        """Increment the ride count for a route."""
+        ...
+
+    async def decrement_ride_count(self, route_id: int) -> None:
+        """Decrement the ride count for a route."""
+        ...
+
+    async def delete(self, route_id: int) -> bool:
+        """Delete a route. Returns True if deleted."""
+        ...
+
+
 # Import types for type hints (avoid circular import at runtime)
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -356,6 +386,7 @@ if TYPE_CHECKING:
         GarminCredentials,
         Notification,
         RecalculationJob,
+        Route,
         User,
         UserOAuthLink,
         XertCredentials,

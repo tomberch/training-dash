@@ -32,7 +32,7 @@ from trainingdash.repositories.postgres.models import (
     User,
 )
 from trainingdash.domain.peaks import extract_peak_powers
-from trainingdash.thresholds import get_thresholds_for_date, ThresholdValues
+from trainingdash.domain.thresholds import get_thresholds_for_date, ThresholdValues
 from trainingdash.domain.wbal import compute_wbal_series
 from trainingdash.domain.fitness import detect_breakthrough, get_all_time_bests, fit_cp_model
 
@@ -675,7 +675,7 @@ class ActivityPipeline:
             result.title_source = "pending"
         else:
             try:
-                from trainingdash.title_generator import generate_activity_title
+                from trainingdash.domain.title_generator import generate_activity_title
                 
                 title = await generate_activity_title(
                     self.records, self.activity.started_at

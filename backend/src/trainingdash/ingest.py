@@ -15,7 +15,7 @@ from trainingdash.domain.metrics import (
     compute_tss,
 )
 from trainingdash.domain.zones import compute_zone_times
-from trainingdash.thresholds import (
+from trainingdash.domain.thresholds import (
     get_thresholds_for_date,
     get_ftp_for_date,
     create_threshold_entries,

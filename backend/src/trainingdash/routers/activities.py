@@ -10,7 +10,7 @@ from sqlalchemy import select, func
 from trainingdash.auth import CurrentUser, DbSession
 from trainingdash.dependencies import ActivityRepoD, DeleteActivityD
 from trainingdash.repositories.postgres.models import Activity, ActivityPeakPower, Record
-from trainingdash.thresholds import get_thresholds_for_date
+from trainingdash.domain.thresholds import get_thresholds_for_date
 from trainingdash.routers.datetime_utils import utc_str
 from trainingdash.routers.serializers import (
     activity_detail,
@@ -177,7 +177,7 @@ async def generate_activity_title_endpoint(
     ]
     
     # Generate title
-    from trainingdash.title_generator import generate_activity_title
+    from trainingdash.domain.title_generator import generate_activity_title
     
     title = await generate_activity_title(records_dicts, activity.started_at)
     

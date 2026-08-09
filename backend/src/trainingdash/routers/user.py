@@ -31,7 +31,7 @@ from trainingdash.routers.serializers import (
     user_response,
 )
 from trainingdash.routers.datetime_utils import utc_str
-from trainingdash.thresholds import (
+from trainingdash.domain.thresholds import (
     ensure_default_thresholds,
     get_all_threshold_entries,
     get_thresholds_for_date,

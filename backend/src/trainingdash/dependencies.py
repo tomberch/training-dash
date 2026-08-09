@@ -18,6 +18,17 @@ from typing import Annotated
 from fastapi import Depends
 
 from trainingdash.auth import DbSession
+from trainingdash.repositories.protocols import (
+    ActivityRepo,
+    AppSettingsRepo,
+    AuditLogRepo,
+    GarminCredentialsRepo,
+    NotificationRepo,
+    OAuthLinkRepo,
+    RecalculationJobRepo,
+    UserRepo,
+    XertCredentialsRepo,
+)
 from trainingdash.repositories.postgres.activity_repo import PostgresActivityRepo
 from trainingdash.repositories.postgres.audit_log_repo import PostgresAuditLogRepo
 from trainingdash.repositories.postgres.credentials_repo import (
@@ -33,67 +44,61 @@ from trainingdash.repositories.postgres.settings_repo import PostgresAppSettings
 from trainingdash.repositories.postgres.user_repo import PostgresUserRepo
 
 
-async def get_activity_repo(db: DbSession) -> PostgresActivityRepo:
+async def get_activity_repo(db: DbSession) -> ActivityRepo:
     """Create an ActivityRepo bound to the current session."""
     return PostgresActivityRepo(db)
 
 
-async def get_user_repo(db: DbSession) -> PostgresUserRepo:
+async def get_user_repo(db: DbSession) -> UserRepo:
     """Create a UserRepo bound to the current session."""
     return PostgresUserRepo(db)
 
 
-async def get_xert_credentials_repo(db: DbSession) -> PostgresXertCredentialsRepo:
+async def get_xert_credentials_repo(db: DbSession) -> XertCredentialsRepo:
     """Create an XertCredentialsRepo bound to the current session."""
     return PostgresXertCredentialsRepo(db)
 
 
-async def get_garmin_credentials_repo(db: DbSession) -> PostgresGarminCredentialsRepo:
+async def get_garmin_credentials_repo(db: DbSession) -> GarminCredentialsRepo:
     """Create a GarminCredentialsRepo bound to the current session."""
     return PostgresGarminCredentialsRepo(db)
 
 
-async def get_notification_repo(db: DbSession) -> PostgresNotificationRepo:
+async def get_notification_repo(db: DbSession) -> NotificationRepo:
     """Create a NotificationRepo bound to the current session."""
     return PostgresNotificationRepo(db)
 
 
-async def get_app_settings_repo(db: DbSession) -> PostgresAppSettingsRepo:
+async def get_app_settings_repo(db: DbSession) -> AppSettingsRepo:
     """Create an AppSettingsRepo bound to the current session."""
     return PostgresAppSettingsRepo(db)
 
 
-async def get_audit_log_repo(db: DbSession) -> PostgresAuditLogRepo:
+async def get_audit_log_repo(db: DbSession) -> AuditLogRepo:
     """Create an AuditLogRepo bound to the current session."""
     return PostgresAuditLogRepo(db)
 
 
-async def get_recalculation_job_repo(db: DbSession) -> PostgresRecalculationJobRepo:
+async def get_recalculation_job_repo(db: DbSession) -> RecalculationJobRepo:
     """Create a RecalculationJobRepo bound to the current session."""
     return PostgresRecalculationJobRepo(db)
 
 
-async def get_oauth_link_repo(db: DbSession) -> PostgresOAuthLinkRepo:
+async def get_oauth_link_repo(db: DbSession) -> OAuthLinkRepo:
     """Create an OAuthLinkRepo bound to the current session."""
     return PostgresOAuthLinkRepo(db)
 
 
 # Annotated types for use in router function signatures
-ActivityRepoD = Annotated[PostgresActivityRepo, Depends(get_activity_repo)]
-UserRepoD = Annotated[PostgresUserRepo, Depends(get_user_repo)]
-XertCredentialsRepoD = Annotated[
-    PostgresXertCredentialsRepo, Depends(get_xert_credentials_repo)
-]
-GarminCredentialsRepoD = Annotated[
-    PostgresGarminCredentialsRepo, Depends(get_garmin_credentials_repo)
-]
-NotificationRepoD = Annotated[PostgresNotificationRepo, Depends(get_notification_repo)]
-AppSettingsRepoD = Annotated[PostgresAppSettingsRepo, Depends(get_app_settings_repo)]
-AuditLogRepoD = Annotated[PostgresAuditLogRepo, Depends(get_audit_log_repo)]
-RecalculationJobRepoD = Annotated[
-    PostgresRecalculationJobRepo, Depends(get_recalculation_job_repo)
-]
-OAuthLinkRepoD = Annotated[PostgresOAuthLinkRepo, Depends(get_oauth_link_repo)]
+ActivityRepoD = Annotated[ActivityRepo, Depends(get_activity_repo)]
+UserRepoD = Annotated[UserRepo, Depends(get_user_repo)]
+XertCredentialsRepoD = Annotated[XertCredentialsRepo, Depends(get_xert_credentials_repo)]
+GarminCredentialsRepoD = Annotated[GarminCredentialsRepo, Depends(get_garmin_credentials_repo)]
+NotificationRepoD = Annotated[NotificationRepo, Depends(get_notification_repo)]
+AppSettingsRepoD = Annotated[AppSettingsRepo, Depends(get_app_settings_repo)]
+AuditLogRepoD = Annotated[AuditLogRepo, Depends(get_audit_log_repo)]
+RecalculationJobRepoD = Annotated[RecalculationJobRepo, Depends(get_recalculation_job_repo)]
+OAuthLinkRepoD = Annotated[OAuthLinkRepo, Depends(get_oauth_link_repo)]
 
 
 # --- Use Cases ---
