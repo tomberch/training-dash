@@ -407,9 +407,7 @@ class AnalyticsRepo(Protocol):
         """Most recent fitness snapshot for the user, or None."""
         ...
 
-    async def get_fitness_history(
-        self, user_id: int, limit: int = 10
-    ) -> "list[FitnessHistory]":
+    async def get_fitness_history(self, user_id: int, limit: int = 10) -> "list[FitnessHistory]":
         """Recent fitness snapshots, most recent first."""
         ...
 
@@ -433,7 +431,7 @@ class AnalyticsRepo(Protocol):
 
 # Import types for type hints (avoid circular import at runtime)
 from datetime import date, datetime
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from trainingdash.repositories.postgres.analytics_repo import RecordsView

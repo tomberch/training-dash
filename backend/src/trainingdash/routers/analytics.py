@@ -55,9 +55,7 @@ async def get_pmc(
         start = end - timedelta(weeks=12)
 
     activities = await repo.list_activities_for_pmc(user.id)
-    daily_tss = aggregate_daily_tss(
-        [{"started_at": a.started_at, "tss": a.tss} for a in activities]
-    )
+    daily_tss = aggregate_daily_tss([{"started_at": a.started_at, "tss": a.tss} for a in activities])
     return compute_pmc(daily_tss, start, end)
 
 

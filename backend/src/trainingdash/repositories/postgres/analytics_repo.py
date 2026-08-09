@@ -4,7 +4,7 @@ Read-only analytics queries for the dashboard endpoints: fitness history,
 PMC source activities, power curve, and lifetime/per-route records.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any
 
@@ -57,9 +57,7 @@ class PostgresAnalyticsRepo:
         )
         return result.scalar_one_or_none()
 
-    async def get_fitness_history(
-        self, user_id: int, limit: int = 10
-    ) -> list[FitnessHistory]:
+    async def get_fitness_history(self, user_id: int, limit: int = 10) -> list[FitnessHistory]:
         """Recent fitness snapshots, most recent first."""
         result = await self._session.execute(
             select(FitnessHistory)
@@ -72,9 +70,7 @@ class PostgresAnalyticsRepo:
     async def list_activities_for_pmc(self, user_id: int) -> list[Activity]:
         """All activities for the user, ordered by started_at ASC (for TSS aggregation)."""
         result = await self._session.execute(
-            select(Activity)
-            .where(Activity.user_id == user_id)
-            .order_by(Activity.started_at)
+            select(Activity).where(Activity.user_id == user_id).order_by(Activity.started_at)
         )
         return list(result.scalars().all())
 
@@ -95,13 +91,9 @@ class PostgresAnalyticsRepo:
             .where(Activity.user_id == user_id)
         )
         if start is not None:
-            query = query.where(
-                Activity.started_at >= datetime.combine(start, datetime.min.time())
-            )
+            query = query.where(Activity.started_at >= datetime.combine(start, datetime.min.time()))
         if end is not None:
-            query = query.where(
-                Activity.started_at <= datetime.combine(end, datetime.max.time())
-            )
+            query = query.where(Activity.started_at <= datetime.combine(end, datetime.max.time()))
         result = await self._session.execute(query)
         return list(result.all())
 
@@ -178,11 +170,7 @@ class PostgresAnalyticsRepo:
         # Window functions: fastest activity per route + earliest activity per route
         # We compute MIN(elapsed_time_s) per route, then find the activity matching it.
         # FIRST_VALUE gives us the first activity's started_at for the label.
-        fastest_time = (
-            func.min(Activity.elapsed_time_s)
-            .over(partition_by=Activity.route_id)
-            .label("fastest_time")
-        )
+        fastest_time = func.min(Activity.elapsed_time_s).over(partition_by=Activity.route_id).label("fastest_time")
         # Rank activities within each route by elapsed_time_s ASC to find the record holder
         fastest_rank = (
             func.row_number()
@@ -255,11 +243,7 @@ class PostgresAnalyticsRepo:
 
         route_prs: list[RoutePrView] = []
         for row in result.all():
-            route_label = (
-                row.first_started_at.strftime("%Y-%m-%d")
-                if row.first_started_at
-                else f"Route {row.route_id}"
-            )
+            route_label = row.first_started_at.strftime("%Y-%m-%d") if row.first_started_at else f"Route {row.route_id}"
             route_prs.append(
                 RoutePrView(
                     route_id=row.route_id,
