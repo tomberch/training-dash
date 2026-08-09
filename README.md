@@ -120,8 +120,7 @@ To sync activities from Garmin or Xert, go to **Settings > Integrations**.
 ```bash
 cd backend
 uv sync
-source .venv/bin/activate
-pytest  # run tests
+uv run pytest  # run tests (use -n auto for parallel integration tests)
 ```
 
 **Frontend:**

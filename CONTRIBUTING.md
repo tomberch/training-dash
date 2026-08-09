@@ -26,12 +26,12 @@ source .venv/bin/activate  # Activate virtualenv
 cp .env.example .env       # Create local config
 ```
 
-Run tests:
+Run tests (from the `backend/` directory):
 ```bash
-pytest                     # All tests
-pytest -x                  # Stop on first failure
-pytest -k "test_name"      # Run specific test
-pytest --cov               # With coverage
+uv run pytest              # All tests
+uv run pytest -x           # Stop on first failure
+uv run pytest -k "test_name"  # Run specific test
+uv run pytest --cov        # With coverage
 ```
 
 ### Frontend
@@ -179,25 +179,27 @@ See `backend/tests/TEST_ARCHITECTURE.md` for detailed documentation.
 
 ### Performance Targets
 
-| Test Suite | Target | Notes |
-|------------|--------|-------|
-| Unit tests | < 10 seconds | Pure Python, no I/O |
-| Integration tests | < 4 minutes | Includes testcontainer startup |
-| Full suite | < 5 minutes | Sequential execution |
+| Test Suite | Target | Actual |
+|------------|--------|--------|
+| Unit tests | < 10 seconds | ~6s |
+| Integration tests (per-file, dev loop) | < 30 seconds | 3-12s serial; 7-9s with `-n auto` |
+| Integration tests (full suite) | < 2 minutes | ~45s with `-n auto`; ~103s serial |
 
 ### Backend Tests
 
-Tests use [testcontainers](https://testcontainers.com/) to spin up real PostgreSQL and Redis instances:
+Tests use a persistent Postgres+PostGIS container (`traindash-test-db` on port 5433) for integration tests, and [testcontainers](https://testcontainers.com/) as a fallback when that container isn't available.
 
 ```bash
 cd backend
-pytest tests/unit/ -q             # Fast unit tests (~5s)
-pytest tests/integration/ -q      # Integration tests (~3-4min)
-pytest                            # All tests
-pytest -v --tb=short              # Verbose with short tracebacks
+uv run pytest tests/unit/ -q                          # Fast unit tests (~6s)
+uv run pytest tests/integration/<file>.py -q          # Per-change loop (3-12s)
+uv run pytest tests/integration/<file>.py -n auto -q  # Per-change loop, parallel (7-9s)
+uv run pytest tests/integration/ -n auto -q           # Full integration suite (~45s)
+uv run pytest -n auto -q                              # All tests
+uv run pytest -v --tb=short                           # Verbose with short tracebacks
 ```
 
-For faster integration test iteration, the test suite auto-manages a persistent postgres container named `traindash-test-db` on port 5433. The first run creates it (~6s), subsequent runs reuse it (instant startup).
+Integration tests use per-test SAVEPOINT rollback (no TRUNCATE) and, under `-n auto`, per-worker schema isolation (`test_gw0`, `test_gw1`, ...) in the shared DB. See `docs/adr/0003-rollback-isolation-and-xdist-schema-per-worker.md`. The persistent `traindash-test-db` container is auto-managed — the first run creates it (~6s), subsequent runs reuse it (instant startup).
 
 ```bash
 # Reset the test database if needed
