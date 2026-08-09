@@ -395,11 +395,7 @@ async def http_client():
         yield client
 
 
-# Backward-compat aliases: older tests referenced the TRUNCATE-named fixtures.
-# They now delegate to the rollback fixtures (semantically equivalent — both
-# deliver a clean DB per test).
-truncate_db_engine = db_engine
-truncate_db_session = db_session
-truncate_seed_user = seed_user
-truncate_app_client = app_client
-truncate_auth_client = auth_client
+# Backward-compat aliases removed: `truncate_*` fixtures had zero references
+# after the rollback rewrite (verified via grep). If a future test needs a
+# TRUNCATE-style clean-DB fixture, add it back explicitly — rollback now
+# provides the same guarantee faster.
