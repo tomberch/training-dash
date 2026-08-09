@@ -27,6 +27,20 @@ _CARTO_STYLES: dict[CartoStyle, str] = {
 }
 
 
+def _tile_coord_str(value: int, *, max_inclusive: int, name: str) -> str:
+    """
+    Validate and normalize a tile coordinate (z/x/y) to a safe string.
+
+    Returns the value's decimal string iff 0 <= value <= max_inclusive.
+    The returned string is derived purely from the validated int, so it
+    contains only digits and is safe to interpolate into a URL or path.
+    Raises HTTPException(400) otherwise.
+    """
+    if value < 0 or value > max_inclusive:
+        raise HTTPException(status_code=400, detail=f"Invalid {name}")
+    return str(value)
+
+
 def _safe_cache_path(base_dir: Path, *parts: str) -> Path:
     """
     Construct a cache path with traversal protection.
@@ -67,17 +81,16 @@ async def get_osm_tile(z: int, x: int, y: int) -> FileResponse:
     and improve performance.
     """
     # Validate zoom level (0-19 is standard for web maps)
-    if z < 0 or z > 19:
-        raise HTTPException(status_code=400, detail="Invalid zoom level")
+    z_s = _tile_coord_str(z, max_inclusive=19, name="zoom level")
 
     # Validate tile coordinates for the given zoom level
     max_coord = 2**z - 1
-    if x < 0 or x > max_coord or y < 0 or y > max_coord:
-        raise HTTPException(status_code=400, detail="Invalid tile coordinates")
+    x_s = _tile_coord_str(x, max_inclusive=max_coord, name="tile coordinate")
+    y_s = _tile_coord_str(y, max_inclusive=max_coord, name="tile coordinate")
 
     # Construct cache path with traversal protection
     try:
-        cache_path = _safe_cache_path(TILE_CACHE_DIR, str(z), str(x), f"{y}.png")
+        cache_path = _safe_cache_path(TILE_CACHE_DIR, z_s, x_s, f"{y_s}.png")
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid tile path")
 
@@ -88,15 +101,12 @@ async def get_osm_tile(z: int, x: int, y: int) -> FileResponse:
             headers=_cache_headers(hit=True),
         )
 
-    # Construct URL using allowlisted base URL and validated integers
-    # The z, x, y values are validated above (z: 0-19, x/y: 0 to 2^z-1)
-    # and are integers, so SSRF is not possible - only valid tile coordinates
-    # can reach this point.
-    osm_url = f"{_OSM_TILE_URL}/{z}/{x}/{y}.png"
+    # URL built from validated, digit-only coordinate strings.
+    osm_url = f"{_OSM_TILE_URL}/{z_s}/{x_s}/{y_s}.png"
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                osm_url,  # nosec B310 - URL uses allowlisted base + validated integers
+                osm_url,
                 headers={"User-Agent": TILE_USER_AGENT},
                 timeout=10.0,
             )
@@ -135,17 +145,16 @@ async def get_carto_tile(style: CartoStyle, z: int, x: int, y: int) -> FileRespo
         )
 
     # Validate zoom level (0-19 is standard for web maps)
-    if z < 0 or z > 19:
-        raise HTTPException(status_code=400, detail="Invalid zoom level")
+    z_s = _tile_coord_str(z, max_inclusive=19, name="zoom level")
 
     # Validate tile coordinates for the given zoom level
     max_coord = 2**z - 1
-    if x < 0 or x > max_coord or y < 0 or y > max_coord:
-        raise HTTPException(status_code=400, detail="Invalid tile coordinates")
+    x_s = _tile_coord_str(x, max_inclusive=max_coord, name="tile coordinate")
+    y_s = _tile_coord_str(y, max_inclusive=max_coord, name="tile coordinate")
 
     # Construct cache path with traversal protection
     try:
-        cache_path = _safe_cache_path(TILE_CACHE_DIR, "carto", style, str(z), str(x), f"{y}.png")
+        cache_path = _safe_cache_path(TILE_CACHE_DIR, "carto", style, z_s, x_s, f"{y_s}.png")
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid tile path")
 
@@ -156,16 +165,14 @@ async def get_carto_tile(style: CartoStyle, z: int, x: int, y: int) -> FileRespo
             headers=_cache_headers(hit=True),
         )
 
-    # Construct URL using allowlisted base URL, validated style, and validated integers
-    # The style is from a Literal["light", "dark"] type and dict lookup,
-    # z, x, y are validated integers. SSRF is not possible.
+    # URL built from validated, digit-only coordinate strings + validated style.
     carto_style = _CARTO_STYLES[style]
-    carto_url = f"{_CARTO_TILE_URL}/{carto_style}/{z}/{x}/{y}.png"
+    carto_url = f"{_CARTO_TILE_URL}/{carto_style}/{z_s}/{x_s}/{y_s}.png"
 
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                carto_url,  # nosec B310 - URL uses allowlisted base + validated integers
+                carto_url,
                 headers={"User-Agent": TILE_USER_AGENT},
                 timeout=10.0,
             )
