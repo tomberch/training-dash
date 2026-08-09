@@ -376,6 +376,30 @@ class RouteRepo(Protocol):
         ...
 
 
+class GeocodingCacheRepo(Protocol):
+    """
+    Repository protocol for geocoding cache entries.
+    
+    Caches reverse geocoding results to respect OpenStreetMap/Photon rate limits.
+    """
+
+    async def get(self, cache_key: str) -> str | None:
+        """
+        Get cached geocoding result by key.
+        
+        Returns JSON string if found, None if not cached.
+        """
+        ...
+
+    async def set(self, cache_key: str, result_json: str) -> None:
+        """
+        Store geocoding result in cache.
+        
+        Upserts the entry (inserts or updates if key exists).
+        """
+        ...
+
+
 # Import types for type hints (avoid circular import at runtime)
 from datetime import datetime
 from typing import TYPE_CHECKING

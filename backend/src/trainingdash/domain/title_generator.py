@@ -4,23 +4,24 @@ Activity title generator from GPS coordinates.
 Analyzes GPS tracks to generate descriptive titles like:
 - "Roundtrip Burgistein via Grosse Scheidegg, Interlaken"
 - "Bern to Thun via Belp"
+
+This module contains pure domain logic for title generation.
+The GeocodingService dependency is injected by callers.
 """
 
 import json
 import logging
 import math
-import os
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
+    from trainingdash.integrations.geocoding import GeocodingService
 
 from trainingdash.integrations.geocoding import (
     GeocodedPlace,
-    GeocodingService,
     get_place_rank,
 )
 
@@ -165,7 +166,7 @@ def find_furthest_point(points: list[RoutePoint]) -> Optional[RoutePoint]:
 
 
 def is_place_on_route(
-    place: "GeocodedPlace",
+    place: GeocodedPlace,
     points: list[RoutePoint],
     threshold_m: float = PLACE_PROXIMITY_THRESHOLD_M
 ) -> bool:
@@ -242,7 +243,7 @@ def find_passes_along_route(
 
 async def find_settlements_along_route(
     points: list[RoutePoint],
-    geocoding: GeocodingService,
+    geocoding: "GeocodingService",
     max_settlements: int = 5,
     min_spacing_m: float = WAYPOINT_MIN_SPACING_M,
 ) -> list[TitleWaypoint]:
@@ -360,7 +361,7 @@ def generate_title(
 async def generate_activity_title(
     records: list[dict],
     activity_date: Optional[datetime] = None,
-    db: Optional["AsyncSession"] = None,
+    geocoding: Optional["GeocodingService"] = None,
 ) -> Optional[str]:
     """
     Generate a title for an activity from its GPS records.
@@ -368,7 +369,7 @@ async def generate_activity_title(
     Args:
         records: List of record dicts with lat, lon, altitude_m, distance_m
         activity_date: Activity start date for fallback title
-        db: Database session for geocoding cache (optional - if not provided,
+        geocoding: GeocodingService for reverse geocoding (optional - if not provided,
             geocoding will be skipped and a generic title returned)
     
     Returns:
@@ -388,14 +389,11 @@ async def generate_activity_title(
     # Check if roundtrip
     roundtrip = is_roundtrip(records)
     
-    # If no db session, skip geocoding and return generic title
-    if db is None:
+    # If no geocoding service, skip geocoding and return generic title
+    if geocoding is None:
         if activity_date:
             return f"Activity on {activity_date.strftime('%d %b %Y')}"
         return "Activity"
-    
-    # Get geocoding service with db session
-    geocoding = GeocodingService(db)
     
     # Geocode start point
     start_point = points[0]

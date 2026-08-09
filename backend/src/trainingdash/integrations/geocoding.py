@@ -1,20 +1,17 @@
 """
 Geocoding service for reverse geocoding GPS coordinates to place names.
 
-Uses Photon (Komoot) as the primary geocoding provider with Postgres caching
+Uses Photon (Komoot) as the primary geocoding provider with caching
 to respect rate limits and improve performance.
 """
 
 import asyncio
 import json
 import logging
-import os
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Protocol
 
 import httpx
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +19,6 @@ logger = logging.getLogger(__name__)
 PHOTON_URL = "https://photon.komoot.io/reverse"
 
 # Cache settings
-CACHE_TTL_SECONDS = 365 * 24 * 60 * 60  # 1 year (place names rarely change)
 COORDINATE_PRECISION = 2  # Round to 2 decimals (~1km grid)
 
 # Rate limiting: 1 request per second to be safe
@@ -48,7 +44,6 @@ class GeocodedPlace:
             "country": self.country,
             "state": self.state,
         }
-
 
     @classmethod
     def from_dict(cls, data: dict) -> "GeocodedPlace":
@@ -93,36 +88,36 @@ def _cache_key(lat: float, lon: float, prefer_locality: bool = False) -> str:
     return f"geocode:{rounded_lat}:{rounded_lon}{suffix}"
 
 
+class GeocodingCacheRepo(Protocol):
+    """Protocol for geocoding cache repository."""
+    
+    async def get(self, cache_key: str) -> str | None:
+        """Get cached result by key."""
+        ...
+    
+    async def set(self, cache_key: str, result_json: str) -> None:
+        """Store result in cache."""
+        ...
+
+
 class GeocodingService:
     """
-    Async geocoding service with Postgres caching and rate limiting.
+    Async geocoding service with caching and rate limiting.
     
     Usage:
-        service = GeocodingService(db_session)
+        from trainingdash.repositories.postgres.geocoding_cache_repo import PostgresGeocodingCacheRepo
+        
+        cache_repo = PostgresGeocodingCacheRepo(db)
+        service = GeocodingService(cache_repo)
         place = await service.reverse_geocode(46.9480, 7.4474)
+        await service.close()
     """
     
-    def __init__(self, db: AsyncSession):
-        self._db = db
+    def __init__(self, cache_repo: GeocodingCacheRepo):
+        self._cache = cache_repo
         self._http: Optional[httpx.AsyncClient] = None
         self._last_request_time: float = 0
         self._lock = asyncio.Lock()
-        self._table_checked = False
-
-    async def _ensure_cache_table(self):
-        """Ensure the geocoding cache table exists."""
-        if self._table_checked:
-            return
-        
-        await self._db.execute(text("""
-            CREATE TABLE IF NOT EXISTS geocoding_cache (
-                cache_key VARCHAR(100) PRIMARY KEY,
-                result_json TEXT,
-                created_at TIMESTAMP DEFAULT NOW()
-            )
-        """))
-        await self._db.commit()
-        self._table_checked = True
 
     async def _get_http_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client."""
@@ -133,13 +128,13 @@ class GeocodingService:
             )
         return self._http
     
-    async def close(self):
+    async def close(self) -> None:
         """Close HTTP connection."""
         if self._http:
             await self._http.aclose()
             self._http = None
     
-    async def _rate_limit(self):
+    async def _rate_limit(self) -> None:
         """Enforce rate limiting between requests."""
         async with self._lock:
             now = asyncio.get_event_loop().time()
@@ -148,38 +143,12 @@ class GeocodingService:
                 await asyncio.sleep(RATE_LIMIT_DELAY - elapsed)
             self._last_request_time = asyncio.get_event_loop().time()
     
-    async def _get_from_cache(self, cache_key: str) -> Optional[dict]:
-        """Get cached result from Postgres."""
-        await self._ensure_cache_table()
-        result = await self._db.execute(
-            text("SELECT result_json FROM geocoding_cache WHERE cache_key = :key"),
-            {"key": cache_key}
-        )
-        row = result.fetchone()
-        if row and row[0]:
-            return json.loads(row[0])
-        return None
-    
-    async def _set_cache(self, cache_key: str, value: Optional[dict]):
-        """Store result in Postgres cache."""
-        await self._ensure_cache_table()
-        json_value = json.dumps(value) if value is not None else None
-        await self._db.execute(
-            text("""
-                INSERT INTO geocoding_cache (cache_key, result_json)
-                VALUES (:key, :value)
-                ON CONFLICT (cache_key) DO UPDATE SET result_json = :value, created_at = NOW()
-            """),
-            {"key": cache_key, "value": json_value}
-        )
-        await self._db.commit()
-    
     async def reverse_geocode(self, lat: float, lon: float, prefer_locality: bool = False) -> Optional[GeocodedPlace]:
         """
         Reverse geocode a coordinate to a place name.
         
         Returns the most relevant place (city/town/village) or None if not found.
-        Uses Postgres cache to avoid repeated API calls.
+        Uses cache to avoid repeated API calls.
         
         Args:
             lat: Latitude
@@ -191,13 +160,14 @@ class GeocodingService:
         
         # Check cache first
         try:
-            cached = await self._get_from_cache(cache_key)
+            cached = await self._cache.get(cache_key)
             if cached is not None:
-                if cached.get("_null"):
+                data = json.loads(cached)
+                if data.get("_null"):
                     return None  # Negative cache hit
-                return GeocodedPlace.from_dict(cached)
+                return GeocodedPlace.from_dict(data)
         except Exception as e:
-            logger.warning(f"Postgres cache read error: {e}")
+            logger.warning(f"Cache read error: {e}")
         
         # Rate limit before API call
         await self._rate_limit()
@@ -217,11 +187,11 @@ class GeocodingService:
             # Cache the result (including None for negative caching)
             try:
                 if place:
-                    await self._set_cache(cache_key, place.to_dict())
+                    await self._cache.set(cache_key, json.dumps(place.to_dict()))
                 else:
-                    await self._set_cache(cache_key, {"_null": True})
+                    await self._cache.set(cache_key, json.dumps({"_null": True}))
             except Exception as e:
-                logger.warning(f"Postgres cache write error: {e}")
+                logger.warning(f"Cache write error: {e}")
             
             return place
             
@@ -230,12 +200,7 @@ class GeocodingService:
             return None
     
     def _parse_photon_response(self, data: dict, prefer_locality: bool = False) -> Optional[GeocodedPlace]:
-        """Parse Photon API response to extract place information.
-        
-        Args:
-            data: Photon API response
-            prefer_locality: Ignored - always prefer city/village level names for clarity.
-        """
+        """Parse Photon API response to extract place information."""
         features = data.get("features", [])
         if not features:
             return None
@@ -259,7 +224,6 @@ class GeocodingService:
                 place_name = props[ptype]
                 place_type = ptype
                 break
-
 
         # Fallback to name if available (but skip POI-like names)
         if not place_name and "name" in props:
