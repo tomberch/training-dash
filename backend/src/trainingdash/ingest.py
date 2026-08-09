@@ -15,15 +15,10 @@ from trainingdash.domain.metrics import (
     compute_tss,
 )
 from trainingdash.domain.polyline import generate_map_polyline
-from trainingdash.domain.thresholds import (
-    create_threshold_entries,
-    get_all_threshold_entries,
-    get_ftp_for_date,
-    get_thresholds_for_date,
-)
 from trainingdash.domain.wbal import compute_wbal_series
 from trainingdash.domain.zones import compute_zone_times
 from trainingdash.repositories.postgres.models import Activity, ActivityPeakPower, Lap, Record, User
+from trainingdash.repositories.postgres.threshold_repo import PostgresThresholdRepo
 
 logger = logging.getLogger(__name__)
 
@@ -520,14 +515,17 @@ async def _auto_create_threshold_if_needed(
     earliest_date = min(a.started_at.date() for a in activities)
 
     # Check if there's already a threshold covering the earliest activity
-    existing_ftp = await get_ftp_for_date(db, user_id, earliest_date)
+    threshold_repo = PostgresThresholdRepo(db)
+    existing_ftp = (
+        await threshold_repo.get_for_date(user_id, earliest_date)
+    ).ftp_watts
 
     if existing_ftp is not None:
         # Already have coverage for historical activities
         return
 
     # Check if there's any threshold at all (user may have set one for "today")
-    all_thresholds = await get_all_threshold_entries(db, user_id)
+    all_thresholds = await threshold_repo.get_history(user_id)
     any_threshold = all_thresholds[0] if all_thresholds else None
 
     # Build peak powers list for CP model
@@ -549,14 +547,13 @@ async def _auto_create_threshold_if_needed(
 
     # If user has a manual threshold, copy HR values from it
     if any_threshold is not None:
-        if any_threshold.get("lthr_bpm"):
-            lthr_bpm = any_threshold["lthr_bpm"]
-        if any_threshold.get("hrmax_bpm"):
-            hrmax_bpm = any_threshold["hrmax_bpm"]
+        if any_threshold.lthr_bpm:
+            lthr_bpm = any_threshold.lthr_bpm
+        if any_threshold.hrmax_bpm:
+            hrmax_bpm = any_threshold.hrmax_bpm
 
     # Create auto-calculated threshold entries for historical activities
-    await create_threshold_entries(
-        db,
+    await threshold_repo.create(
         user_id,
         earliest_date,
         ftp_watts=cp_watts,
@@ -655,7 +652,7 @@ async def backfill_activity_metrics(
     for activity in activities:
         # Get thresholds effective at activity date
         activity_date = activity.started_at.date()
-        threshold = await get_thresholds_for_date(db, user_id, activity_date)
+        threshold = await PostgresThresholdRepo(db).get_for_date(user_id, activity_date)
 
         if threshold is None or threshold.ftp_watts is None:
             continue

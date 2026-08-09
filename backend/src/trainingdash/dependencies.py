@@ -33,6 +33,7 @@ from trainingdash.repositories.postgres.recalculation_job_repo import (
     PostgresRecalculationJobRepo,
 )
 from trainingdash.repositories.postgres.settings_repo import PostgresAppSettingsRepo
+from trainingdash.repositories.postgres.threshold_repo import PostgresThresholdRepo
 from trainingdash.repositories.postgres.user_repo import PostgresUserRepo
 from trainingdash.repositories.protocols import (
     ActivityRepo,
@@ -43,6 +44,7 @@ from trainingdash.repositories.protocols import (
     NotificationRepo,
     OAuthLinkRepo,
     RecalculationJobRepo,
+    ThresholdRepo,
     UserRepo,
     XertCredentialsRepo,
 )
@@ -98,6 +100,11 @@ async def get_oauth_link_repo(db: DbSession) -> OAuthLinkRepo:
     return PostgresOAuthLinkRepo(db)
 
 
+async def get_threshold_repo(db: DbSession) -> ThresholdRepo:
+    """Create a ThresholdRepo bound to the current session."""
+    return PostgresThresholdRepo(db)
+
+
 def get_geocoding_service(db: DbSession) -> GeocodingService:
     """Wire a GeocodingService with a Postgres cache repo.
 
@@ -120,11 +127,13 @@ AppSettingsRepoD = Annotated[AppSettingsRepo, Depends(get_app_settings_repo)]
 AuditLogRepoD = Annotated[AuditLogRepo, Depends(get_audit_log_repo)]
 RecalculationJobRepoD = Annotated[RecalculationJobRepo, Depends(get_recalculation_job_repo)]
 OAuthLinkRepoD = Annotated[OAuthLinkRepo, Depends(get_oauth_link_repo)]
+ThresholdRepoD = Annotated[ThresholdRepo, Depends(get_threshold_repo)]
 
 
 # --- Use Cases ---
 
 from trainingdash.use_cases.delete_activity import DeleteActivity
+from trainingdash.use_cases.ensure_default_thresholds import EnsureDefaultThresholds
 from trainingdash.use_cases.ingest_activity import IngestActivity
 
 
@@ -140,5 +149,13 @@ async def get_delete_activity_use_case(
     return DeleteActivity(activity_repo)
 
 
+async def get_ensure_default_thresholds_use_case(db: DbSession) -> EnsureDefaultThresholds:
+    """Create an EnsureDefaultThresholds use case bound to the current session."""
+    return EnsureDefaultThresholds(db)
+
+
 IngestActivityD = Annotated[IngestActivity, Depends(get_ingest_activity_use_case)]
 DeleteActivityD = Annotated[DeleteActivity, Depends(get_delete_activity_use_case)]
+EnsureDefaultThresholdsD = Annotated[
+    EnsureDefaultThresholds, Depends(get_ensure_default_thresholds_use_case)
+]

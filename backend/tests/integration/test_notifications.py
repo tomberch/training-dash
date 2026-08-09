@@ -9,8 +9,8 @@ from sqlalchemy import select
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "tests" / "fixtures"))
 from generate_fit import make_test_fit
 
-from trainingdash.domain.thresholds import create_threshold_entries
 from trainingdash.repositories.postgres.models import MetricEntry, MetricType, Notification
+from trainingdash.repositories.postgres.threshold_repo import PostgresThresholdRepo
 
 
 class TestNotificationsEndpoint:
@@ -112,8 +112,7 @@ class TestAcceptNotification:
         from datetime import date as date_type
 
         # Create existing threshold using metric_entries
-        await create_threshold_entries(
-            db_session,
+        await PostgresThresholdRepo(db_session).create(
             user_id=seed_user.id,
             effective_date=date_type(2024, 1, 1),
             ftp_watts=250,

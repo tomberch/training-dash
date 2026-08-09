@@ -23,7 +23,7 @@ from trainingdash.domain.metrics import (
     compute_tss,
 )
 from trainingdash.domain.peaks import extract_peak_powers
-from trainingdash.domain.thresholds import ThresholdValues, get_thresholds_for_date
+from trainingdash.domain.thresholds import ThresholdValues
 from trainingdash.domain.wbal import compute_wbal_series
 from trainingdash.domain.zones import compute_zone_times
 from trainingdash.repositories.postgres.models import (
@@ -238,7 +238,11 @@ class ActivityPipeline:
 
     async def _get_threshold_for_date(self, activity_date) -> ThresholdValues | None:
         """Get the threshold effective at the given date."""
-        return await get_thresholds_for_date(self.db, self.activity.user_id, activity_date)
+        from trainingdash.repositories.postgres.threshold_repo import PostgresThresholdRepo
+
+        return await PostgresThresholdRepo(self.db).get_for_date(
+            self.activity.user_id, activity_date
+        )
 
     async def _compute_power_metrics(
         self,

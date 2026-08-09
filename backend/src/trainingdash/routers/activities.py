@@ -8,8 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 
 from trainingdash.auth import CurrentUser, DbSession
-from trainingdash.dependencies import ActivityRepoD, DeleteActivityD
-from trainingdash.domain.thresholds import get_thresholds_for_date
+from trainingdash.dependencies import ActivityRepoD, DeleteActivityD, ThresholdRepoD
 from trainingdash.repositories.postgres.models import Activity, ActivityPeakPower, Record
 from trainingdash.routers.datetime_utils import utc_str
 from trainingdash.routers.serializers import (
@@ -207,13 +206,13 @@ async def get_activity_records(db: DbSession, repo: ActivityRepoD, user: Current
 
 
 @router.get("/activities/{activity_id}/wbal")
-async def get_activity_wbal(db: DbSession, repo: ActivityRepoD, user: CurrentUser, activity_id: UUID):
+async def get_activity_wbal(db: DbSession, repo: ActivityRepoD, threshold_repo: ThresholdRepoD, user: CurrentUser, activity_id: UUID):
     """Get W'bal time series for an activity."""
     activity = await _get_owned_activity(repo, user, activity_id)
 
     # Get threshold effective at activity date
     activity_date = activity.started_at.date()
-    threshold = await get_thresholds_for_date(db, user.id, activity_date)
+    threshold = await threshold_repo.get_for_date(user.id, activity_date)
 
     if threshold is None or threshold.ftp_watts is None:
         return {"wbal_series": [], "w_prime_joules": None, "ftp_watts": None}

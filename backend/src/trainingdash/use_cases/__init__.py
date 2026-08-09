@@ -23,6 +23,7 @@ Example:
 
 from trainingdash.use_cases.breakthrough_evaluator import BreakthroughEvaluator
 from trainingdash.use_cases.delete_activity import DeleteActivity
+from trainingdash.use_cases.ensure_default_thresholds import EnsureDefaultThresholds
 from trainingdash.use_cases.fitness_model_updater import FitnessModelUpdater
 from trainingdash.use_cases.hourly_sync_scheduler import HourlySyncScheduler
 from trainingdash.use_cases.ingest_activity import IngestActivity
@@ -34,6 +35,7 @@ from trainingdash.use_cases.sync_from_provider import SyncFromProvider, SyncResu
 __all__ = [
     "BreakthroughEvaluator",
     "DeleteActivity",
+    "EnsureDefaultThresholds",
     "FitnessModelUpdater",
     "HourlySyncScheduler",
     "IngestActivity",
