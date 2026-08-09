@@ -499,8 +499,9 @@ class ActivityPipeline:
             await self.db.flush()
             await self.db.refresh(self.activity)
             
-            # Update fitness model
-            await self._update_fitness_model()
+            # Update fitness model (user-level recompute via use case)
+            from trainingdash.use_cases.fitness_model_updater import FitnessModelUpdater
+            await FitnessModelUpdater(self.db).execute(self.activity.user_id)
             result.fitness_updated = True
         
         return result
@@ -524,12 +525,6 @@ class ActivityPipeline:
             peaks_by_activity[p.activity_id][p.duration_seconds] = p.watts
         
         return get_all_time_bests(list(peaks_by_activity.values()))
-
-    async def _update_fitness_model(self) -> None:
-        """Recalculate and store user's fitness model via the FitnessModelUpdater use case."""
-        from trainingdash.use_cases.fitness_model_updater import FitnessModelUpdater
-
-        await FitnessModelUpdater(self.db).execute(self.activity.user_id)
 
     async def match_route(self) -> RouteMatchResult:
         """

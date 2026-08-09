@@ -25,6 +25,8 @@ from trainingdash.use_cases.ingest_activity import IngestActivity
 from trainingdash.use_cases.delete_activity import DeleteActivity
 from trainingdash.use_cases.sync_from_provider import SyncFromProvider, SyncResult
 from trainingdash.use_cases.recalculate_metrics import RecalculateMetrics, RecalculationResult
+from trainingdash.use_cases.fitness_model_updater import FitnessModelUpdater
+from trainingdash.use_cases.breakthrough_evaluator import BreakthroughEvaluator
 
 __all__ = [
     "IngestActivity",
@@ -33,4 +35,6 @@ __all__ = [
     "SyncResult",
     "RecalculateMetrics",
     "RecalculationResult",
+    "FitnessModelUpdater",
+    "BreakthroughEvaluator",
 ]
