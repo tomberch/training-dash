@@ -624,8 +624,8 @@ class TestHourlySyncScheduler:
         _fake_enqueue_garmin.calls = []
 
         with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
-            with mock.patch("trainingdash.worker.enqueue_sync_xert_job", _fake_enqueue_xert):
-                with mock.patch("trainingdash.worker.enqueue_sync_garmin_job", _fake_enqueue_garmin):
+            with mock.patch("trainingdash.use_cases.hourly_sync_scheduler.enqueue_sync_xert_job", _fake_enqueue_xert):
+                with mock.patch("trainingdash.use_cases.hourly_sync_scheduler.enqueue_sync_garmin_job", _fake_enqueue_garmin):
                     from trainingdash.worker import hourly_sync_scheduler
                     result = await hourly_sync_scheduler({})
 
@@ -656,8 +656,8 @@ class TestHourlySyncScheduler:
             return "test-job-key"
 
         with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
-            with mock.patch("trainingdash.worker.enqueue_sync_xert_job", _fake_enqueue_xert):
-                with mock.patch("trainingdash.worker.enqueue_sync_garmin_job", _fake_enqueue_garmin):
+            with mock.patch("trainingdash.use_cases.hourly_sync_scheduler.enqueue_sync_xert_job", _fake_enqueue_xert):
+                with mock.patch("trainingdash.use_cases.hourly_sync_scheduler.enqueue_sync_garmin_job", _fake_enqueue_garmin):
                     from trainingdash.worker import hourly_sync_scheduler
                     result = await hourly_sync_scheduler({})
 

@@ -27,11 +27,7 @@ from saq import CronJob
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine, AsyncEngine
 
 from trainingdash.integrations.xert.mock_client import setup_mock_xert_client
-from trainingdash.jobs import (
-    enqueue_match_route_job,
-    enqueue_sync_garmin_job,
-    enqueue_sync_xert_job,
-)
+from trainingdash.jobs import enqueue_match_route_job
 
 logger = logging.getLogger(__name__)
 
@@ -98,75 +94,19 @@ async def ingest_job(ctx: dict, *, user_id: int, fit_bytes_b64: str, source: str
 
 
 async def match_route_job(ctx: dict, *, activity_id: str, user_id: int):
-    """Match an activity to a route cluster.
-    
-    Note: activity_id is a string (UUID serialized) for JSON compatibility.
-    """
-    from uuid import UUID as PyUUID
-    from sqlalchemy import select
-    from trainingdash.repositories.postgres.models import Activity, Record
-    from trainingdash.route_matching import find_or_create_route_id
-
-    # Convert string back to UUID
-    activity_uuid = PyUUID(activity_id)
+    """Match an activity to a route cluster (thin dispatch to MatchRoute use case)."""
+    from trainingdash.use_cases.match_route import MatchRoute
 
     async with worker_db_session(ctx) as db:
-        result = await db.execute(select(Activity).where(Activity.id == activity_uuid))
-        activity = result.scalar_one_or_none()
-        if activity is None:
-            return {"success": False}
-
-        records_result = await db.execute(
-            select(Record).where(Record.activity_id == activity_uuid).order_by(Record.timestamp)
-        )
-        all_records = records_result.scalars().all()
-        route_id = await find_or_create_route_id(db, activity, all_records)
-        if route_id is not None:
-            activity.route_id = route_id
-            await db.commit()
-        return {"success": True, "route_id": route_id}
+        return await MatchRoute(db).execute(activity_id, user_id)
 
 
 async def recalculate_after_delete_job(ctx: dict, *, user_id: int) -> dict:
-    """
-    Recompute fitness model and breakthrough flags after an activity is deleted.
-
-    Runs asynchronously so the DELETE endpoint returns 204 immediately.
-    Steps:
-      1. Recompute FitnessHistory (CP model) from remaining activities.
-      2. Re-evaluate is_breakthrough flags on all remaining activities.
-
-    Idempotent — safe to re-run after partial failure.
-    """
-    import logging
-
-    from trainingdash.use_cases.fitness_model_updater import FitnessModelUpdater
-    from trainingdash.use_cases.breakthrough_evaluator import BreakthroughEvaluator
-
-    logger = logging.getLogger(__name__)
+    """Recompute fitness model + breakthrough flags after a delete (thin dispatch)."""
+    from trainingdash.use_cases.recalc_after_delete import RecalcAfterDelete
 
     async with worker_db_session(ctx) as db:
-        # Step 1: Recompute fitness model (FitnessHistory snapshot)
-        try:
-            await FitnessModelUpdater(db).execute(user_id)
-            await db.commit()
-        except Exception:
-            logger.exception(
-                "recalculate_after_delete_job: fitness model update failed for user %s",
-                user_id,
-            )
-
-        # Step 2: Re-evaluate is_breakthrough on all remaining activities
-        try:
-            await BreakthroughEvaluator(db).execute(user_id)
-            await db.commit()
-        except Exception:
-            logger.exception(
-                "recalculate_after_delete_job: breakthrough re-evaluation failed for user %s",
-                user_id,
-            )
-
-        return {"success": True, "user_id": user_id}
+        return await RecalcAfterDelete(db).execute(user_id)
 
 
 async def sync_xert_job(ctx: dict, *, user_id: int):
@@ -220,53 +160,11 @@ async def sync_garmin_job(ctx: dict, *, user_id: int):
 
 
 async def hourly_sync_scheduler(ctx: dict):
-    """
-    Hourly cron job: enqueue sync jobs for users whose sync_hour matches current hour.
-    
-    Garmin syncs are enqueued immediately (at :00).
-    Xert syncs are deferred by 15 minutes to stagger API calls.
-    """
-    from sqlalchemy import select
-    from trainingdash.repositories.postgres.models import GarminCredentials, XertCredentials, User
-    
-    current_hour = datetime.now(timezone.utc).hour
-    logger.info(f"hourly_sync_scheduler: Running for hour {current_hour}")
-    
+    """Hourly cron: enqueue sync jobs for users whose sync_hour matches (thin dispatch)."""
+    from trainingdash.use_cases.hourly_sync_scheduler import HourlySyncScheduler
+
     async with worker_db_session(ctx) as db:
-        # Find users with this sync_hour who have Garmin credentials
-        garmin_result = await db.execute(
-            select(GarminCredentials.user_id)
-            .join(User, User.id == GarminCredentials.user_id)
-            .where(User.sync_hour == current_hour)
-        )
-        garmin_user_ids = garmin_result.scalars().all()
-        
-        # Find users with this sync_hour who have Xert credentials
-        xert_result = await db.execute(
-            select(XertCredentials.user_id)
-            .join(User, User.id == XertCredentials.user_id)
-            .where(User.sync_hour == current_hour)
-        )
-        xert_user_ids = xert_result.scalars().all()
-    
-    if not garmin_user_ids and not xert_user_ids:
-        logger.info(f"hourly_sync_scheduler: No users scheduled for hour {current_hour}")
-        return {"success": True, "garmin_queued": 0, "xert_queued": 0}
-
-    # Enqueue Garmin syncs immediately
-    for user_id in garmin_user_ids:
-        await enqueue_sync_garmin_job(user_id)
-        logger.info(f"hourly_sync_scheduler: Enqueued Garmin sync for user {user_id}")
-
-    # Enqueue Xert syncs with 15 minute delay to stagger
-    import time
-    defer_until = time.time() + (15 * 60)  # 15 minutes from now
-    for user_id in xert_user_ids:
-        await enqueue_sync_xert_job(user_id, scheduled=defer_until)
-        logger.info(f"hourly_sync_scheduler: Enqueued Xert sync for user {user_id} (deferred 15min)")
-    
-    logger.info(f"hourly_sync_scheduler: Queued {len(garmin_user_ids)} Garmin, {len(xert_user_ids)} Xert syncs")
-    return {"success": True, "garmin_queued": len(garmin_user_ids), "xert_queued": len(xert_user_ids)}
+        return await HourlySyncScheduler(db).execute()
 
 
 async def recalculate_metrics_job(ctx: dict, *, user_id: int) -> dict:
