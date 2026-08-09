@@ -101,7 +101,9 @@ export default defineConfig({
   webServer: {
     command: 'docker compose -f ../docker-compose.e2e.yml up --build',
     url: 'http://localhost:8001/api/health',
-    reuseExistingServer: !process.env.CI,
+    // In CI, the workflow starts Docker Compose before running tests, so reuse it.
+    // Locally, reuse if already running (for faster iteration), otherwise start it.
+    reuseExistingServer: true,
     timeout: 120_000, // 2 minutes for Docker build + startup
     stdout: 'pipe',
     stderr: 'pipe',
