@@ -142,9 +142,7 @@ async def get_carto_tile(style: CartoStyle, z: int, x: int, y: int) -> FileRespo
 
     # Construct cache path with traversal protection
     try:
-        cache_path = _safe_cache_path(
-            TILE_CACHE_DIR, "carto", style, str(z), str(x), f"{y}.png"
-        )
+        cache_path = _safe_cache_path(TILE_CACHE_DIR, "carto", style, str(z), str(x), f"{y}.png")
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid tile path")
 
