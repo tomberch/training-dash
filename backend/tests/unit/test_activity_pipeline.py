@@ -555,12 +555,14 @@ class TestPipelineRun:
         assert result.title.title == "Morning Ride"
 
     @pytest.mark.asyncio
-    async def test_parallel_steps_run_concurrently(
+    async def test_route_and_title_run_sequentially(
         self, mock_db, mock_activity, sample_records
     ):
-        """Route matching and title generation should run in parallel."""
-        import asyncio
-
+        """Route matching and title generation run sequentially.
+        
+        These steps run sequentially because both use the same db session,
+        and asyncpg doesn't support concurrent operations on one connection.
+        """
         pipeline = ActivityPipeline(
             db=mock_db,
             activity=mock_activity,
@@ -572,13 +574,11 @@ class TestPipelineRun:
 
         async def mock_route():
             call_order.append("route_start")
-            await asyncio.sleep(0.01)
             call_order.append("route_end")
             return RouteMatchResult()
 
         async def mock_title():
             call_order.append("title_start")
-            await asyncio.sleep(0.01)
             call_order.append("title_end")
             return TitleResult()
 
@@ -594,13 +594,8 @@ class TestPipelineRun:
                             with patch.object(pipeline, "generate_title", mock_title):
                                 await pipeline.run()
 
-        # Both should start before either ends (parallel execution)
-        # The exact order may vary, but both starts should come before any end
-        starts = [i for i, x in enumerate(call_order) if x.endswith("_start")]
-        ends = [i for i, x in enumerate(call_order) if x.endswith("_end")]
-        
-        # Both starts should happen before the first end
-        assert max(starts) < min(ends)
+        # Route matching completes before title generation starts (sequential)
+        assert call_order == ["route_start", "route_end", "title_start", "title_end"]
 
 
 class TestErrorHandling:
