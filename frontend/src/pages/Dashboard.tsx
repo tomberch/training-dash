@@ -27,6 +27,7 @@ import { TSB_ZONES, getTSBZone } from "../constants";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 
 function DashboardLoadingSkeleton() {
   return (
@@ -475,9 +476,16 @@ export function Dashboard() {
               </ResponsiveContainer>
             </div>
           ) : (
-            <div className="h-40 flex items-center justify-center text-muted-foreground text-sm">
-              No data available
-            </div>
+            <EmptyState
+              icon={
+                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                </svg>
+              }
+              title="No fitness data yet"
+              description="Upload activities with power or heart rate data to track your fitness over time."
+              className="h-40 py-4"
+            />
           )}
           
           {currentPMC && (
@@ -506,38 +514,45 @@ export function Dashboard() {
         {/* Weekly Summary */}
         <div className="bg-card rounded-lg border border-border p-4">
           <h2 className="text-sm font-medium text-muted-foreground mb-3">This Week</h2>
-          <div className="space-y-3">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Rides</span>
-              <span className="font-medium text-foreground">{weeklySummary.thisWeek.count}</span>
+          {weeklySummary.thisWeek.count === 0 ? (
+            <div className="flex flex-col items-center justify-center py-4 text-center">
+              <p className="text-sm text-muted-foreground">No rides this week yet</p>
+              <p className="text-xs text-muted-foreground mt-1">Time to get out there!</p>
             </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Time</span>
-              <div className="text-right">
-                <span className="font-medium text-foreground">{formatDuration(weeklySummary.thisWeek.duration)}</span>
-                {weeklySummary.lastWeek.duration > 0 && (
-                  <span className={`ml-2 text-xs ${weeklySummary.thisWeek.duration >= weeklySummary.lastWeek.duration ? "text-success" : "text-destructive"}`}>
-                    vs {formatDuration(weeklySummary.lastWeek.duration)}
-                  </span>
-                )}
+          ) : (
+            <div className="space-y-3">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Rides</span>
+                <span className="font-medium text-foreground">{weeklySummary.thisWeek.count}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Time</span>
+                <div className="text-right">
+                  <span className="font-medium text-foreground">{formatDuration(weeklySummary.thisWeek.duration)}</span>
+                  {weeklySummary.lastWeek.duration > 0 && (
+                    <span className={`ml-2 text-xs ${weeklySummary.thisWeek.duration >= weeklySummary.lastWeek.duration ? "text-success" : "text-destructive"}`}>
+                      vs {formatDuration(weeklySummary.lastWeek.duration)}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">TSS</span>
+                <div className="text-right">
+                  <span className="font-medium text-foreground">{Math.round(weeklySummary.thisWeek.tss)}</span>
+                  {weeklySummary.lastWeek.tss > 0 && (
+                    <span className={`ml-2 text-xs ${weeklySummary.thisWeek.tss >= weeklySummary.lastWeek.tss ? "text-success" : "text-destructive"}`}>
+                      vs {Math.round(weeklySummary.lastWeek.tss)}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Distance</span>
+                <span className="font-medium text-foreground">{formatDistance(weeklySummary.thisWeek.distance)}</span>
               </div>
             </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">TSS</span>
-              <div className="text-right">
-                <span className="font-medium text-foreground">{Math.round(weeklySummary.thisWeek.tss)}</span>
-                {weeklySummary.lastWeek.tss > 0 && (
-                  <span className={`ml-2 text-xs ${weeklySummary.thisWeek.tss >= weeklySummary.lastWeek.tss ? "text-success" : "text-destructive"}`}>
-                    vs {Math.round(weeklySummary.lastWeek.tss)}
-                  </span>
-                )}
-              </div>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Distance</span>
-              <span className="font-medium text-foreground">{formatDistance(weeklySummary.thisWeek.distance)}</span>
-            </div>
-          </div>
+          )}
         </div>
       </div>
 
@@ -780,9 +795,16 @@ export function Dashboard() {
             </ResponsiveContainer>
           </div>
         ) : (
-          <div className="h-32 flex items-center justify-center text-muted-foreground text-sm">
-            No power data available
-          </div>
+          <EmptyState
+            icon={
+              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            }
+            title="No power data"
+            description="Upload activities recorded with a power meter to see your power curve."
+            className="h-32 py-2"
+          />
         )}
         {powerCurve.length > 0 && (
           <div className="flex justify-between text-xs text-muted-foreground mt-1">
