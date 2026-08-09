@@ -39,7 +39,7 @@ def _mock_geocoding(monkeypatch):
         return "Test Ride"
 
     monkeypatch.setattr(
-        "trainingdash.title_generator.generate_activity_title", _fake_title
+        "trainingdash.domain.title_generator.generate_activity_title", _fake_title
     )
 
 
