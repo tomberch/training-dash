@@ -26,8 +26,12 @@ from datetime import datetime, timedelta, timezone
 from saq import CronJob
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine, AsyncEngine
 
-from trainingdash.queue import get_queue
 from trainingdash.integrations.xert.mock_client import setup_mock_xert_client
+from trainingdash.jobs import (
+    enqueue_match_route_job,
+    enqueue_sync_garmin_job,
+    enqueue_sync_xert_job,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -88,9 +92,7 @@ async def ingest_job(ctx: dict, *, user_id: int, fit_bytes_b64: str, source: str
         if activity is None:
             return {"success": False, "activity_id": None}
 
-        queue = await get_queue()
-        # Convert UUID to string for JSON serialization
-        await queue.enqueue("match_route_job", activity_id=str(activity.id), user_id=user_id)
+        await enqueue_match_route_job(str(activity.id), user_id)
 
         return {"success": True, "activity_id": str(activity.id)}
 
@@ -283,19 +285,17 @@ async def hourly_sync_scheduler(ctx: dict):
     if not garmin_user_ids and not xert_user_ids:
         logger.info(f"hourly_sync_scheduler: No users scheduled for hour {current_hour}")
         return {"success": True, "garmin_queued": 0, "xert_queued": 0}
-    
-    queue = await get_queue()
-    
+
     # Enqueue Garmin syncs immediately
     for user_id in garmin_user_ids:
-        await queue.enqueue("sync_garmin_job", user_id=user_id)
+        await enqueue_sync_garmin_job(user_id)
         logger.info(f"hourly_sync_scheduler: Enqueued Garmin sync for user {user_id}")
-    
+
     # Enqueue Xert syncs with 15 minute delay to stagger
     import time
     defer_until = time.time() + (15 * 60)  # 15 minutes from now
     for user_id in xert_user_ids:
-        await queue.enqueue("sync_xert_job", user_id=user_id, scheduled=defer_until)
+        await enqueue_sync_xert_job(user_id, scheduled=defer_until)
         logger.info(f"hourly_sync_scheduler: Enqueued Xert sync for user {user_id} (deferred 15min)")
     
     logger.info(f"hourly_sync_scheduler: Queued {len(garmin_user_ids)} Garmin, {len(xert_user_ids)} Xert syncs")

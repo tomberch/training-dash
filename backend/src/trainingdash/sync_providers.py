@@ -13,7 +13,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from trainingdash.repositories.postgres.models import Activity, XertCredentials, GarminCredentials
-from trainingdash.sync import SyncProvider, ProviderActivity, CredentialInfo
+from trainingdash.integrations.protocols import SyncProvider, ProviderActivity, CredentialInfo
 
 logger = logging.getLogger(__name__)
 

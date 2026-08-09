@@ -53,23 +53,29 @@ async def get_job_status(job_key: str) -> dict:
     }
 
 
-async def enqueue_sync_xert_job(user_id: int) -> str | None:
-    """Enqueue a Xert sync job for a user. Returns job key or None if queue not available."""
+async def enqueue_sync_xert_job(user_id: int, scheduled: float | None = None) -> str | None:
+    """Enqueue a Xert sync job for a user. Returns job key or None if queue not available.
+
+    Pass ``scheduled`` (unix seconds) to defer the job.
+    """
     if not queue_available():
         return None
     queue = await get_queue()
     # Sync jobs need longer timeout for external API calls and FIT file processing
-    job = await queue.enqueue("sync_xert_job", user_id=user_id, timeout=300)
+    job = await queue.enqueue("sync_xert_job", user_id=user_id, timeout=300, scheduled=scheduled)
     return job.key if job else None
 
 
-async def enqueue_sync_garmin_job(user_id: int) -> str | None:
-    """Enqueue a Garmin sync job for a user. Returns job key or None if queue not available."""
+async def enqueue_sync_garmin_job(user_id: int, scheduled: float | None = None) -> str | None:
+    """Enqueue a Garmin sync job for a user. Returns job key or None if queue not available.
+
+    Pass ``scheduled`` (unix seconds) to defer the job.
+    """
     if not queue_available():
         return None
     queue = await get_queue()
     # Sync jobs need longer timeout for external API calls and FIT file processing
-    job = await queue.enqueue("sync_garmin_job", user_id=user_id, timeout=300)
+    job = await queue.enqueue("sync_garmin_job", user_id=user_id, timeout=300, scheduled=scheduled)
     return job.key if job else None
 
 
@@ -101,4 +107,13 @@ async def enqueue_recalculate_metrics_job(user_id: int) -> str | None:
     queue = await get_queue()
     # Recalculation may process many activities; give it longer timeout
     job = await queue.enqueue("recalculate_metrics_job", user_id=user_id, timeout=300)
+    return job.key if job else None
+
+
+async def enqueue_match_route_job(activity_id: str, user_id: int) -> str | None:
+    """Enqueue route matching for a freshly-ingested activity. Returns job key or None if queue not available."""
+    if not queue_available():
+        return None
+    queue = await get_queue()
+    job = await queue.enqueue("match_route_job", activity_id=activity_id, user_id=user_id)
     return job.key if job else None

@@ -1,4 +1,4 @@
-"""Unit tests for _determine_sync_range in sync.py.
+"""Unit tests for _determine_sync_range in use_cases/sync_from_provider.py.
 
 Covers all four range-selection paths:
   1. First sync  — sync_since set        → use sync_since as start
@@ -10,7 +10,10 @@ Covers all four range-selection paths:
 from datetime import datetime, timedelta
 from unittest import mock
 
-from trainingdash.sync import _determine_sync_range, CredentialInfo
+from trainingdash.integrations.protocols import CredentialInfo
+from trainingdash.use_cases.sync_from_provider import SyncFromProvider
+
+_determine_sync_range = SyncFromProvider._determine_sync_range
 
 
 def _cred(sync_since=None, last_synced_at=None) -> CredentialInfo:

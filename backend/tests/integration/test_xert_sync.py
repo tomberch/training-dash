@@ -613,22 +613,26 @@ class TestHourlySyncScheduler:
 
         mock_worker_db_session, _ = _make_worker_db_session_ctx(db_engine)
 
-        # Mock SAQ queue to capture enqueued jobs
-        mock_queue = mock.AsyncMock()
-        mock_queue.enqueue = mock.AsyncMock(return_value=mock.MagicMock(key="test-job-key"))
+        # Mock the jobs.py enqueue wrappers to capture enqueued jobs
+        async def _fake_enqueue_xert(user_id, scheduled=None):
+            _fake_enqueue_xert.calls.append((user_id, scheduled))
+            return "test-job-key"
+        _fake_enqueue_xert.calls = []
+        async def _fake_enqueue_garmin(user_id, scheduled=None):
+            _fake_enqueue_garmin.calls.append((user_id, scheduled))
+            return "test-job-key"
+        _fake_enqueue_garmin.calls = []
 
         with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
-            with mock.patch("trainingdash.worker.get_queue", return_value=mock_queue):
-                from trainingdash.worker import hourly_sync_scheduler
-                result = await hourly_sync_scheduler({})
+            with mock.patch("trainingdash.worker.enqueue_sync_xert_job", _fake_enqueue_xert):
+                with mock.patch("trainingdash.worker.enqueue_sync_garmin_job", _fake_enqueue_garmin):
+                    from trainingdash.worker import hourly_sync_scheduler
+                    result = await hourly_sync_scheduler({})
 
         assert result["success"] is True
         assert result["xert_queued"] == 2
 
-        enqueued_user_ids = set()
-        for call in mock_queue.enqueue.call_args_list:
-            if call.args[0] == "sync_xert_job":
-                enqueued_user_ids.add(call.kwargs["user_id"])
+        enqueued_user_ids = {user_id for user_id, _ in _fake_enqueue_xert.calls}
         assert user1.id in enqueued_user_ids
         assert user2.id in enqueued_user_ids
         assert user3.id not in enqueued_user_ids
@@ -645,14 +649,17 @@ class TestHourlySyncScheduler:
 
         mock_worker_db_session, _ = _make_worker_db_session_ctx(db_engine)
 
-        # Mock SAQ queue to capture enqueued jobs
-        mock_queue = mock.AsyncMock()
-        mock_queue.enqueue = mock.AsyncMock(return_value=mock.MagicMock(key="test-job-key"))
+        # Mock the jobs.py enqueue wrappers (no users → no calls expected)
+        async def _fake_enqueue_xert(user_id, scheduled=None):
+            return "test-job-key"
+        async def _fake_enqueue_garmin(user_id, scheduled=None):
+            return "test-job-key"
 
         with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
-            with mock.patch("trainingdash.worker.get_queue", return_value=mock_queue):
-                from trainingdash.worker import hourly_sync_scheduler
-                result = await hourly_sync_scheduler({})
+            with mock.patch("trainingdash.worker.enqueue_sync_xert_job", _fake_enqueue_xert):
+                with mock.patch("trainingdash.worker.enqueue_sync_garmin_job", _fake_enqueue_garmin):
+                    from trainingdash.worker import hourly_sync_scheduler
+                    result = await hourly_sync_scheduler({})
 
         assert result["success"] is True
         assert result["xert_queued"] == 0
