@@ -12,6 +12,7 @@ from trainingdash.activity_pipeline import (
     MetricsResult,
     PeaksResult,
     HrPowerResult,
+    HrmaxDetectionResult,
     BreakthroughResult,
     RouteMatchResult,
     TitleResult,
@@ -493,18 +494,21 @@ class TestBatchModeBehavior:
                     pipeline, "estimate_hr_derived_power", return_value=HrPowerResult()
                 ):
                     with patch.object(
-                        pipeline, "extract_peaks", return_value=PeaksResult()
+                        pipeline, "check_hrmax_detection", return_value=HrmaxDetectionResult()
                     ):
                         with patch.object(
-                            pipeline, "detect_breakthrough", return_value=BreakthroughResult()
-                        ) as mock_breakthrough:
+                            pipeline, "extract_peaks", return_value=PeaksResult()
+                        ):
                             with patch.object(
-                                pipeline, "match_route", return_value=RouteMatchResult()
-                            ):
+                                pipeline, "detect_breakthrough", return_value=BreakthroughResult()
+                            ) as mock_breakthrough:
                                 with patch.object(
-                                    pipeline, "generate_title", return_value=TitleResult()
+                                    pipeline, "match_route", return_value=RouteMatchResult()
                                 ):
-                                    await pipeline.run()
+                                    with patch.object(
+                                        pipeline, "generate_title", return_value=TitleResult()
+                                    ):
+                                        await pipeline.run()
 
         # detect_breakthrough SHOULD have been called
         mock_breakthrough.assert_called_once()

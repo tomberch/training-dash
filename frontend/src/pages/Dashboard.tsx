@@ -403,6 +403,14 @@ export function Dashboard() {
                     Apply {notif.payload.suggested_ftp}W
                   </button>
                 )}
+                {notif.payload?.suggested_hrmax && (
+                  <button
+                    onClick={() => handleAcceptNotification(notif.id)}
+                    className="px-3 py-1 text-xs font-medium text-white bg-warning hover:bg-warning/80 rounded-lg transition-fast"
+                  >
+                    Apply {notif.payload.suggested_hrmax} bpm
+                  </button>
+                )}
                 <button
                   onClick={() => handleDismissNotification(notif.id)}
                   className="px-3 py-1 text-xs font-medium text-warning-foreground hover:bg-warning/20 rounded-lg transition-fast"

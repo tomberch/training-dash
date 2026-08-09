@@ -230,7 +230,7 @@ export interface Notification {
   id: number;
   type: string;
   message: string;
-  payload: { suggested_ftp?: number } | null;
+  payload: { suggested_ftp?: number; suggested_hrmax?: number } | null;
   created_at: string;
 }
 

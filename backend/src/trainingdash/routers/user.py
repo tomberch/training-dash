@@ -630,6 +630,27 @@ async def accept_notification(
                 source_detail="ftp_suggestion_accepted",
             )
 
+    # Handle HRmax suggestion
+    elif notification.type == "hrmax_suggestion" and notification.payload:
+        payload = json.loads(notification.payload)
+        suggested_hrmax = payload.get("suggested_hrmax")
+
+        if suggested_hrmax:
+            # Get current thresholds to copy FTP and LTHR
+            current = await get_thresholds_for_date(db, user.id, date.today())
+
+            # Create new threshold entries with suggested HRmax
+            await create_threshold_entries(
+                db,
+                user.id,
+                date.today(),
+                ftp_watts=current.ftp_watts if current else 200,
+                lthr_bpm=current.lthr_bpm if current else 165,
+                hrmax_bpm=suggested_hrmax,
+                source="calculated",
+                source_detail="hrmax_suggestion_accepted",
+            )
+
     # Mark notification as accepted
     notification.status = "accepted"
     await db.commit()

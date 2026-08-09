@@ -96,12 +96,22 @@ class TitleResult:
 
 
 @dataclass
+class HrmaxDetectionResult:
+    """Result of HRmax auto-detection check."""
+
+    notification_created: bool = False
+    observed_hrmax: int | None = None
+    current_hrmax: int | None = None
+
+
+@dataclass
 class PipelineResult:
     """Combined result of all pipeline steps."""
 
     metrics: MetricsResult = field(default_factory=MetricsResult)
     peaks: PeaksResult = field(default_factory=PeaksResult)
     hr_power: HrPowerResult = field(default_factory=HrPowerResult)
+    hrmax_detection: HrmaxDetectionResult = field(default_factory=HrmaxDetectionResult)
     breakthrough: BreakthroughResult = field(default_factory=BreakthroughResult)
     route: RouteMatchResult = field(default_factory=RouteMatchResult)
     title: TitleResult = field(default_factory=TitleResult)
@@ -118,9 +128,10 @@ class ActivityPipeline:
     1. Compute training metrics (NP, IF, TSS, zones, W'bal)
     2. Update HR-power model (if dual-sensor)
     3. Estimate HR-derived power (if HR-only)
-    4. Extract peak powers
-    5. Detect breakthroughs and update fitness model (unless batch_mode)
-    6. Route matching and title generation (parallel, independent)
+    4. Check HRmax auto-detection (unless batch_mode)
+    5. Extract peak powers
+    6. Detect breakthroughs and update fitness model (unless batch_mode)
+    7. Route matching and title generation (sequential)
     
     Each step receives typed inputs and produces typed outputs, making the
     data flow explicit and testable.
@@ -153,9 +164,9 @@ class ActivityPipeline:
         """
         Execute all pipeline steps in order, returning combined results.
         
-        Steps 1-4 run sequentially (later steps depend on earlier results).
-        Steps 5-6 (route matching, title generation) run in parallel as they
-        are independent of each other.
+        Steps 1-5 run sequentially (later steps depend on earlier results).
+        Steps 6-7 (route matching, title generation) run sequentially as they
+        share the same db session.
         """
         # Step 1: Compute training metrics
         self.result.metrics = await self.compute_metrics()
@@ -167,14 +178,18 @@ class ActivityPipeline:
         hr_power_result = await self.estimate_hr_derived_power()
         self.result.hr_power = hr_power_result
 
-        # Step 4: Extract peak powers
+        # Step 4: Check HRmax auto-detection (skip in batch mode)
+        if not self.batch_mode:
+            self.result.hrmax_detection = await self.check_hrmax_detection()
+
+        # Step 5: Extract peak powers
         self.result.peaks = await self.extract_peaks()
 
-        # Step 5: Detect breakthroughs (skip in batch mode)
+        # Step 6: Detect breakthroughs (skip in batch mode)
         if not self.batch_mode:
             self.result.breakthrough = await self.detect_breakthrough()
 
-        # Step 6 & 7: Route matching and title generation (sequential)
+        # Step 7 & 8: Route matching and title generation (sequential)
         # Note: These run sequentially because both use the same db session,
         # and asyncpg doesn't support concurrent operations on one connection.
         self.result.route = await self.match_route()
@@ -428,6 +443,94 @@ class ActivityPipeline:
             if intensity_factor is not None:
                 tss = compute_tss(duration_s, np_estimate, intensity_factor, ftp)
                 self.activity.tss = tss
+
+    async def check_hrmax_detection(self) -> HrmaxDetectionResult:
+        """
+        Step 4: Check if observed max HR exceeds user's HRmax threshold.
+        
+        Creates a notification if observed max HR > current HRmax + 5 bpm.
+        This allows users to update their HRmax based on actual performance
+        while filtering out noise from sensor spikes.
+        
+        Returns:
+            HrmaxDetectionResult with notification status and HR values
+        """
+        result = HrmaxDetectionResult()
+        
+        # Get max HR from this activity's records
+        hr_array = [r.get("hr_bpm") for r in self.records]
+        valid_hrs = [h for h in hr_array if h is not None and h > 0]
+        
+        if not valid_hrs:
+            return result
+        
+        observed_max_hr = max(valid_hrs)
+        result.observed_hrmax = observed_max_hr
+        
+        # Get current HRmax threshold
+        activity_date = self.activity.started_at.date()
+        threshold = await self._get_threshold_for_date(activity_date)
+        
+        if threshold is None or threshold.hrmax_bpm is None:
+            return result
+        
+        current_hrmax = threshold.hrmax_bpm
+        result.current_hrmax = current_hrmax
+        
+        # Check if observed exceeds threshold by >5 bpm
+        if observed_max_hr <= current_hrmax + 5:
+            return result
+        
+        # Create or update hrmax_suggestion notification
+        await self._create_hrmax_notification(observed_max_hr, current_hrmax)
+        result.notification_created = True
+        
+        return result
+
+    async def _create_hrmax_notification(
+        self, observed_hrmax: int, current_hrmax: int
+    ) -> None:
+        """Create or update an HRmax suggestion notification."""
+        # Check for existing pending notification
+        query = await self.db.execute(
+            select(Notification).where(
+                Notification.user_id == self.activity.user_id,
+                Notification.type == "hrmax_suggestion",
+                Notification.status == "pending",
+            )
+        )
+        existing = query.scalar_one_or_none()
+        
+        message = (
+            f"Your max HR of {observed_hrmax} bpm exceeds your HRmax setting "
+            f"of {current_hrmax} bpm. Update?"
+        )
+        payload = json.dumps({
+            "observed_hrmax": observed_hrmax,
+            "suggested_hrmax": observed_hrmax,
+            "current_hrmax": current_hrmax,
+        })
+        
+        if existing is not None:
+            # Update existing notification if new observed is higher
+            existing_payload = json.loads(existing.payload) if existing.payload else {}
+            existing_observed = existing_payload.get("observed_hrmax", 0)
+            
+            if observed_hrmax > existing_observed:
+                existing.message = message
+                existing.payload = payload
+                await self.db.flush()
+            return
+        
+        # Create new notification
+        self.db.add(Notification(
+            user_id=self.activity.user_id,
+            type="hrmax_suggestion",
+            message=message,
+            payload=payload,
+            status="pending",
+        ))
+        await self.db.flush()
 
     async def extract_peaks(self) -> PeaksResult:
         """
