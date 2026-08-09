@@ -11,7 +11,7 @@ router = APIRouter(prefix="/api", tags=["health"])
 @router.get("/health")
 async def health_check(db: DbSession):
     """Health check that verifies database connectivity.
-    
+
     Returns 200 if the app and database are ready.
     Used by:
     - Docker Compose healthchecks

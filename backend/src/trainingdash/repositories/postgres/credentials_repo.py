@@ -15,15 +15,11 @@ class PostgresXertCredentialsRepo:
         self._db = db
 
     async def get_by_user_id(self, user_id: int) -> XertCredentials | None:
-        result = await self._db.execute(
-            select(XertCredentials).where(XertCredentials.user_id == user_id)
-        )
+        result = await self._db.execute(select(XertCredentials).where(XertCredentials.user_id == user_id))
         return result.scalar_one_or_none()
 
     async def exists(self, user_id: int) -> bool:
-        result = await self._db.execute(
-            select(XertCredentials.user_id).where(XertCredentials.user_id == user_id)
-        )
+        result = await self._db.execute(select(XertCredentials.user_id).where(XertCredentials.user_id == user_id))
         return result.scalar_one_or_none() is not None
 
     async def save(
@@ -33,9 +29,7 @@ class PostgresXertCredentialsRepo:
         encrypted_password: str,
         sync_since: datetime | None = None,
     ) -> XertCredentials:
-        result = await self._db.execute(
-            select(XertCredentials).where(XertCredentials.user_id == user_id)
-        )
+        result = await self._db.execute(select(XertCredentials).where(XertCredentials.user_id == user_id))
         creds = result.scalar_one_or_none()
 
         if creds is None:
@@ -57,9 +51,7 @@ class PostgresXertCredentialsRepo:
         return creds
 
     async def delete(self, user_id: int) -> bool:
-        result = await self._db.execute(
-            select(XertCredentials).where(XertCredentials.user_id == user_id)
-        )
+        result = await self._db.execute(select(XertCredentials).where(XertCredentials.user_id == user_id))
         creds = result.scalar_one_or_none()
         if creds is None:
             return False
@@ -75,17 +67,11 @@ class PostgresGarminCredentialsRepo:
         self._db = db
 
     async def get_by_user_id(self, user_id: int) -> GarminCredentials | None:
-        result = await self._db.execute(
-            select(GarminCredentials).where(GarminCredentials.user_id == user_id)
-        )
+        result = await self._db.execute(select(GarminCredentials).where(GarminCredentials.user_id == user_id))
         return result.scalar_one_or_none()
 
     async def exists(self, user_id: int) -> bool:
-        result = await self._db.execute(
-            select(GarminCredentials.user_id).where(
-                GarminCredentials.user_id == user_id
-            )
-        )
+        result = await self._db.execute(select(GarminCredentials.user_id).where(GarminCredentials.user_id == user_id))
         return result.scalar_one_or_none() is not None
 
     async def save(
@@ -95,9 +81,7 @@ class PostgresGarminCredentialsRepo:
         encrypted_password: str,
         sync_since: datetime | None = None,
     ) -> GarminCredentials:
-        result = await self._db.execute(
-            select(GarminCredentials).where(GarminCredentials.user_id == user_id)
-        )
+        result = await self._db.execute(select(GarminCredentials).where(GarminCredentials.user_id == user_id))
         creds = result.scalar_one_or_none()
 
         if creds is None:
@@ -119,9 +103,7 @@ class PostgresGarminCredentialsRepo:
         return creds
 
     async def delete(self, user_id: int) -> bool:
-        result = await self._db.execute(
-            select(GarminCredentials).where(GarminCredentials.user_id == user_id)
-        )
+        result = await self._db.execute(select(GarminCredentials).where(GarminCredentials.user_id == user_id))
         creds = result.scalar_one_or_none()
         if creds is None:
             return False

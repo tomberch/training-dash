@@ -10,14 +10,14 @@ Usage pattern:
     async def test_some_use_case():
         user_repo = FakeUserRepo()
         activity_repo = FakeActivityRepo()
-        
+
         # Seed test data
         user = User(id=1, email="test@example.com", ...)
         await user_repo.save(user)
-        
+
         # Test business logic
         result = await some_use_case(user_repo, activity_repo, ...)
-        
+
         # Assert on results and repo state
         assert result == expected
 
@@ -29,22 +29,22 @@ Benefits over testcontainers:
 """
 
 from tests.fakes.activity_repo import FakeActivityRepo
-from tests.fakes.user_repo import FakeUserRepo
-from tests.fakes.credentials_repo import FakeXertCredentialsRepo, FakeGarminCredentialsRepo
-from tests.fakes.notification_repo import FakeNotificationRepo
-from tests.fakes.settings_repo import FakeAppSettingsRepo
 from tests.fakes.audit_log_repo import FakeAuditLogRepo
-from tests.fakes.recalculation_job_repo import FakeRecalculationJobRepo
+from tests.fakes.credentials_repo import FakeGarminCredentialsRepo, FakeXertCredentialsRepo
+from tests.fakes.notification_repo import FakeNotificationRepo
 from tests.fakes.oauth_link_repo import FakeOAuthLinkRepo
+from tests.fakes.recalculation_job_repo import FakeRecalculationJobRepo
+from tests.fakes.settings_repo import FakeAppSettingsRepo
+from tests.fakes.user_repo import FakeUserRepo
 
 __all__ = [
     "FakeActivityRepo",
-    "FakeUserRepo",
-    "FakeXertCredentialsRepo",
-    "FakeGarminCredentialsRepo",
-    "FakeNotificationRepo",
     "FakeAppSettingsRepo",
     "FakeAuditLogRepo",
-    "FakeRecalculationJobRepo",
+    "FakeGarminCredentialsRepo",
+    "FakeNotificationRepo",
     "FakeOAuthLinkRepo",
+    "FakeRecalculationJobRepo",
+    "FakeUserRepo",
+    "FakeXertCredentialsRepo",
 ]

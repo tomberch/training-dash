@@ -6,7 +6,7 @@ from trainingdash.repositories.postgres.models import AppSettings
 class FakeAppSettingsRepo:
     """
     In-memory fake implementation of AppSettingsRepo protocol.
-    
+
     Stores settings in a dict keyed by setting key.
     """
 
@@ -28,9 +28,7 @@ class FakeAppSettingsRepo:
         self._settings[key] = value
 
     async def list_all(self) -> list[AppSettings]:
-        return [
-            AppSettings(key=k, value=v) for k, v in self._settings.items()
-        ]
+        return [AppSettings(key=k, value=v) for k, v in self._settings.items()]
 
     # --- Test helper methods ---
 

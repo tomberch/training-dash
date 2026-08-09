@@ -20,19 +20,19 @@ from saq import Queue
 def get_queue_url() -> str:
     """
     Get the Postgres URL for SAQ queue.
-    
+
     SAQ requires psycopg3 format (postgresql:// not postgresql+asyncpg://).
     We derive it from DATABASE_URL by stripping the +asyncpg suffix.
     """
     db_url = os.environ.get("DATABASE_URL", "")
     if not db_url:
         raise RuntimeError("DATABASE_URL environment variable not set")
-    
+
     # Convert SQLAlchemy async URL to psycopg3 URL
     # postgresql+asyncpg://... -> postgresql://...
     if "+asyncpg" in db_url:
         db_url = db_url.replace("+asyncpg", "")
-    
+
     return db_url
 
 
@@ -45,7 +45,7 @@ def queue_available() -> bool:
 def _get_queue_instance() -> Queue:
     """Get or create the singleton SAQ queue instance."""
     from saq.queue.postgres import PostgresQueue
-    
+
     return PostgresQueue.from_url(
         get_queue_url(),
         name="default",
@@ -57,7 +57,7 @@ def _get_queue_instance() -> Queue:
 def get_queue_sync() -> Queue:
     """
     Get the SAQ queue instance synchronously (for worker settings).
-    
+
     The queue will connect when the worker starts. This just returns
     the unconnected queue instance.
     """
@@ -67,7 +67,7 @@ def get_queue_sync() -> Queue:
 async def get_queue() -> Queue:
     """
     Get the SAQ queue instance, connecting if needed.
-    
+
     The queue connects lazily on first call and reuses the connection.
     SAQ automatically creates the required tables (saq_jobs, saq_stats, saq_versions)
     on first connect via init_db().

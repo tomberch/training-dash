@@ -1,6 +1,6 @@
 """Unit tests for fitness model computation functions."""
 
-from datetime import datetime, timedelta
+from datetime import datetime
 
 
 class TestFitnessModelUnit:

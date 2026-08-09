@@ -127,9 +127,7 @@ class _OAuthSession:
                 raise XertAPIError("No access_token in Xert login response")
 
         except httpx.HTTPStatusError as e:
-            raise XertAPIError(
-                f"Xert OAuth login failed: HTTP {e.response.status_code}"
-            ) from e
+            raise XertAPIError(f"Xert OAuth login failed: HTTP {e.response.status_code}") from e
         except httpx.RequestError as e:
             raise XertAPIError(f"Failed to connect to Xert: {e}") from e
 
@@ -153,9 +151,7 @@ class _OAuthSession:
             expires_in = data.get("expires_in", 604800)
             self._token_expires_at = time.time() + expires_in - 60
         except httpx.HTTPStatusError as e:
-            raise XertAPIError(
-                f"Token refresh failed: HTTP {e.response.status_code}"
-            ) from e
+            raise XertAPIError(f"Token refresh failed: HTTP {e.response.status_code}") from e
         except httpx.RequestError as e:
             raise XertAPIError(f"Failed to connect to Xert: {e}") from e
 
@@ -222,9 +218,7 @@ class XertClient:
             # Extract hidden _token from the login form HTML
             match = re.search(r'name="_token"\s+value="([^"]+)"', home.text)
             if not match:
-                raise XertAPIError(
-                    "Could not find CSRF _token on Xert login page"
-                )
+                raise XertAPIError("Could not find CSRF _token on Xert login page")
             form_token = match.group(1)
 
             # Submit the login form
@@ -245,16 +239,12 @@ class XertClient:
             # Detect failure: still on /auth or /auth/login after redirects
             final_path = str(login_resp.url).replace(self.BASE_URL, "")
             if final_path.startswith("/auth"):
-                raise XertAPIError(
-                    "Xert web login failed — invalid credentials or CSRF mismatch"
-                )
+                raise XertAPIError("Xert web login failed — invalid credentials or CSRF mismatch")
 
         except XertAPIError:
             raise
         except httpx.HTTPStatusError as e:
-            raise XertAPIError(
-                f"Xert web login HTTP error: {e.response.status_code}"
-            ) from e
+            raise XertAPIError(f"Xert web login HTTP error: {e.response.status_code}") from e
         except httpx.RequestError as e:
             raise XertAPIError(f"Failed to connect to Xert: {e}") from e
 
@@ -276,10 +266,7 @@ class XertClient:
         content_type = response.headers.get("content-type", "")
         if "octet-stream" in content_type or "fit" in content_type.lower():
             return True
-        return (
-            len(response.content) > 12
-            and response.content[8:12] == b".FIT"
-        )
+        return len(response.content) > 12 and response.content[8:12] == b".FIT"
 
     # ------------------------------------------------------------------
     # Public API
@@ -325,18 +312,14 @@ class XertClient:
             data = response.json()
 
             if not data.get("success"):
-                raise XertAPIError(
-                    "Xert API returned success=false for activity list"
-                )
+                raise XertAPIError("Xert API returned success=false for activity list")
 
             activities = []
             for item in data.get("activities", []):
                 start_date_obj = item.get("start_date", {})
                 date_str = start_date_obj.get("date", "")
                 try:
-                    started_at = datetime.strptime(
-                        date_str.split(".")[0], "%Y-%m-%d %H:%M:%S"
-                    )
+                    started_at = datetime.strptime(date_str.split(".")[0], "%Y-%m-%d %H:%M:%S")
                 except (ValueError, AttributeError):
                     started_at = datetime.utcnow()
 
@@ -353,9 +336,7 @@ class XertClient:
             return activities
 
         except httpx.HTTPStatusError as e:
-            raise XertAPIError(
-                f"Failed to list activities: HTTP {e.response.status_code}"
-            ) from e
+            raise XertAPIError(f"Failed to list activities: HTTP {e.response.status_code}") from e
         except httpx.RequestError as e:
             raise XertAPIError(f"Failed to connect to Xert: {e}") from e
 
@@ -380,14 +361,9 @@ class XertClient:
                 response = await self._client.get(url)
                 response.raise_for_status()
             except httpx.HTTPStatusError as e:
-                raise XertAPIError(
-                    f"FIT download HTTP error for {activity_id}:"
-                    f" {e.response.status_code}"
-                ) from e
+                raise XertAPIError(f"FIT download HTTP error for {activity_id}: {e.response.status_code}") from e
             except httpx.RequestError as e:
-                raise XertAPIError(
-                    f"FIT download connection error: {e}"
-                ) from e
+                raise XertAPIError(f"FIT download connection error: {e}") from e
 
             if self._is_fit_response(response):
                 return response.content
@@ -395,14 +371,11 @@ class XertClient:
             # Session expired — server returned an HTML page instead of FIT bytes
             if attempt == 0:
                 logger.warning(
-                    "Xert FIT download returned HTML for activity %s — "
-                    "re-establishing web session and retrying",
+                    "Xert FIT download returned HTML for activity %s — re-establishing web session and retrying",
                     activity_id,
                 )
                 if not self._username or not self._password:
-                    raise XertAPIError(
-                        "Web session expired and no credentials stored for re-login"
-                    )
+                    raise XertAPIError("Web session expired and no credentials stored for re-login")
                 await self._web_login(self._username, self._password)
             else:
                 raise XertAPIError(
@@ -442,9 +415,7 @@ class XertClient:
             return data.get("summary", {}).get("xss")
 
         except (httpx.HTTPStatusError, httpx.RequestError) as e:
-            logger.warning(
-                "Failed to fetch XSS for activity %s: %s", activity_id, e
-            )
+            logger.warning("Failed to fetch XSS for activity %s: %s", activity_id, e)
             return None
 
     async def close(self) -> None:

@@ -5,9 +5,10 @@ import pytest
 from sqlalchemy import select
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "tests" / "fixtures"))
-from generate_fit import make_test_fit  # noqa: E402
-from trainingdash.repositories.postgres.models import Activity, User, Route  # noqa: E402
-from tests.integration.fixtures import CACHED_HASH_PASS  # noqa: E402
+from generate_fit import make_test_fit
+
+from tests.integration.fixtures import CACHED_HASH_PASS
+from trainingdash.repositories.postgres.models import Activity, User
 
 
 class TestRecords:
@@ -40,7 +41,8 @@ class TestRecords:
     @pytest.mark.asyncio
     async def test_records_fastest_point_to_point(self, auth_client, db_session, seed_user):
         from datetime import datetime
-        for dist, time_s, avg_speed in [(10000, 1200, 10000/1200), (40000, 5400, 40000/5400)]:
+
+        for dist, time_s, avg_speed in [(10000, 1200, 10000 / 1200), (40000, 5400, 40000 / 5400)]:
             activity = Activity(
                 user_id=seed_user.id,
                 source="upload",
@@ -78,7 +80,7 @@ class TestRecords:
             started_at=datetime(2024, 3, 15, 10, 0),
             total_distance_m=10000,
             moving_time_s=1800,
-            avg_speed_mps=10000/1800,
+            avg_speed_mps=10000 / 1800,
             max_speed_mps=12.0,
             max_hr_bpm=160,
             elevation_gain_m=200,
@@ -127,7 +129,6 @@ class TestRecords:
 
     @pytest.mark.asyncio
     async def test_per_route_prs_faster_ride_holds_record(self, auth_client, db_session, seed_user):
-        from datetime import datetime
         # Upload two rides on the same route
         fit_data = make_test_fit(num_records=100, start_lat=47.3769, start_lon=8.5417)
         resp1 = await auth_client.post(
@@ -156,7 +157,6 @@ class TestRecords:
 
     @pytest.mark.asyncio
     async def test_per_route_prs_cross_user_isolation(self, auth_client, db_session, seed_user):
-        from datetime import datetime
         # User A uploads a ride
         fit_data = make_test_fit(num_records=100, start_lat=47.3769, start_lon=8.5417)
         await auth_client.post(
@@ -172,6 +172,7 @@ class TestRecords:
 
         fit_b = make_test_fit(num_records=100, start_lat=46.5197, start_lon=6.6323)
         from trainingdash.ingest import ingest_fit
+
         await ingest_fit(db_session, user_b.id, fit_b, "upload", "ride_b.fit")
 
         response = await auth_client.get("/api/records")

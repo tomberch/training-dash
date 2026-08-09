@@ -8,33 +8,30 @@ Independent steps (route matching, title generation) run in parallel.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any
+from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from trainingdash.domain.fitness import detect_breakthrough, get_all_time_bests
 from trainingdash.domain.metrics import (
-    compute_normalized_power,
     compute_intensity_factor,
+    compute_normalized_power,
     compute_tss,
 )
+from trainingdash.domain.peaks import extract_peak_powers
+from trainingdash.domain.thresholds import ThresholdValues, get_thresholds_for_date
+from trainingdash.domain.wbal import compute_wbal_series
 from trainingdash.domain.zones import compute_zone_times
 from trainingdash.repositories.postgres.models import (
     Activity,
     ActivityPeakPower,
-    FitnessHistory,
     Notification,
     User,
 )
-from trainingdash.domain.peaks import extract_peak_powers
-from trainingdash.domain.thresholds import get_thresholds_for_date, ThresholdValues
-from trainingdash.domain.wbal import compute_wbal_series
-from trainingdash.domain.fitness import detect_breakthrough, get_all_time_bests, fit_cp_model
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +120,7 @@ class PipelineResult:
 class ActivityPipeline:
     """
     Explicit pipeline for processing activity data after initial ingestion.
-    
+
     The pipeline processes activity data through ordered steps:
     1. Compute training metrics (NP, IF, TSS, zones, W'bal)
     2. Update HR-power model (if dual-sensor)
@@ -132,7 +129,7 @@ class ActivityPipeline:
     5. Extract peak powers
     6. Detect breakthroughs and update fitness model (unless batch_mode)
     7. Route matching and title generation (sequential)
-    
+
     Each step receives typed inputs and produces typed outputs, making the
     data flow explicit and testable.
     """
@@ -146,7 +143,7 @@ class ActivityPipeline:
     ) -> None:
         """
         Initialize the pipeline.
-        
+
         Args:
             db: Database session
             activity: The Activity model instance (already persisted with id)
@@ -163,7 +160,7 @@ class ActivityPipeline:
     async def run(self) -> PipelineResult:
         """
         Execute all pipeline steps in order, returning combined results.
-        
+
         Steps 1-5 run sequentially (later steps depend on earlier results).
         Steps 6-7 (route matching, title generation) run sequentially as they
         share the same db session.
@@ -205,47 +202,43 @@ class ActivityPipeline:
     async def compute_metrics(self) -> MetricsResult:
         """
         Step 1: Compute training metrics from power/HR data.
-        
+
         Computes NP, IF, TSS, power zone times, HR zone times, and W'bal.
         Requires user's threshold history and zone definitions.
-        
+
         Returns:
             MetricsResult with computed values (None for missing data)
         """
         result = MetricsResult()
-        
+
         # Get threshold effective at activity date
         activity_date = self.activity.started_at.date()
         threshold = await self._get_threshold_for_date(activity_date)
-        
+
         if threshold is None or threshold.ftp_watts is None:
             return result
-        
+
         # Extract power and HR arrays
         power_array = [r.get("power_w") for r in self.records]
         hr_array = [r.get("hr_bpm") for r in self.records]
-        
+
         has_power = any(p is not None and p > 0 for p in power_array)
         has_hr = any(h is not None and h > 0 for h in hr_array)
-        
+
         if has_power:
-            result = await self._compute_power_metrics(
-                power_array, threshold, result
-            )
-        
+            result = await self._compute_power_metrics(power_array, threshold, result)
+
         if has_hr:
             result = await self._compute_hr_metrics(hr_array, result)
-        
+
         # Apply results to activity
         await self._apply_metrics_to_activity(result)
-        
+
         return result
 
     async def _get_threshold_for_date(self, activity_date) -> ThresholdValues | None:
         """Get the threshold effective at the given date."""
-        return await get_thresholds_for_date(
-            self.db, self.activity.user_id, activity_date
-        )
+        return await get_thresholds_for_date(self.db, self.activity.user_id, activity_date)
 
     async def _compute_power_metrics(
         self,
@@ -258,18 +251,18 @@ class ActivityPipeline:
         np_watts = compute_normalized_power(power_array)
         if np_watts is not None:
             result.np_power_w = int(np_watts)
-            
+
             # Compute IF and TSS
             if_value = compute_intensity_factor(np_watts, threshold.ftp_watts)
             if if_value is not None:
                 result.intensity_factor = if_value
-                
+
                 duration_s = self.activity.moving_time_s or self.activity.elapsed_time_s
                 tss = compute_tss(duration_s, np_watts, if_value, threshold.ftp_watts)
                 if tss is not None:
                     result.tss = tss
                     result.training_load = tss
-        
+
         # Compute power zone times using computed zones (not table lookup)
         if threshold.ftp_watts and threshold.ftp_watts > 0:
             user = await self._get_user()
@@ -280,7 +273,7 @@ class ActivityPipeline:
                 power_zone_pct=user.power_zone_percentages if user else None,
             )
             result.power_zone_times = power_zone_times
-        
+
         # Compute W'bal
         w_prime_joules = threshold.ftp_watts * 60  # Simple estimate
         cp_watts = int(threshold.ftp_watts * 0.95)
@@ -288,7 +281,7 @@ class ActivityPipeline:
         if wbal_result["min_wbal"] is not None:
             result.wbal_min_joules = wbal_result["min_wbal"]
             result.wbal_min_pct = wbal_result["min_wbal_pct"]
-        
+
         return result
 
     async def _compute_hr_metrics(
@@ -300,7 +293,7 @@ class ActivityPipeline:
         # Get threshold to get LTHR
         activity_date = self.activity.started_at.date()
         threshold = await self._get_threshold_for_date(activity_date)
-        
+
         if threshold and threshold.lthr_bpm and threshold.lthr_bpm > 0:
             user = await self._get_user()
             _, hr_zone_times = compute_zone_times(
@@ -331,114 +324,110 @@ class ActivityPipeline:
             self.activity.wbal_min_joules = metrics.wbal_min_joules
         if metrics.wbal_min_pct is not None:
             self.activity.wbal_min_pct = metrics.wbal_min_pct
-        
+
         await self.db.flush()
         await self.db.refresh(self.activity)
 
     async def update_hr_power_model(self) -> None:
         """
         Step 2: Update HR-power model if this is a dual-sensor ride.
-        
+
         A dual-sensor ride has both measured power (NP) and heart rate.
         """
         from trainingdash.hr_power import update_ef_model
-        
+
         if self.activity.np_power_w is None or self.activity.avg_hr_bpm is None:
             return
-        
+
         if self.activity.avg_hr_bpm <= 0:
             return
-        
+
         # Mark as measured power
         self.activity.power_source = "measured"
         await self.db.flush()
-        
+
         # Update EF model
         await update_ef_model(self.db, self.activity.user_id)
 
     async def estimate_hr_derived_power(self) -> HrPowerResult:
         """
         Step 3: Estimate power from HR for HR-only activities.
-        
+
         Only applies if:
         - Activity has no measured power
         - Activity has HR data
         - User has HR-derived power enabled
         - EF model exists
-        
+
         Returns:
             HrPowerResult with estimated power and confidence
         """
         from trainingdash.hr_power import estimate_power_from_hr
-        
+
         result = HrPowerResult()
-        
+
         # Skip if already has power
         if self.activity.avg_power_w is not None:
             return result
-        
+
         # Skip if no HR data
         if self.activity.avg_hr_bpm is None or self.activity.avg_hr_bpm <= 0:
             return result
-        
+
         # Check if user has HR-derived power enabled
         user = await self._get_user()
         if user is None or not user.hr_derived_power_enabled:
             return result
-        
+
         # Try to estimate power
         estimated_power, confidence = await estimate_power_from_hr(
             self.db, self.activity.user_id, self.activity.avg_hr_bpm
         )
-        
+
         if estimated_power is None:
             return result
-        
+
         # Store results
         result.power_source = "hr_derived"
         result.power_confidence = confidence
         result.estimated_power = estimated_power
-        
+
         # Update activity
         self.activity.avg_power_w = estimated_power
         self.activity.power_source = "hr_derived"
         self.activity.power_confidence = confidence
-        
+
         # Recompute metrics with estimated power
         await self._recompute_metrics_with_estimated_power(estimated_power)
-        
+
         await self.db.flush()
         await self.db.refresh(self.activity)
-        
+
         return result
 
     async def _get_user(self) -> User | None:
         """Get the user for this activity."""
-        query = await self.db.execute(
-            select(User).where(User.id == self.activity.user_id)
-        )
+        query = await self.db.execute(select(User).where(User.id == self.activity.user_id))
         return query.scalar_one_or_none()
 
-    async def _recompute_metrics_with_estimated_power(
-        self, estimated_power: int
-    ) -> None:
+    async def _recompute_metrics_with_estimated_power(self, estimated_power: int) -> None:
         """Recompute NP, IF, TSS using estimated power."""
         activity_date = self.activity.started_at.date()
         threshold = await self._get_threshold_for_date(activity_date)
-        
+
         if threshold is None:
             return
-        
+
         ftp = threshold.ftp_watts
-        
+
         # For HR-derived power, estimate NP as slightly lower than avg
         np_estimate = int(estimated_power * 0.95)
         self.activity.np_power_w = np_estimate
-        
+
         if ftp > 0:
             intensity_factor = compute_intensity_factor(np_estimate, ftp)
             self.activity.intensity_factor = intensity_factor
-            
+
             duration_s = self.activity.moving_time_s or self.activity.elapsed_time_s
             if intensity_factor is not None:
                 tss = compute_tss(duration_s, np_estimate, intensity_factor, ftp)
@@ -447,49 +436,47 @@ class ActivityPipeline:
     async def check_hrmax_detection(self) -> HrmaxDetectionResult:
         """
         Step 4: Check if observed max HR exceeds user's HRmax threshold.
-        
+
         Creates a notification if observed max HR > current HRmax + 5 bpm.
         This allows users to update their HRmax based on actual performance
         while filtering out noise from sensor spikes.
-        
+
         Returns:
             HrmaxDetectionResult with notification status and HR values
         """
         result = HrmaxDetectionResult()
-        
+
         # Get max HR from this activity's records
         hr_array = [r.get("hr_bpm") for r in self.records]
         valid_hrs = [h for h in hr_array if h is not None and h > 0]
-        
+
         if not valid_hrs:
             return result
-        
+
         observed_max_hr = max(valid_hrs)
         result.observed_hrmax = observed_max_hr
-        
+
         # Get current HRmax threshold
         activity_date = self.activity.started_at.date()
         threshold = await self._get_threshold_for_date(activity_date)
-        
+
         if threshold is None or threshold.hrmax_bpm is None:
             return result
-        
+
         current_hrmax = threshold.hrmax_bpm
         result.current_hrmax = current_hrmax
-        
+
         # Check if observed exceeds threshold by >5 bpm
         if observed_max_hr <= current_hrmax + 5:
             return result
-        
+
         # Create or update hrmax_suggestion notification
         await self._create_hrmax_notification(observed_max_hr, current_hrmax)
         result.notification_created = True
-        
+
         return result
 
-    async def _create_hrmax_notification(
-        self, observed_hrmax: int, current_hrmax: int
-    ) -> None:
+    async def _create_hrmax_notification(self, observed_hrmax: int, current_hrmax: int) -> None:
         """Create or update an HRmax suggestion notification."""
         # Check for existing pending notification
         query = await self.db.execute(
@@ -500,59 +487,60 @@ class ActivityPipeline:
             )
         )
         existing = query.scalar_one_or_none()
-        
-        message = (
-            f"Your max HR of {observed_hrmax} bpm exceeds your HRmax setting "
-            f"of {current_hrmax} bpm. Update?"
+
+        message = f"Your max HR of {observed_hrmax} bpm exceeds your HRmax setting of {current_hrmax} bpm. Update?"
+        payload = json.dumps(
+            {
+                "observed_hrmax": observed_hrmax,
+                "suggested_hrmax": observed_hrmax,
+                "current_hrmax": current_hrmax,
+            }
         )
-        payload = json.dumps({
-            "observed_hrmax": observed_hrmax,
-            "suggested_hrmax": observed_hrmax,
-            "current_hrmax": current_hrmax,
-        })
-        
+
         if existing is not None:
             # Update existing notification if new observed is higher
             existing_payload = json.loads(existing.payload) if existing.payload else {}
             existing_observed = existing_payload.get("observed_hrmax", 0)
-            
+
             if observed_hrmax > existing_observed:
                 existing.message = message
                 existing.payload = payload
                 await self.db.flush()
             return
-        
+
         # Create new notification
-        self.db.add(Notification(
-            user_id=self.activity.user_id,
-            type="hrmax_suggestion",
-            message=message,
-            payload=payload,
-            status="pending",
-        ))
+        self.db.add(
+            Notification(
+                user_id=self.activity.user_id,
+                type="hrmax_suggestion",
+                message=message,
+                payload=payload,
+                status="pending",
+            )
+        )
         await self.db.flush()
 
     async def extract_peaks(self) -> PeaksResult:
         """
         Step 4: Extract peak powers at standard durations.
-        
+
         Stores peaks in ActivityPeakPower table for power curve analysis.
-        
+
         Returns:
             PeaksResult with peaks dict mapping duration to watts
         """
         result = PeaksResult()
-        
+
         power_array = [r.get("power_w") for r in self.records]
         has_power = any(p is not None and p > 0 for p in power_array)
-        
+
         if not has_power:
             return result
-        
+
         # Extract peaks at all standard durations
         peaks = extract_peak_powers(power_array)
         result.peaks = peaks
-        
+
         # Store each peak
         for duration_seconds, watts in peaks.items():
             if watts is not None:
@@ -562,51 +550,51 @@ class ActivityPipeline:
                     watts=watts,
                 )
                 self.db.add(peak)
-        
+
         await self.db.flush()
-        
+
         return result
 
     async def detect_breakthrough(self) -> BreakthroughResult:
         """
         Step 5: Detect if activity is a breakthrough and update fitness model.
-        
+
         A breakthrough occurs when the activity sets PRs at key durations.
-        
+
         Returns:
             BreakthroughResult with is_breakthrough flag
         """
         result = BreakthroughResult()
-        
+
         # Get this activity's peaks
         query = await self.db.execute(
-            select(ActivityPeakPower)
-            .where(ActivityPeakPower.activity_id == self.activity.id)
+            select(ActivityPeakPower).where(ActivityPeakPower.activity_id == self.activity.id)
         )
         activity_peaks_rows = query.scalars().all()
-        
+
         if not activity_peaks_rows:
             return result
-        
+
         activity_peaks = {p.duration_seconds: p.watts for p in activity_peaks_rows}
-        
+
         # Get all previous peaks
         all_time_bests = await self._get_all_time_bests()
-        
+
         # Check for breakthrough
         is_breakthrough = detect_breakthrough(activity_peaks, all_time_bests)
         result.is_breakthrough = is_breakthrough
-        
+
         if is_breakthrough:
             self.activity.is_breakthrough = True
             await self.db.flush()
             await self.db.refresh(self.activity)
-            
+
             # Update fitness model (user-level recompute via use case)
             from trainingdash.use_cases.fitness_model_updater import FitnessModelUpdater
+
             await FitnessModelUpdater(self.db).execute(self.activity.user_id)
             result.fitness_updated = True
-        
+
         return result
 
     async def _get_all_time_bests(self) -> dict[int, int]:
@@ -620,56 +608,55 @@ class ActivityPipeline:
             )
         )
         previous_peaks_rows = query.scalars().all()
-        
+
         peaks_by_activity: dict[int, dict[int, int]] = {}
         for p in previous_peaks_rows:
             if p.activity_id not in peaks_by_activity:
                 peaks_by_activity[p.activity_id] = {}
             peaks_by_activity[p.activity_id][p.duration_seconds] = p.watts
-        
+
         return get_all_time_bests(list(peaks_by_activity.values()))
 
     async def match_route(self) -> RouteMatchResult:
         """
         Step 6: Match activity to existing route or create new one.
-        
+
         Uses GPS track similarity to identify recurring routes.
-        
+
         Returns:
             RouteMatchResult with route_id if matched
         """
         from trainingdash.route_matching import find_or_create_route_id
-        
+
         result = RouteMatchResult()
-        
-        route_id = await find_or_create_route_id(
-            self.db, self.activity, self.records
-        )
-        
+
+        route_id = await find_or_create_route_id(self.db, self.activity, self.records)
+
         if route_id is not None:
             result.route_id = route_id
             self.activity.route_id = route_id
             await self.db.flush()
             await self.db.refresh(self.activity)
-        
+
         return result
 
     async def generate_title(self) -> TitleResult:
         """
         Step 7: Generate activity title from GPS data.
-        
+
         In batch_mode, uses time-of-day title to avoid rate limits.
         Otherwise, uses reverse geocoding for descriptive title.
-        
+
         Returns:
             TitleResult with title and source
         """
         result = TitleResult()
-        
+
         # Skip geocoding in batch mode or when disabled via environment
         import os
+
         skip_geocoding = self.batch_mode or os.environ.get("DISABLE_GEOCODING", "").lower() in ("1", "true", "yes")
-        
+
         if skip_geocoding:
             # Use time-of-day title for batch imports or when geocoding disabled
             result.title = _time_of_day_title(self.activity.started_at)
@@ -681,9 +668,7 @@ class ActivityPipeline:
 
                 geocoding = get_geocoding_service(self.db)
 
-                title = await generate_activity_title(
-                    self.records, self.activity.started_at, geocoding=geocoding
-                )
+                title = await generate_activity_title(self.records, self.activity.started_at, geocoding=geocoding)
                 if title:
                     result.title = title
                     result.title_source = "auto"
@@ -691,19 +676,17 @@ class ActivityPipeline:
                     result.title = _time_of_day_title(self.activity.started_at)
                     result.title_source = "pending"
             except Exception as e:
-                logger.warning(
-                    f"Failed to generate title for activity {self.activity.id}: {e}"
-                )
+                logger.warning(f"Failed to generate title for activity {self.activity.id}: {e}")
                 # Fall back to time-of-day title
                 result.title = _time_of_day_title(self.activity.started_at)
                 result.title_source = "pending"
-        
+
         if result.title:
             self.activity.title = result.title
             self.activity.title_source = result.title_source
             await self.db.flush()
             await self.db.refresh(self.activity)
-        
+
         return result
 
 
@@ -713,7 +696,7 @@ class ActivityPipeline:
 def _time_of_day_title(started_at: datetime) -> str:
     """
     Generate a time-of-day based title like "Morning Ride".
-    
+
     Time ranges:
     - 05:00-11:59 -> Morning Ride
     - 12:00-16:59 -> Afternoon Ride
@@ -721,7 +704,7 @@ def _time_of_day_title(started_at: datetime) -> str:
     - 21:00-04:59 -> Night Ride
     """
     hour = started_at.hour
-    
+
     if 5 <= hour < 12:
         return "Morning Ride"
     elif 12 <= hour < 17:

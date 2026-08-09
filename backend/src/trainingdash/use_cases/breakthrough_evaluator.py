@@ -30,9 +30,7 @@ class BreakthroughEvaluator:
         """
         # Load activities chronologically
         result = await self._db.execute(
-            select(Activity)
-            .where(Activity.user_id == user_id)
-            .order_by(Activity.started_at.asc())
+            select(Activity).where(Activity.user_id == user_id).order_by(Activity.started_at.asc())
         )
         activities = result.scalars().all()
 
@@ -42,9 +40,7 @@ class BreakthroughEvaluator:
         # Load all peak powers for this user's activities
         activity_ids = [a.id for a in activities]
         result = await self._db.execute(
-            select(ActivityPeakPower).where(
-                ActivityPeakPower.activity_id.in_(activity_ids)
-            )
+            select(ActivityPeakPower).where(ActivityPeakPower.activity_id.in_(activity_ids))
         )
         all_peaks = result.scalars().all()
 

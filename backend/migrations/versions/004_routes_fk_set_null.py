@@ -9,22 +9,20 @@ Revises: 003_add_utc_offset_to_activities
 Create Date: 2026-08-06
 
 """
-from typing import Sequence, Union
 
-import sqlalchemy as sa
+from collections.abc import Sequence
+
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "004_routes_fk_set_null"
-down_revision: Union[str, None] = "001_initial"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "001_initial"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.drop_constraint(
-        "routes_first_seen_activity_id_fkey", "routes", type_="foreignkey"
-    )
+    op.drop_constraint("routes_first_seen_activity_id_fkey", "routes", type_="foreignkey")
     op.alter_column(
         "routes",
         "first_seen_activity_id",
@@ -42,9 +40,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_constraint(
-        "routes_first_seen_activity_id_fkey", "routes", type_="foreignkey"
-    )
+    op.drop_constraint("routes_first_seen_activity_id_fkey", "routes", type_="foreignkey")
     op.alter_column(
         "routes",
         "first_seen_activity_id",

@@ -1,4 +1,3 @@
-import pytest
 from trainingdash.domain.resampler import compute_time_gap_series, resample_by_distance
 
 

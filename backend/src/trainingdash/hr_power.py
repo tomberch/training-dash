@@ -1,11 +1,12 @@
 """HR-derived power estimation using Efficiency Factor (EF) model."""
+
 import math
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from trainingdash.repositories.postgres.models import Activity, User, EFModel
-
+from trainingdash.repositories.postgres.models import Activity, EFModel, User
 
 # Minimum rides needed to build EF model
 MIN_RIDES_FOR_MODEL = 5
@@ -38,18 +39,16 @@ def compute_decay_weight(activity_date: datetime, reference_date: datetime) -> f
 async def update_ef_model(db: AsyncSession, user_id: int) -> EFModel | None:
     """
     Update the EF model for a user based on their dual-sensor rides.
-    
+
     Returns the updated model, or None if insufficient data.
     """
     # Check if user has HR-derived power enabled
-    result = await db.execute(
-        select(User).where(User.id == user_id)
-    )
+    result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
-    
+
     if user is None or not user.hr_derived_power_enabled:
         return None
-    
+
     # Get activities with both power and HR (dual-sensor rides)
     result = await db.execute(
         select(Activity)
@@ -63,36 +62,34 @@ async def update_ef_model(db: AsyncSession, user_id: int) -> EFModel | None:
         .order_by(Activity.started_at.desc())
     )
     dual_sensor_rides = result.scalars().all()
-    
+
     if len(dual_sensor_rides) < MIN_RIDES_FOR_MODEL:
         return None
-    
+
     # Compute weighted average EF
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = datetime.now(UTC).replace(tzinfo=None)
     total_weight = 0.0
     weighted_ef_sum = 0.0
-    
+
     for activity in dual_sensor_rides:
         ef = compute_ef(activity.np_power_w, activity.avg_hr_bpm)
         weight = compute_decay_weight(activity.started_at, now)
-        
+
         weighted_ef_sum += ef * weight
         total_weight += weight
-    
+
     if total_weight == 0:
         return None
-    
+
     ef_value = weighted_ef_sum / total_weight
-    
+
     # Compute confidence score
     confidence = compute_confidence(dual_sensor_rides, now)
-    
+
     # Upsert EF model
-    result = await db.execute(
-        select(EFModel).where(EFModel.user_id == user_id)
-    )
+    result = await db.execute(select(EFModel).where(EFModel.user_id == user_id))
     existing = result.scalar_one_or_none()
-    
+
     if existing:
         existing.ef_value = ef_value
         existing.computed_at = now
@@ -108,7 +105,7 @@ async def update_ef_model(db: AsyncSession, user_id: int) -> EFModel | None:
             confidence=confidence,
         )
         db.add(model)
-    
+
     await db.commit()
     await db.refresh(model)
     return model
@@ -117,7 +114,7 @@ async def update_ef_model(db: AsyncSession, user_id: int) -> EFModel | None:
 def compute_confidence(dual_sensor_rides: list[Activity], reference_date: datetime) -> float:
     """
     Compute confidence score for the EF model.
-    
+
     Factors:
     - Number of rides (more = higher confidence, up to 20)
     - Recency of last ride (< 30 days = higher confidence)
@@ -125,11 +122,11 @@ def compute_confidence(dual_sensor_rides: list[Activity], reference_date: dateti
     """
     if not dual_sensor_rides:
         return 0.0
-    
+
     # Factor 1: Ride count (0.0-0.4)
     ride_count = len(dual_sensor_rides)
     count_factor = min(ride_count / 20, 1.0) * 0.4
-    
+
     # Factor 2: Recency (0.0-0.3)
     most_recent = dual_sensor_rides[0].started_at
     days_since_last = (reference_date - most_recent).days
@@ -137,14 +134,10 @@ def compute_confidence(dual_sensor_rides: list[Activity], reference_date: dateti
         recency_factor = 0.3 * (1 - days_since_last / STALENESS_THRESHOLD_DAYS)
     else:
         recency_factor = 0.0
-    
+
     # Factor 3: Consistency (0.0-0.3)
-    ef_values = [
-        compute_ef(a.np_power_w, a.avg_hr_bpm)
-        for a in dual_sensor_rides
-        if a.np_power_w and a.avg_hr_bpm
-    ]
-    
+    ef_values = [compute_ef(a.np_power_w, a.avg_hr_bpm) for a in dual_sensor_rides if a.np_power_w and a.avg_hr_bpm]
+
     if len(ef_values) >= 2:
         mean_ef = sum(ef_values) / len(ef_values)
         variance = sum((ef - mean_ef) ** 2 for ef in ef_values) / len(ef_values)
@@ -155,7 +148,7 @@ def compute_confidence(dual_sensor_rides: list[Activity], reference_date: dateti
         consistency_factor = max(0, 0.3 * (1 - min(cv / 0.2, 1.0)))
     else:
         consistency_factor = 0.0
-    
+
     return round(count_factor + recency_factor + consistency_factor, 3)
 
 
@@ -166,32 +159,30 @@ async def estimate_power_from_hr(
 ) -> tuple[int | None, float | None]:
     """
     Estimate power from heart rate using the EF model.
-    
+
     Returns (estimated_power, confidence) or (None, None) if no model.
     """
     # Get EF model
-    result = await db.execute(
-        select(EFModel).where(EFModel.user_id == user_id)
-    )
+    result = await db.execute(select(EFModel).where(EFModel.user_id == user_id))
     model = result.scalar_one_or_none()
-    
+
     if model is None:
         return None, None
-    
+
     # Check staleness
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = datetime.now(UTC).replace(tzinfo=None)
     days_since_update = (now - model.computed_at).days
-    
+
     if days_since_update > STALENESS_THRESHOLD_DAYS:
         # Model is stale - reduce confidence
         staleness_penalty = min(days_since_update / (STALENESS_THRESHOLD_DAYS * 2), 0.5)
         adjusted_confidence = max(0.1, model.confidence - staleness_penalty)
     else:
         adjusted_confidence = model.confidence
-    
+
     # Estimate power: power = EF × HR
     estimated_power = int(round(float(model.ef_value) * avg_hr))
-    
+
     return estimated_power, round(adjusted_confidence, 3)
 
 
@@ -200,19 +191,15 @@ async def get_ef_model_status(db: AsyncSession, user_id: int) -> dict:
     Get the status of the user's EF model for display in /me endpoint.
     """
     # Check if enabled
-    result = await db.execute(
-        select(User).where(User.id == user_id)
-    )
+    result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
-    
+
     enabled = user.hr_derived_power_enabled if user else False
-    
+
     # Get model if exists
-    result = await db.execute(
-        select(EFModel).where(EFModel.user_id == user_id)
-    )
+    result = await db.execute(select(EFModel).where(EFModel.user_id == user_id))
     model = result.scalar_one_or_none()
-    
+
     if model is None:
         return {
             "enabled": enabled,
@@ -223,11 +210,11 @@ async def get_ef_model_status(db: AsyncSession, user_id: int) -> dict:
             "computed_at": None,
             "is_stale": None,
         }
-    
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    now = datetime.now(UTC).replace(tzinfo=None)
     days_since_update = (now - model.computed_at).days
     is_stale = days_since_update > STALENESS_THRESHOLD_DAYS
-    
+
     return {
         "enabled": enabled,
         "model_exists": True,

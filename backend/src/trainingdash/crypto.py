@@ -11,6 +11,7 @@ from trainingdash.config import settings
 
 class EncryptionError(Exception):
     """Raised when encryption/decryption fails."""
+
     pass
 
 
@@ -38,7 +39,7 @@ def generate_encryption_key() -> str:
 def encrypt(plaintext: str) -> bytes:
     """
     Encrypt plaintext using AES-256-GCM.
-    
+
     Returns: nonce (12 bytes) + ciphertext + tag (concatenated)
     """
     key = _get_key()
@@ -52,22 +53,22 @@ def encrypt(plaintext: str) -> bytes:
 def decrypt(encrypted: bytes) -> str:
     """
     Decrypt data encrypted with encrypt().
-    
+
     Args:
         encrypted: nonce (12 bytes) + ciphertext + tag
-        
+
     Returns: decrypted plaintext string
-    
+
     Raises: EncryptionError if decryption fails (wrong key, corrupted data, etc.)
     """
     if len(encrypted) < 12 + 16:  # nonce + minimum tag
         raise EncryptionError("Invalid encrypted data: too short")
-    
+
     key = _get_key()
     aesgcm = AESGCM(key)
     nonce = encrypted[:12]
     ciphertext = encrypted[12:]
-    
+
     try:
         plaintext_bytes = aesgcm.decrypt(nonce, ciphertext, None)
         return plaintext_bytes.decode("utf-8")

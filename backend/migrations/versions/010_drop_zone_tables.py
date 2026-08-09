@@ -7,9 +7,8 @@ Revises: 009_user_profile_zones
 Create Date: 2026-08-08
 """
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 revision = "010_drop_zone_tables"
 down_revision = "009_user_profile_zones"

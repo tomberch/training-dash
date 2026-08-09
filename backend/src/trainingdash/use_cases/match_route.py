@@ -29,17 +29,13 @@ class MatchRoute:
         """
         activity_uuid = UUID(activity_id)
 
-        result = await self._db.execute(
-            select(Activity).where(Activity.id == activity_uuid)
-        )
+        result = await self._db.execute(select(Activity).where(Activity.id == activity_uuid))
         activity = result.scalar_one_or_none()
         if activity is None:
             return {"success": False}
 
         records_result = await self._db.execute(
-            select(Record)
-            .where(Record.activity_id == activity_uuid)
-            .order_by(Record.timestamp)
+            select(Record).where(Record.activity_id == activity_uuid).order_by(Record.timestamp)
         )
         all_records = records_result.scalars().all()
 

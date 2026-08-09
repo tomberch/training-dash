@@ -1,6 +1,6 @@
 """PostgreSQL implementation of NotificationRepo."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import select, update
@@ -15,9 +15,7 @@ class PostgresNotificationRepo:
     def __init__(self, db: AsyncSession):
         self._db = db
 
-    async def list_for_user(
-        self, user_id: int, limit: int = 50, offset: int = 0
-    ) -> list[Notification]:
+    async def list_for_user(self, user_id: int, limit: int = 50, offset: int = 0) -> list[Notification]:
         result = await self._db.execute(
             select(Notification)
             .where(Notification.user_id == user_id)
@@ -43,7 +41,7 @@ class PostgresNotificationRepo:
                 Notification.id == notification_id,
                 Notification.user_id == user_id,
             )
-            .values(read_at=datetime.now(timezone.utc).replace(tzinfo=None))
+            .values(read_at=datetime.now(UTC).replace(tzinfo=None))
         )
         await self._db.commit()
         return result.rowcount > 0
@@ -55,7 +53,7 @@ class PostgresNotificationRepo:
                 Notification.user_id == user_id,
                 Notification.read_at.is_(None),
             )
-            .values(read_at=datetime.now(timezone.utc).replace(tzinfo=None))
+            .values(read_at=datetime.now(UTC).replace(tzinfo=None))
         )
         await self._db.commit()
         return result.rowcount

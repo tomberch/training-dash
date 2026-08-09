@@ -14,7 +14,6 @@ Create Date: 2026-08-07
 
 from alembic import op
 
-
 # revision identifiers, used by Alembic.
 revision = "006_threshold_sentinel"
 down_revision = "005_threshold_unique_date"

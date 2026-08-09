@@ -8,8 +8,6 @@ Create Date: 2026-08-08
 """
 
 from alembic import op
-import sqlalchemy as sa
-
 
 revision = "011_migrate_threshold_to_metrics"
 down_revision = "010_drop_zone_tables"

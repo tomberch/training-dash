@@ -2,9 +2,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "tests" / "fixtures"))
-from generate_fit import make_test_fit  # noqa: E402
+from generate_fit import make_test_fit
 
-from trainingdash.ingest import parse_records  # noqa: E402
+from trainingdash.ingest import parse_records
 
 
 class TestParseRecords:

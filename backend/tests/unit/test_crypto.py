@@ -6,7 +6,7 @@ from unittest import mock
 
 import pytest
 
-from trainingdash.crypto import encrypt, decrypt, generate_encryption_key, EncryptionError
+from trainingdash.crypto import EncryptionError, decrypt, encrypt, generate_encryption_key
 
 
 @pytest.fixture

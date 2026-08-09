@@ -93,8 +93,6 @@ class ActivityRepo(Protocol):
         ...
 
 
-
-
 class UserRepo(Protocol):
     """
     Repository protocol for User entities.
@@ -221,9 +219,7 @@ class NotificationRepo(Protocol):
     Repository protocol for user notifications.
     """
 
-    async def list_for_user(
-        self, user_id: int, limit: int = 50, offset: int = 0
-    ) -> list["Notification"]:
+    async def list_for_user(self, user_id: int, limit: int = 50, offset: int = 0) -> list["Notification"]:
         """List notifications for a user, ordered by created_at descending."""
         ...
 
@@ -313,9 +309,7 @@ class OAuthLinkRepo(Protocol):
     Repository protocol for OAuth provider links.
     """
 
-    async def get_by_provider_id(
-        self, provider: str, provider_user_id: str
-    ) -> "UserOAuthLink | None":
+    async def get_by_provider_id(self, provider: str, provider_user_id: str) -> "UserOAuthLink | None":
         """Find a link by provider and provider's user ID."""
         ...
 
@@ -349,7 +343,7 @@ class OAuthLinkRepo(Protocol):
 class RouteRepo(Protocol):
     """
     Repository protocol for Route entities.
-    
+
     Note: Complex spatial operations (find_or_create with Hausdorff distance)
     remain in route_matching.py due to PostGIS dependency. This protocol
     covers simpler route operations.
@@ -379,14 +373,14 @@ class RouteRepo(Protocol):
 class GeocodingCacheRepo(Protocol):
     """
     Repository protocol for geocoding cache entries.
-    
+
     Caches reverse geocoding results to respect OpenStreetMap/Photon rate limits.
     """
 
     async def get(self, cache_key: str) -> str | None:
         """
         Get cached geocoding result by key.
-        
+
         Returns JSON string if found, None if not cached.
         """
         ...
@@ -394,7 +388,7 @@ class GeocodingCacheRepo(Protocol):
     async def set(self, cache_key: str, result_json: str) -> None:
         """
         Store geocoding result in cache.
-        
+
         Upserts the entry (inserts or updates if key exists).
         """
         ...

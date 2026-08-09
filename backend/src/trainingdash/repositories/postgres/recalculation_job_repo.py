@@ -1,6 +1,6 @@
 """PostgreSQL implementation of RecalculationJobRepo."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -16,13 +16,11 @@ class PostgresRecalculationJobRepo:
         self._db = db
 
     async def get_by_user_id(self, user_id: int) -> RecalculationJob | None:
-        result = await self._db.execute(
-            select(RecalculationJob).where(RecalculationJob.user_id == user_id)
-        )
+        result = await self._db.execute(select(RecalculationJob).where(RecalculationJob.user_id == user_id))
         return result.scalar_one_or_none()
 
     async def upsert_pending(self, user_id: int) -> RecalculationJob:
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        now = datetime.now(UTC).replace(tzinfo=None)
         await self._db.execute(
             pg_insert(RecalculationJob)
             .values(user_id=user_id, status="pending", started_at=now)
@@ -36,13 +34,11 @@ class PostgresRecalculationJobRepo:
                 },
             )
         )
-        result = await self._db.execute(
-            select(RecalculationJob).where(RecalculationJob.user_id == user_id)
-        )
+        result = await self._db.execute(select(RecalculationJob).where(RecalculationJob.user_id == user_id))
         return result.scalar_one()
 
     async def upsert_failed(self, user_id: int) -> RecalculationJob:
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        now = datetime.now(UTC).replace(tzinfo=None)
         await self._db.execute(
             pg_insert(RecalculationJob)
             .values(user_id=user_id, status="failed", started_at=now)
@@ -51,14 +47,12 @@ class PostgresRecalculationJobRepo:
                 set_={"status": "failed", "started_at": now},
             )
         )
-        result = await self._db.execute(
-            select(RecalculationJob).where(RecalculationJob.user_id == user_id)
-        )
+        result = await self._db.execute(select(RecalculationJob).where(RecalculationJob.user_id == user_id))
         return result.scalar_one()
 
     async def mark_running(self, user_id: int) -> None:
         """Mark job as running."""
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        now = datetime.now(UTC).replace(tzinfo=None)
         await self._db.execute(
             pg_insert(RecalculationJob)
             .values(user_id=user_id, status="running", started_at=now)
@@ -75,7 +69,7 @@ class PostgresRecalculationJobRepo:
 
     async def mark_completed(self, user_id: int, activities_updated: int) -> None:
         """Mark job as completed with count of updated activities."""
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        now = datetime.now(UTC).replace(tzinfo=None)
         await self._db.execute(
             pg_insert(RecalculationJob)
             .values(
@@ -98,7 +92,7 @@ class PostgresRecalculationJobRepo:
 
     async def mark_failed(self, user_id: int, error_message: str) -> None:
         """Mark job as failed with error message."""
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        now = datetime.now(UTC).replace(tzinfo=None)
         await self._db.execute(
             pg_insert(RecalculationJob)
             .values(

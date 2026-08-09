@@ -3,7 +3,7 @@
 from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Query
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 
 from trainingdash.auth import CurrentUser, DbSession
 from trainingdash.repositories.postgres.models import Activity, ActivityPeakPower, FitnessHistory
@@ -89,11 +89,7 @@ async def get_pmc(
         start = end - timedelta(weeks=12)
 
     # Get all activities with TSS for this user
-    result = await db.execute(
-        select(Activity)
-        .where(Activity.user_id == user.id)
-        .order_by(Activity.started_at)
-    )
+    result = await db.execute(select(Activity).where(Activity.user_id == user.id).order_by(Activity.started_at))
     activities = result.scalars().all()
 
     # Aggregate TSS by date
@@ -130,13 +126,9 @@ async def get_power_curve(
 
     # Apply date filters if specified
     if start is not None:
-        query = query.where(
-            Activity.started_at >= datetime.combine(start, datetime.min.time())
-        )
+        query = query.where(Activity.started_at >= datetime.combine(start, datetime.min.time()))
     if end is not None:
-        query = query.where(
-            Activity.started_at <= datetime.combine(end, datetime.max.time())
-        )
+        query = query.where(Activity.started_at <= datetime.combine(end, datetime.max.time()))
 
     result = await db.execute(query)
     rows = result.all()
@@ -147,9 +139,7 @@ async def get_power_curve(
     for peak, started_at in rows:
         duration = peak.duration_seconds
         watts = peak.watts
-        achieved_date = (
-            started_at.date() if hasattr(started_at, "date") else started_at
-        )
+        achieved_date = started_at.date() if hasattr(started_at, "date") else started_at
 
         if duration not in best_by_duration or watts > best_by_duration[duration][0]:
             best_by_duration[duration] = (watts, achieved_date)
@@ -265,11 +255,7 @@ async def get_records(db: DbSession, user: CurrentUser):
             .limit(1)
         )
         first_started = first_activity_result.scalar()
-        route_label = (
-            first_started.strftime("%Y-%m-%d")
-            if first_started
-            else f"Route {row.route_id}"
-        )
+        route_label = first_started.strftime("%Y-%m-%d") if first_started else f"Route {row.route_id}"
         route_prs.append(
             {
                 "route_id": row.route_id,

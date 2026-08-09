@@ -10,8 +10,8 @@ from trainingdash.integrations.xert.client import (
 )
 
 __all__ = [
-    "XertActivity",
     "XertAPIError",
+    "XertActivity",
     "XertClient",
     "XertClientProtocol",
     "get_xert_client",

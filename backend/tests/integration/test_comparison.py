@@ -6,8 +6,9 @@ import pytest
 from sqlalchemy import select
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "tests" / "fixtures"))
-from generate_fit import make_test_fit  # noqa: E402
-from trainingdash.repositories.postgres.models import Activity, Record  # noqa: E402
+from generate_fit import make_test_fit
+
+from trainingdash.repositories.postgres.models import Record
 
 
 async def upload_fit(auth_client, name, fit_data):
@@ -38,7 +39,7 @@ class TestCompare:
 
     @pytest.mark.asyncio
     async def test_gap_signs_correct_faster_ride_negative(self, auth_client, db_session, seed_user):
-        from datetime import datetime, timedelta
+        from datetime import timedelta
 
         # Upload two rides on the same route
         fit_data = make_test_fit(num_records=100, start_lat=47.3769, start_lon=8.5417)
@@ -65,7 +66,6 @@ class TestCompare:
 
     @pytest.mark.asyncio
     async def test_gap_series_truncates_to_shorter_ride(self, auth_client, db_session, seed_user):
-        from datetime import datetime, timedelta
 
         # Upload same-route rides, then truncate one's records to simulate shorter distance
         fit_data = make_test_fit(num_records=100, start_lat=47.3769, start_lon=8.5417)

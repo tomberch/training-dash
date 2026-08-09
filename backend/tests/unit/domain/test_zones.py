@@ -1,15 +1,11 @@
 """Unit tests for zone computation functions."""
 
-import pytest
-
 from trainingdash.domain.zones import (
-    compute_power_zones,
     compute_hr_zones,
-    get_zone_for_power,
-    get_zone_for_hr,
+    compute_power_zones,
     compute_zone_times,
-    DEFAULT_POWER_ZONES,
-    DEFAULT_HR_ZONES,
+    get_zone_for_hr,
+    get_zone_for_power,
 )
 
 
@@ -19,18 +15,18 @@ class TestComputePowerZones:
     def test_computes_default_zones_from_ftp(self):
         """Should compute 7 Coggan zones from FTP."""
         zones = compute_power_zones(200)
-        
+
         assert len(zones) == 7
         assert zones[0]["zone"] == 1
         assert zones[0]["name"] == "Active Recovery"
         assert zones[0]["min_watts"] == 0  # 0% of 200
         assert zones[0]["max_watts"] == 110  # 55% of 200
-        
+
         assert zones[3]["zone"] == 4
         assert zones[3]["name"] == "Threshold"
         assert zones[3]["min_watts"] == 182  # 91% of 200
         assert zones[3]["max_watts"] == 210  # 105% of 200
-        
+
         assert zones[6]["zone"] == 7
         assert zones[6]["name"] == "Neuromuscular"
         assert zones[6]["min_watts"] == 302  # 151% of 200
@@ -44,7 +40,7 @@ class TestComputePowerZones:
             "3": [100, None],
         }
         zones = compute_power_zones(200, custom)
-        
+
         assert len(zones) == 3
         assert zones[0]["min_watts"] == 0
         assert zones[0]["max_watts"] == 100  # 50% of 200
@@ -65,18 +61,18 @@ class TestComputeHrZones:
     def test_computes_default_zones_from_lthr(self):
         """Should compute 5 HR zones from LTHR."""
         zones = compute_hr_zones(170)
-        
+
         assert len(zones) == 5
         assert zones[0]["zone"] == 1
         assert zones[0]["name"] == "Recovery"
         assert zones[0]["min_bpm"] == 0
         assert zones[0]["max_bpm"] == 137  # 81% of 170
-        
+
         assert zones[3]["zone"] == 4
         assert zones[3]["name"] == "Threshold"
         assert zones[3]["min_bpm"] == 159  # 94% of 170
         assert zones[3]["max_bpm"] == 170  # 100% of 170
-        
+
         assert zones[4]["zone"] == 5
         assert zones[4]["name"] == "Anaerobic"
         assert zones[4]["max_bpm"] is None  # No upper limit
@@ -89,7 +85,7 @@ class TestComputeHrZones:
             "3": [100, None],
         }
         zones = compute_hr_zones(170, custom)
-        
+
         assert len(zones) == 3
         assert zones[0]["max_bpm"] == 136  # 80% of 170
         assert zones[1]["min_bpm"] == 136
@@ -157,14 +153,20 @@ class TestComputeZoneTimes:
         """Should compute time in each power zone."""
         # 10 seconds at different power levels
         power_data = [
-            100, 100, 100,  # Zone 1 (50% FTP) - 3 seconds
-            150, 150,       # Zone 2 (75% FTP) - 2 seconds
-            200, 200, 200,  # Zone 4 (100% FTP) - 3 seconds
-            300, 300,       # Zone 6 (150% FTP) - 2 seconds
+            100,
+            100,
+            100,  # Zone 1 (50% FTP) - 3 seconds
+            150,
+            150,  # Zone 2 (75% FTP) - 2 seconds
+            200,
+            200,
+            200,  # Zone 4 (100% FTP) - 3 seconds
+            300,
+            300,  # Zone 6 (150% FTP) - 2 seconds
         ]
-        
+
         power_times, hr_times = compute_zone_times(power_data, 200)
-        
+
         assert power_times is not None
         assert hr_times is None
         assert power_times[1] == 3
@@ -175,13 +177,17 @@ class TestComputeZoneTimes:
     def test_hr_zone_times_basic(self):
         """Should compute time in each HR zone."""
         hr_data = [
-            120, 120, 120,  # Zone 1 (~71% LTHR) - 3 seconds
-            155, 155,       # Zone 3 (~91% LTHR) - 2 seconds
-            170, 170,       # Zone 5 (100% LTHR) - 2 seconds
+            120,
+            120,
+            120,  # Zone 1 (~71% LTHR) - 3 seconds
+            155,
+            155,  # Zone 3 (~91% LTHR) - 2 seconds
+            170,
+            170,  # Zone 5 (100% LTHR) - 2 seconds
         ]
-        
+
         power_times, hr_times = compute_zone_times([], None, hr_data, 170)
-        
+
         assert power_times is None
         assert hr_times is not None
         assert hr_times[1] == 3
@@ -192,9 +198,9 @@ class TestComputeZoneTimes:
         """Should compute both power and HR zone times."""
         power_data = [200, 200, 200]
         hr_data = [170, 170, 170]
-        
+
         power_times, hr_times = compute_zone_times(power_data, 200, hr_data, 170)
-        
+
         assert power_times is not None
         assert hr_times is not None
         assert power_times[4] == 3  # Threshold
@@ -203,17 +209,17 @@ class TestComputeZoneTimes:
     def test_skips_none_values(self):
         """Should skip None values in data."""
         power_data = [200, None, 200, None, 200]
-        
+
         power_times, _ = compute_zone_times(power_data, 200)
-        
+
         assert sum(power_times.values()) == 3  # Only 3 valid samples
 
     def test_skips_zero_values(self):
         """Should skip zero values in data."""
         power_data = [200, 0, 200, 0, 200]
-        
+
         power_times, _ = compute_zone_times(power_data, 200)
-        
+
         assert sum(power_times.values()) == 3  # Only 3 non-zero samples
 
     def test_no_ftp_returns_none_power_zones(self):
@@ -230,10 +236,8 @@ class TestComputeZoneTimes:
         """Should use custom zone percentages."""
         power_data = [100, 100, 200, 200]  # 50% and 100% of FTP
         custom = {"1": [0, 75], "2": [75, None]}
-        
-        power_times, _ = compute_zone_times(
-            power_data, 200, power_zone_pct=custom
-        )
-        
+
+        power_times, _ = compute_zone_times(power_data, 200, power_zone_pct=custom)
+
         assert power_times[1] == 2  # 100W = 50% < 75%
         assert power_times[2] == 2  # 200W = 100% >= 75%

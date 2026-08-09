@@ -23,12 +23,10 @@ References:
 """
 
 import math
-from datetime import datetime, timezone
-from typing import Sequence
+from datetime import UTC, datetime
 
 import numpy as np
 from scipy.optimize import curve_fit
-
 
 # Key durations for breakthrough detection (seconds)
 BREAKTHROUGH_DURATIONS = [5, 60, 300, 1200]  # 5s, 1min, 5min, 20min
@@ -38,14 +36,14 @@ DECAY_HALF_LIFE_DAYS = 42  # 6 weeks
 
 # Duration bounds for CP model fitting (seconds)
 # Based on scientific literature: 2-12 minutes is the validated range
-CP_FIT_MIN_DURATION = 120   # 2 minutes
-CP_FIT_MAX_DURATION = 720   # 12 minutes
+CP_FIT_MIN_DURATION = 120  # 2 minutes
+CP_FIT_MAX_DURATION = 720  # 12 minutes
 
 
 def compute_decay_weight(activity_date: datetime, reference_date: datetime) -> float:
     """
     Compute exponential decay weight for an activity.
-    
+
     More recent activities are weighted higher.
     Weight = 0.5^(days_old / half_life)
     """
@@ -54,7 +52,7 @@ def compute_decay_weight(activity_date: datetime, reference_date: datetime) -> f
         activity_date = activity_date.replace(tzinfo=None)
     if reference_date.tzinfo is not None:
         reference_date = reference_date.replace(tzinfo=None)
-    
+
     days_old = (reference_date - activity_date).days
     if days_old < 0:
         days_old = 0
@@ -64,14 +62,14 @@ def compute_decay_weight(activity_date: datetime, reference_date: datetime) -> f
 def _hyperbolic_model(t: np.ndarray, cp: float, w_prime: float) -> np.ndarray:
     """
     2-parameter hyperbolic critical power model.
-    
+
     P(t) = CP + W' / t
-    
+
     Args:
         t: Duration in seconds (array)
         cp: Critical Power in watts
         w_prime: W' in joules
-    
+
     Returns:
         Power output in watts (array)
     """
@@ -85,30 +83,30 @@ def _fit_2_parameter_model(
 ) -> tuple[float, float] | None:
     """
     Fit the 2-parameter CP model using nonlinear least squares.
-    
+
     The model: P(t) = CP + W'/t
-    
+
     Args:
         durations: Array of durations in seconds
         powers: Array of power values in watts
         weights: Optional weights for each data point
-    
+
     Returns:
         Tuple of (CP, W') or None if fitting fails
     """
     if len(durations) < 2:
         return None
-    
+
     # Initial guesses based on data
     # CP ~ power at longest duration
     # W' ~ (power at shortest - power at longest) * shortest duration
     cp_init = float(np.min(powers))
     w_prime_init = float((np.max(powers) - cp_init) * np.min(durations))
-    
+
     # Bounds: CP > 0, W' > 0
     # Typical ranges: CP 100-500W, W' 5000-40000 J
     bounds = ([50, 1000], [600, 50000])
-    
+
     try:
         if weights is not None:
             # Weighted least squares via sigma (inverse of weights)
@@ -132,10 +130,10 @@ def _fit_2_parameter_model(
                 bounds=bounds,
                 maxfev=1000,
             )
-        
+
         cp, w_prime = popt
         return float(cp), float(w_prime)
-    
+
     except (RuntimeError, ValueError):
         # Fitting failed, fall back to linear regression on work-time model
         # W = CP * t + W' (linear in CP and W')
@@ -148,9 +146,9 @@ def _fit_linear_work_model(
 ) -> tuple[float, float] | None:
     """
     Fallback: fit the work-time linear model.
-    
+
     W = CP * t + W'
-    
+
     This is a linear regression where:
     - Work (W = P * t) is the dependent variable
     - Duration (t) is the independent variable
@@ -159,22 +157,22 @@ def _fit_linear_work_model(
     """
     if len(durations) < 2:
         return None
-    
+
     work = powers * durations
-    
+
     # Linear regression: W = CP * t + W'
     # Using numpy's polyfit (degree 1)
     try:
         coeffs = np.polyfit(durations, work, 1)
         cp = float(coeffs[0])  # slope
         w_prime = float(coeffs[1])  # intercept
-        
+
         # Sanity check
         if cp < 50 or cp > 600 or w_prime < 1000 or w_prime > 50000:
             return None
-        
+
         return cp, w_prime
-    
+
     except (np.linalg.LinAlgError, ValueError):
         return None
 
@@ -186,96 +184,92 @@ def fit_cp_model(
 ) -> dict | None:
     """
     Fit 2-parameter Critical Power model to peak power data.
-    
+
     Uses nonlinear least squares regression on the hyperbolic model:
     P(t) = CP + W'/t
-    
+
     Only uses data points in the scientifically validated range (2-12 minutes)
     for CP/W' fitting. Peak power is estimated separately from short efforts.
-    
+
     Args:
         peak_powers: List of {duration_seconds: watts} dicts, one per activity
         activity_dates: Optional list of activity dates for decay weighting
         reference_date: Reference date for decay calculation (default: now)
-    
+
     Returns:
         Dict with pp_watts, w_prime_joules, cp_watts, or None if insufficient data
     """
     if not peak_powers:
         return None
-    
+
     # Aggregate best power at each duration across all activities
     best_by_duration: dict[int, tuple[int, float]] = {}  # duration -> (watts, weight)
-    
-    reference_date = reference_date or datetime.now(timezone.utc)
-    
+
+    reference_date = reference_date or datetime.now(UTC)
+
     for i, peaks in enumerate(peak_powers):
         weight = 1.0
         if activity_dates and i < len(activity_dates):
             weight = compute_decay_weight(activity_dates[i], reference_date)
-        
+
         for duration, watts in peaks.items():
             if watts is None:
                 continue
             duration = int(duration)
             watts = int(watts)
-            
+
             if duration not in best_by_duration or watts > best_by_duration[duration][0]:
                 best_by_duration[duration] = (watts, weight)
-    
+
     if len(best_by_duration) < 3:
         return None
-    
+
     # Estimate PP (peak power) from short durations (1-10s)
     pp_watts = 0
     for dur in [1, 5, 10]:
         if dur in best_by_duration:
             pp_watts = max(pp_watts, best_by_duration[dur][0])
-    
+
     if pp_watts == 0:
         # Fallback to shortest available
         shortest = min(best_by_duration.keys())
         pp_watts = best_by_duration[shortest][0]
-    
+
     # Filter data points for CP model fitting (2-12 minute range)
     fit_data = [
         (dur, watts, weight)
         for dur, (watts, weight) in best_by_duration.items()
         if CP_FIT_MIN_DURATION <= dur <= CP_FIT_MAX_DURATION
     ]
-    
+
     # If not enough points in the ideal range, expand to 1-20 minutes
     if len(fit_data) < 2:
-        fit_data = [
-            (dur, watts, weight)
-            for dur, (watts, weight) in best_by_duration.items()
-            if 60 <= dur <= 1200
-        ]
-    
+        fit_data = [(dur, watts, weight) for dur, (watts, weight) in best_by_duration.items() if 60 <= dur <= 1200]
+
     if len(fit_data) < 2:
         # Still not enough data, use simple estimation
         return _fallback_estimation(best_by_duration, pp_watts)
-    
+
     # Prepare arrays for curve fitting
     durations = np.array([d[0] for d in fit_data], dtype=float)
     powers = np.array([d[1] for d in fit_data], dtype=float)
     weights = np.array([d[2] for d in fit_data], dtype=float)
-    
+
     # Fit the model
     result = _fit_2_parameter_model(durations, powers, weights)
-    
+
     if result is None:
         return _fallback_estimation(best_by_duration, pp_watts)
-    
+
     cp_watts, w_prime_joules = result
-    
+
     # Round to integers
     cp_watts = int(round(cp_watts))
     w_prime_joules = int(round(w_prime_joules))
-    
+
     # Final sanity bounds
     w_prime_joules = max(5000, min(40000, w_prime_joules))
-    
+
     return {
         "pp_watts": pp_watts,
         "w_prime_joules": w_prime_joules,
@@ -289,11 +283,11 @@ def _fallback_estimation(
 ) -> dict | None:
     """
     Fallback CP estimation when curve fitting isn't possible.
-    
+
     Uses the traditional 95% of 20-minute power rule, or similar heuristics.
     """
     cp_watts = 0
-    
+
     # Try 20-minute power first (the FTP test duration)
     if 1200 in best_by_duration:
         # CP ≈ 20-minute power (already maximal effort)
@@ -307,10 +301,10 @@ def _fallback_estimation(
     elif 60 in best_by_duration:
         # Very rough: CP ≈ 80% of 1-minute power
         cp_watts = int(best_by_duration[60][0] * 0.80)
-    
+
     if cp_watts == 0:
         return None
-    
+
     # Estimate W' from difference between short efforts and CP
     w_prime_estimates = []
     for dur in [60, 120, 180, 300]:
@@ -319,14 +313,14 @@ def _fallback_estimation(
             if p > cp_watts:
                 w_prime = (p - cp_watts) * dur
                 w_prime_estimates.append(w_prime)
-    
+
     if w_prime_estimates:
         w_prime_joules = int(sum(w_prime_estimates) / len(w_prime_estimates))
     else:
         w_prime_joules = cp_watts * 60
-    
+
     w_prime_joules = max(5000, min(40000, w_prime_joules))
-    
+
     return {
         "pp_watts": pp_watts,
         "w_prime_joules": w_prime_joules,
@@ -340,11 +334,11 @@ def detect_breakthrough(
 ) -> bool:
     """
     Detect if an activity is a breakthrough (sets PRs at key durations).
-    
+
     Args:
         activity_peaks: {duration_seconds: watts} for the new activity
         all_time_bests: {duration_seconds: watts} best powers before this activity
-    
+
     Returns:
         True if the activity sets a new PR at any breakthrough duration
     """
@@ -362,10 +356,10 @@ def get_all_time_bests(
 ) -> dict[int, int]:
     """
     Get all-time best power at each duration.
-    
+
     Args:
         peak_powers_by_activity: List of {duration: watts} dicts
-    
+
     Returns:
         {duration: best_watts} across all activities
     """

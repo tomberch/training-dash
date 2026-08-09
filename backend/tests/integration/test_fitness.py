@@ -1,4 +1,5 @@
 """Integration tests for fitness model and breakthrough detection (#20)."""
+
 import sys
 from pathlib import Path
 from uuid import UUID as UUIDType
@@ -7,8 +8,9 @@ import pytest
 from sqlalchemy import select
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "tests" / "fixtures"))
-from generate_fit import make_test_fit  # noqa: E402
-from trainingdash.repositories.postgres.models import Activity, FitnessHistory  # noqa: E402
+from generate_fit import make_test_fit
+
+from trainingdash.repositories.postgres.models import Activity
 
 
 class TestBreakthroughDetection:
@@ -25,11 +27,9 @@ class TestBreakthroughDetection:
         )
         assert response.status_code == 200
         activity_id = UUIDType(response.json()["id"])
-        
+
         # Check activity is marked as breakthrough
-        result = await db_session.execute(
-            select(Activity).where(Activity.id == activity_id)
-        )
+        result = await db_session.execute(select(Activity).where(Activity.id == activity_id))
         activity = result.scalar_one()
         assert activity.is_breakthrough is True
 
@@ -42,7 +42,7 @@ class TestBreakthroughDetection:
             "/api/upload",
             files={"file": ("first.fit", fit_data1, "application/octet-stream")},
         )
-        
+
         # Upload second FIT with same power pattern (no new PRs)
         fit_data2 = make_test_fit(num_records=120)
         response = await auth_client.post(
@@ -50,11 +50,9 @@ class TestBreakthroughDetection:
             files={"file": ("second.fit", fit_data2, "application/octet-stream")},
         )
         activity_id = UUIDType(response.json()["id"])
-        
+
         # Check second activity is NOT a breakthrough
-        result = await db_session.execute(
-            select(Activity).where(Activity.id == activity_id)
-        )
+        result = await db_session.execute(select(Activity).where(Activity.id == activity_id))
         activity = result.scalar_one()
         assert activity.is_breakthrough is False
 
@@ -67,13 +65,13 @@ class TestBreakthroughDetection:
             "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
-        
+
         # Get activity list
         response = await auth_client.get("/api/activities")
         assert response.status_code == 200
         data = response.json()
         activities = data["activities"]
-        
+
         assert len(activities) >= 1
         assert "is_breakthrough" in activities[0]
 
@@ -87,12 +85,12 @@ class TestBreakthroughDetection:
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         activity_id = upload_resp.json()["id"]
-        
+
         # Get activity detail
         response = await auth_client.get(f"/api/activities/{activity_id}")
         assert response.status_code == 200
         data = response.json()
-        
+
         assert "is_breakthrough" in data
         assert data["is_breakthrough"] is True  # First activity is breakthrough
 
@@ -106,7 +104,7 @@ class TestFitnessModel:
         response = await auth_client.get("/api/fitness")
         assert response.status_code == 200
         data = response.json()
-        
+
         assert data["current"] is None
         assert data["history"] == []
 
@@ -119,18 +117,18 @@ class TestFitnessModel:
             "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
-        
+
         # Check fitness was computed
         response = await auth_client.get("/api/fitness")
         assert response.status_code == 200
         data = response.json()
-        
+
         assert data["current"] is not None
         assert "pp_watts" in data["current"]
         assert "w_prime_joules" in data["current"]
         assert "cp_watts" in data["current"]
         assert "computed_at" in data["current"]
-        
+
         # Values should be positive
         assert data["current"]["pp_watts"] > 0
         assert data["current"]["w_prime_joules"] > 0
@@ -145,10 +143,10 @@ class TestFitnessModel:
             "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
-        
+
         response = await auth_client.get("/api/fitness")
         data = response.json()
-        
+
         assert len(data["history"]) >= 1
         assert data["history"][0]["pp_watts"] == data["current"]["pp_watts"]
 
@@ -161,16 +159,16 @@ class TestFitnessModel:
             "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
-        
+
         response = await auth_client.get("/api/fitness")
         data = response.json()
-        
+
         # PP should be highest peak (around 279W for test data)
         assert 200 <= data["current"]["pp_watts"] <= 350
-        
+
         # CP should be lower than PP
         assert data["current"]["cp_watts"] < data["current"]["pp_watts"]
-        
+
         # W' should be in reasonable range (5-40 kJ)
         assert 5000 <= data["current"]["w_prime_joules"] <= 40000
 

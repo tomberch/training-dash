@@ -21,10 +21,9 @@ Engine lifecycle:
 import logging
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta, timezone
 
 from saq import CronJob
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine, AsyncEngine
+from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 
 from trainingdash.integrations.xert.mock_client import setup_mock_xert_client
 from trainingdash.jobs import enqueue_match_route_job
@@ -40,7 +39,7 @@ async def startup(ctx: dict) -> None:
     db_url = os.environ.get("DATABASE_URL")
     if not db_url:
         raise RuntimeError("DATABASE_URL environment variable not set")
-    
+
     engine = create_async_engine(
         db_url,
         pool_size=5,
@@ -66,17 +65,18 @@ async def worker_db_session(ctx: dict):
     session_factory = ctx.get("db_session_factory")
     if session_factory is None:
         raise RuntimeError("Database session factory not initialized. Was startup called?")
-    
+
     async with session_factory() as session:
         yield session
 
 
 async def ingest_job(ctx: dict, *, user_id: int, fit_bytes_b64: str, source: str, source_ref: str):
     """Ingest a FIT file and enqueue route matching.
-    
+
     Note: fit_bytes_b64 is base64-encoded because SAQ uses JSON serialization.
     """
     import base64
+
     from trainingdash.use_cases import IngestActivity
 
     # Decode base64 back to bytes
@@ -112,19 +112,19 @@ async def recalculate_after_delete_job(ctx: dict, *, user_id: int) -> dict:
 async def sync_xert_job(ctx: dict, *, user_id: int):
     """
     Sync activities from Xert for a user.
-    
+
     Uses the SyncFromProvider use case with XertSyncProvider.
     Activities are ingested via session_data (not FIT files) and
     routed through the full metric pipeline.
     """
-    from trainingdash.use_cases import SyncFromProvider
     from trainingdash.sync_providers import XertSyncProvider
-    
+    from trainingdash.use_cases import SyncFromProvider
+
     async with worker_db_session(ctx) as db:
         provider = XertSyncProvider()
         use_case = SyncFromProvider(db)
         result = await use_case.execute(user_id, provider)
-        
+
         return {
             "success": result.success,
             "user_id": result.user_id,
@@ -137,19 +137,19 @@ async def sync_xert_job(ctx: dict, *, user_id: int):
 async def sync_garmin_job(ctx: dict, *, user_id: int):
     """
     Sync activities from Garmin Connect for a user.
-    
+
     Uses the SyncFromProvider use case with GarminSyncProvider.
     Activities are ingested via FIT file download through the
     standard ingest pipeline.
     """
-    from trainingdash.use_cases import SyncFromProvider
     from trainingdash.sync_providers import GarminSyncProvider
-    
+    from trainingdash.use_cases import SyncFromProvider
+
     async with worker_db_session(ctx) as db:
         provider = GarminSyncProvider()
         use_case = SyncFromProvider(db)
         result = await use_case.execute(user_id, provider)
-        
+
         return {
             "success": result.success,
             "user_id": result.user_id,
@@ -177,16 +177,16 @@ async def recalculate_metrics_job(ctx: dict, *, user_id: int) -> dict:
 
     Returns a dict with success flag and count of activities updated.
     """
-    from trainingdash.use_cases import RecalculateMetrics
     from trainingdash.repositories.postgres.recalculation_job_repo import (
         PostgresRecalculationJobRepo,
     )
-    
+    from trainingdash.use_cases import RecalculateMetrics
+
     async with worker_db_session(ctx) as db:
         job_repo = PostgresRecalculationJobRepo(db)
         use_case = RecalculateMetrics(db, job_repo)
         result = await use_case.execute(user_id)
-        
+
         return {
             "success": result.success,
             "user_id": result.user_id,
@@ -202,15 +202,16 @@ async def recalculate_metrics_job(ctx: dict, *, user_id: int) -> dict:
 def settings():
     """
     Return SAQ worker settings.
-    
+
     This is a callable (not a dict) so that PostgresQueue.from_url() is not
     called at module import time. The queue connection is deferred until
     the worker process actually starts, giving the database container time
     to become healthy.
     """
     from saq.queue.postgres import PostgresQueue
+
     from trainingdash.queue import get_queue_url
-    
+
     return {
         "queue": PostgresQueue.from_url(
             get_queue_url(),

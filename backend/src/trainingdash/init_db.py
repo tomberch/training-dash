@@ -5,22 +5,23 @@ import sys
 
 from sqlalchemy import text
 
+from trainingdash.auth import hash_password
 from trainingdash.repositories.postgres.db import async_session, engine
 from trainingdash.repositories.postgres.models import User
-from trainingdash.auth import hash_password
 
 
 def run_alembic_upgrade():
     """Run alembic upgrade head using sync subprocess."""
     # Get database URL and convert to sync driver for alembic
     from trainingdash.config import settings
+
     db_url = settings.database_url
     if "+asyncpg" in db_url:
         db_url = db_url.replace("+asyncpg", "")
-    
+
     env = os.environ.copy()
     env["DATABASE_URL"] = db_url
-    
+
     result = subprocess.run(
         ["alembic", "upgrade", "head"],
         env=env,

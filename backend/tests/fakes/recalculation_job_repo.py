@@ -1,6 +1,6 @@
 """In-memory fake implementation of RecalculationJobRepo for testing."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from trainingdash.repositories.postgres.models import RecalculationJob
 
@@ -8,7 +8,7 @@ from trainingdash.repositories.postgres.models import RecalculationJob
 class FakeRecalculationJobRepo:
     """
     In-memory fake implementation of RecalculationJobRepo protocol.
-    
+
     Stores jobs in a dict keyed by user_id (one job per user).
     """
 
@@ -21,7 +21,7 @@ class FakeRecalculationJobRepo:
         return self._jobs.get(user_id)
 
     async def upsert_pending(self, user_id: int) -> RecalculationJob:
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        now = datetime.now(UTC).replace(tzinfo=None)
         job = self._jobs.get(user_id)
         if job is None:
             job = RecalculationJob(user_id=user_id, status="pending", started_at=now)
@@ -34,7 +34,7 @@ class FakeRecalculationJobRepo:
         return job
 
     async def upsert_failed(self, user_id: int) -> RecalculationJob:
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        now = datetime.now(UTC).replace(tzinfo=None)
         job = self._jobs.get(user_id)
         if job is None:
             job = RecalculationJob(user_id=user_id, status="failed", started_at=now)
@@ -47,7 +47,7 @@ class FakeRecalculationJobRepo:
 
     async def mark_running(self, user_id: int) -> None:
         """Mark job as running."""
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        now = datetime.now(UTC).replace(tzinfo=None)
         job = self._jobs.get(user_id)
         if job is None:
             job = RecalculationJob(user_id=user_id, status="running", started_at=now)
@@ -60,7 +60,7 @@ class FakeRecalculationJobRepo:
 
     async def mark_completed(self, user_id: int, activities_updated: int) -> None:
         """Mark job as completed with count of updated activities."""
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        now = datetime.now(UTC).replace(tzinfo=None)
         job = self._jobs.get(user_id)
         if job is None:
             job = RecalculationJob(
@@ -79,7 +79,7 @@ class FakeRecalculationJobRepo:
 
     async def mark_failed(self, user_id: int, error_message: str) -> None:
         """Mark job as failed with error message."""
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        now = datetime.now(UTC).replace(tzinfo=None)
         job = self._jobs.get(user_id)
         if job is None:
             job = RecalculationJob(
@@ -111,5 +111,5 @@ class FakeRecalculationJobRepo:
         job = self._jobs.get(user_id)
         if job:
             job.status = "completed"
-            job.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            job.completed_at = datetime.now(UTC).replace(tzinfo=None)
             job.activities_updated = activities_updated

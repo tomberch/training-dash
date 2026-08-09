@@ -12,9 +12,7 @@ class PostgresOAuthLinkRepo:
     def __init__(self, db: AsyncSession):
         self._db = db
 
-    async def get_by_provider_id(
-        self, provider: str, provider_user_id: str
-    ) -> UserOAuthLink | None:
+    async def get_by_provider_id(self, provider: str, provider_user_id: str) -> UserOAuthLink | None:
         result = await self._db.execute(
             select(UserOAuthLink).where(
                 UserOAuthLink.provider == provider,
@@ -24,9 +22,7 @@ class PostgresOAuthLinkRepo:
         return result.scalar_one_or_none()
 
     async def list_for_user(self, user_id: int) -> list[UserOAuthLink]:
-        result = await self._db.execute(
-            select(UserOAuthLink).where(UserOAuthLink.user_id == user_id)
-        )
+        result = await self._db.execute(select(UserOAuthLink).where(UserOAuthLink.user_id == user_id))
         return list(result.scalars().all())
 
     async def get_for_user(self, user_id: int, provider: str) -> UserOAuthLink | None:
@@ -86,8 +82,6 @@ class PostgresOAuthLinkRepo:
 
     async def count_for_user(self, user_id: int) -> int:
         result = await self._db.execute(
-            select(func.count())
-            .select_from(UserOAuthLink)
-            .where(UserOAuthLink.user_id == user_id)
+            select(func.count()).select_from(UserOAuthLink).where(UserOAuthLink.user_id == user_id)
         )
         return result.scalar() or 0

@@ -3,7 +3,7 @@
 import json
 import logging
 import os
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request, status
@@ -11,34 +11,31 @@ from pydantic import BaseModel
 from sqlalchemy import select
 
 from trainingdash.auth import CurrentUser, DbSession, hash_password
-from trainingdash.crypto import encrypt, EncryptionError
+from trainingdash.crypto import EncryptionError, encrypt
 from trainingdash.dependencies import (
     GarminCredentialsRepoD,
-    NotificationRepoD,
     OAuthLinkRepoD,
     RecalculationJobRepoD,
     XertCredentialsRepoD,
 )
-from trainingdash.integrations.garmin import get_garmin_client, GarminAPIError, GarminMFARequired
+from trainingdash.domain.thresholds import (
+    create_threshold_entries,
+    ensure_default_thresholds,
+    get_all_threshold_entries,
+    get_thresholds_for_date,
+)
+from trainingdash.domain.zones import compute_hr_zones, compute_power_zones
+from trainingdash.integrations.garmin import GarminAPIError, GarminMFARequired, get_garmin_client
+from trainingdash.integrations.xert import XertAPIError, get_xert_client
 from trainingdash.jobs import enqueue_recalculate_metrics_job
 from trainingdash.repositories.postgres.models import (
-    GarminCredentials,
     Notification,
-    XertCredentials,
 )
+from trainingdash.routers.datetime_utils import utc_str
 from trainingdash.routers.serializers import (
     recalculation_job_response,
     user_response,
 )
-from trainingdash.routers.datetime_utils import utc_str
-from trainingdash.domain.thresholds import (
-    ensure_default_thresholds,
-    get_all_threshold_entries,
-    get_thresholds_for_date,
-    create_threshold_entries,
-)
-from trainingdash.domain.zones import compute_power_zones, compute_hr_zones
-from trainingdash.integrations.xert import get_xert_client, XertAPIError
 
 logger = logging.getLogger(__name__)
 
@@ -80,28 +77,22 @@ async def update_me(db: DbSession, user: CurrentUser, request: UpdateMeRequest):
     """Update the current user's preferences."""
     if request.display_name is not None:
         user.display_name = request.display_name.strip() if request.display_name else None
-    
+
     if request.unit_system is not None:
         if request.unit_system not in ("metric", "imperial"):
-            raise HTTPException(
-                status_code=400, detail="unit_system must be 'metric' or 'imperial'"
-            )
+            raise HTTPException(status_code=400, detail="unit_system must be 'metric' or 'imperial'")
         user.unit_system = request.unit_system
 
     if request.sync_hour is not None:
         if request.sync_hour < 0 or request.sync_hour > 23:
-            raise HTTPException(
-                status_code=400, detail="sync_hour must be between 0 and 23"
-            )
+            raise HTTPException(status_code=400, detail="sync_hour must be between 0 and 23")
         user.sync_hour = request.sync_hour
 
     if request.date_of_birth is not None:
         today = date.today()
         age = (today - request.date_of_birth).days // 365
         if request.date_of_birth > today:
-            raise HTTPException(
-                status_code=400, detail="date_of_birth cannot be in the future"
-            )
+            raise HTTPException(status_code=400, detail="date_of_birth cannot be in the future")
         if age < 10 or age > 100:
             raise HTTPException(
                 status_code=400,
@@ -113,23 +104,17 @@ async def update_me(db: DbSession, user: CurrentUser, request: UpdateMeRequest):
         if request.weight_kg <= 0:
             raise HTTPException(status_code=400, detail="weight_kg must be positive")
         if request.weight_kg > 500:
-            raise HTTPException(
-                status_code=400, detail="weight_kg must be realistic (max 500)"
-            )
+            raise HTTPException(status_code=400, detail="weight_kg must be realistic (max 500)")
         user.weight_kg = request.weight_kg
 
     if request.height_cm is not None:
         if request.height_cm < 100 or request.height_cm > 250:
-            raise HTTPException(
-                status_code=400, detail="height_cm must be between 100 and 250"
-            )
+            raise HTTPException(status_code=400, detail="height_cm must be between 100 and 250")
         user.height_cm = request.height_cm
 
     if request.gender is not None:
         if request.gender not in ("male", "female"):
-            raise HTTPException(
-                status_code=400, detail="gender must be 'male' or 'female'"
-            )
+            raise HTTPException(status_code=400, detail="gender must be 'male' or 'female'")
         user.gender = request.gender
 
     if request.power_zone_percentages is not None:
@@ -159,11 +144,7 @@ async def get_my_xert_credentials(xert_repo: XertCredentialsRepoD, user: Current
     return {
         "configured": True,
         "xert_email": creds.xert_email,
-        "sync_since": (
-            creds.sync_since.date()
-            if hasattr(creds.sync_since, "date")
-            else creds.sync_since
-        ).isoformat()
+        "sync_since": (creds.sync_since.date() if hasattr(creds.sync_since, "date") else creds.sync_since).isoformat()
         if creds.sync_since
         else None,
     }
@@ -193,17 +174,13 @@ async def put_my_xert_credentials(
     try:
         encrypted_password = encrypt(request.xert_password)
     except EncryptionError as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
     # Determine sync_since: use provided date or default to 90 days ago
     if request.sync_since is not None:
         sync_since_dt = datetime.combine(request.sync_since, datetime.min.time())
     else:
-        sync_since_dt = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(
-            days=90
-        )
+        sync_since_dt = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=90)
 
     await xert_repo.save(
         user_id=user.id,
@@ -233,11 +210,7 @@ async def get_my_garmin_credentials(garmin_repo: GarminCredentialsRepoD, user: C
     return {
         "configured": True,
         "garmin_email": creds.garmin_email,
-        "sync_since": (
-            creds.sync_since.date()
-            if hasattr(creds.sync_since, "date")
-            else creds.sync_since
-        ).isoformat()
+        "sync_since": (creds.sync_since.date() if hasattr(creds.sync_since, "date") else creds.sync_since).isoformat()
         if creds.sync_since
         else None,
     }
@@ -285,9 +258,7 @@ class GarminMFARequest(BaseModel):
 
 
 @router.post("/me/garmin-credentials/mfa")
-async def complete_garmin_mfa(
-    garmin_repo: GarminCredentialsRepoD, user: CurrentUser, request: GarminMFARequest
-):
+async def complete_garmin_mfa(garmin_repo: GarminCredentialsRepoD, user: CurrentUser, request: GarminMFARequest):
     """Complete Garmin MFA authentication and save credentials."""
     pending = _pending_garmin_mfa.get(user.id)
     if pending is None:
@@ -328,17 +299,13 @@ async def _save_garmin_credentials(
     try:
         encrypted_password = encrypt(password)
     except EncryptionError as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
     # Determine sync_since: use provided date or default to 90 days ago
     if sync_since is not None:
         sync_since_dt = datetime.combine(sync_since, datetime.min.time())
     else:
-        sync_since_dt = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(
-            days=90
-        )
+        sync_since_dt = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=90)
 
     await garmin_repo.save(
         user_id=user.id,
@@ -386,7 +353,7 @@ async def create_threshold(
     request: CreateThresholdRequest,
 ):
     """Create a new threshold entry for the current user.
-    
+
     All fields are optional. At least one of ftp_watts, lthr_bpm, or hrmax_bpm
     must be provided. Once a value is set, it cannot be removed in subsequent
     entries (only changed).
@@ -394,37 +361,28 @@ async def create_threshold(
     # Check at least one value provided
     if request.ftp_watts is None and request.lthr_bpm is None and request.hrmax_bpm is None:
         raise HTTPException(
-            status_code=400, 
-            detail="At least one threshold value (ftp_watts, lthr_bpm, or hrmax_bpm) is required"
+            status_code=400, detail="At least one threshold value (ftp_watts, lthr_bpm, or hrmax_bpm) is required"
         )
-    
+
     # Validation for provided values
     if request.ftp_watts is not None:
         if request.ftp_watts <= 0:
             raise HTTPException(status_code=400, detail="ftp_watts must be positive")
         if request.ftp_watts > 2000:
-            raise HTTPException(
-                status_code=400, detail="ftp_watts must be realistic (max 2000)"
-            )
+            raise HTTPException(status_code=400, detail="ftp_watts must be realistic (max 2000)")
     if request.lthr_bpm is not None:
         if request.lthr_bpm <= 0:
             raise HTTPException(status_code=400, detail="lthr_bpm must be positive")
         if request.lthr_bpm > 250:
-            raise HTTPException(
-                status_code=400, detail="lthr_bpm must be realistic (max 250)"
-            )
+            raise HTTPException(status_code=400, detail="lthr_bpm must be realistic (max 250)")
     if request.hrmax_bpm is not None:
         if request.hrmax_bpm <= 0:
             raise HTTPException(status_code=400, detail="hrmax_bpm must be positive")
         if request.hrmax_bpm > 250:
-            raise HTTPException(
-                status_code=400, detail="hrmax_bpm must be realistic (max 250)"
-            )
+            raise HTTPException(status_code=400, detail="hrmax_bpm must be realistic (max 250)")
     if request.lthr_bpm is not None and request.hrmax_bpm is not None:
         if request.lthr_bpm > request.hrmax_bpm:
-            raise HTTPException(
-                status_code=400, detail="lthr_bpm cannot exceed hrmax_bpm"
-            )
+            raise HTTPException(status_code=400, detail="lthr_bpm cannot exceed hrmax_bpm")
 
     # Get the most recent thresholds to carry forward values
     all_thresholds = await get_all_threshold_entries(db, user.id)
@@ -438,34 +396,33 @@ async def create_threshold(
         effective = date(2000, 1, 1)
     else:
         effective = date.today()
-    
+
     # Determine final values - use new value if provided, else carry forward
     # Note: Once a threshold value is set, it cannot be removed - only changed.
     # Omitting a field preserves the previous value.
-    final_ftp = request.ftp_watts if request.ftp_watts is not None else (previous.get("ftp_watts") if previous else None)
+    final_ftp = (
+        request.ftp_watts if request.ftp_watts is not None else (previous.get("ftp_watts") if previous else None)
+    )
     final_lthr = request.lthr_bpm if request.lthr_bpm is not None else (previous.get("lthr_bpm") if previous else None)
-    final_hrmax = request.hrmax_bpm if request.hrmax_bpm is not None else (previous.get("hrmax_bpm") if previous else None)
-    
+    final_hrmax = (
+        request.hrmax_bpm if request.hrmax_bpm is not None else (previous.get("hrmax_bpm") if previous else None)
+    )
+
     # If user has previous thresholds but provided no new values, reject
     # (they should use the existing values or provide updates)
     if previous is not None:
         has_any_new_value = (
-            request.ftp_watts is not None or 
-            request.lthr_bpm is not None or 
-            request.hrmax_bpm is not None
+            request.ftp_watts is not None or request.lthr_bpm is not None or request.hrmax_bpm is not None
         )
         if not has_any_new_value:
             raise HTTPException(
-                status_code=400,
-                detail="You already have thresholds set. Provide at least one value to update."
+                status_code=400, detail="You already have thresholds set. Provide at least one value to update."
             )
-    
+
     # Validate lthr doesn't exceed hrmax after merging with previous
     if final_lthr is not None and final_hrmax is not None:
         if final_lthr > final_hrmax:
-            raise HTTPException(
-                status_code=400, detail="lthr_bpm cannot exceed hrmax_bpm"
-            )
+            raise HTTPException(status_code=400, detail="lthr_bpm cannot exceed hrmax_bpm")
 
     # Create threshold metric entries
     await create_threshold_entries(
@@ -491,9 +448,7 @@ async def create_threshold(
             user.id,
         )
         # Mark job as failed so user sees accurate state
-        await recalculation_job_repo.mark_failed(
-            user.id, "Failed to enqueue job. Please try again."
-        )
+        await recalculation_job_repo.mark_failed(user.id, "Failed to enqueue job. Please try again.")
         await db.commit()
 
     # Return the new thresholds for this date
@@ -532,6 +487,7 @@ async def get_my_zones(db: DbSession, user: CurrentUser):
 
 class UpdateZonePercentagesRequest(BaseModel):
     """Update custom zone percentages. Set to null to reset to defaults."""
+
     power_zone_percentages: dict | None = None
     hr_zone_percentages: dict | None = None
     reset_power_zones: bool = False
@@ -586,9 +542,7 @@ async def get_notifications(db: DbSession, user: CurrentUser):
 
 
 @router.post("/me/notifications/{notification_id}/accept")
-async def accept_notification(
-    db: DbSession, user: CurrentUser, notification_id: int
-):
+async def accept_notification(db: DbSession, user: CurrentUser, notification_id: int):
     """Accept a notification (e.g., apply FTP suggestion)."""
     result = await db.execute(
         select(Notification).where(
@@ -599,9 +553,7 @@ async def accept_notification(
     notification = result.scalar_one_or_none()
 
     if notification is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
 
     if notification.status != "pending":
         raise HTTPException(
@@ -659,9 +611,7 @@ async def accept_notification(
 
 
 @router.post("/me/notifications/{notification_id}/dismiss")
-async def dismiss_notification(
-    db: DbSession, user: CurrentUser, notification_id: int
-):
+async def dismiss_notification(db: DbSession, user: CurrentUser, notification_id: int):
     """Dismiss a notification."""
     result = await db.execute(
         select(Notification).where(
@@ -672,9 +622,7 @@ async def dismiss_notification(
     notification = result.scalar_one_or_none()
 
     if notification is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
 
     if notification.status != "pending":
         raise HTTPException(
@@ -688,7 +636,6 @@ async def dismiss_notification(
     return {"success": True}
 
 
-
 # --- Avatar ---
 
 
@@ -699,11 +646,11 @@ async def upload_avatar(db: DbSession, user: CurrentUser, request: Request):
     content_type = request.headers.get("content-type", "")
     if not content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Content-Type must be an image")
-    
+
     body = await request.body()
     if len(body) > 5 * 1024 * 1024:  # 5MB limit
         raise HTTPException(status_code=400, detail="Image too large (max 5MB)")
-    
+
     # Determine file extension from content type
     ext_map = {
         "image/jpeg": ".jpg",
@@ -712,29 +659,29 @@ async def upload_avatar(db: DbSession, user: CurrentUser, request: Request):
         "image/webp": ".webp",
     }
     ext = ext_map.get(content_type, ".jpg")
-    
+
     # Ensure uploads directory exists
     uploads_base = Path(os.environ.get("TRAININGDASH_UPLOADS_DIR", "/app/uploads"))
     uploads_dir = uploads_base / "avatars"
     uploads_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Delete old avatar if exists
     if user.avatar_path:
         old_path = uploads_base.parent / user.avatar_path.lstrip("/")
         if old_path.exists():
             old_path.unlink()
-    
+
     # Save new avatar
     filename = f"{user.id}{ext}"
     filepath = uploads_dir / filename
     with open(filepath, "wb") as f:
         f.write(body)
-    
+
     # Update user record
     user.avatar_path = f"/uploads/avatars/{filename}"
     await db.commit()
     await db.refresh(user)
-    
+
     return {"avatar_path": user.avatar_path}
 
 
@@ -748,7 +695,7 @@ async def delete_avatar(db: DbSession, user: CurrentUser):
             filepath.unlink()
         user.avatar_path = None
         await db.commit()
-    
+
     return {"success": True}
 
 
@@ -759,12 +706,10 @@ async def delete_avatar(db: DbSession, user: CurrentUser):
 async def trigger_garmin_sync(garmin_repo: GarminCredentialsRepoD, user: CurrentUser):
     """Trigger a Garmin sync for the current user."""
     from trainingdash.jobs import enqueue_sync_garmin_job
-    
+
     if not await garmin_repo.exists(user.id):
-        raise HTTPException(
-            status_code=400, detail="No Garmin credentials configured"
-        )
-    
+        raise HTTPException(status_code=400, detail="No Garmin credentials configured")
+
     job_id = await enqueue_sync_garmin_job(user.id)
     if job_id is None:
         raise HTTPException(status_code=503, detail="Job queue not available")
@@ -775,17 +720,14 @@ async def trigger_garmin_sync(garmin_repo: GarminCredentialsRepoD, user: Current
 async def trigger_xert_sync(xert_repo: XertCredentialsRepoD, user: CurrentUser):
     """Trigger a Xert sync for the current user."""
     from trainingdash.jobs import enqueue_sync_xert_job
-    
+
     if not await xert_repo.exists(user.id):
-        raise HTTPException(
-            status_code=400, detail="No Xert credentials configured"
-        )
-    
+        raise HTTPException(status_code=400, detail="No Xert credentials configured")
+
     job_id = await enqueue_sync_xert_job(user.id)
     if job_id is None:
         raise HTTPException(status_code=503, detail="Job queue not available")
     return {"success": True, "job_id": job_id}
-
 
 
 # --- OAuth Links ---
@@ -806,7 +748,7 @@ async def list_oauth_links(oauth_repo: OAuthLinkRepoD, user: CurrentUser) -> lis
         avatar_url, and created_at fields.
     """
     links = await oauth_repo.list_for_user(user.id)
-    
+
     return [
         {
             "provider": link.provider,
@@ -820,9 +762,7 @@ async def list_oauth_links(oauth_repo: OAuthLinkRepoD, user: CurrentUser) -> lis
 
 
 @router.delete("/me/oauth-links/{provider}")
-async def disconnect_oauth_provider(
-    oauth_repo: OAuthLinkRepoD, user: CurrentUser, provider: str
-) -> dict:
+async def disconnect_oauth_provider(oauth_repo: OAuthLinkRepoD, user: CurrentUser, provider: str) -> dict:
     """Disconnect an OAuth provider from the current user's account.
 
     Includes lockout protection: refuses to disconnect if it would leave
@@ -842,27 +782,27 @@ async def disconnect_oauth_provider(
     """
     # Check if the link exists
     link = await oauth_repo.get_for_user(user.id, provider)
-    
+
     if not link:
         raise HTTPException(status_code=404, detail=f"No {provider} account connected")
-    
+
     # Lockout protection: check if user would be locked out
     # User needs at least one auth method: password OR another OAuth link
     has_password = user.password_hash is not None and user.password_hash != ""
-    
+
     if not has_password:
         # Count other OAuth links (total - 1 for current provider)
         total_links = await oauth_repo.count_for_user(user.id)
-        
+
         if total_links <= 1:
             raise HTTPException(
                 status_code=400,
                 detail="Cannot disconnect: this is your only sign-in method. Set a password or connect another provider first.",
             )
-    
+
     # Safe to delete
     await oauth_repo.delete(user.id, provider)
-    
+
     return {"success": True}
 
 
@@ -873,9 +813,7 @@ class SetPasswordRequest(BaseModel):
 
 
 @router.post("/me/set-password")
-async def set_password(
-    db: DbSession, user: CurrentUser, request: SetPasswordRequest
-) -> dict:
+async def set_password(db: DbSession, user: CurrentUser, request: SetPasswordRequest) -> dict:
     """Set a password for OAuth-only users who don't have one.
 
     Allows users who signed up via OAuth to add a password so they can
@@ -899,18 +837,18 @@ async def set_password(
             status_code=400,
             detail="Password already set. Use change password instead.",
         )
-    
+
     # Validate password
     if len(request.password) < 8:
         raise HTTPException(
             status_code=400,
             detail="Password must be at least 8 characters long.",
         )
-    
+
     # Set password
     user.password_hash = hash_password(request.password)
     await db.commit()
-    
+
     return {"success": True}
 
 
@@ -930,14 +868,11 @@ async def has_password(user: CurrentUser) -> dict:
     return {"has_password": user.password_hash is not None and user.password_hash != ""}
 
 
-
 # --- Metric recalculation ---
 
 
 @router.post("/me/recalculate-metrics")
-async def trigger_recalculate_metrics(
-    db: DbSession, recalc_repo: RecalculationJobRepoD, user: CurrentUser
-):
+async def trigger_recalculate_metrics(db: DbSession, recalc_repo: RecalculationJobRepoD, user: CurrentUser):
     """Enqueue an async job to recompute training metrics for all activities.
 
     Upserts a RecalculationJob row to status=pending and enqueues the SAQ
@@ -950,9 +885,7 @@ async def trigger_recalculate_metrics(
     try:
         await enqueue_recalculate_metrics_job(user.id)
     except Exception:
-        logger.exception(
-            "Failed to enqueue metric recalculation for user %s", user.id
-        )
+        logger.exception("Failed to enqueue metric recalculation for user %s", user.id)
         # Mark job as failed so user sees accurate state
         await recalc_repo.upsert_failed(user.id)
         await db.commit()

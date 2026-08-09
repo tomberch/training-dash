@@ -19,8 +19,10 @@ async def enqueue_ingest_job(user_id: int, fit_bytes: bytes, source: str, source
         return None
     queue = await get_queue()
     # Base64 encode bytes for JSON serialization
-    fit_bytes_b64 = base64.b64encode(fit_bytes).decode('ascii')
-    job = await queue.enqueue("ingest_job", user_id=user_id, fit_bytes_b64=fit_bytes_b64, source=source, source_ref=source_ref)
+    fit_bytes_b64 = base64.b64encode(fit_bytes).decode("ascii")
+    job = await queue.enqueue(
+        "ingest_job", user_id=user_id, fit_bytes_b64=fit_bytes_b64, source=source, source_ref=source_ref
+    )
     return job.key if job else None
 
 
@@ -28,13 +30,13 @@ async def get_job_status(job_key: str) -> dict:
     """Get the status of a job by key. Returns status and result if complete."""
     if not queue_available():
         return {"status": "unknown", "result": None}
-    
+
     queue = await get_queue()
     job = await queue.job(job_key)
-    
+
     if job is None:
         return {"status": "not_found", "result": None}
-    
+
     # Map SAQ status to our API status
     status_map = {
         "new": "pending",
@@ -46,7 +48,7 @@ async def get_job_status(job_key: str) -> dict:
         "aborted": "aborted",
         "aborting": "processing",
     }
-    
+
     return {
         "status": status_map.get(job.status, "unknown"),
         "result": job.result,

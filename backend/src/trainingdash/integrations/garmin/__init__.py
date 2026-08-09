@@ -11,8 +11,8 @@ from trainingdash.integrations.garmin.client import (
 )
 
 __all__ = [
-    "GarminActivity",
     "GarminAPIError",
+    "GarminActivity",
     "GarminClient",
     "GarminClientProtocol",
     "GarminMFARequired",

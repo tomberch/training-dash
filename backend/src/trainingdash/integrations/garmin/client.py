@@ -25,17 +25,20 @@ logger = logging.getLogger(__name__)
 
 class GarminAPIError(Exception):
     """Raised when Garmin API returns an error."""
+
     pass
 
 
 class GarminMFARequired(Exception):
     """Raised when MFA is required to complete login."""
+
     pass
 
 
 @dataclass
 class GarminActivity:
     """Represents an activity from Garmin Connect."""
+
     id: str  # activityId from Garmin
     name: str
     started_at: datetime
@@ -202,14 +205,16 @@ class GarminClient:
                 else:
                     started_at = datetime.now()
 
-                activities.append(GarminActivity(
-                    id=str(item.get("activityId", "")),
-                    name=item.get("activityName", ""),
-                    started_at=started_at,
-                    activity_type=item.get("activityType", {}).get("typeKey", ""),
-                    distance_m=item.get("distance", 0) or 0,
-                    duration_s=item.get("duration", 0) or 0,
-                ))
+                activities.append(
+                    GarminActivity(
+                        id=str(item.get("activityId", "")),
+                        name=item.get("activityName", ""),
+                        started_at=started_at,
+                        activity_type=item.get("activityType", {}).get("typeKey", ""),
+                        distance_m=item.get("distance", 0) or 0,
+                        duration_s=item.get("duration", 0) or 0,
+                    )
+                )
 
             return activities
 
@@ -231,18 +236,15 @@ class GarminClient:
 
         try:
             # download_activity returns ZIP bytes containing the FIT file
-            zip_data = self._client.download_activity(
-                activity_id,
-                dl_fmt=self._client.ActivityDownloadFormat.ORIGINAL
-            )
-            
+            zip_data = self._client.download_activity(activity_id, dl_fmt=self._client.ActivityDownloadFormat.ORIGINAL)
+
             # Extract FIT from ZIP
             import io
             import zipfile
-            
+
             with zipfile.ZipFile(io.BytesIO(zip_data)) as zf:
                 # Find the FIT file in the ZIP
-                fit_files = [n for n in zf.namelist() if n.lower().endswith('.fit')]
+                fit_files = [n for n in zf.namelist() if n.lower().endswith(".fit")]
                 if not fit_files:
                     raise GarminAPIError(f"No FIT file found in download for activity {activity_id}")
                 return zf.read(fit_files[0])

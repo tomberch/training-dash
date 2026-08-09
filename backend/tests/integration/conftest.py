@@ -13,16 +13,15 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from testcontainers.postgres import PostgresContainer
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "tests" / "fixtures"))
-from generate_fit import make_test_fit  # noqa: E402
 
+from tests.integration.fixtures import CACHED_HASH_TESTPASS
 from trainingdash.app import create_app
 from trainingdash.repositories.postgres.db import Base
 from trainingdash.repositories.postgres.models import User
-from tests.integration.fixtures import CACHED_HASH_TESTPASS
 
 
 @pytest.fixture(autouse=True)
@@ -34,12 +33,11 @@ def _mock_geocoding(monkeypatch):
     eliminates the sleep tax without losing coverage — the real title logic is
     untested today (see #259) and is independent of the integration suite.
     """
+
     async def _fake_title(records, activity_date=None):
         return "Test Ride"
 
-    monkeypatch.setattr(
-        "trainingdash.domain.title_generator.generate_activity_title", _fake_title
-    )
+    monkeypatch.setattr("trainingdash.domain.title_generator.generate_activity_title", _fake_title)
 
 
 # Dedicated test container settings
@@ -58,18 +56,16 @@ def _is_port_available(host: str = "localhost", port: int = TEST_CONTAINER_PORT)
             s.settimeout(0.5)
             s.connect((host, port))
             return True
-    except (socket.timeout, ConnectionRefusedError, OSError):
+    except (TimeoutError, ConnectionRefusedError, OSError):
         return False
 
 
 def _is_postgres_ready(host: str = "localhost", port: int = TEST_CONTAINER_PORT) -> bool:
     """Check if postgres is actually ready to accept queries (not just TCP connections)."""
     import subprocess
+
     result = subprocess.run(
-        [
-            "docker", "exec", TEST_CONTAINER_NAME,
-            "pg_isready", "-h", "localhost", "-U", TEST_DB_USER
-        ],
+        ["docker", "exec", TEST_CONTAINER_NAME, "pg_isready", "-h", "localhost", "-U", TEST_DB_USER],
         capture_output=True,
         timeout=5,
     )
@@ -95,7 +91,7 @@ def _wait_for_postgres(host: str = "localhost", port: int = TEST_CONTAINER_PORT,
 def _ensure_test_container_running() -> bool:
     """
     Ensure the dedicated test postgres container is running.
-    
+
     Returns True if container is ready, False if we should fall back to testcontainers.
     """
     try:
@@ -103,7 +99,7 @@ def _ensure_test_container_running() -> bool:
     except docker.errors.DockerException:
         # Docker not available
         return False
-    
+
     try:
         container = client.containers.get(TEST_CONTAINER_NAME)
         if container.status == "running":
@@ -157,31 +153,35 @@ def _ensure_test_container_running() -> bool:
 def pg_container():
     """
     Session-scoped postgres connection.
-    
+
     Priority order:
     1. TEST_DATABASE_URL environment variable (explicit override)
     2. Dedicated test container 'traindash-test-db' on port 5433 (auto-managed)
     3. Testcontainers fallback (~6s startup per session)
-    
+
     The dedicated container persists between test runs for instant startup.
     To reset it: docker rm -f traindash-test-db
     """
     # Check for TEST_DATABASE_URL override
     if os.environ.get("TEST_DATABASE_URL"):
+
         class LocalPg:
             def get_connection_url(self):
                 return os.environ["TEST_DATABASE_URL"]
+
         yield LocalPg()
         return
-    
+
     # Try to use/start the dedicated test container
     if _ensure_test_container_running():
+
         class LocalPg:
             def get_connection_url(self):
                 return f"postgresql+asyncpg://{TEST_DB_USER}:{TEST_DB_PASSWORD}@localhost:{TEST_CONTAINER_PORT}/{TEST_DB_NAME}"
+
         yield LocalPg()
         return
-    
+
     # Fall back to testcontainers (ephemeral, slower)
     print("\n[pytest] Falling back to testcontainers (no dedicated container available)")
     with PostgresContainer(TEST_CONTAINER_IMAGE, driver="asyncpg") as pg:
@@ -246,9 +246,7 @@ async def db_engine_session(pg_container, worker_schema):
         # when raced; CREATE EXTENSION ... SCHEMA public puts objects in public
         # regardless of the worker's search_path.)
         await conn.execute(text("SELECT pg_advisory_xact_lock(42)"))
-        existing = await conn.execute(
-            text("SELECT 1 FROM pg_extension WHERE extname = 'postgis'")
-        )
+        existing = await conn.execute(text("SELECT 1 FROM pg_extension WHERE extname = 'postgis'"))
         if existing.scalar() is None:
             await conn.execute(text("CREATE EXTENSION postgis SCHEMA public"))
         # Tables go in the worker's schema (search_path leads with it).
@@ -256,7 +254,8 @@ async def db_engine_session(pg_container, worker_schema):
 
     # Seed metric_types once per worker (lives in the worker's schema).
     async with engine.begin() as conn:
-        await conn.execute(text("""
+        await conn.execute(
+            text("""
             INSERT INTO metric_types (key, display_name, unit, category, data_type, min_value, max_value, allowed_sources, recalc_targets, sort_order)
             VALUES 
                 ('ftp', 'Functional Threshold Power', 'W', 'threshold', 'integer', 50, 500, ARRAY['manual', 'calculated', 'device'], ARRAY['power_zones', 'tss', 'if'], 1),
@@ -267,7 +266,8 @@ async def db_engine_session(pg_container, worker_schema):
                 ('resting_hr', 'Resting Heart Rate', 'bpm', 'recovery', 'integer', 30, 100, ARRAY['manual', 'device'], NULL, 6),
                 ('hrv', 'Heart Rate Variability', 'ms', 'recovery', 'integer', 10, 200, ARRAY['manual', 'device'], NULL, 7)
             ON CONFLICT (key) DO NOTHING
-        """))
+        """)
+        )
 
     yield engine
     await engine.dispose()
@@ -375,9 +375,7 @@ async def app_client(_test_conn, seed_user):
 
 @pytest_asyncio.fixture(loop_scope="session")
 async def auth_client(app_client, seed_user):
-    response = await app_client.post(
-        "/api/login", json={"email": "testuser@example.com", "password": "testpass"}
-    )
+    response = await app_client.post("/api/login", json={"email": "testuser@example.com", "password": "testpass"})
     assert response.status_code == 200
     return app_client
 

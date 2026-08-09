@@ -13,9 +13,7 @@ class PostgresAppSettingsRepo:
         self._db = db
 
     async def get(self, key: str) -> str | None:
-        result = await self._db.execute(
-            select(AppSettings).where(AppSettings.key == key)
-        )
+        result = await self._db.execute(select(AppSettings).where(AppSettings.key == key))
         setting = result.scalar_one_or_none()
         return setting.value if setting else None
 
@@ -26,9 +24,7 @@ class PostgresAppSettingsRepo:
         return AppSettings.str_to_bool(value)
 
     async def set(self, key: str, value: str) -> None:
-        result = await self._db.execute(
-            select(AppSettings).where(AppSettings.key == key)
-        )
+        result = await self._db.execute(select(AppSettings).where(AppSettings.key == key))
         setting = result.scalar_one_or_none()
 
         if setting is None:

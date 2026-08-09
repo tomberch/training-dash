@@ -11,7 +11,7 @@ This collapses the four duplicated copies of this sequence that lived in
 """
 
 import json
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -42,9 +42,7 @@ class FitnessModelUpdater:
         """
         # Load all activities with peaks for this user
         result = await self._db.execute(
-            select(Activity)
-            .where(Activity.user_id == user_id)
-            .order_by(Activity.started_at.desc())
+            select(Activity).where(Activity.user_id == user_id).order_by(Activity.started_at.desc())
         )
         activities = result.scalars().all()
 
@@ -54,8 +52,7 @@ class FitnessModelUpdater:
         # Load peaks for all activities
         activity_ids = [a.id for a in activities]
         result = await self._db.execute(
-            select(ActivityPeakPower)
-            .where(ActivityPeakPower.activity_id.in_(activity_ids))
+            select(ActivityPeakPower).where(ActivityPeakPower.activity_id.in_(activity_ids))
         )
         all_peaks = result.scalars().all()
 
@@ -83,7 +80,7 @@ class FitnessModelUpdater:
         # Store new fitness snapshot
         fitness = FitnessHistory(
             user_id=user_id,
-            computed_at=datetime.now(timezone.utc).replace(tzinfo=None),
+            computed_at=datetime.now(UTC).replace(tzinfo=None),
             pp_watts=model["pp_watts"],
             w_prime_joules=model["w_prime_joules"],
             cp_watts=model["cp_watts"],
@@ -94,9 +91,7 @@ class FitnessModelUpdater:
         # Check if CP diverges from current FTP and create notification
         await self._check_ftp_notification(user_id, model["cp_watts"], activity_count)
 
-    async def _check_ftp_notification(
-        self, user_id: int, cp_watts: int, activity_count: int | None = None
-    ) -> None:
+    async def _check_ftp_notification(self, user_id: int, cp_watts: int, activity_count: int | None = None) -> None:
         """Create/update an FTP-divergence notification if CP diverges >5% from FTP.
 
         When ``activity_count`` is set, produces a batch-summary notification
@@ -118,17 +113,18 @@ class FitnessModelUpdater:
                 f"After importing {activity_count} activities, your fitness model "
                 f"suggests updating your FTP from {current_ftp}W to {cp_watts}W"
             )
-            payload = json.dumps({
-                "current_ftp": current_ftp,
-                "suggested_ftp": cp_watts,
-                "divergence_pct": round((ratio - 1) * 100, 1),
-                "batch_import": True,
-                "activity_count": activity_count,
-            })
+            payload = json.dumps(
+                {
+                    "current_ftp": current_ftp,
+                    "suggested_ftp": cp_watts,
+                    "divergence_pct": round((ratio - 1) * 100, 1),
+                    "batch_import": True,
+                    "activity_count": activity_count,
+                }
+            )
             # Batch mode: replace any existing pending FTP notifications
             result = await self._db.execute(
-                select(Notification)
-                .where(
+                select(Notification).where(
                     Notification.user_id == user_id,
                     Notification.type == "ftp_suggestion",
                     Notification.status == "pending",
@@ -137,17 +133,21 @@ class FitnessModelUpdater:
             for n in result.scalars().all():
                 await self._db.delete(n)
             await self._db.flush()
-            self._db.add(Notification(
-                user_id=user_id, type="ftp_suggestion", message=message,
-                payload=payload, status="pending",
-            ))
+            self._db.add(
+                Notification(
+                    user_id=user_id,
+                    type="ftp_suggestion",
+                    message=message,
+                    payload=payload,
+                    status="pending",
+                )
+            )
             await self._db.flush()
             return
 
         # Single-ingest mode: dedupe by updating an existing pending notification
         result = await self._db.execute(
-            select(Notification)
-            .where(
+            select(Notification).where(
                 Notification.user_id == user_id,
                 Notification.type == "ftp_suggestion",
                 Notification.status == "pending",
@@ -156,11 +156,13 @@ class FitnessModelUpdater:
         existing = result.scalar_one_or_none()
 
         message = f"Your fitness model suggests updating your FTP from {current_ftp}W to {cp_watts}W"
-        payload = json.dumps({
-            "current_ftp": current_ftp,
-            "suggested_ftp": cp_watts,
-            "divergence_pct": round((ratio - 1) * 100, 1),
-        })
+        payload = json.dumps(
+            {
+                "current_ftp": current_ftp,
+                "suggested_ftp": cp_watts,
+                "divergence_pct": round((ratio - 1) * 100, 1),
+            }
+        )
 
         if existing is not None:
             existing.message = message
@@ -168,8 +170,13 @@ class FitnessModelUpdater:
             await self._db.flush()
             return
 
-        self._db.add(Notification(
-            user_id=user_id, type="ftp_suggestion", message=message,
-            payload=payload, status="pending",
-        ))
+        self._db.add(
+            Notification(
+                user_id=user_id,
+                type="ftp_suggestion",
+                message=message,
+                payload=payload,
+                status="pending",
+            )
+        )
         await self._db.flush()

@@ -210,9 +210,7 @@ class TestGarminListActivities:
             assert activities[1].name == "Evening Run"
 
             # Verify date format passed to API
-            mock_instance.get_activities_by_date.assert_called_once_with(
-                "2024-03-01", "2024-03-31"
-            )
+            mock_instance.get_activities_by_date.assert_called_once_with("2024-03-01", "2024-03-31")
 
     def test_list_activities_empty_list(self):
         """Empty activity list is handled correctly."""
@@ -225,9 +223,7 @@ class TestGarminListActivities:
             client.login("user@example.com", "password123")
             mock_instance.get_activities_by_date.return_value = []
 
-            activities = client.list_activities(
-                datetime(2024, 1, 1), datetime(2024, 1, 31)
-            )
+            activities = client.list_activities(datetime(2024, 1, 1), datetime(2024, 1, 31))
 
             assert activities == []
 
@@ -249,9 +245,7 @@ class TestGarminListActivities:
                 },
             ]
 
-            activities = client.list_activities(
-                datetime(2024, 1, 1), datetime(2024, 1, 31)
-            )
+            activities = client.list_activities(datetime(2024, 1, 1), datetime(2024, 1, 31))
 
             assert len(activities) == 1
             assert activities[0].id == "999"
@@ -278,9 +272,7 @@ class TestGarminListActivities:
                 },
             ]
 
-            activities = client.list_activities(
-                datetime(2024, 1, 1), datetime(2024, 1, 31)
-            )
+            activities = client.list_activities(datetime(2024, 1, 1), datetime(2024, 1, 31))
 
             assert activities[0].distance_m == 0
             assert activities[0].duration_s == 0
@@ -329,9 +321,7 @@ class TestGarminDownloadFit:
             client.login("user@example.com", "password123")
 
             # Mock download returning ZIP with FIT file
-            mock_instance.download_activity.return_value = self._create_fit_zip(
-                fit_content, "12345678.fit"
-            )
+            mock_instance.download_activity.return_value = self._create_fit_zip(fit_content, "12345678.fit")
 
             result = client.download_fit("12345678")
 
@@ -351,9 +341,7 @@ class TestGarminDownloadFit:
             mock_garmin.return_value = mock_instance
 
             client.login("user@example.com", "password123")
-            mock_instance.download_activity.return_value = self._create_fit_zip(
-                fit_content, "ACTIVITY.FIT"
-            )
+            mock_instance.download_activity.return_value = self._create_fit_zip(fit_content, "ACTIVITY.FIT")
 
             result = client.download_fit("12345678")
 

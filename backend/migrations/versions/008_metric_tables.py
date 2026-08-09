@@ -7,10 +7,9 @@ Revises: 007_recalculation_jobs
 Create Date: 2026-08-08
 """
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql
-
 
 revision = "008_metric_tables"
 down_revision = "007_recalculation_jobs"
@@ -147,12 +146,8 @@ def upgrade() -> None:
         sa.Column("notes", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(), server_default=sa.text("now()")),
         sa.Column("updated_at", sa.DateTime(), server_default=sa.text("now()")),
-        sa.UniqueConstraint(
-            "user_id", "metric_type_id", "effective_date", name="uq_metric_user_type_date"
-        ),
-        sa.CheckConstraint(
-            "source IN ('manual', 'calculated', 'device')", name="ck_metric_source"
-        ),
+        sa.UniqueConstraint("user_id", "metric_type_id", "effective_date", name="uq_metric_user_type_date"),
+        sa.CheckConstraint("source IN ('manual', 'calculated', 'device')", name="ck_metric_source"),
     )
 
     # Create indexes for efficient queries

@@ -8,12 +8,11 @@ common orchestration logic lives in run_sync().
 
 import logging
 from datetime import datetime
-from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from trainingdash.repositories.postgres.models import Activity, XertCredentials, GarminCredentials
-from trainingdash.integrations.protocols import SyncProvider, ProviderActivity, CredentialInfo
+from trainingdash.integrations.protocols import CredentialInfo, ProviderActivity, SyncProvider
+from trainingdash.repositories.postgres.models import Activity, GarminCredentials, XertCredentials
 
 logger = logging.getLogger(__name__)
 
@@ -58,25 +57,23 @@ class XertSyncProvider(SyncProvider):
         # login() establishes both the OAuth2 token and the web session cookie
         await self._client.login(email, password)
 
-    async def list_activities(
-        self, start_date: datetime, end_date: datetime
-    ) -> list[ProviderActivity]:
+    async def list_activities(self, start_date: datetime, end_date: datetime) -> list[ProviderActivity]:
         """List Xert activities in date range via OAuth API."""
         from_ts = int(start_date.timestamp())
         to_ts = int(end_date.timestamp())
 
-        activities = await self._client.list_activities(
-            from_timestamp=from_ts, to_timestamp=to_ts
-        )
+        activities = await self._client.list_activities(from_timestamp=from_ts, to_timestamp=to_ts)
 
         result = []
         for a in activities:
-            result.append(ProviderActivity(
-                id=str(a.id),
-                started_at=a.started_at,
-                distance_m=0,  # not available from list; ingest_fit() computes it
-                raw=a,
-            ))
+            result.append(
+                ProviderActivity(
+                    id=str(a.id),
+                    started_at=a.started_at,
+                    distance_m=0,  # not available from list; ingest_fit() computes it
+                    raw=a,
+                )
+            )
 
         return result
 
@@ -104,9 +101,7 @@ class XertSyncProvider(SyncProvider):
             fit_bytes = await self._client.download_fit(activity.id)
 
             # Ingest through the standard FIT pipeline
-            ingested = await ingest_fit(
-                db, user_id, fit_bytes, "xert", source_ref, batch_mode
-            )
+            ingested = await ingest_fit(db, user_id, fit_bytes, "xert", source_ref, batch_mode)
 
             if ingested is not None:
                 # Fetch XSS and overwrite training_load set by ingest_fit().
@@ -133,18 +128,18 @@ class XertSyncProvider(SyncProvider):
 class GarminSyncProvider(SyncProvider):
     """
     Garmin Connect sync provider.
-    
+
     Garmin provides original FIT files, so activities are ingested
     via the standard ingest_fit() pipeline.
     """
-    
+
     def __init__(self):
         self._client = None
-    
+
     @property
     def source_name(self) -> str:
         return "garmin"
-    
+
     @property
     def credentials_model(self) -> type:
         return GarminCredentials
@@ -158,35 +153,33 @@ class GarminSyncProvider(SyncProvider):
         )
 
     async def connect(self, email: str, password: str) -> None:
-        from trainingdash.integrations.garmin import get_garmin_client, GarminMFARequired
-        
+        from trainingdash.integrations.garmin import GarminMFARequired, get_garmin_client
+
         self._client = get_garmin_client()
         try:
             self._client.login(email, password)
         except GarminMFARequired:
             raise RuntimeError("MFA required - please re-authenticate in settings")
-    
-    async def list_activities(
-        self, start_date: datetime, end_date: datetime
-    ) -> list[ProviderActivity]:
+
+    async def list_activities(self, start_date: datetime, end_date: datetime) -> list[ProviderActivity]:
         """List Garmin activities in date range."""
-        activities = self._client.list_activities(
-            start_date=start_date, end_date=end_date
-        )
-        
+        activities = self._client.list_activities(start_date=start_date, end_date=end_date)
+
         # Wrap in ProviderActivity with common fields
         result = []
         for a in activities:
             # Garmin activity has: id, started_at, distance_m
-            result.append(ProviderActivity(
-                id=str(a.id),
-                started_at=a.started_at,
-                distance_m=a.distance_m or 0,
-                raw=a,
-            ))
-        
+            result.append(
+                ProviderActivity(
+                    id=str(a.id),
+                    started_at=a.started_at,
+                    distance_m=a.distance_m or 0,
+                    raw=a,
+                )
+            )
+
         return result
-    
+
     async def ingest_activity(
         self,
         db: AsyncSession,
@@ -197,22 +190,20 @@ class GarminSyncProvider(SyncProvider):
         """Ingest a Garmin activity via FIT file download."""
         from trainingdash.ingest import ingest_fit
         from trainingdash.integrations.garmin import GarminAPIError
-        
+
         source_ref = self.make_source_ref(activity.id)
-        
+
         try:
             # Download original FIT file
             fit_bytes = self._client.download_fit(int(activity.id))
-            
+
             # Ingest using standard FIT pipeline
-            return await ingest_fit(
-                db, user_id, fit_bytes, "garmin", source_ref, batch_mode
-            )
-            
+            return await ingest_fit(db, user_id, fit_bytes, "garmin", source_ref, batch_mode)
+
         except GarminAPIError as e:
             logger.warning(f"Failed to download Garmin activity {activity.id}: {e}")
             return None
-    
+
     async def close(self) -> None:
         # Garmin client doesn't need explicit close
         self._client = None

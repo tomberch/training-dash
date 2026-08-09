@@ -4,18 +4,14 @@ import pytest
 class TestAuth:
     @pytest.mark.asyncio
     async def test_login_with_admin_provisioned_credentials_returns_session(self, app_client, seed_user):
-        response = await app_client.post(
-            "/api/login", json={"email": "testuser@example.com", "password": "testpass"}
-        )
+        response = await app_client.post("/api/login", json={"email": "testuser@example.com", "password": "testpass"})
         assert response.status_code == 200
         assert response.json()["email"] == "testuser@example.com"
         assert "session" in response.cookies
 
     @pytest.mark.asyncio
     async def test_login_with_wrong_password_rejected(self, app_client, seed_user):
-        response = await app_client.post(
-            "/api/login", json={"email": "testuser@example.com", "password": "wrongpass"}
-        )
+        response = await app_client.post("/api/login", json={"email": "testuser@example.com", "password": "wrongpass"})
         assert response.status_code == 401
 
     @pytest.mark.asyncio
@@ -85,9 +81,10 @@ class TestAuth:
 
     @pytest.mark.asyncio
     async def test_user_a_cannot_see_user_b_activities(self, app_client, auth_client, db_session):
-        from trainingdash.repositories.postgres.models import User, Activity
-        from tests.integration.fixtures import CACHED_HASH_PASS
         from datetime import datetime
+
+        from tests.integration.fixtures import CACHED_HASH_PASS
+        from trainingdash.repositories.postgres.models import Activity, User
 
         user_b = User(email="userb@example.com", password_hash=CACHED_HASH_PASS)
         db_session.add(user_b)

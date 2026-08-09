@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated
 
 import bcrypt
@@ -29,7 +29,7 @@ def verify_password(password: str, hashed: str) -> bool:
 
 
 def create_session_cookie(user_id: int) -> str:
-    return serializer.dumps({"user_id": user_id, "ts": datetime.now(timezone.utc).isoformat()})
+    return serializer.dumps({"user_id": user_id, "ts": datetime.now(UTC).isoformat()})
 
 
 def verify_session_cookie(cookie: str) -> int | None:

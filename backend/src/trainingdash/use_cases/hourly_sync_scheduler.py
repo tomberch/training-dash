@@ -7,7 +7,7 @@ syncs are deferred by 15 minutes to stagger API calls.
 
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,7 +25,7 @@ class HourlySyncScheduler:
         self._db = db
 
     async def execute(self) -> dict:
-        current_hour = datetime.now(timezone.utc).hour
+        current_hour = datetime.now(UTC).hour
         logger.info(f"HourlySyncScheduler: running for hour {current_hour}")
 
         # Find users with this sync_hour who have Garmin credentials
@@ -59,7 +59,5 @@ class HourlySyncScheduler:
             await enqueue_sync_xert_job(user_id, scheduled=defer_until)
             logger.info(f"HourlySyncScheduler: enqueued Xert sync for user {user_id} (deferred 15min)")
 
-        logger.info(
-            f"HourlySyncScheduler: queued {len(garmin_user_ids)} Garmin, {len(xert_user_ids)} Xert syncs"
-        )
+        logger.info(f"HourlySyncScheduler: queued {len(garmin_user_ids)} Garmin, {len(xert_user_ids)} Xert syncs")
         return {"success": True, "garmin_queued": len(garmin_user_ids), "xert_queued": len(xert_user_ids)}

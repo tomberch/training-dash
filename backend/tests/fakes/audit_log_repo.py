@@ -1,12 +1,13 @@
 """In-memory fake implementation of AuditLogRepo for testing."""
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 
 @dataclass
 class AuditLogEntry:
     """Simple data class representing an audit log entry."""
+
     admin_id: int
     action: str
     target_user_id: int | None
@@ -17,7 +18,7 @@ class AuditLogEntry:
 class FakeAuditLogRepo:
     """
     In-memory fake implementation of AuditLogRepo protocol.
-    
+
     Stores audit entries in a list (append-only like real audit log).
     """
 
@@ -38,7 +39,7 @@ class FakeAuditLogRepo:
             action=action,
             target_user_id=target_user_id,
             details=details,
-            created_at=datetime.now(timezone.utc).replace(tzinfo=None),
+            created_at=datetime.now(UTC).replace(tzinfo=None),
         )
         self._entries.append(entry)
 

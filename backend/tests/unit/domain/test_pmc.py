@@ -106,7 +106,7 @@ class TestPMCComputation:
         from trainingdash.domain.pmc import compute_ewma_factor
 
         # 7-day: factor ≈ 0.857
-        assert abs(compute_ewma_factor(7) - (1 - 1/7)) < 0.001
+        assert abs(compute_ewma_factor(7) - (1 - 1 / 7)) < 0.001
 
         # 42-day: factor ≈ 0.976
-        assert abs(compute_ewma_factor(42) - (1 - 1/42)) < 0.001
+        assert abs(compute_ewma_factor(42) - (1 - 1 / 42)) < 0.001

@@ -2,24 +2,23 @@
 Tests for the ActivityPipeline class and its typed step results.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from trainingdash.activity_pipeline import (
     ActivityPipeline,
+    BreakthroughResult,
+    HrmaxDetectionResult,
+    HrPowerResult,
     MetricsResult,
     PeaksResult,
-    HrPowerResult,
-    HrmaxDetectionResult,
-    BreakthroughResult,
+    PipelineResult,
     RouteMatchResult,
     TitleResult,
-    PipelineResult,
     _time_of_day_title,
 )
-
 
 # --- Dataclass Tests ---
 
@@ -235,9 +234,7 @@ class TestComputeMetrics:
     """Test the compute_metrics pipeline step."""
 
     @pytest.mark.asyncio
-    async def test_no_threshold_returns_empty_result(
-        self, mock_db, mock_activity, sample_records
-    ):
+    async def test_no_threshold_returns_empty_result(self, mock_db, mock_activity, sample_records):
         """When no threshold exists, metrics should be empty."""
         # Mock the threshold query to return None
         mock_result = MagicMock()
@@ -256,9 +253,7 @@ class TestComputeMetrics:
         assert result.tss is None
 
     @pytest.mark.asyncio
-    async def test_with_power_data_computes_np(
-        self, mock_db, mock_activity, sample_records
-    ):
+    async def test_with_power_data_computes_np(self, mock_db, mock_activity, sample_records):
         """When power data and threshold exist, NP should be computed."""
         # Mock threshold
         mock_threshold = MagicMock()
@@ -271,7 +266,7 @@ class TestComputeMetrics:
         mock_user.hr_zone_percentages = None
 
         call_count = [0]
-        
+
         # Set up execute to return different results for different queries
         async def mock_execute(query):
             result = MagicMock()
@@ -303,9 +298,7 @@ class TestExtractPeaks:
     """Test the extract_peaks pipeline step."""
 
     @pytest.mark.asyncio
-    async def test_extract_peaks_with_power_data(
-        self, mock_db, mock_activity, sample_records
-    ):
+    async def test_extract_peaks_with_power_data(self, mock_db, mock_activity, sample_records):
         """Peaks should be extracted from power data."""
         pipeline = ActivityPipeline(
             db=mock_db,
@@ -340,9 +333,7 @@ class TestGenerateTitle:
     """Test the generate_title pipeline step."""
 
     @pytest.mark.asyncio
-    async def test_batch_mode_uses_time_of_day(
-        self, mock_db, mock_activity, sample_records
-    ):
+    async def test_batch_mode_uses_time_of_day(self, mock_db, mock_activity, sample_records):
         """In batch mode, title should be time-of-day based."""
         pipeline = ActivityPipeline(
             db=mock_db,
@@ -357,9 +348,7 @@ class TestGenerateTitle:
         assert result.title_source == "pending"
 
     @pytest.mark.asyncio
-    async def test_non_batch_mode_attempts_geocoding(
-        self, mock_db, mock_activity, sample_records
-    ):
+    async def test_non_batch_mode_attempts_geocoding(self, mock_db, mock_activity, sample_records):
         """In non-batch mode, should attempt geocoding."""
         pipeline = ActivityPipeline(
             db=mock_db,
@@ -371,9 +360,11 @@ class TestGenerateTitle:
         # Mock the title generator module import to fail (simulating no geocoding service)
         with patch.dict(
             "sys.modules",
-            {"trainingdash.title_generator": MagicMock(
-                generate_activity_title=AsyncMock(side_effect=Exception("No geocoding"))
-            )},
+            {
+                "trainingdash.title_generator": MagicMock(
+                    generate_activity_title=AsyncMock(side_effect=Exception("No geocoding"))
+                )
+            },
         ):
             result = await pipeline.generate_title()
 
@@ -403,16 +394,16 @@ class TestMatchRoute:
             # Need to re-import the function
             with patch.object(pipeline, "match_route", wraps=pipeline.match_route):
                 # Actually just mock the function directly in the method
-                import trainingdash.activity_pipeline as ap_module
                 original_match = pipeline.match_route
-                
+
                 async def patched_match_route():
                     from trainingdash.activity_pipeline import RouteMatchResult
+
                     result = RouteMatchResult()
                     result.route_id = 42
                     mock_activity.route_id = 42
                     return result
-                
+
                 result = await patched_match_route()
 
         assert result.route_id == 42
@@ -430,8 +421,9 @@ class TestMatchRoute:
         # Create a patched version that returns None
         async def patched_match_route():
             from trainingdash.activity_pipeline import RouteMatchResult
+
             return RouteMatchResult(route_id=None)
-        
+
         result = await patched_match_route()
 
         assert result.route_id is None
@@ -441,9 +433,7 @@ class TestBatchModeBehavior:
     """Test batch_mode flag behavior across pipeline."""
 
     @pytest.mark.asyncio
-    async def test_batch_mode_skips_breakthrough_detection(
-        self, mock_db, mock_activity, sample_records
-    ):
+    async def test_batch_mode_skips_breakthrough_detection(self, mock_db, mock_activity, sample_records):
         """In batch mode, breakthrough detection should be skipped."""
         pipeline = ActivityPipeline(
             db=mock_db,
@@ -455,30 +445,20 @@ class TestBatchModeBehavior:
         # Mock all the dependencies
         with patch.object(pipeline, "compute_metrics", return_value=MetricsResult()):
             with patch.object(pipeline, "update_hr_power_model"):
-                with patch.object(
-                    pipeline, "estimate_hr_derived_power", return_value=HrPowerResult()
-                ):
-                    with patch.object(
-                        pipeline, "extract_peaks", return_value=PeaksResult()
-                    ):
+                with patch.object(pipeline, "estimate_hr_derived_power", return_value=HrPowerResult()):
+                    with patch.object(pipeline, "extract_peaks", return_value=PeaksResult()):
                         with patch.object(
                             pipeline, "detect_breakthrough", return_value=BreakthroughResult()
                         ) as mock_breakthrough:
-                            with patch.object(
-                                pipeline, "match_route", return_value=RouteMatchResult()
-                            ):
-                                with patch.object(
-                                    pipeline, "generate_title", return_value=TitleResult()
-                                ):
+                            with patch.object(pipeline, "match_route", return_value=RouteMatchResult()):
+                                with patch.object(pipeline, "generate_title", return_value=TitleResult()):
                                     await pipeline.run()
 
         # detect_breakthrough should NOT have been called
         mock_breakthrough.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_non_batch_mode_runs_breakthrough_detection(
-        self, mock_db, mock_activity, sample_records
-    ):
+    async def test_non_batch_mode_runs_breakthrough_detection(self, mock_db, mock_activity, sample_records):
         """In non-batch mode, breakthrough detection should run."""
         pipeline = ActivityPipeline(
             db=mock_db,
@@ -490,24 +470,14 @@ class TestBatchModeBehavior:
         # Mock all the dependencies
         with patch.object(pipeline, "compute_metrics", return_value=MetricsResult()):
             with patch.object(pipeline, "update_hr_power_model"):
-                with patch.object(
-                    pipeline, "estimate_hr_derived_power", return_value=HrPowerResult()
-                ):
-                    with patch.object(
-                        pipeline, "check_hrmax_detection", return_value=HrmaxDetectionResult()
-                    ):
-                        with patch.object(
-                            pipeline, "extract_peaks", return_value=PeaksResult()
-                        ):
+                with patch.object(pipeline, "estimate_hr_derived_power", return_value=HrPowerResult()):
+                    with patch.object(pipeline, "check_hrmax_detection", return_value=HrmaxDetectionResult()):
+                        with patch.object(pipeline, "extract_peaks", return_value=PeaksResult()):
                             with patch.object(
                                 pipeline, "detect_breakthrough", return_value=BreakthroughResult()
                             ) as mock_breakthrough:
-                                with patch.object(
-                                    pipeline, "match_route", return_value=RouteMatchResult()
-                                ):
-                                    with patch.object(
-                                        pipeline, "generate_title", return_value=TitleResult()
-                                    ):
+                                with patch.object(pipeline, "match_route", return_value=RouteMatchResult()):
+                                    with patch.object(pipeline, "generate_title", return_value=TitleResult()):
                                         await pipeline.run()
 
         # detect_breakthrough SHOULD have been called
@@ -518,9 +488,7 @@ class TestPipelineRun:
     """Test the full pipeline run."""
 
     @pytest.mark.asyncio
-    async def test_run_returns_pipeline_result(
-        self, mock_db, mock_activity, sample_records
-    ):
+    async def test_run_returns_pipeline_result(self, mock_db, mock_activity, sample_records):
         """Running the pipeline should return a PipelineResult."""
         pipeline = ActivityPipeline(
             db=mock_db,
@@ -530,25 +498,15 @@ class TestPipelineRun:
         )
 
         # Mock all steps
-        with patch.object(
-            pipeline, "compute_metrics", return_value=MetricsResult(np_power_w=250)
-        ):
+        with patch.object(pipeline, "compute_metrics", return_value=MetricsResult(np_power_w=250)):
             with patch.object(pipeline, "update_hr_power_model"):
-                with patch.object(
-                    pipeline, "estimate_hr_derived_power", return_value=HrPowerResult()
-                ):
-                    with patch.object(
-                        pipeline, "extract_peaks", return_value=PeaksResult(peaks={5: 800})
-                    ):
-                        with patch.object(
-                            pipeline, "match_route", return_value=RouteMatchResult(route_id=10)
-                        ):
+                with patch.object(pipeline, "estimate_hr_derived_power", return_value=HrPowerResult()):
+                    with patch.object(pipeline, "extract_peaks", return_value=PeaksResult(peaks={5: 800})):
+                        with patch.object(pipeline, "match_route", return_value=RouteMatchResult(route_id=10)):
                             with patch.object(
                                 pipeline,
                                 "generate_title",
-                                return_value=TitleResult(
-                                    title="Morning Ride", title_source="pending"
-                                ),
+                                return_value=TitleResult(title="Morning Ride", title_source="pending"),
                             ):
                                 result = await pipeline.run()
 
@@ -559,11 +517,9 @@ class TestPipelineRun:
         assert result.title.title == "Morning Ride"
 
     @pytest.mark.asyncio
-    async def test_route_and_title_run_sequentially(
-        self, mock_db, mock_activity, sample_records
-    ):
+    async def test_route_and_title_run_sequentially(self, mock_db, mock_activity, sample_records):
         """Route matching and title generation run sequentially.
-        
+
         These steps run sequentially because both use the same db session,
         and asyncpg doesn't support concurrent operations on one connection.
         """
@@ -588,12 +544,8 @@ class TestPipelineRun:
 
         with patch.object(pipeline, "compute_metrics", return_value=MetricsResult()):
             with patch.object(pipeline, "update_hr_power_model"):
-                with patch.object(
-                    pipeline, "estimate_hr_derived_power", return_value=HrPowerResult()
-                ):
-                    with patch.object(
-                        pipeline, "extract_peaks", return_value=PeaksResult()
-                    ):
+                with patch.object(pipeline, "estimate_hr_derived_power", return_value=HrPowerResult()):
+                    with patch.object(pipeline, "extract_peaks", return_value=PeaksResult()):
                         with patch.object(pipeline, "match_route", mock_route):
                             with patch.object(pipeline, "generate_title", mock_title):
                                 await pipeline.run()
@@ -606,9 +558,7 @@ class TestErrorHandling:
     """Test error handling in pipeline steps."""
 
     @pytest.mark.asyncio
-    async def test_title_generation_failure_falls_back(
-        self, mock_db, mock_activity, sample_records
-    ):
+    async def test_title_generation_failure_falls_back(self, mock_db, mock_activity, sample_records):
         """Title generation failure should fall back to time-of-day title."""
         pipeline = ActivityPipeline(
             db=mock_db,
@@ -620,9 +570,11 @@ class TestErrorHandling:
         # Mock the title generator module import to fail
         with patch.dict(
             "sys.modules",
-            {"trainingdash.title_generator": MagicMock(
-                generate_activity_title=AsyncMock(side_effect=Exception("Geocoding service unavailable"))
-            )},
+            {
+                "trainingdash.title_generator": MagicMock(
+                    generate_activity_title=AsyncMock(side_effect=Exception("Geocoding service unavailable"))
+                )
+            },
         ):
             result = await pipeline.generate_title()
 

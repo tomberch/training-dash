@@ -1,4 +1,4 @@
-from datetime import datetime, date
+from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
 
@@ -16,7 +16,8 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID as PgUUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
+from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from trainingdash.repositories.postgres.db import Base
@@ -46,12 +47,11 @@ class User(Base):
 
 class UserOAuthLink(Base):
     """Links users to OAuth provider accounts (GitHub, Google, etc.)."""
+
     __tablename__ = "user_oauth_links"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
-    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     provider: Mapped[str] = mapped_column(String(20), nullable=False)  # 'github', 'google'
     provider_user_id: Mapped[str] = mapped_column(String(255), nullable=False)
     provider_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -88,9 +88,7 @@ class Route(Base):
     __tablename__ = "routes"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     simplified_polyline: Mapped[object] = mapped_column(
         Geography("LINESTRING", srid=4326, spatial_index=True), nullable=False
     )
@@ -106,12 +104,8 @@ class Route(Base):
 class Activity(Base):
     __tablename__ = "activities"
 
-    id: Mapped[UUID] = mapped_column(
-        PgUUID(as_uuid=True), primary_key=True, default=uuid4
-    )
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    )
+    id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True, default=uuid4)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     source: Mapped[str] = mapped_column(String(50), nullable=False)
     source_ref: Mapped[str] = mapped_column(Text, nullable=False)
     started_at: Mapped[datetime] = mapped_column(nullable=False)
@@ -146,9 +140,7 @@ class Activity(Base):
     # Simplified GPS polyline for list view thumbnails (Google polyline encoding)
     map_polyline: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Routing
-    route_id: Mapped[int | None] = mapped_column(
-        ForeignKey("routes.id"), nullable=True
-    )
+    route_id: Mapped[int | None] = mapped_column(ForeignKey("routes.id"), nullable=True)
     raw_fit: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     utc_offset_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
@@ -172,6 +164,7 @@ class Lap(Base):
 
 class ActivityPeakPower(Base):
     """Peak power values at standard durations for an activity."""
+
     __tablename__ = "activity_peak_powers"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
@@ -184,12 +177,11 @@ class ActivityPeakPower(Base):
 
 class FitnessHistory(Base):
     """User fitness model snapshots over time (3-parameter CP model)."""
+
     __tablename__ = "fitness_history"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     computed_at: Mapped[datetime] = mapped_column(nullable=False)
     # Peak Power (neuromuscular, ~5s)
     pp_watts: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -201,12 +193,11 @@ class FitnessHistory(Base):
 
 class Notification(Base):
     """User notifications (FTP suggestions, etc.)."""
+
     __tablename__ = "notifications"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     type: Mapped[str] = mapped_column(String(50), nullable=False)  # e.g., "ftp_suggestion"
     message: Mapped[str] = mapped_column(Text, nullable=False)
     payload: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON payload
@@ -216,12 +207,11 @@ class Notification(Base):
 
 class AuditLog(Base):
     """Record of destructive admin actions (nuke operations)."""
+
     __tablename__ = "audit_log"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    admin_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
-    )
+    admin_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     action: Mapped[str] = mapped_column(String(50), nullable=False)  # nuke_activities, nuke_integrations, nuke_account
     target_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Not FK, user may be deleted
     target_user_email: Mapped[str] = mapped_column(String(255), nullable=False)  # Preserved even if user deleted
@@ -231,12 +221,11 @@ class AuditLog(Base):
 
 class EFModel(Base):
     """Efficiency Factor model for HR-derived power estimation."""
+
     __tablename__ = "ef_models"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False
-    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
     ef_value: Mapped[float] = mapped_column(Numeric(6, 4), nullable=False)  # NP/HR ratio
     computed_at: Mapped[datetime] = mapped_column(nullable=False)
     ride_count: Mapped[int] = mapped_column(Integer, nullable=False)  # Number of rides used
@@ -247,38 +236,31 @@ class XertCredentials(Base):
     __tablename__ = "xert_credentials"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False
-    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
     xert_email: Mapped[str] = mapped_column(String(255), nullable=False)
     encrypted_password: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     sync_since: Mapped[datetime | None] = mapped_column(nullable=True)
     last_synced_at: Mapped[datetime | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
-    updated_at: Mapped[datetime] = mapped_column(
-        server_default=text("now()"), onupdate=text("now()")
-    )
+    updated_at: Mapped[datetime] = mapped_column(server_default=text("now()"), onupdate=text("now()"))
 
 
 class GarminCredentials(Base):
     __tablename__ = "garmin_credentials"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False
-    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
     garmin_email: Mapped[str] = mapped_column(String(255), nullable=False)
     encrypted_password: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     sync_since: Mapped[datetime | None] = mapped_column(nullable=True)
     last_synced_at: Mapped[datetime | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
-    updated_at: Mapped[datetime] = mapped_column(
-        server_default=text("now()"), onupdate=text("now()")
-    )
+    updated_at: Mapped[datetime] = mapped_column(server_default=text("now()"), onupdate=text("now()"))
 
 
 class MetricType(Base):
     """Defines available metric types (FTP, LTHR, weight, etc.)."""
+
     __tablename__ = "metric_types"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -296,18 +278,13 @@ class MetricType(Base):
 
 class MetricEntry(Base):
     """Historical metric values for a user (FTP on date X, weight on date Y, etc.)."""
+
     __tablename__ = "metric_entries"
-    __table_args__ = (
-        UniqueConstraint("user_id", "metric_type_id", "effective_date", name="uq_metric_user_type_date"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "metric_type_id", "effective_date", name="uq_metric_user_type_date"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    )
-    metric_type_id: Mapped[int] = mapped_column(
-        ForeignKey("metric_types.id"), nullable=False
-    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    metric_type_id: Mapped[int] = mapped_column(ForeignKey("metric_types.id"), nullable=False)
     effective_date: Mapped[date] = mapped_column(Date, nullable=False)
     value: Mapped[Decimal] = mapped_column(Numeric, nullable=False)
     source: Mapped[str] = mapped_column(String(20), nullable=False)  # manual | calculated | device
@@ -333,10 +310,7 @@ class Record(Base):
     speed_mps: Mapped[float | None] = mapped_column(Float, nullable=True)
     altitude_m: Mapped[float | None] = mapped_column(Float, nullable=True)
     cadence_rpm: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    geom: Mapped[object | None] = mapped_column(
-        Geography("POINT", srid=4326, spatial_index=True), nullable=True
-    )
-
+    geom: Mapped[object | None] = mapped_column(Geography("POINT", srid=4326, spatial_index=True), nullable=True)
 
 
 class RecalculationJob(Base):
@@ -347,17 +321,11 @@ class RecalculationJob(Base):
     """
 
     __tablename__ = "recalculation_jobs"
-    __table_args__ = (
-        UniqueConstraint("user_id", name="uq_recalculation_job_user"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", name="uq_recalculation_job_user"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    )
-    status: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="pending"
-    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
     started_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
     completed_at: Mapped[datetime | None] = mapped_column(nullable=True)
     activities_updated: Mapped[int | None] = mapped_column(Integer, nullable=True)

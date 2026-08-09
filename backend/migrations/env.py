@@ -1,9 +1,8 @@
 import os
 from logging.config import fileConfig
 
-from sqlalchemy import create_engine, pool, MetaData
-
 from alembic import context
+from sqlalchemy import create_engine, pool
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -28,19 +27,22 @@ if config.config_file_name is not None:
 
 # Import Base directly from models module, avoiding db.py which creates async engine
 # We need to construct it here to avoid the async driver issue
-from sqlalchemy.orm import DeclarativeBase
 import importlib.util
 import sys
+
+from sqlalchemy.orm import DeclarativeBase
 
 # Load models module without importing db.py
 spec = importlib.util.spec_from_file_location(
     "models_for_alembic",
-    os.path.join(os.path.dirname(__file__), "..", "src", "trainingdash", "repositories", "postgres", "models.py")
+    os.path.join(os.path.dirname(__file__), "..", "src", "trainingdash", "repositories", "postgres", "models.py"),
 )
+
 
 # We need Base from db.py, but it's just a DeclarativeBase - recreate it
 class Base(DeclarativeBase):
     pass
+
 
 # Now manually import the models file content to get the metadata
 # Actually, let's just import the models after patching
@@ -48,15 +50,10 @@ class Base(DeclarativeBase):
 class FakeDb:
     Base = Base
 
-sys.modules['trainingdash.repositories.postgres.db'] = FakeDb()
+
+sys.modules["trainingdash.repositories.postgres.db"] = FakeDb()
 
 # Now we can import models
-from trainingdash.repositories.postgres.models import (
-    User, Activity, Record, Route,
-    XertCredentials, GarminCredentials,
-    ActivityPeakPower, FitnessHistory, Notification, EFModel,
-    MetricType, MetricEntry,
-)
 
 # Model metadata for autogenerate support
 target_metadata = Base.metadata
@@ -66,11 +63,28 @@ APP_TABLES = {t.name for t in target_metadata.tables.values()}
 
 # PostGIS/tiger tables to ignore
 POSTGIS_PREFIXES = (
-    'spatial_ref_sys', 'topology', 'layer',
-    'zip_', 'county', 'state', 'place', 'addr', 'faces', 'edges',
-    'featnames', 'bg', 'tract', 'tabblock', 'cousub', 'zcta5',
-    'loader_', 'geocode_', 'pagc_', 'direction_lookup',
-    'secondary_unit_lookup', 'street_type_lookup',
+    "spatial_ref_sys",
+    "topology",
+    "layer",
+    "zip_",
+    "county",
+    "state",
+    "place",
+    "addr",
+    "faces",
+    "edges",
+    "featnames",
+    "bg",
+    "tract",
+    "tabblock",
+    "cousub",
+    "zcta5",
+    "loader_",
+    "geocode_",
+    "pagc_",
+    "direction_lookup",
+    "secondary_unit_lookup",
+    "street_type_lookup",
 )
 
 

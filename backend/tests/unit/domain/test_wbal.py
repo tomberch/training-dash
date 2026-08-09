@@ -1,6 +1,5 @@
 """Unit tests for W'bal computation."""
 
-import pytest
 from trainingdash.domain.wbal import compute_wbal_series, estimate_w_prime
 
 
@@ -24,7 +23,7 @@ class TestWbalSeries:
         """Power below CP should not deplete W'bal (should recover or stay full)."""
         power = [200] * 60  # 1 minute at 200W with CP=250
         result = compute_wbal_series(power, cp_watts=250, w_prime_joules=20000)
-        
+
         # Should stay at full W'
         assert result["series"][-1] == 20000
         assert result["min_wbal"] == 20000
@@ -33,7 +32,7 @@ class TestWbalSeries:
         """Power exactly at CP should maintain current W'bal."""
         power = [250] * 60  # 1 minute exactly at CP
         result = compute_wbal_series(power, cp_watts=250, w_prime_joules=20000)
-        
+
         # Should stay at full W'
         assert result["series"][-1] == 20000
         assert result["min_wbal"] == 20000
@@ -44,7 +43,7 @@ class TestWbalSeries:
         # Depletion = 100W * 60s = 6000J
         power = [350] * 60
         result = compute_wbal_series(power, cp_watts=250, w_prime_joules=20000)
-        
+
         expected_final = 20000 - 6000  # 14000J
         assert result["series"][-1] == expected_final
         assert result["min_wbal"] == expected_final
@@ -54,7 +53,7 @@ class TestWbalSeries:
         # 300 seconds at 350W = 30000J depletion, but W' is only 20000J
         power = [350] * 300
         result = compute_wbal_series(power, cp_watts=250, w_prime_joules=20000)
-        
+
         assert result["min_wbal"] == 0
         assert all(w >= 0 for w in result["series"])
 
@@ -64,10 +63,10 @@ class TestWbalSeries:
         # Then recover: 60s at 150W (100W below CP)
         power = [350] * 60 + [150] * 60
         result = compute_wbal_series(power, cp_watts=250, w_prime_joules=20000)
-        
+
         # After depletion: 14000J
         assert result["series"][59] == 14000
-        
+
         # After recovery: should be higher than 14000
         final_wbal = result["series"][-1]
         assert final_wbal > 14000
@@ -79,7 +78,7 @@ class TestWbalSeries:
         # Deplete, then recover
         power = [400] * 60 + [100] * 60  # Hard then easy
         result = compute_wbal_series(power, cp_watts=250, w_prime_joules=20000)
-        
+
         # Min should be at end of hard effort
         assert result["min_wbal_index"] == 59
         assert result["min_wbal"] == 20000 - (150 * 60)  # 11000J
@@ -88,7 +87,7 @@ class TestWbalSeries:
         """Should calculate minimum as percentage of W'."""
         power = [350] * 60  # Deplete by 6000J
         result = compute_wbal_series(power, cp_watts=250, w_prime_joules=20000)
-        
+
         # 14000/20000 = 70%
         assert result["min_wbal_pct"] == 70.0
 
@@ -96,7 +95,7 @@ class TestWbalSeries:
         """None values should be treated as coasting (0W = recovery)."""
         power = [350] * 30 + [None] * 30 + [350] * 30
         result = compute_wbal_series(power, cp_watts=250, w_prime_joules=20000)
-        
+
         # Should have some recovery in the middle
         assert len(result["series"]) == 90
 
@@ -105,11 +104,11 @@ class TestWbalSeries:
         # 60 seconds at 350W, 1Hz
         power_1hz = [350] * 60
         result_1hz = compute_wbal_series(power_1hz, cp_watts=250, w_prime_joules=20000, sample_rate_hz=1.0)
-        
+
         # 60 seconds at 350W, 2Hz (120 samples)
         power_2hz = [350] * 120
         result_2hz = compute_wbal_series(power_2hz, cp_watts=250, w_prime_joules=20000, sample_rate_hz=2.0)
-        
+
         # Final W'bal should be approximately the same
         assert abs(result_1hz["series"][-1] - result_2hz["series"][-1]) < 100
 
@@ -125,7 +124,7 @@ class TestWbalSeries:
         # Depletion = 50W * 300s = 15000J
         power = [300] * 300
         result = compute_wbal_series(power, cp_watts=250, w_prime_joules=20000)
-        
+
         assert result["min_wbal"] == 5000
         assert result["min_wbal_pct"] == 25.0
 

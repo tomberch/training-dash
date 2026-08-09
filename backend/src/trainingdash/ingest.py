@@ -1,31 +1,29 @@
-from datetime import datetime, timezone, timedelta
 import json
 import logging
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from geoalchemy2.functions import ST_SetSRID, ST_MakePoint
-from sqlalchemy import select, and_
+from geoalchemy2.functions import ST_MakePoint, ST_SetSRID
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from trainingdash.repositories.postgres.models import Activity, Lap, Record, ActivityPeakPower, FitnessHistory, Notification, User
-from trainingdash.domain.polyline import generate_map_polyline
+from trainingdash.activity_pipeline import ActivityPipeline
+from trainingdash.domain.fitness import fit_cp_model
 from trainingdash.domain.metrics import (
-    compute_normalized_power,
     compute_intensity_factor,
+    compute_normalized_power,
     compute_tss,
 )
-from trainingdash.domain.zones import compute_zone_times
+from trainingdash.domain.polyline import generate_map_polyline
 from trainingdash.domain.thresholds import (
-    get_thresholds_for_date,
-    get_ftp_for_date,
     create_threshold_entries,
     get_all_threshold_entries,
+    get_ftp_for_date,
+    get_thresholds_for_date,
 )
 from trainingdash.domain.wbal import compute_wbal_series
-from trainingdash.domain.peaks import extract_peak_powers
-from trainingdash.domain.fitness import detect_breakthrough, get_all_time_bests, fit_cp_model
-from trainingdash.hr_power import update_ef_model, estimate_power_from_hr
-from trainingdash.activity_pipeline import ActivityPipeline
+from trainingdash.domain.zones import compute_zone_times
+from trainingdash.repositories.postgres.models import Activity, ActivityPeakPower, Lap, Record, User
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +61,7 @@ def _to_naive_utc(dt: datetime | None) -> datetime | None:
     if dt is None:
         return None
     if dt.tzinfo is not None:
-        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+        dt = dt.astimezone(UTC).replace(tzinfo=None)
     return dt
 
 
@@ -159,10 +157,10 @@ def parse_records(fit_bytes: bytes) -> dict[str, Any]:
                 # Get position (convert from semicircles to degrees)
                 lat = _semicircles_to_degrees(_get_field(frame, "position_lat"))
                 lon = _semicircles_to_degrees(_get_field(frame, "position_long"))
-                
+
                 # Get timestamp
                 ts = _to_naive_utc(_get_field(frame, "timestamp"))
-                
+
                 # Get metrics - prefer enhanced versions for newer FIT files
                 speed = _safe_float(_get_field(frame, "enhanced_speed", "speed"))
                 altitude = _safe_float(_get_field(frame, "enhanced_altitude", "altitude"))
@@ -170,31 +168,35 @@ def parse_records(fit_bytes: bytes) -> dict[str, Any]:
                 hr = _safe_int(_get_field(frame, "heart_rate"))
                 power = _safe_int(_get_field(frame, "power"))
                 cadence = _safe_int(_get_field(frame, "cadence"))
-                
-                records.append({
-                    "timestamp": ts,
-                    "lat": lat,
-                    "lon": lon,
-                    "distance_m": distance if distance is not None else 0,
-                    "hr_bpm": hr,
-                    "power_w": power,
-                    "speed_mps": speed,
-                    "altitude_m": altitude,
-                    "cadence_rpm": cadence,
-                })
-                
+
+                records.append(
+                    {
+                        "timestamp": ts,
+                        "lat": lat,
+                        "lon": lon,
+                        "distance_m": distance if distance is not None else 0,
+                        "hr_bpm": hr,
+                        "power_w": power,
+                        "speed_mps": speed,
+                        "altitude_m": altitude,
+                        "cadence_rpm": cadence,
+                    }
+                )
+
             elif frame.name == "lap":
                 start = _to_naive_utc(_get_field(frame, "start_time"))
                 end = _to_naive_utc(_get_field(frame, "timestamp"))
-                laps.append({
-                    "start_time": start,
-                    "end_time": end,
-                    "total_distance_m": _safe_float(_get_field(frame, "total_distance")) or 0,
-                    "avg_hr_bpm": _safe_int(_get_field(frame, "avg_heart_rate")),
-                    "avg_power_w": _safe_int(_get_field(frame, "avg_power")),
-                    "max_hr_bpm": _safe_int(_get_field(frame, "max_heart_rate")),
-                })
-                
+                laps.append(
+                    {
+                        "start_time": start,
+                        "end_time": end,
+                        "total_distance_m": _safe_float(_get_field(frame, "total_distance")) or 0,
+                        "avg_hr_bpm": _safe_int(_get_field(frame, "avg_heart_rate")),
+                        "avg_power_w": _safe_int(_get_field(frame, "avg_power")),
+                        "max_hr_bpm": _safe_int(_get_field(frame, "max_heart_rate")),
+                    }
+                )
+
             elif frame.name == "session":
                 # Extract session summary data
                 timer_time = _safe_float(_get_field(frame, "total_timer_time"))
@@ -227,14 +229,14 @@ def parse_records(fit_bytes: bytes) -> dict[str, Any]:
         total_distance = session_data["total_distance_m"]
         moving_time = int(session_data["total_timer_time"] or 0)
         elapsed_time = int(session_data["total_elapsed_time"] or 0)
-        
+
         # If moving_time is 0 but we have records, compute from records
         if moving_time == 0 and records:
             computed_moving = _compute_moving_time(records)
             if computed_moving > 0:
                 moving_time = computed_moving
                 logger.debug(f"Computed moving_time from records: {moving_time}s (elapsed: {elapsed_time}s)")
-        
+
         elev_gain = session_data["total_ascent"] or 0
         avg_speed = session_data["avg_speed"] or 0
         avg_hr = session_data["avg_hr"]
@@ -253,7 +255,7 @@ def parse_records(fit_bytes: bytes) -> dict[str, Any]:
         avg_power = None
         max_speed = 0
         max_hr = None
-    
+
     return {
         "started_at": started_at,
         "total_distance_m": float(total_distance),
@@ -283,24 +285,24 @@ async def is_duplicate_activity(
     - Same user
     - started_at within 60 seconds
     - total_distance_m within 1%
-    
+
     Used to prevent duplicate imports when user syncs from both Xert and Garmin,
     or re-syncs the same source. First activity wins (kept), duplicates are skipped.
-    
+
     Args:
         db: Database session
         user_id: The user's ID
         started_at: Activity start time
         total_distance_m: Total distance in meters
         source: Source identifier (for logging only)
-    
+
     Returns:
         True if a matching activity already exists, False otherwise
     """
     # Define time window: +/- 60 seconds
     time_start = started_at - timedelta(seconds=60)
     time_end = started_at + timedelta(seconds=60)
-    
+
     # Query for activities in the time window
     result = await db.execute(
         select(Activity).where(
@@ -312,7 +314,7 @@ async def is_duplicate_activity(
         )
     )
     candidates = result.scalars().all()
-    
+
     for candidate in candidates:
         # Check distance within 1%
         if total_distance_m > 0 and candidate.total_distance_m > 0:
@@ -331,7 +333,7 @@ async def is_duplicate_activity(
                 f"(0m) matches existing activity {candidate.id} from {candidate.source}"
             )
             return True
-    
+
     return False
 
 
@@ -417,12 +419,12 @@ async def ingest_fit(
 ) -> Activity | None:
     """
     Ingest a FIT file and process through the activity pipeline.
-    
+
     Steps:
     1. Parse FIT file to extract records, laps, and summary data
     2. Create Activity, Lap, and Record models
     3. Run activity through the pipeline for metrics, peaks, routes, and titles
-    
+
     Args:
         db: Database session
         user_id: User ID to attribute the activity to
@@ -430,7 +432,7 @@ async def ingest_fit(
         source: Source identifier (e.g., "garmin", "xert")
         source_ref: Unique reference from the source
         batch_mode: If True, skip per-activity fitness updates and geocoding
-    
+
     Returns:
         Created Activity or None if parsing failed
     """
@@ -450,7 +452,6 @@ async def ingest_fit(
     await pipeline.run()
 
     return activity
-
 
 
 async def finalize_batch_import(
@@ -478,21 +479,14 @@ async def finalize_batch_import(
     await db.commit()
 
     # Load activities + peaks for the threshold helper below
-    result = await db.execute(
-        select(Activity)
-        .where(Activity.user_id == user_id)
-        .order_by(Activity.started_at.asc())
-    )
+    result = await db.execute(select(Activity).where(Activity.user_id == user_id).order_by(Activity.started_at.asc()))
     activities = result.scalars().all()
 
     if not activities:
         return
 
     activity_ids = [a.id for a in activities]
-    result = await db.execute(
-        select(ActivityPeakPower)
-        .where(ActivityPeakPower.activity_id.in_(activity_ids))
-    )
+    result = await db.execute(select(ActivityPeakPower).where(ActivityPeakPower.activity_id.in_(activity_ids)))
     all_peaks = result.scalars().all()
 
     peaks_by_activity: dict[int, dict[int, int]] = {}
@@ -514,53 +508,52 @@ async def _auto_create_threshold_if_needed(
 ) -> None:
     """
     Auto-create a threshold from CP model if historical activities lack coverage.
-    
+
     This ensures activities imported before any manual threshold was set
     still get their metrics calculated.
     """
-    from datetime import date as date_type
-    
+
     if not activities:
         return
-    
+
     # Find earliest activity date
     earliest_date = min(a.started_at.date() for a in activities)
-    
+
     # Check if there's already a threshold covering the earliest activity
     existing_ftp = await get_ftp_for_date(db, user_id, earliest_date)
-    
+
     if existing_ftp is not None:
         # Already have coverage for historical activities
         return
-    
+
     # Check if there's any threshold at all (user may have set one for "today")
     all_thresholds = await get_all_threshold_entries(db, user_id)
     any_threshold = all_thresholds[0] if all_thresholds else None
-    
+
     # Build peak powers list for CP model
     peak_powers = list(peaks_by_activity.values())
     if not peak_powers:
         return
-    
+
     activity_dates = [a.started_at for a in activities if a.id in peaks_by_activity]
-    
+
     # Fit CP model
     model = fit_cp_model(peak_powers, activity_dates)
     if model is None:
         return
-    
+
     cp_watts = model["cp_watts"]
-    
+
     # Estimate LTHR and HRmax from activities if possible, otherwise use defaults
     lthr_bpm, hrmax_bpm = _estimate_hr_thresholds(activities)
-    
+
     # If user has a manual threshold, copy HR values from it
     if any_threshold is not None:
         if any_threshold.get("lthr_bpm"):
             lthr_bpm = any_threshold["lthr_bpm"]
         if any_threshold.get("hrmax_bpm"):
             hrmax_bpm = any_threshold["hrmax_bpm"]
-    
+
     # Create auto-calculated threshold entries for historical activities
     await create_threshold_entries(
         db,
@@ -578,18 +571,18 @@ async def _auto_create_threshold_if_needed(
 def _estimate_hr_thresholds(activities: list[Activity]) -> tuple[int, int]:
     """
     Estimate LTHR and HRmax from activity data.
-    
+
     Returns (lthr_bpm, hrmax_bpm) with reasonable defaults if no HR data.
     """
     max_hr_seen = 0
     avg_hrs = []
-    
+
     for a in activities:
         if a.max_hr_bpm is not None and a.max_hr_bpm > max_hr_seen:
             max_hr_seen = a.max_hr_bpm
         if a.avg_hr_bpm is not None and a.avg_hr_bpm > 0:
             avg_hrs.append(a.avg_hr_bpm)
-    
+
     if max_hr_seen > 0:
         hrmax = max_hr_seen
         # LTHR is typically 93% of HRmax
@@ -598,9 +591,8 @@ def _estimate_hr_thresholds(activities: list[Activity]) -> tuple[int, int]:
         # Default values (180 HRmax, 167 LTHR for ~40 year old)
         hrmax = 180
         lthr = 167
-    
-    return lthr, hrmax
 
+    return lthr, hrmax
 
 
 async def backfill_activity_metrics(
@@ -610,22 +602,22 @@ async def backfill_activity_metrics(
 ) -> int:
     """
     Backfill training metrics for activities that are missing them.
-    
+
     This is used after creating an auto-calculated threshold to compute
     metrics for historical activities that were imported before any
     threshold existed.
-    
+
     Args:
         db: Database session
         user_id: User ID to backfill metrics for
         activity_ids: Optional list of specific activity IDs to process.
                       If None, processes all activities missing metrics.
-    
+
     Returns:
         Number of activities updated
     """
     from trainingdash.repositories.postgres.models import Record
-    
+
     # Find activities missing metrics (NP is the indicator - if NP is null but has power, needs backfill)
     if activity_ids:
         result = await db.execute(
@@ -648,63 +640,59 @@ async def backfill_activity_metrics(
             )
             .order_by(Activity.started_at)
         )
-    
+
     activities = result.scalars().all()
-    
+
     if not activities:
         return 0
-    
+
     # Get user for zone percentages
-    user_result = await db.execute(
-        select(User).where(User.id == user_id)
-    )
+    user_result = await db.execute(select(User).where(User.id == user_id))
     user = user_result.scalar_one_or_none()
-    
+
     updated_count = 0
-    
+
     for activity in activities:
         # Get thresholds effective at activity date
         activity_date = activity.started_at.date()
         threshold = await get_thresholds_for_date(db, user_id, activity_date)
-        
+
         if threshold is None or threshold.ftp_watts is None:
             continue
-        
+
         # Load records for this activity
         records_result = await db.execute(
-            select(Record)
-            .where(Record.activity_id == activity.id)
-            .order_by(Record.timestamp)
+            select(Record).where(Record.activity_id == activity.id).order_by(Record.timestamp)
         )
         records = records_result.scalars().all()
-        
+
         if not records:
             continue
-        
+
         # Extract power and HR arrays
         power_array = [r.power_w for r in records]
         hr_array = [r.hr_bpm for r in records]
-        
+
         has_power = any(p is not None and p > 0 for p in power_array)
         has_hr = any(h is not None and h > 0 for h in hr_array)
-        
+
         if has_power:
             # Compute NP
             np_watts = compute_normalized_power(power_array)
             if np_watts is not None:
                 activity.np_power_w = int(np_watts)
-                
+
                 # Compute IF and TSS
                 if_value = compute_intensity_factor(np_watts, threshold.ftp_watts)
                 if if_value is not None:
                     activity.intensity_factor = if_value
-                    
+
                     duration_s = activity.moving_time_s or activity.elapsed_time_s
                     tss = compute_tss(duration_s, np_watts, if_value, threshold.ftp_watts)
                     if tss is not None:
                         activity.tss = tss
                         activity.training_load = tss
-            
+
             # Compute power zone times using computed zones
             if threshold.ftp_watts and threshold.ftp_watts > 0:
                 power_zone_times, _ = compute_zone_times(
@@ -714,7 +702,7 @@ async def backfill_activity_metrics(
                 )
                 if power_zone_times:
                     activity.power_zone_times = json.dumps(power_zone_times)
-            
+
             # Compute W'bal
             w_prime_joules = threshold.ftp_watts * 60
             cp_watts = int(threshold.ftp_watts * 0.95)
@@ -722,7 +710,7 @@ async def backfill_activity_metrics(
             if wbal_result["min_wbal"] is not None:
                 activity.wbal_min_joules = wbal_result["min_wbal"]
                 activity.wbal_min_pct = wbal_result["min_wbal_pct"]
-        
+
         if has_hr and threshold.lthr_bpm and threshold.lthr_bpm > 0:
             _, hr_zone_times = compute_zone_times(
                 [],  # no power data needed
@@ -733,8 +721,8 @@ async def backfill_activity_metrics(
             )
             if hr_zone_times:
                 activity.hr_zone_times = json.dumps(hr_zone_times)
-        
+
         updated_count += 1
-    
+
     await db.commit()
     return updated_count

@@ -1,6 +1,6 @@
 import math
 
-from sqlalchemy import select, text, update
+from sqlalchemy import text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from trainingdash.repositories.postgres.models import Activity, Record, Route
@@ -39,20 +39,22 @@ async def find_or_create_route_id(
 ) -> int | None:
     """
     Find an existing route matching this activity's GPS track, or create a new one.
-    
+
     Uses Hausdorff distance to compare simplified polylines. If a match is found
     within threshold, increments the route's ride_count. Otherwise creates a new route.
-    
+
     Returns the route_id or None if the activity has no GPS data.
     """
     wkt = build_linestring_wkt(records)
     if wkt is None:
         return None
 
-    gps_records = [(r["lat"], r["lon"]) if isinstance(r, dict) else (r.lat, r.lon)
-                   for r in records
-                   if (r.get("lat") if isinstance(r, dict) else r.lat) is not None
-                   and (r.get("lon") if isinstance(r, dict) else r.lon) is not None]
+    gps_records = [
+        (r["lat"], r["lon"]) if isinstance(r, dict) else (r.lat, r.lon)
+        for r in records
+        if (r.get("lat") if isinstance(r, dict) else r.lat) is not None
+        and (r.get("lon") if isinstance(r, dict) else r.lon) is not None
+    ]
     if not gps_records:
         return None
     mid_lat = sum(lat for lat, lon in gps_records) / len(gps_records)
@@ -80,9 +82,7 @@ async def find_or_create_route_id(
     if match is not None and match.distance is not None and match.distance <= threshold_deg:
         # Found a matching route - increment ride count
         route_id = match.id
-        await db.execute(
-            update(Route).where(Route.id == route_id).values(ride_count=Route.ride_count + 1)
-        )
+        await db.execute(update(Route).where(Route.id == route_id).values(ride_count=Route.ride_count + 1))
         await db.flush()
         return route_id
 

@@ -8,7 +8,7 @@ from trainingdash.repositories.postgres.models import Activity
 class FakeActivityRepo:
     """
     In-memory fake implementation of ActivityRepo protocol.
-    
+
     Stores activities in a dict keyed by (user_id, activity_id).
     Provides inspection methods for test assertions.
     """
@@ -27,9 +27,7 @@ class FakeActivityRepo:
         limit: int = 20,
         offset: int = 0,
     ) -> list[Activity]:
-        user_activities = [
-            a for (uid, _), a in self._activities.items() if uid == user_id
-        ]
+        user_activities = [a for (uid, _), a in self._activities.items() if uid == user_id]
         # Sort by started_at descending
         user_activities.sort(key=lambda a: a.started_at or 0, reverse=True)
         return user_activities[offset : offset + limit]
@@ -59,9 +57,7 @@ class FakeActivityRepo:
         results = [
             a
             for (uid, aid), a in self._activities.items()
-            if uid == user_id
-            and a.route_id == route_id
-            and (exclude_activity_id is None or aid != exclude_activity_id)
+            if uid == user_id and a.route_id == route_id and (exclude_activity_id is None or aid != exclude_activity_id)
         ]
         results.sort(key=lambda a: a.started_at or 0, reverse=True)
         return results

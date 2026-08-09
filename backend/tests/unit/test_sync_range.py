@@ -31,6 +31,7 @@ _FROZEN = datetime(2026, 8, 6, 12, 0, 0)
 
 import pytest
 
+
 @pytest.fixture(autouse=True)
 def freeze_now():
     """Pin datetime.now() to _FROZEN for all tests in this module."""
@@ -48,6 +49,7 @@ def freeze_now():
 # First-sync path  (existing_refs is empty)
 # ---------------------------------------------------------------------------
 
+
 class TestFirstSync:
     def test_uses_sync_since_when_set(self, freeze_now):
         sync_since = datetime(2026, 1, 1, 0, 0, 0)
@@ -59,6 +61,7 @@ class TestFirstSync:
     def test_uses_sync_since_date_object(self, freeze_now):
         """sync_since may be a date (no .hour) — should be combined with midnight."""
         from datetime import date
+
         sync_date = date(2026, 3, 15)
         start, _, is_first = _determine_sync_range(_cred(sync_since=sync_date), set())
         assert is_first is True
@@ -81,23 +84,20 @@ class TestFirstSync:
 # Subsequent-sync path  (existing_refs is non-empty)
 # ---------------------------------------------------------------------------
 
+
 class TestSubsequentSync:
     _EXISTING = {"xert:abc123"}
 
     def test_incremental_window_uses_last_synced_at_minus_4h(self, freeze_now):
         last_synced = datetime(2026, 8, 6, 8, 0, 0)
-        start, end, is_first = _determine_sync_range(
-            _cred(last_synced_at=last_synced), self._EXISTING
-        )
+        start, end, is_first = _determine_sync_range(_cred(last_synced_at=last_synced), self._EXISTING)
         assert is_first is False
         assert start == last_synced - timedelta(hours=4)
         assert end == freeze_now
 
     def test_buffer_covers_exactly_4_hours(self, freeze_now):
         last_synced = datetime(2026, 8, 5, 23, 30, 0)
-        start, _, _ = _determine_sync_range(
-            _cred(last_synced_at=last_synced), self._EXISTING
-        )
+        start, _, _ = _determine_sync_range(_cred(last_synced_at=last_synced), self._EXISTING)
         assert start == datetime(2026, 8, 5, 19, 30, 0)
 
     def test_falls_back_to_90_days_when_no_last_synced_at(self, freeze_now):

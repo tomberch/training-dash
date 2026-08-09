@@ -5,12 +5,12 @@ from uuid import UUID
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 
 from trainingdash.auth import CurrentUser, DbSession
 from trainingdash.dependencies import ActivityRepoD, DeleteActivityD
-from trainingdash.repositories.postgres.models import Activity, ActivityPeakPower, Record
 from trainingdash.domain.thresholds import get_thresholds_for_date
+from trainingdash.repositories.postgres.models import Activity, ActivityPeakPower, Record
 from trainingdash.routers.datetime_utils import utc_str
 from trainingdash.routers.serializers import (
     activity_detail,
@@ -28,6 +28,7 @@ MAX_PER_PAGE = 100
 
 class PaginationMeta(BaseModel):
     """Pagination metadata."""
+
     total: int
     page: int
     per_page: int
@@ -36,18 +37,15 @@ class PaginationMeta(BaseModel):
 
 class ActivityUpdateRequest(BaseModel):
     """Request body for updating an activity."""
+
     title: str | None = None
 
 
-async def _get_owned_activity(
-    repo: ActivityRepoD, user: CurrentUser, activity_id: UUID
-) -> Activity:
+async def _get_owned_activity(repo: ActivityRepoD, user: CurrentUser, activity_id: UUID) -> Activity:
     """Fetch an activity owned by the current user or raise 404."""
     activity = await repo.get_by_id(activity_id, user.id)
     if activity is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Activity not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Activity not found")
     return activity
 
 
@@ -59,21 +57,21 @@ async def list_activities(
     per_page: int = Query(DEFAULT_PER_PAGE, ge=1, le=MAX_PER_PAGE, description="Items per page"),
 ):
     """List activities for the current user with pagination.
-    
+
     Returns:
         activities: List of activity summaries
         pagination: Pagination metadata (total, page, per_page, total_pages)
     """
     # Count total activities
     total = await repo.count_for_user(user.id)
-    
+
     # Calculate pagination
     total_pages = (total + per_page - 1) // per_page if total > 0 else 1
     offset = (page - 1) * per_page
-    
+
     # Fetch page of activities
     activities = await repo.list_for_user(user.id, limit=per_page, offset=offset)
-    
+
     return {
         "activities": [activity_summary(a) for a in activities],
         "pagination": {
@@ -81,7 +79,7 @@ async def list_activities(
             "page": page,
             "per_page": per_page,
             "total_pages": total_pages,
-        }
+        },
     }
 
 
@@ -136,46 +134,39 @@ async def update_activity(
 ):
     """Update an activity (currently only title)."""
     activity = await _get_owned_activity(repo, user, activity_id)
-    
+
     if request.title is not None:
         activity.title = request.title
         activity.title_source = "manual"
-    
+
     await db.commit()
     await db.refresh(activity)
-    
+
     return activity_summary(activity)
 
 
 @router.post("/activities/{activity_id}/generate-title")
-async def generate_activity_title_endpoint(
-    db: DbSession, repo: ActivityRepoD, user: CurrentUser, activity_id: UUID
-):
+async def generate_activity_title_endpoint(db: DbSession, repo: ActivityRepoD, user: CurrentUser, activity_id: UUID):
     """Generate title for an activity using geocoding.
-    
+
     This is useful for activities that were bulk-imported and skipped
     title generation due to rate limits.
     """
     activity = await _get_owned_activity(repo, user, activity_id)
-    
+
     # Don't overwrite manually set titles
     if activity.title_source == "manual":
         return activity_summary(activity)
-    
+
     # Get GPS records
-    result = await db.execute(
-        select(Record)
-        .where(Record.activity_id == activity_id)
-        .order_by(Record.timestamp)
-    )
+    result = await db.execute(select(Record).where(Record.activity_id == activity_id).order_by(Record.timestamp))
     records = result.scalars().all()
-    
+
     # Convert to dict format for title generator
     records_dicts = [
-        {"lat": r.lat, "lon": r.lon, "altitude_m": r.altitude_m, "distance_m": r.distance_m}
-        for r in records
+        {"lat": r.lat, "lon": r.lon, "altitude_m": r.altitude_m, "distance_m": r.distance_m} for r in records
     ]
-    
+
     # Create geocoding service via the single wiring point in dependencies.py
     from trainingdash.dependencies import get_geocoding_service
     from trainingdash.domain.title_generator import generate_activity_title
@@ -183,13 +174,13 @@ async def generate_activity_title_endpoint(
     geocoding = get_geocoding_service(db)
 
     title = await generate_activity_title(records_dicts, activity.started_at, geocoding=geocoding)
-    
+
     if title:
         activity.title = title
         activity.title_source = "auto"
         await db.commit()
         await db.refresh(activity)
-    
+
     return activity_summary(activity)
 
 
@@ -197,11 +188,7 @@ async def generate_activity_title_endpoint(
 async def get_activity_records(db: DbSession, repo: ActivityRepoD, user: CurrentUser, activity_id: UUID):
     """Get GPS and sensor records for an activity as GeoJSON."""
     await _get_owned_activity(repo, user, activity_id)
-    result = await db.execute(
-        select(Record)
-        .where(Record.activity_id == activity_id)
-        .order_by(Record.timestamp)
-    )
+    result = await db.execute(select(Record).where(Record.activity_id == activity_id).order_by(Record.timestamp))
     records = result.scalars().all()
     geojson = records_to_geojson(
         records,
@@ -235,11 +222,7 @@ async def get_activity_wbal(db: DbSession, repo: ActivityRepoD, user: CurrentUse
     w_prime = ftp * 60  # Estimate W' as FTP * 60 joules
 
     # Get records with power data
-    result = await db.execute(
-        select(Record)
-        .where(Record.activity_id == activity_id)
-        .order_by(Record.timestamp)
-    )
+    result = await db.execute(select(Record).where(Record.activity_id == activity_id).order_by(Record.timestamp))
     records = result.scalars().all()
 
     # Compute W'bal series using differential equation model
@@ -274,18 +257,18 @@ async def get_activity_wbal(db: DbSession, repo: ActivityRepoD, user: CurrentUse
 
 def _get_gps_points(records):
     """Extract GPS points with distance from records."""
-    return [(r.lat, r.lon, r.distance_m) for r in records 
-            if r.lat is not None and r.lon is not None]
+    return [(r.lat, r.lon, r.distance_m) for r in records if r.lat is not None and r.lon is not None]
 
 
 def _haversine_distance_m(p1, p2):
     """Calculate distance between two lat/lon points in meters."""
     import math
+
     lat1, lon1 = math.radians(p1[0]), math.radians(p1[1])
     lat2, lon2 = math.radians(p2[0]), math.radians(p2[1])
     dlat = lat2 - lat1
     dlon = lon2 - lon1
-    a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
+    a = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
     c = 2 * math.asin(math.sqrt(a))
     return 6371000 * c  # Earth radius in meters
 
@@ -293,16 +276,16 @@ def _haversine_distance_m(p1, p2):
 def _is_same_direction(gps_a: list, gps_b: list) -> bool:
     """
     Check if two GPS tracks are going in the same direction.
-    
+
     Samples points from the first 20% of track A and finds their nearest
     points in track B. If the matched distances in B are increasing,
     they're going the same direction; if decreasing, opposite.
     """
     if len(gps_a) < 10 or len(gps_b) < 10:
         return True  # Not enough data, assume same direction
-    
+
     def find_nearest_point(target_lat, target_lon, points):
-        min_dist = float('inf')
+        min_dist = float("inf")
         nearest_distance_m = None
         for lat, lon, dist_m in points:
             d = _haversine_distance_m((target_lat, target_lon), (lat, lon))
@@ -310,11 +293,11 @@ def _is_same_direction(gps_a: list, gps_b: list) -> bool:
                 min_dist = d
                 nearest_distance_m = dist_m
         return nearest_distance_m, min_dist
-    
+
     # Sample points from the first 20% of track A
     sample_count = max(5, len(gps_a) // 5)
     sample_indices = [i * len(gps_a) // (sample_count * 5) for i in range(sample_count)]
-    
+
     # For each sampled point from A, find nearest point in B
     matched_distances_b = []
     for idx in sample_indices:
@@ -322,10 +305,10 @@ def _is_same_direction(gps_a: list, gps_b: list) -> bool:
         nearest_dist_b, gps_dist = find_nearest_point(lat_a, lon_a, gps_b)
         if nearest_dist_b is not None and gps_dist < 100:  # Within 100m
             matched_distances_b.append((dist_a, nearest_dist_b))
-    
+
     if len(matched_distances_b) < 3:
         return True  # Not enough matched points, assume same direction
-    
+
     # Check if distances in B are increasing (same direction) or decreasing (opposite)
     increasing_count = 0
     decreasing_count = 0
@@ -336,55 +319,49 @@ def _is_same_direction(gps_a: list, gps_b: list) -> bool:
             increasing_count += 1
         elif curr_b < prev_b:
             decreasing_count += 1
-    
+
     return increasing_count >= decreasing_count
 
 
 @router.get("/activities/{activity_id}/same-route")
-async def get_same_route_activities(
-    db: DbSession, repo: ActivityRepoD, user: CurrentUser, activity_id: UUID
-):
+async def get_same_route_activities(db: DbSession, repo: ActivityRepoD, user: CurrentUser, activity_id: UUID):
     """Get other activities on the same route, filtered to same direction only."""
     activity = await _get_owned_activity(repo, user, activity_id)
     if activity.route_id is None:
         return {"route_id": None, "activities": []}
-    
+
     # Get all activities on the same route
     others = await repo.list_by_route(activity.route_id, user.id, exclude_activity_id=activity_id)
-    
+
     if not others:
         return {"route_id": activity.route_id, "activities": []}
-    
+
     # Get GPS records for the base activity
     base_records_result = await db.execute(
-        select(Record)
-        .where(Record.activity_id == activity_id)
-        .order_by(Record.timestamp)
+        select(Record).where(Record.activity_id == activity_id).order_by(Record.timestamp)
     )
     base_records = base_records_result.scalars().all()
     base_gps = _get_gps_points(base_records)
-    
+
     if len(base_gps) < 10:
         # Not enough GPS data to determine direction, return all
         return {
             "route_id": activity.route_id,
             "activities": [activity_summary(a) for a in others],
         }
-    
+
     # Filter to only same-direction activities
     same_direction_activities = []
     for other in others:
         other_records_result = await db.execute(
-            select(Record)
-            .where(Record.activity_id == other.id)
-            .order_by(Record.timestamp)
+            select(Record).where(Record.activity_id == other.id).order_by(Record.timestamp)
         )
         other_records = other_records_result.scalars().all()
         other_gps = _get_gps_points(other_records)
-        
+
         if _is_same_direction(base_gps, other_gps):
             same_direction_activities.append(other)
-    
+
     return {
         "route_id": activity.route_id,
         "activities": [activity_summary(a) for a in same_direction_activities],
@@ -407,14 +384,10 @@ async def compare_activities(
         return {"comparable": False, "gap_series": [], "other_geojson": None, "reason": "different_routes"}
 
     records_a_result = await db.execute(
-        select(Record)
-        .where(Record.activity_id == activity_id)
-        .order_by(Record.timestamp)
+        select(Record).where(Record.activity_id == activity_id).order_by(Record.timestamp)
     )
     records_b_result = await db.execute(
-        select(Record)
-        .where(Record.activity_id == other_activity_id)
-        .order_by(Record.timestamp)
+        select(Record).where(Record.activity_id == other_activity_id).order_by(Record.timestamp)
     )
     records_a = records_a_result.scalars().all()
     records_b = records_b_result.scalars().all()
@@ -422,12 +395,12 @@ async def compare_activities(
     # Verify same direction (should already be filtered, but double-check)
     gps_a = _get_gps_points(records_a)
     gps_b = _get_gps_points(records_b)
-    
+
     if not _is_same_direction(gps_a, gps_b):
         return {
-            "comparable": False, 
-            "gap_series": [], 
-            "other_geojson": None, 
+            "comparable": False,
+            "gap_series": [],
+            "other_geojson": None,
             "reason": "opposite_direction",
         }
 
@@ -450,9 +423,7 @@ async def compare_activities(
         to_resample_input(records_b, first_ts_b),
     )
 
-    other_geojson = records_to_geojson(
-        records_b, ["timestamp", "distance_m", "speed_mps"]
-    )
+    other_geojson = records_to_geojson(records_b, ["timestamp", "distance_m", "speed_mps"])
 
     return {
         "comparable": True,
@@ -462,9 +433,7 @@ async def compare_activities(
 
 
 @router.post("/upload")
-async def upload_activity(
-    db: DbSession, user: CurrentUser, file: UploadFile = File(...)
-):
+async def upload_activity(db: DbSession, user: CurrentUser, file: UploadFile = File(...)):
     """Upload a FIT file for processing."""
     fit_bytes = await file.read()
     source_ref = file.filename or "upload.fit"
@@ -483,9 +452,7 @@ async def upload_activity(
     use_case = IngestActivity(db)
     activity = await use_case.execute(user.id, fit_bytes, "upload", source_ref)
     if activity is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to parse FIT file"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to parse FIT file")
     return {"id": str(activity.id), "started_at": utc_str(activity.started_at)}
 
 
@@ -495,7 +462,6 @@ async def get_job_status(user: CurrentUser, job_id: str):
     from trainingdash.jobs import get_job_status as _get_job_status
 
     return await _get_job_status(job_id)
-
 
 
 @router.delete("/activities/{activity_id}", status_code=204)
@@ -514,6 +480,4 @@ async def delete_activity(
     """
     deleted = await delete_use_case.execute(user.id, activity_id)
     if not deleted:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Activity not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Activity not found")

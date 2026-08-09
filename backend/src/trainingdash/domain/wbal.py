@@ -4,8 +4,8 @@ W'bal (W-prime balance) computation using the Skiba differential method.
 W'bal tracks the depletion and recovery of anaerobic work capacity (W') during exercise.
 """
 
-from typing import Sequence
 import math
+from collections.abc import Sequence
 
 
 def compute_wbal_series(
@@ -16,17 +16,17 @@ def compute_wbal_series(
 ) -> dict:
     """
     Compute W'bal (W-prime balance) time series using the Skiba differential method.
-    
+
     The differential method:
     - When power > CP: W'bal depletes at rate (power - CP) joules per second
     - When power < CP: W'bal recovers exponentially with tau = W' / (CP - power)
-    
+
     Args:
         power_array: Array of power values in watts (None values treated as 0)
         cp_watts: Critical Power in watts
         w_prime_joules: W' (anaerobic work capacity) in joules
         sample_rate_hz: Sample rate in Hz (samples per second), default 1.0
-    
+
     Returns:
         Dict with:
         - series: List of W'bal values in joules at each sample point
@@ -41,17 +41,17 @@ def compute_wbal_series(
             "min_wbal_index": None,
             "min_wbal_pct": None,
         }
-    
+
     dt = 1.0 / sample_rate_hz  # Time step in seconds
     wbal = float(w_prime_joules)  # Start with full W'
     series = []
     min_wbal = wbal
     min_wbal_index = 0
-    
+
     for i, power in enumerate(power_array):
         # Treat None as 0 (coasting/no data)
         p = float(power) if power is not None and power >= 0 else 0.0
-        
+
         if p > cp_watts:
             # Above CP: deplete W'bal
             # dW'bal = -(P - CP) * dt
@@ -69,15 +69,15 @@ def compute_wbal_series(
                 recovery = (w_prime_joules - wbal) * (1 - math.exp(-dt / tau))
                 wbal = min(w_prime_joules, wbal + recovery)
         # At exactly CP: no change
-        
+
         series.append(round(wbal))
-        
+
         if wbal < min_wbal:
             min_wbal = wbal
             min_wbal_index = i
-    
+
     min_wbal_pct = round((min_wbal / w_prime_joules) * 100, 1) if w_prime_joules > 0 else None
-    
+
     return {
         "series": series,
         "min_wbal": round(min_wbal),
@@ -92,32 +92,32 @@ def estimate_w_prime(
 ) -> int | None:
     """
     Estimate W' from peak power data using the 2-parameter CP model.
-    
+
     W' = (P - CP) * t for efforts above CP.
     Uses the 1-minute and 5-minute peak powers to estimate.
-    
+
     Args:
         peak_powers: Dict mapping duration_seconds to peak watts
         cp_watts: Critical Power in watts
-    
+
     Returns:
         Estimated W' in joules, or None if insufficient data
     """
     # Need at least the 1-minute peak above CP
     p1 = peak_powers.get(60)  # 1 minute
     p5 = peak_powers.get(300)  # 5 minutes
-    
+
     if p1 is None or p1 <= cp_watts:
         return None
-    
+
     # Simple estimate: W' = (P1 - CP) * 60
     # This assumes the 1-minute effort fully depleted W'
     w_prime = (p1 - cp_watts) * 60
-    
+
     # If we have 5-minute data, use it for a better estimate
     if p5 is not None and p5 > cp_watts:
         w_prime_5 = (p5 - cp_watts) * 300
         # Average the two estimates
         w_prime = (w_prime + w_prime_5) // 2
-    
+
     return max(5000, min(w_prime, 50000))  # Clamp to realistic range (5-50 kJ)

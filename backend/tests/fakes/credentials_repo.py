@@ -8,7 +8,7 @@ from trainingdash.repositories.postgres.models import GarminCredentials, XertCre
 class FakeXertCredentialsRepo:
     """
     In-memory fake implementation of XertCredentialsRepo protocol.
-    
+
     Stores credentials in a dict keyed by user_id.
     """
 
@@ -66,7 +66,7 @@ class FakeXertCredentialsRepo:
 class FakeGarminCredentialsRepo:
     """
     In-memory fake implementation of GarminCredentialsRepo protocol.
-    
+
     Stores credentials in a dict keyed by user_id.
     """
 

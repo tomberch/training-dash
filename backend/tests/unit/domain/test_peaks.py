@@ -1,12 +1,12 @@
 """Unit tests for peak power extraction."""
 
-import pytest
 import time
+
 from trainingdash.domain.peaks import (
-    extract_peak_powers,
-    extract_peak_power_with_index,
-    compute_power_curve,
     PEAK_DURATIONS,
+    compute_power_curve,
+    extract_peak_power_with_index,
+    extract_peak_powers,
 )
 
 
@@ -21,13 +21,13 @@ class TestExtractPeakPowers:
         """All peaks should equal the constant power."""
         power = [200] * 3600  # 1 hour at 200W
         result = extract_peak_powers(power)
-        
+
         # All durations up to 1 hour should return 200W
         assert result[1] == 200
         assert result[60] == 200
         assert result[300] == 200
         assert result[3600] == 200
-        
+
         # Durations longer than ride should be None
         assert result[5400] is None
         assert result[7200] is None
@@ -37,7 +37,7 @@ class TestExtractPeakPowers:
         # 5 minutes of easy, 5 minutes hard, 5 minutes easy
         power = [150] * 300 + [300] * 300 + [150] * 300  # 15 min total
         result = extract_peak_powers(power)
-        
+
         # 5-minute peak should be the hard section
         assert result[300] == 300
         # 10-minute peak should average the hard + some easy
@@ -47,7 +47,7 @@ class TestExtractPeakPowers:
         """Durations longer than the ride should return None."""
         power = [200] * 120  # Only 2 minutes
         result = extract_peak_powers(power)
-        
+
         assert result[1] == 200
         assert result[60] == 200
         assert result[120] == 200
@@ -57,7 +57,7 @@ class TestExtractPeakPowers:
         """None values should be treated as 0."""
         power = [200, None, 200, None, 200]
         result = extract_peak_powers(power, durations=[1, 3, 5])
-        
+
         # 1-second peak should find a 200
         assert result[1] == 200
         # 3-second window will include a None (0)
@@ -67,7 +67,7 @@ class TestExtractPeakPowers:
         """Negative values should be treated as 0."""
         power = [200, -100, 200]
         result = extract_peak_powers(power, durations=[1, 3])
-        
+
         assert result[1] == 200
         assert result[3] == 133  # (200 + 0 + 200) / 3
 
@@ -76,7 +76,7 @@ class TestExtractPeakPowers:
         # 60 samples at 2Hz = 30 seconds
         power = [200] * 60
         result = extract_peak_powers(power, sample_rate_hz=2.0, durations=[30, 60])
-        
+
         assert result[30] == 200  # 60 samples = 30 seconds at 2Hz
         assert result[60] is None  # Would need 120 samples
 
@@ -84,7 +84,7 @@ class TestExtractPeakPowers:
         """Can specify custom durations."""
         power = [200] * 100
         result = extract_peak_powers(power, durations=[10, 20, 50])
-        
+
         assert 10 in result
         assert 20 in result
         assert 50 in result
@@ -94,7 +94,7 @@ class TestExtractPeakPowers:
         """Result should include all standard durations."""
         power = [200] * 20000  # ~5.5 hours
         result = extract_peak_powers(power)
-        
+
         for duration in PEAK_DURATIONS:
             assert duration in result
 
@@ -103,7 +103,7 @@ class TestExtractPeakPowers:
         # 1 hour at 150W with a 10-second 800W sprint in the middle
         power = [150] * 1800 + [800] * 10 + [150] * 1790
         result = extract_peak_powers(power)
-        
+
         assert result[10] == 800
         assert result[1] == 800
         # 1-minute including the sprint
@@ -112,11 +112,11 @@ class TestExtractPeakPowers:
     def test_performance_5_hour_ride(self):
         """Should handle 5-hour ride (18000+ samples) efficiently."""
         power = [200] * 18000
-        
+
         start = time.time()
         result = extract_peak_powers(power)
         elapsed = time.time() - start
-        
+
         assert elapsed < 0.5  # Should complete in under 500ms
         assert result[1] == 200
         assert result[3600] == 200
@@ -135,14 +135,14 @@ class TestExtractPeakPowerWithIndex:
         # 60s easy, 60s hard, 60s easy
         power = [100] * 60 + [300] * 60 + [100] * 60
         watts, idx = extract_peak_power_with_index(power, 60)
-        
+
         assert watts == 300
         assert idx == 60  # Hard section starts at index 60
 
     def test_ride_too_short_returns_none(self):
         power = [200] * 30
         watts, idx = extract_peak_power_with_index(power, 60)
-        
+
         assert watts is None
         assert idx is None
 
@@ -158,7 +158,7 @@ class TestComputePowerCurve:
         """Short ride should only have durations up to ride length."""
         power = [200] * 30  # 30 seconds
         result = compute_power_curve(power)
-        
+
         assert 1 in result
         assert 30 in result
         assert 60 not in result
@@ -167,7 +167,7 @@ class TestComputePowerCurve:
         """Should include every second from 1-60."""
         power = [200] * 120
         result = compute_power_curve(power)
-        
+
         for s in range(1, 61):
             assert s in result
 
@@ -175,7 +175,7 @@ class TestComputePowerCurve:
         """Can limit the maximum duration."""
         power = [200] * 3600
         result = compute_power_curve(power, max_duration_s=120)
-        
+
         assert 1 in result
         assert 60 in result
         assert 120 in result
@@ -185,10 +185,10 @@ class TestComputePowerCurve:
     def test_performance_long_ride(self):
         """Should be reasonably efficient for long rides."""
         power = [200] * 7200  # 2 hours
-        
+
         start = time.time()
         result = compute_power_curve(power)
         elapsed = time.time() - start
-        
+
         assert elapsed < 2.0  # Should complete in under 2 seconds
         assert len(result) > 60  # Should have many data points

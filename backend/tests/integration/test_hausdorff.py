@@ -16,7 +16,9 @@ async def test_identical_polylines_hausdorff_distance_zero(db_session: AsyncSess
 async def test_parallel_offset_polylines_distance_equals_offset(db_session: AsyncSession):
     wkt_a = "LINESTRING(0 0, 10 0)"
     wkt_b = "LINESTRING(0 5, 10 5)"
-    stmt = text("SELECT ST_HausdorffDistance(CAST(:a AS geometry), CAST(:b AS geometry)) AS dist").params(a=wkt_a, b=wkt_b)
+    stmt = text("SELECT ST_HausdorffDistance(CAST(:a AS geometry), CAST(:b AS geometry)) AS dist").params(
+        a=wkt_a, b=wkt_b
+    )
     result = await db_session.execute(stmt)
     distance = result.scalar()
     assert distance == pytest.approx(5.0)

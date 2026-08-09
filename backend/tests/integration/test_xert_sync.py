@@ -9,7 +9,7 @@ Based on Xert Online API v1.5: https://www.xertonline.com/API.html
 
 import base64
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from unittest import mock
@@ -20,9 +20,9 @@ from dotenv import load_dotenv
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from trainingdash.repositories.postgres.models import Activity, Record, User, XertCredentials
+from tests.integration.fixtures import CACHED_HASH_PASS, CACHED_HASH_TESTPASS
 from trainingdash.integrations.xert import XertActivity, XertAPIError
-from tests.integration.fixtures import CACHED_HASH_TESTPASS, CACHED_HASH_PASS
+from trainingdash.repositories.postgres.models import Activity, Record, User, XertCredentials
 
 # Load .env.test if it exists (for local Xert API testing)
 _env_test_path = Path(__file__).parent.parent.parent / ".env.test"
@@ -160,6 +160,7 @@ def _patch_pipeline():
 # Admin credential endpoint tests
 # ---------------------------------------------------------------------------
 
+
 class TestXertCredentialsEndpoints:
     """Tests for admin Xert credentials endpoints."""
 
@@ -177,9 +178,7 @@ class TestXertCredentialsEndpoints:
         assert "encrypted_password" not in data
 
     @pytest.mark.asyncio
-    async def test_get_xert_credentials_shows_email_not_password(
-        self, auth_client, seed_user, encryption_key_env
-    ):
+    async def test_get_xert_credentials_shows_email_not_password(self, auth_client, seed_user, encryption_key_env):
         await auth_client.put(
             f"/api/admin/users/{seed_user.id}/xert-credentials",
             json={"xert_email": "test@xert.com", "xert_password": "secret123"},
@@ -231,6 +230,7 @@ class TestXertCredentialsEndpoints:
 # sync_xert_job tests
 # ---------------------------------------------------------------------------
 
+
 class TestSyncXertJob:
     """Tests for the sync_xert_job worker function."""
 
@@ -254,6 +254,7 @@ class TestSyncXertJob:
             with mock.patch("trainingdash.integrations.xert.get_xert_client", return_value=mock_xert_client):
                 with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
                     from trainingdash.worker import sync_xert_job
+
                     result = await sync_xert_job({}, user_id=user_with_xert_creds.id)
 
         assert result["success"] is True
@@ -272,9 +273,7 @@ class TestSyncXertJob:
             assert activity.training_load == MOCK_XSS
 
             # Verify Records were created from the fixture FIT (10 records)
-            record_result = await session.execute(
-                select(Record).where(Record.activity_id == activity.id)
-            )
+            record_result = await session.execute(select(Record).where(Record.activity_id == activity.id))
             records = record_result.scalars().all()
             assert len(records) == 10
 
@@ -298,20 +297,19 @@ class TestSyncXertJob:
             with mock.patch("trainingdash.integrations.xert.get_xert_client", return_value=mock_xert_client):
                 with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
                     from trainingdash.worker import sync_xert_job
+
                     result = await sync_xert_job({}, user_id=user_with_xert_creds.id)
 
         assert result["success"] is True
 
         async with session_factory() as session:
             creds_result = await session.execute(
-                select(XertCredentials).where(
-                    XertCredentials.user_id == user_with_xert_creds.id
-                )
+                select(XertCredentials).where(XertCredentials.user_id == user_with_xert_creds.id)
             )
             creds = creds_result.scalar_one()
             assert creds.last_synced_at is not None
             # last_synced_at should be very recent (within 60 seconds of now)
-            delta = datetime.now(timezone.utc).replace(tzinfo=None) - creds.last_synced_at
+            delta = datetime.now(UTC).replace(tzinfo=None) - creds.last_synced_at
             assert abs(delta.total_seconds()) < 60
 
     @pytest.mark.asyncio
@@ -346,6 +344,7 @@ class TestSyncXertJob:
         with mock.patch("trainingdash.integrations.xert.get_xert_client", return_value=mock_xert_client):
             with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
                 from trainingdash.worker import sync_xert_job
+
                 result = await sync_xert_job({}, user_id=user_with_xert_creds.id)
 
         assert result["success"] is True
@@ -353,9 +352,7 @@ class TestSyncXertJob:
 
         async with session_factory() as session:
             creds_result = await session.execute(
-                select(XertCredentials).where(
-                    XertCredentials.user_id == user_with_xert_creds.id
-                )
+                select(XertCredentials).where(XertCredentials.user_id == user_with_xert_creds.id)
             )
             creds = creds_result.scalar_one()
             assert creds.last_synced_at is not None
@@ -380,6 +377,7 @@ class TestSyncXertJob:
             with mock.patch("trainingdash.integrations.xert.get_xert_client", return_value=mock_xert_client):
                 with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
                     from trainingdash.worker import sync_xert_job
+
                     await sync_xert_job({}, user_id=user_with_xert_creds.id)
 
         async with session_factory() as session:
@@ -426,6 +424,7 @@ class TestSyncXertJob:
             with mock.patch("trainingdash.integrations.xert.get_xert_client", return_value=mock_xert_client):
                 with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
                     from trainingdash.worker import sync_xert_job
+
                     await sync_xert_job({}, user_id=user_with_xert_creds.id)
 
         async with session_factory() as session:
@@ -457,6 +456,7 @@ class TestSyncXertJob:
             with mock.patch("trainingdash.integrations.xert.get_xert_client", return_value=mock_xert_client):
                 with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
                     from trainingdash.worker import sync_xert_job
+
                     result = await sync_xert_job({}, user_id=user_with_xert_creds.id)
 
         assert result["success"] is True
@@ -501,6 +501,7 @@ class TestSyncXertJob:
             with mock.patch("trainingdash.integrations.xert.get_xert_client", return_value=mock_xert_client):
                 with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
                     from trainingdash.worker import sync_xert_job
+
                     result = await sync_xert_job({}, user_id=user_with_xert_creds.id)
 
         assert result["success"] is True
@@ -518,6 +519,7 @@ class TestSyncXertJob:
 
         with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
             from trainingdash.worker import sync_xert_job
+
             result = await sync_xert_job({}, user_id=user.id)
 
         assert result["success"] is False
@@ -535,6 +537,7 @@ class TestSyncXertJob:
         with mock.patch("trainingdash.integrations.xert.get_xert_client", return_value=mock_xert_client):
             with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
                 from trainingdash.worker import sync_xert_job
+
                 result = await sync_xert_job({}, user_id=user_with_xert_creds.id)
 
         assert result["success"] is False
@@ -567,15 +570,14 @@ class TestSyncXertJob:
             with mock.patch("trainingdash.integrations.xert.get_xert_client", return_value=mock_xert_client):
                 with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
                     from trainingdash.worker import sync_xert_job
+
                     result = await sync_xert_job({}, user_id=user_with_xert_creds.id)
 
         assert result["success"] is True
         assert result["synced_activities"] == 1
 
         async with session_factory() as session:
-            activity_result = await session.execute(
-                select(Activity).where(Activity.source == "xert")
-            )
+            activity_result = await session.execute(select(Activity).where(Activity.source == "xert"))
             activities = activity_result.scalars().all()
             assert len(activities) == 1
             assert activities[0].source_ref == "xert:success-activity"
@@ -584,6 +586,7 @@ class TestSyncXertJob:
 # ---------------------------------------------------------------------------
 # Hourly scheduler tests
 # ---------------------------------------------------------------------------
+
 
 class TestHourlySyncScheduler:
     """Tests for the hourly sync scheduler cron job."""
@@ -595,7 +598,7 @@ class TestHourlySyncScheduler:
         """hourly_sync_scheduler enqueues sync only for users whose sync_hour matches."""
         from trainingdash.crypto import encrypt
 
-        current_hour = datetime.now(timezone.utc).hour
+        current_hour = datetime.now(UTC).hour
 
         user1 = User(email="user1@example.com", password_hash=CACHED_HASH_PASS, sync_hour=current_hour)
         user2 = User(email="user2@example.com", password_hash=CACHED_HASH_PASS, sync_hour=current_hour)
@@ -617,16 +620,22 @@ class TestHourlySyncScheduler:
         async def _fake_enqueue_xert(user_id, scheduled=None):
             _fake_enqueue_xert.calls.append((user_id, scheduled))
             return "test-job-key"
+
         _fake_enqueue_xert.calls = []
+
         async def _fake_enqueue_garmin(user_id, scheduled=None):
             _fake_enqueue_garmin.calls.append((user_id, scheduled))
             return "test-job-key"
+
         _fake_enqueue_garmin.calls = []
 
         with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
             with mock.patch("trainingdash.use_cases.hourly_sync_scheduler.enqueue_sync_xert_job", _fake_enqueue_xert):
-                with mock.patch("trainingdash.use_cases.hourly_sync_scheduler.enqueue_sync_garmin_job", _fake_enqueue_garmin):
+                with mock.patch(
+                    "trainingdash.use_cases.hourly_sync_scheduler.enqueue_sync_garmin_job", _fake_enqueue_garmin
+                ):
                     from trainingdash.worker import hourly_sync_scheduler
+
                     result = await hourly_sync_scheduler({})
 
         assert result["success"] is True
@@ -640,7 +649,7 @@ class TestHourlySyncScheduler:
     @pytest.mark.asyncio
     async def test_hourly_sync_no_users_for_current_hour(self, db_engine, db_session):
         """hourly_sync_scheduler handles no users matching the current sync hour."""
-        current_hour = datetime.now(timezone.utc).hour
+        current_hour = datetime.now(UTC).hour
         different_hour = (current_hour + 1) % 24
 
         user = User(email="nocreds@example.com", password_hash=CACHED_HASH_PASS, sync_hour=different_hour)
@@ -652,13 +661,17 @@ class TestHourlySyncScheduler:
         # Mock the jobs.py enqueue wrappers (no users → no calls expected)
         async def _fake_enqueue_xert(user_id, scheduled=None):
             return "test-job-key"
+
         async def _fake_enqueue_garmin(user_id, scheduled=None):
             return "test-job-key"
 
         with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
             with mock.patch("trainingdash.use_cases.hourly_sync_scheduler.enqueue_sync_xert_job", _fake_enqueue_xert):
-                with mock.patch("trainingdash.use_cases.hourly_sync_scheduler.enqueue_sync_garmin_job", _fake_enqueue_garmin):
+                with mock.patch(
+                    "trainingdash.use_cases.hourly_sync_scheduler.enqueue_sync_garmin_job", _fake_enqueue_garmin
+                ):
                     from trainingdash.worker import hourly_sync_scheduler
+
                     result = await hourly_sync_scheduler({})
 
         assert result["success"] is True
@@ -669,6 +682,7 @@ class TestHourlySyncScheduler:
 # ---------------------------------------------------------------------------
 # Real API tests (skipped unless credentials are set)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.skipif(
     not os.environ.get("XERT_TEST_USERNAME"),
@@ -697,9 +711,7 @@ class TestXertClientRealAPI:
 
         to_ts = int(time.time())
         from_ts = to_ts - (7 * 24 * 60 * 60)
-        return await live_client.list_activities(
-            from_timestamp=from_ts, to_timestamp=to_ts
-        )
+        return await live_client.list_activities(from_timestamp=from_ts, to_timestamp=to_ts)
 
     @pytest.mark.asyncio
     async def test_real_xert_login_and_list_activities(self, live_client, live_activities):
@@ -723,9 +735,7 @@ class TestXertClientRealAPI:
 
         assert len(fit_bytes) > 100
         # Valid FIT file has ".FIT" magic at bytes 8-12
-        assert fit_bytes[8:12] == b".FIT", (
-            f"Expected FIT magic at bytes 8-12, got {fit_bytes[8:12]!r}"
-        )
+        assert fit_bytes[8:12] == b".FIT", f"Expected FIT magic at bytes 8-12, got {fit_bytes[8:12]!r}"
 
     @pytest.mark.asyncio
     async def test_real_xert_get_xss(self, live_client, live_activities):
@@ -740,7 +750,7 @@ class TestXertClientRealAPI:
     @pytest.mark.asyncio
     async def test_real_xert_invalid_credentials(self):
         """Invalid credentials raise XertAPIError."""
-        from trainingdash.integrations.xert import XertClient, XertAPIError
+        from trainingdash.integrations.xert import XertAPIError, XertClient
 
         client = XertClient()
         try:

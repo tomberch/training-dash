@@ -7,18 +7,16 @@ OAuth accounts to existing users from the Settings page.
 
 import os
 from dataclasses import dataclass
-from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
-from sqlalchemy import select, func
-
+from fastapi_sso.sso.base import SSOBase
 from fastapi_sso.sso.github import GithubSSO
 from fastapi_sso.sso.google import GoogleSSO
-from fastapi_sso.sso.base import SSOBase
+from sqlalchemy import func, select
 
-from trainingdash.auth import create_session_cookie, verify_session_cookie, DbSession
-from trainingdash.repositories.postgres.models import User, UserOAuthLink, AppSettings
+from trainingdash.auth import DbSession, create_session_cookie, verify_session_cookie
+from trainingdash.repositories.postgres.models import AppSettings, User, UserOAuthLink
 
 router = APIRouter(prefix="/auth", tags=["OAuth"])
 
@@ -102,9 +100,7 @@ async def _verify_oauth_and_extract_user(
         raise HTTPException(status_code=400, detail=f"OAuth error: {e}")
 
     if not openid:
-        raise HTTPException(
-            status_code=400, detail=f"Failed to get user info from {provider}"
-        )
+        raise HTTPException(status_code=400, detail=f"Failed to get user info from {provider}")
 
     if not openid.email:
         raise HTTPException(
@@ -162,9 +158,7 @@ async def _get_or_create_oauth_user(
 
     if existing_link:
         # Found existing OAuth link - load that user
-        user_result = await db.execute(
-            select(User).where(User.id == existing_link.user_id)
-        )
+        user_result = await db.execute(select(User).where(User.id == existing_link.user_id))
         user = user_result.scalar_one_or_none()
 
         # Update link with latest provider data
@@ -174,9 +168,7 @@ async def _get_or_create_oauth_user(
 
     if not user:
         # 2. Check if email matches existing user (auto-link)
-        user_result = await db.execute(
-            select(User).where(User.email == user_info.email)
-        )
+        user_result = await db.execute(select(User).where(User.email == user_info.email))
         user = user_result.scalar_one_or_none()
 
     if not user:
@@ -220,9 +212,7 @@ async def _create_new_oauth_user(db: DbSession, user_info: OAuthUserInfo) -> Use
     # Check if approval is required
     is_approved = True
     if not is_first_user:
-        settings_result = await db.execute(
-            select(AppSettings).where(AppSettings.key == "require_approval")
-        )
+        settings_result = await db.execute(select(AppSettings).where(AppSettings.key == "require_approval"))
         setting = settings_result.scalar_one_or_none()
         if setting and setting.as_bool():
             is_approved = False
@@ -280,14 +270,10 @@ async def _handle_oauth_connect(
         async with sso:
             openid = await sso.verify_and_process(request)
     except Exception:
-        return RedirectResponse(
-            url="/settings?error=oauth_failed", status_code=status.HTTP_302_FOUND
-        )
+        return RedirectResponse(url="/settings?error=oauth_failed", status_code=status.HTTP_302_FOUND)
 
     if not openid or not openid.email:
-        return RedirectResponse(
-            url="/settings?error=no_email", status_code=status.HTTP_302_FOUND
-        )
+        return RedirectResponse(url="/settings?error=no_email", status_code=status.HTTP_302_FOUND)
 
     # Get current user from session
     cookie = request.cookies.get("session")
@@ -307,9 +293,7 @@ async def _handle_oauth_connect(
     )
     link = existing_link.scalar_one_or_none()
     if link and link.user_id != user_id:
-        return RedirectResponse(
-            url="/settings?error=already_linked", status_code=status.HTTP_302_FOUND
-        )
+        return RedirectResponse(url="/settings?error=already_linked", status_code=status.HTTP_302_FOUND)
 
     # Build display name
     display_name = openid.display_name
@@ -335,9 +319,7 @@ async def _handle_oauth_connect(
         db.add(new_link)
 
     await db.commit()
-    return RedirectResponse(
-        url=f"/settings?success={provider}_connected", status_code=status.HTTP_302_FOUND
-    )
+    return RedirectResponse(url=f"/settings?success={provider}_connected", status_code=status.HTTP_302_FOUND)
 
 
 # =============================================================================
@@ -415,9 +397,7 @@ async def github_connect() -> RedirectResponse:
 
 
 @router.get("/github/connect/callback")
-async def github_connect_callback(
-    request: Request, db: DbSession
-) -> RedirectResponse:
+async def github_connect_callback(request: Request, db: DbSession) -> RedirectResponse:
     """Handle GitHub OAuth callback when connecting from Settings.
 
     Links the GitHub account to the currently logged-in user.
@@ -459,9 +439,7 @@ async def google_login() -> RedirectResponse:
 
     google_sso = _get_google_sso()
     async with google_sso:
-        return await google_sso.get_login_redirect(
-            params={"prompt": "consent", "access_type": "offline"}
-        )
+        return await google_sso.get_login_redirect(params={"prompt": "consent", "access_type": "offline"})
 
 
 @router.get("/google/callback")
@@ -509,15 +487,11 @@ async def google_connect() -> RedirectResponse:
 
     google_sso = _get_google_sso("/auth/google/connect/callback")
     async with google_sso:
-        return await google_sso.get_login_redirect(
-            params={"prompt": "consent", "access_type": "offline"}
-        )
+        return await google_sso.get_login_redirect(params={"prompt": "consent", "access_type": "offline"})
 
 
 @router.get("/google/connect/callback")
-async def google_connect_callback(
-    request: Request, db: DbSession
-) -> RedirectResponse:
+async def google_connect_callback(request: Request, db: DbSession) -> RedirectResponse:
     """Handle Google OAuth callback when connecting from Settings.
 
     Links the Google account to the currently logged-in user.

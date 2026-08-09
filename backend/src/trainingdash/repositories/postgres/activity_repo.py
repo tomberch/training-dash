@@ -6,7 +6,8 @@ Uses SQLAlchemy async session for all database operations.
 
 from uuid import UUID
 
-from sqlalchemy import func, select, text as sql_text
+from sqlalchemy import func, select
+from sqlalchemy import text as sql_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from trainingdash.repositories.postgres.models import Activity, Route
@@ -56,11 +57,8 @@ class PostgresActivityRepo:
 
     async def count_for_user(self, user_id: int) -> int:
         """Count total activities for a user."""
-        result = await self._session.execute(
-            select(func.count(Activity.id)).where(Activity.user_id == user_id)
-        )
+        result = await self._session.execute(select(func.count(Activity.id)).where(Activity.user_id == user_id))
         return result.scalar() or 0
-
 
     async def save(self, activity: Activity) -> Activity:
         """
@@ -89,9 +87,7 @@ class PostgresActivityRepo:
 
         # Handle route maintenance before deletion
         if activity.route_id is not None:
-            route_result = await self._session.execute(
-                select(Route).where(Route.id == activity.route_id)
-            )
+            route_result = await self._session.execute(select(Route).where(Route.id == activity.route_id))
             route = route_result.scalar_one_or_none()
 
             if route is not None:
@@ -108,9 +104,7 @@ class PostgresActivityRepo:
                 else:
                     # Decrement ride_count; ON DELETE SET NULL handles first_seen
                     await self._session.execute(
-                        sql_text(
-                            "UPDATE routes SET ride_count = ride_count - 1 WHERE id = :rid"
-                        ),
+                        sql_text("UPDATE routes SET ride_count = ride_count - 1 WHERE id = :rid"),
                         {"rid": route.id},
                     )
                     await self._session.execute(
@@ -143,7 +137,5 @@ class PostgresActivityRepo:
         if exclude_activity_id is not None:
             query = query.where(Activity.id != exclude_activity_id)
 
-        result = await self._session.execute(
-            query.order_by(Activity.started_at.desc())
-        )
+        result = await self._session.execute(query.order_by(Activity.started_at.desc()))
         return list(result.scalars().all())

@@ -6,7 +6,7 @@ from trainingdash.repositories.postgres.models import User
 class FakeUserRepo:
     """
     In-memory fake implementation of UserRepo protocol.
-    
+
     Stores users in a dict keyed by user ID.
     Auto-generates IDs for new users if not set.
     """

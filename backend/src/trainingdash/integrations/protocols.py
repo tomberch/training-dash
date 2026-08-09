@@ -79,9 +79,7 @@ class SyncProvider(ABC, Generic[TActivity]):
         ...
 
     @abstractmethod
-    async def list_activities(
-        self, start_date: datetime, end_date: datetime
-    ) -> list[ProviderActivity[TActivity]]:
+    async def list_activities(self, start_date: datetime, end_date: datetime) -> list[ProviderActivity[TActivity]]:
         """
         List activities in the date range.
 

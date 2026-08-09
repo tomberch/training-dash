@@ -6,8 +6,9 @@ import pytest
 from sqlalchemy import select
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "tests" / "fixtures"))
-from generate_fit import make_test_fit  # noqa: E402
-from trainingdash.repositories.postgres.models import Activity, Lap, Record  # noqa: E402
+from generate_fit import make_test_fit
+
+from trainingdash.repositories.postgres.models import Activity, Lap, Record
 
 
 class TestUpload:
@@ -43,9 +44,7 @@ class TestUpload:
         assert activity.source_ref == "test.fit"
 
     @pytest.mark.asyncio
-    async def test_uploaded_fit_writes_records_with_lat_lon_hr_power_alt(
-        self, auth_client, db_session
-    ):
+    async def test_uploaded_fit_writes_records_with_lat_lon_hr_power_alt(self, auth_client, db_session):
         fit_data = make_test_fit(num_records=5)
         response = await auth_client.post(
             "/api/upload",
@@ -73,9 +72,7 @@ class TestUpload:
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         activity_id = UUIDType(response.json()["id"])
-        result = await db_session.execute(
-            select(Lap).where(Lap.activity_id == activity_id).order_by(Lap.lap_index)
-        )
+        result = await db_session.execute(select(Lap).where(Lap.activity_id == activity_id).order_by(Lap.lap_index))
         laps = result.scalars().all()
         assert len(laps) == 1
         assert laps[0].lap_index == 0
@@ -119,10 +116,10 @@ class TestActivityMetricsOnIngest:
         )
         assert response.status_code == 200
         activity_id = UUIDType(response.json()["id"])
-        
+
         result = await db_session.execute(select(Activity).where(Activity.id == activity_id))
         activity = result.scalar_one()
-        
+
         # No thresholds = no metrics
         assert activity.np_power_w is None
         assert activity.intensity_factor is None
@@ -137,14 +134,9 @@ class TestActivityMetricsOnIngest:
         # Set up threshold with effective_date before test FIT (2024-03-15)
         await auth_client.post(
             "/api/me/thresholds",
-            json={
-                "effective_date": "2024-01-01",
-                "ftp_watts": 250,
-                "lthr_bpm": 165,
-                "hrmax_bpm": 185
-            }
+            json={"effective_date": "2024-01-01", "ftp_watts": 250, "lthr_bpm": 165, "hrmax_bpm": 185},
         )
-        
+
         # Upload FIT with 60+ records (enough for 30s rolling avg)
         fit_data = make_test_fit(num_records=120)
         response = await auth_client.post(
@@ -153,22 +145,22 @@ class TestActivityMetricsOnIngest:
         )
         assert response.status_code == 200
         activity_id = UUIDType(response.json()["id"])
-        
+
         result = await db_session.execute(select(Activity).where(Activity.id == activity_id))
         activity = result.scalar_one()
-        
+
         # NP should be computed (test FIT has power data)
         assert activity.np_power_w is not None
         assert activity.np_power_w > 0
-        
+
         # IF = NP / FTP
         assert activity.intensity_factor is not None
         assert 0 < activity.intensity_factor < 2  # Reasonable range
-        
+
         # TSS should be computed
         assert activity.tss is not None
         assert activity.tss > 0
-        
+
         # training_load should equal TSS
         assert activity.training_load == activity.tss
 
@@ -178,20 +170,15 @@ class TestActivityMetricsOnIngest:
         # Set up threshold with effective_date before test FIT (2024-03-15)
         await auth_client.post(
             "/api/me/thresholds",
-            json={
-                "effective_date": "2024-01-01",
-                "ftp_watts": 250,
-                "lthr_bpm": 165,
-                "hrmax_bpm": 185
-            }
+            json={"effective_date": "2024-01-01", "ftp_watts": 250, "lthr_bpm": 165, "hrmax_bpm": 185},
         )
-        
+
         # Ensure zones exist by calling GET /me/zones
         zones_resp = await auth_client.get("/api/me/zones")
         assert zones_resp.status_code == 200
         zones_data = zones_resp.json()
         assert len(zones_data["power_zones"]) == 7  # Coggan 7-zone
-        
+
         # Upload FIT
         fit_data = make_test_fit(num_records=60)
         response = await auth_client.post(
@@ -200,13 +187,14 @@ class TestActivityMetricsOnIngest:
         )
         assert response.status_code == 200
         activity_id = UUIDType(response.json()["id"])
-        
+
         result = await db_session.execute(select(Activity).where(Activity.id == activity_id))
         activity = result.scalar_one()
-        
+
         # Power zone times should be computed
         assert activity.power_zone_times is not None
         import json
+
         zone_times = json.loads(activity.power_zone_times)
         assert isinstance(zone_times, dict)
         # Total time should roughly equal number of valid power records
@@ -219,20 +207,15 @@ class TestActivityMetricsOnIngest:
         # Set up threshold with effective_date before test FIT (2024-03-15)
         await auth_client.post(
             "/api/me/thresholds",
-            json={
-                "effective_date": "2024-01-01",
-                "ftp_watts": 250,
-                "lthr_bpm": 165,
-                "hrmax_bpm": 185
-            }
+            json={"effective_date": "2024-01-01", "ftp_watts": 250, "lthr_bpm": 165, "hrmax_bpm": 185},
         )
-        
+
         # Ensure zones exist
         zones_resp = await auth_client.get("/api/me/zones")
         assert zones_resp.status_code == 200
         zones_data = zones_resp.json()
         assert len(zones_data["hr_zones"]) == 5  # Friel 5-zone
-        
+
         # Upload FIT
         fit_data = make_test_fit(num_records=60)
         response = await auth_client.post(
@@ -241,13 +224,14 @@ class TestActivityMetricsOnIngest:
         )
         assert response.status_code == 200
         activity_id = UUIDType(response.json()["id"])
-        
+
         result = await db_session.execute(select(Activity).where(Activity.id == activity_id))
         activity = result.scalar_one()
-        
+
         # HR zone times should be computed
         assert activity.hr_zone_times is not None
         import json
+
         zone_times = json.loads(activity.hr_zone_times)
         assert isinstance(zone_times, dict)
         total_zone_time = sum(zone_times.values())
@@ -259,14 +243,9 @@ class TestActivityMetricsOnIngest:
         # Set up threshold with effective_date before test FIT (2024-03-15)
         await auth_client.post(
             "/api/me/thresholds",
-            json={
-                "effective_date": "2024-01-01",
-                "ftp_watts": 250,
-                "lthr_bpm": 165,
-                "hrmax_bpm": 185
-            }
+            json={"effective_date": "2024-01-01", "ftp_watts": 250, "lthr_bpm": 165, "hrmax_bpm": 185},
         )
-        
+
         # Upload FIT with power data
         fit_data = make_test_fit(num_records=120)
         response = await auth_client.post(
@@ -275,10 +254,10 @@ class TestActivityMetricsOnIngest:
         )
         assert response.status_code == 200
         activity_id = UUIDType(response.json()["id"])
-        
+
         result = await db_session.execute(select(Activity).where(Activity.id == activity_id))
         activity = result.scalar_one()
-        
+
         # W'bal should be computed
         assert activity.wbal_min_joules is not None
         assert activity.wbal_min_pct is not None
@@ -290,15 +269,10 @@ class TestActivityMetricsOnIngest:
         # Set up threshold with effective_date before test FIT (2024-03-15)
         await auth_client.post(
             "/api/me/thresholds",
-            json={
-                "effective_date": "2024-01-01",
-                "ftp_watts": 250,
-                "lthr_bpm": 165,
-                "hrmax_bpm": 185
-            }
+            json={"effective_date": "2024-01-01", "ftp_watts": 250, "lthr_bpm": 165, "hrmax_bpm": 185},
         )
         await auth_client.get("/api/me/zones")  # Trigger zone creation
-        
+
         # Upload FIT
         fit_data = make_test_fit(num_records=120)
         upload_resp = await auth_client.post(
@@ -306,12 +280,12 @@ class TestActivityMetricsOnIngest:
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         activity_id = upload_resp.json()["id"]
-        
+
         # Get activity detail
         response = await auth_client.get(f"/api/activities/{activity_id}")
         assert response.status_code == 200
         data = response.json()
-        
+
         # Should include all metrics
         assert "np_power_w" in data
         assert "intensity_factor" in data
@@ -321,15 +295,13 @@ class TestActivityMetricsOnIngest:
         assert "hr_zone_times" in data
         assert "wbal_min_joules" in data
         assert "wbal_min_pct" in data
-        
+
         # Values should be populated
         assert data["np_power_w"] is not None
         assert data["intensity_factor"] is not None
         assert data["tss"] is not None
         assert isinstance(data["power_zone_times"], dict)
         assert isinstance(data["hr_zone_times"], dict)
-
-
 
 
 class TestPeakPowersOnIngest:
@@ -339,7 +311,7 @@ class TestPeakPowersOnIngest:
     async def test_upload_extracts_peak_powers(self, auth_client, db_session):
         """Upload with power data extracts peaks at standard durations."""
         from trainingdash.repositories.postgres.models import ActivityPeakPower
-        
+
         # Upload FIT with 120 records (2 minutes of data)
         fit_data = make_test_fit(num_records=120)
         response = await auth_client.post(
@@ -348,7 +320,7 @@ class TestPeakPowersOnIngest:
         )
         assert response.status_code == 200
         activity_id = UUIDType(response.json()["id"])
-        
+
         # Query peaks from database
         result = await db_session.execute(
             select(ActivityPeakPower)
@@ -356,10 +328,10 @@ class TestPeakPowersOnIngest:
             .order_by(ActivityPeakPower.duration_seconds)
         )
         peaks = result.scalars().all()
-        
+
         # Should have peaks for durations <= 120 seconds (1, 5, 10, 30, 60, 120)
         assert len(peaks) >= 6
-        
+
         # Check durations are as expected
         durations = [p.duration_seconds for p in peaks]
         assert 1 in durations
@@ -367,7 +339,7 @@ class TestPeakPowersOnIngest:
         assert 10 in durations
         assert 30 in durations
         assert 60 in durations
-        
+
         # All watts should be positive
         for peak in peaks:
             assert peak.watts > 0
@@ -376,7 +348,7 @@ class TestPeakPowersOnIngest:
     async def test_upload_only_stores_peaks_for_valid_durations(self, auth_client, db_session):
         """Peaks only stored for durations where ride was long enough."""
         from trainingdash.repositories.postgres.models import ActivityPeakPower
-        
+
         # Upload FIT with only 30 records (30 seconds)
         fit_data = make_test_fit(num_records=30)
         response = await auth_client.post(
@@ -385,7 +357,7 @@ class TestPeakPowersOnIngest:
         )
         assert response.status_code == 200
         activity_id = UUIDType(response.json()["id"])
-        
+
         # Query peaks
         result = await db_session.execute(
             select(ActivityPeakPower)
@@ -393,7 +365,7 @@ class TestPeakPowersOnIngest:
             .order_by(ActivityPeakPower.duration_seconds)
         )
         peaks = result.scalars().all()
-        
+
         # Should only have peaks for durations <= 30 seconds
         durations = [p.duration_seconds for p in peaks]
         assert 1 in durations
@@ -414,23 +386,23 @@ class TestPeakPowersOnIngest:
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         activity_id = upload_resp.json()["id"]
-        
+
         # Get activity detail
         response = await auth_client.get(f"/api/activities/{activity_id}")
         assert response.status_code == 200
         data = response.json()
-        
+
         # Should include peaks array
         assert "peaks" in data
         assert isinstance(data["peaks"], list)
         assert len(data["peaks"]) >= 6
-        
+
         # Each peak should have duration_seconds and watts
         for peak in data["peaks"]:
             assert "duration_seconds" in peak
             assert "watts" in peak
             assert peak["watts"] > 0
-        
+
         # Peaks should be ordered by duration
         durations = [p["duration_seconds"] for p in data["peaks"]]
         assert durations == sorted(durations)
@@ -445,13 +417,13 @@ class TestPeakPowersOnIngest:
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
         activity_id = upload_resp.json()["id"]
-        
+
         response = await auth_client.get(f"/api/activities/{activity_id}")
         data = response.json()
-        
+
         # 1-second peak should be >= 60-second peak (shorter duration = higher peak generally)
         peaks_by_duration = {p["duration_seconds"]: p["watts"] for p in data["peaks"]}
-        
+
         if 1 in peaks_by_duration and 60 in peaks_by_duration:
             # With test FIT's power pattern (200 + i % 80), the 1s peak should be high
             assert peaks_by_duration[1] >= peaks_by_duration[60]

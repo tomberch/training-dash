@@ -7,10 +7,9 @@ Revises: 008_metric_tables
 Create Date: 2026-08-08
 """
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql
-
 
 revision = "009_user_profile_zones"
 down_revision = "008_metric_tables"

@@ -18,6 +18,21 @@ from typing import Annotated
 from fastapi import Depends
 
 from trainingdash.auth import DbSession
+from trainingdash.integrations.geocoding import GeocodingService
+from trainingdash.repositories.postgres.activity_repo import PostgresActivityRepo
+from trainingdash.repositories.postgres.audit_log_repo import PostgresAuditLogRepo
+from trainingdash.repositories.postgres.credentials_repo import (
+    PostgresGarminCredentialsRepo,
+    PostgresXertCredentialsRepo,
+)
+from trainingdash.repositories.postgres.geocoding_cache_repo import PostgresGeocodingCacheRepo
+from trainingdash.repositories.postgres.notification_repo import PostgresNotificationRepo
+from trainingdash.repositories.postgres.oauth_link_repo import PostgresOAuthLinkRepo
+from trainingdash.repositories.postgres.recalculation_job_repo import (
+    PostgresRecalculationJobRepo,
+)
+from trainingdash.repositories.postgres.settings_repo import PostgresAppSettingsRepo
+from trainingdash.repositories.postgres.user_repo import PostgresUserRepo
 from trainingdash.repositories.protocols import (
     ActivityRepo,
     AppSettingsRepo,
@@ -29,21 +44,6 @@ from trainingdash.repositories.protocols import (
     UserRepo,
     XertCredentialsRepo,
 )
-from trainingdash.repositories.postgres.activity_repo import PostgresActivityRepo
-from trainingdash.repositories.postgres.audit_log_repo import PostgresAuditLogRepo
-from trainingdash.repositories.postgres.credentials_repo import (
-    PostgresGarminCredentialsRepo,
-    PostgresXertCredentialsRepo,
-)
-from trainingdash.repositories.postgres.notification_repo import PostgresNotificationRepo
-from trainingdash.repositories.postgres.oauth_link_repo import PostgresOAuthLinkRepo
-from trainingdash.repositories.postgres.recalculation_job_repo import (
-    PostgresRecalculationJobRepo,
-)
-from trainingdash.repositories.postgres.settings_repo import PostgresAppSettingsRepo
-from trainingdash.repositories.postgres.user_repo import PostgresUserRepo
-from trainingdash.integrations.geocoding import GeocodingService
-from trainingdash.repositories.postgres.geocoding_cache_repo import PostgresGeocodingCacheRepo
 
 
 async def get_activity_repo(db: DbSession) -> ActivityRepo:
@@ -116,8 +116,8 @@ OAuthLinkRepoD = Annotated[OAuthLinkRepo, Depends(get_oauth_link_repo)]
 
 # --- Use Cases ---
 
-from trainingdash.use_cases.ingest_activity import IngestActivity
 from trainingdash.use_cases.delete_activity import DeleteActivity
+from trainingdash.use_cases.ingest_activity import IngestActivity
 
 
 async def get_ingest_activity_use_case(db: DbSession) -> IngestActivity:

@@ -6,7 +6,7 @@ from trainingdash.repositories.postgres.models import UserOAuthLink
 class FakeOAuthLinkRepo:
     """
     In-memory fake implementation of OAuthLinkRepo protocol.
-    
+
     Stores links in a dict keyed by (user_id, provider).
     """
 
@@ -15,9 +15,7 @@ class FakeOAuthLinkRepo:
 
     # --- Protocol methods ---
 
-    async def get_by_provider_id(
-        self, provider: str, provider_user_id: str
-    ) -> UserOAuthLink | None:
+    async def get_by_provider_id(self, provider: str, provider_user_id: str) -> UserOAuthLink | None:
         for link in self._links.values():
             if link.provider == provider and link.provider_user_id == provider_user_id:
                 return link

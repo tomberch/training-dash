@@ -46,14 +46,10 @@ class MockXertClient:
     """
 
     def __init__(self):
-        self._fixtures_dir = Path(
-            os.environ.get("MOCK_XERT_FIXTURES_DIR", DEFAULT_FIXTURES_DIR)
-        )
+        self._fixtures_dir = Path(os.environ.get("MOCK_XERT_FIXTURES_DIR", DEFAULT_FIXTURES_DIR))
         self._logged_in = False
         self._username: str | None = None
-        logger.info(
-            "MockXertClient initialized with fixtures_dir=%s", self._fixtures_dir
-        )
+        logger.info("MockXertClient initialized with fixtures_dir=%s", self._fixtures_dir)
 
     async def login(self, username: str, password: str) -> None:
         """Simulate Xert login. Always succeeds unless password is 'invalid'."""
@@ -101,9 +97,7 @@ class MockXertClient:
                 )
             )
 
-        logger.info(
-            "MockXertClient: list_activities returning %d activities", len(activities)
-        )
+        logger.info("MockXertClient: list_activities returning %d activities", len(activities))
         return activities
 
     async def download_fit(self, activity_id: str) -> bytes:

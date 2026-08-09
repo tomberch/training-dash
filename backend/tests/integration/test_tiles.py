@@ -1,7 +1,5 @@
 """Integration tests for the map tile proxy endpoints (routers/tiles.py)."""
 
-import tempfile
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -13,7 +11,9 @@ class TestOsmTileProxy:
         monkeypatch.setenv("TILE_CACHE_DIR", str(tmp_path))
         # Reload the module so the router picks up the new cache dir
         import importlib
+
         import trainingdash.routers.tiles as tiles_mod
+
         importlib.reload(tiles_mod)
 
         fake_png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 100
@@ -37,7 +37,9 @@ class TestOsmTileProxy:
     async def test_tile_served_from_cache_on_second_request(self, http_client, tmp_path, monkeypatch):
         monkeypatch.setenv("TILE_CACHE_DIR", str(tmp_path))
         import importlib
+
         import trainingdash.routers.tiles as tiles_mod
+
         importlib.reload(tiles_mod)
 
         fake_png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 100
@@ -77,7 +79,9 @@ class TestOsmTileProxy:
 
         monkeypatch.setenv("TILE_CACHE_DIR", str(tmp_path))
         import importlib
+
         import trainingdash.routers.tiles as tiles_mod
+
         importlib.reload(tiles_mod)
 
         mock_client = AsyncMock()
@@ -96,7 +100,9 @@ class TestCartoTileProxy:
     async def test_light_tile_fetched_and_returned(self, http_client, tmp_path, monkeypatch):
         monkeypatch.setenv("TILE_CACHE_DIR", str(tmp_path))
         import importlib
+
         import trainingdash.routers.tiles as tiles_mod
+
         importlib.reload(tiles_mod)
 
         fake_png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 100
@@ -123,7 +129,9 @@ class TestCartoTileProxy:
     async def test_dark_tile_hits_dark_matter_url(self, http_client, tmp_path, monkeypatch):
         monkeypatch.setenv("TILE_CACHE_DIR", str(tmp_path))
         import importlib
+
         import trainingdash.routers.tiles as tiles_mod
+
         importlib.reload(tiles_mod)
 
         fake_png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 100
@@ -144,12 +152,12 @@ class TestCartoTileProxy:
         assert "dark_all" in call_url
 
     @pytest.mark.asyncio
-    async def test_carto_tile_served_from_cache_on_second_request(
-        self, http_client, tmp_path, monkeypatch
-    ):
+    async def test_carto_tile_served_from_cache_on_second_request(self, http_client, tmp_path, monkeypatch):
         monkeypatch.setenv("TILE_CACHE_DIR", str(tmp_path))
         import importlib
+
         import trainingdash.routers.tiles as tiles_mod
+
         importlib.reload(tiles_mod)
 
         fake_png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 100
@@ -191,7 +199,9 @@ class TestCartoTileProxy:
 
         monkeypatch.setenv("TILE_CACHE_DIR", str(tmp_path))
         import importlib
+
         import trainingdash.routers.tiles as tiles_mod
+
         importlib.reload(tiles_mod)
 
         mock_client = AsyncMock()
@@ -209,7 +219,9 @@ class TestCartoTileProxy:
         """Light and dark tiles must not share cache entries."""
         monkeypatch.setenv("TILE_CACHE_DIR", str(tmp_path))
         import importlib
+
         import trainingdash.routers.tiles as tiles_mod
+
         importlib.reload(tiles_mod)
 
         fake_png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 100

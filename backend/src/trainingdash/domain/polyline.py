@@ -8,8 +8,8 @@ The polyline encoding is used for efficient storage and transfer of GPS
 tracks for activity list thumbnails.
 """
 
-from typing import Sequence
 import math
+from collections.abc import Sequence
 
 
 def _perpendicular_distance(
@@ -19,9 +19,7 @@ def _perpendicular_distance(
 ) -> float:
     """Calculate perpendicular distance from point to line segment."""
     if line_start == line_end:
-        return math.sqrt(
-            (point[0] - line_start[0]) ** 2 + (point[1] - line_start[1]) ** 2
-        )
+        return math.sqrt((point[0] - line_start[0]) ** 2 + (point[1] - line_start[1]) ** 2)
 
     # Line segment length squared
     line_len_sq = (line_end[0] - line_start[0]) ** 2 + (line_end[1] - line_start[1]) ** 2
@@ -215,11 +213,7 @@ def generate_map_polyline(records: list[dict], max_points: int = 100) -> str | N
         Encoded polyline string, or None if no GPS data
     """
     # Extract coordinates from records
-    coords = [
-        (r["lat"], r["lon"])
-        for r in records
-        if r.get("lat") is not None and r.get("lon") is not None
-    ]
+    coords = [(r["lat"], r["lon"]) for r in records if r.get("lat") is not None and r.get("lon") is not None]
 
     if len(coords) < 2:
         return None

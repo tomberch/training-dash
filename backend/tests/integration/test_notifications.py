@@ -1,4 +1,5 @@
 """Integration tests for FTP auto-detection and notifications (#23)."""
+
 import sys
 from pathlib import Path
 
@@ -6,9 +7,10 @@ import pytest
 from sqlalchemy import select
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "tests" / "fixtures"))
-from generate_fit import make_test_fit  # noqa: E402
-from trainingdash.repositories.postgres.models import Notification, MetricEntry, MetricType  # noqa: E402
-from trainingdash.domain.thresholds import create_threshold_entries  # noqa: E402
+from generate_fit import make_test_fit
+
+from trainingdash.domain.thresholds import create_threshold_entries
+from trainingdash.repositories.postgres.models import MetricEntry, MetricType, Notification
 
 
 class TestNotificationsEndpoint:
@@ -20,7 +22,7 @@ class TestNotificationsEndpoint:
         response = await auth_client.get("/api/me/notifications")
         assert response.status_code == 200
         data = response.json()
-        
+
         assert isinstance(data, list)
         assert len(data) == 0
 
@@ -37,11 +39,11 @@ class TestNotificationsEndpoint:
         )
         db_session.add(notification)
         await db_session.commit()
-        
+
         response = await auth_client.get("/api/me/notifications")
         assert response.status_code == 200
         data = response.json()
-        
+
         assert len(data) == 1
         n = data[0]
         assert "id" in n
@@ -65,10 +67,10 @@ class TestNotificationsEndpoint:
             )
             db_session.add(notification)
         await db_session.commit()
-        
+
         response = await auth_client.get("/api/me/notifications")
         data = response.json()
-        
+
         # Only pending should be returned
         assert len(data) == 1
         assert data[0]["message"] == "Status: pending"
@@ -95,11 +97,11 @@ class TestAcceptNotification:
         db_session.add(notification)
         await db_session.commit()
         await db_session.refresh(notification)
-        
+
         response = await auth_client.post(f"/api/me/notifications/{notification.id}/accept")
         assert response.status_code == 200
         assert response.json()["success"] is True
-        
+
         # Verify status changed
         await db_session.refresh(notification)
         assert notification.status == "accepted"
@@ -108,7 +110,7 @@ class TestAcceptNotification:
     async def test_accept_ftp_suggestion_creates_threshold(self, auth_client, db_session, seed_user):
         """Accepting FTP suggestion creates a new threshold."""
         from datetime import date as date_type
-        
+
         # Create existing threshold using metric_entries
         await create_threshold_entries(
             db_session,
@@ -120,7 +122,7 @@ class TestAcceptNotification:
             source="manual",
         )
         await db_session.commit()
-        
+
         # Create FTP suggestion
         notification = Notification(
             user_id=seed_user.id,
@@ -132,24 +134,22 @@ class TestAcceptNotification:
         db_session.add(notification)
         await db_session.commit()
         await db_session.refresh(notification)
-        
+
         # Accept the notification
         response = await auth_client.post(f"/api/me/notifications/{notification.id}/accept")
         assert response.status_code == 200
-        
+
         # Verify new FTP metric entry was created
-        ftp_type_result = await db_session.execute(
-            select(MetricType.id).where(MetricType.key == "ftp")
-        )
+        ftp_type_result = await db_session.execute(select(MetricType.id).where(MetricType.key == "ftp"))
         ftp_type_id = ftp_type_result.scalar_one()
-        
+
         result = await db_session.execute(
             select(MetricEntry)
             .where(MetricEntry.user_id == seed_user.id, MetricEntry.metric_type_id == ftp_type_id)
             .order_by(MetricEntry.effective_date.desc())
         )
         entries = result.scalars().all()
-        
+
         # Should have 2 FTP entries now (original + accepted suggestion)
         assert len(entries) == 2
         # Latest should have suggested FTP
@@ -173,7 +173,7 @@ class TestAcceptNotification:
         db_session.add(notification)
         await db_session.commit()
         await db_session.refresh(notification)
-        
+
         response = await auth_client.post(f"/api/me/notifications/{notification.id}/accept")
         assert response.status_code == 400
 
@@ -193,11 +193,11 @@ class TestDismissNotification:
         db_session.add(notification)
         await db_session.commit()
         await db_session.refresh(notification)
-        
+
         response = await auth_client.post(f"/api/me/notifications/{notification.id}/dismiss")
         assert response.status_code == 200
         assert response.json()["success"] is True
-        
+
         # Verify status changed
         await db_session.refresh(notification)
         assert notification.status == "dismissed"
@@ -220,7 +220,7 @@ class TestDismissNotification:
         db_session.add(notification)
         await db_session.commit()
         await db_session.refresh(notification)
-        
+
         response = await auth_client.post(f"/api/me/notifications/{notification.id}/dismiss")
         assert response.status_code == 400
 
@@ -239,24 +239,24 @@ class TestFTPAutoDetection:
                 "ftp_watts": 150,  # Low FTP, test fit power is 200-279
                 "lthr_bpm": 165,
                 "hrmax_bpm": 185,
-            }
+            },
         )
-        
+
         # Upload FIT file (this triggers breakthrough -> fitness model update)
         fit_data = make_test_fit(num_records=300)  # 5 min for good CP estimate
         await auth_client.post(
             "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
-        
+
         # Check for notification
         response = await auth_client.get("/api/me/notifications")
         data = response.json()
-        
+
         # Should have FTP suggestion notification
         ftp_notifications = [n for n in data if n["type"] == "ftp_suggestion"]
         assert len(ftp_notifications) >= 1
-        
+
         # Notification should have payload with suggested FTP
         n = ftp_notifications[0]
         assert n["payload"] is not None
@@ -277,20 +277,20 @@ class TestFTPAutoDetection:
                 "ftp_watts": 240,  # Close to expected CP
                 "lthr_bpm": 165,
                 "hrmax_bpm": 185,
-            }
+            },
         )
-        
+
         # Upload FIT file
         fit_data = make_test_fit(num_records=300)
         await auth_client.post(
             "/api/upload",
             files={"file": ("test.fit", fit_data, "application/octet-stream")},
         )
-        
+
         # Check for notification - should have none or different type
         response = await auth_client.get("/api/me/notifications")
         data = response.json()
-        
+
         ftp_notifications = [n for n in data if n["type"] == "ftp_suggestion"]
         # Within 5% = no notification (or possibly one if edge case)
         # This is a soft assertion since CP estimation varies

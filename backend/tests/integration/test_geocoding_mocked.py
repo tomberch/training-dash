@@ -1,4 +1,5 @@
 """Verify geocoding is mocked out in the integration suite (#254)."""
+
 import sys
 from pathlib import Path
 from unittest import mock
@@ -6,9 +7,9 @@ from unittest import mock
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "tests" / "fixtures"))
-from generate_fit import make_test_fit  # noqa: E402
+from generate_fit import make_test_fit
 
-from trainingdash.integrations.geocoding import GeocodingService  # noqa: E402
+from trainingdash.integrations.geocoding import GeocodingService
 
 
 @pytest.mark.asyncio

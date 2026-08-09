@@ -1,13 +1,14 @@
 """Unit tests for training metrics computation functions."""
 
 import pytest
+
 from trainingdash.domain.metrics import (
-    compute_normalized_power,
+    compute_average_power,
     compute_intensity_factor,
+    compute_max_power,
+    compute_normalized_power,
     compute_tss,
     compute_zone_times,
-    compute_average_power,
-    compute_max_power,
 )
 
 
@@ -72,12 +73,12 @@ class TestNormalizedPower:
         """Golden test: intervals produce higher NP than average."""
         # 5 min at 300W, 5 min at 100W, repeated 3 times = 30 min
         interval_high = [300] * 300  # 5 min at 300W
-        interval_low = [100] * 300   # 5 min at 100W
+        interval_low = [100] * 300  # 5 min at 100W
         power = (interval_high + interval_low) * 3
-        
+
         np = compute_normalized_power(power, sample_rate_hz=1.0)
         avg = sum(power) / len(power)  # 200W average
-        
+
         # NP should be significantly higher due to high-intensity intervals
         assert np > avg
         assert np > 220  # Should be well above average
@@ -227,7 +228,8 @@ class TestZoneTimes:
         ]
         hr = [140] * 60  # 60 seconds at 140 bpm
         result = compute_zone_times(
-            hr, hr_zones,
+            hr,
+            hr_zones,
             value_key_min="min_bpm",
             value_key_max="max_bpm",
         )

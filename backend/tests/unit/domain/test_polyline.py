@@ -1,11 +1,10 @@
 """Tests for the polyline encoding/decoding module."""
 
-import pytest
 from trainingdash.domain.polyline import (
-    encode_polyline,
     decode_polyline,
-    simplify_coords,
+    encode_polyline,
     generate_map_polyline,
+    simplify_coords,
 )
 
 
@@ -16,7 +15,7 @@ class TestEncodeDecodeRoundtrip:
         coords = [(47.3769, 8.5417), (47.3800, 8.5500), (47.3850, 8.5600)]
         encoded = encode_polyline(coords)
         decoded = decode_polyline(encoded)
-        
+
         assert len(decoded) == len(coords)
         for (orig_lat, orig_lon), (dec_lat, dec_lon) in zip(coords, decoded):
             assert abs(orig_lat - dec_lat) < 0.00001
@@ -39,7 +38,7 @@ class TestEncodeDecodeRoundtrip:
         coords = [(-33.8688, 151.2093), (-33.8700, 151.2100)]  # Sydney
         encoded = encode_polyline(coords)
         decoded = decode_polyline(encoded)
-        
+
         for (orig_lat, orig_lon), (dec_lat, dec_lon) in zip(coords, decoded):
             assert abs(orig_lat - dec_lat) < 0.00001
             assert abs(orig_lon - dec_lon) < 0.00001
@@ -64,7 +63,7 @@ class TestSimplifyCoords:
             lat = 47.0 + (i % 2) * 0.01
             lon = 8.0 + i * 0.001
             coords.append((lat, lon))
-        
+
         simplified = simplify_coords(coords, max_points=50)
         assert len(simplified) <= 50
 
@@ -101,7 +100,7 @@ class TestGenerateMapPolyline:
         polyline = generate_map_polyline(records)
         assert polyline is not None
         assert len(polyline) > 0
-        
+
         # Should decode back to valid coords
         decoded = decode_polyline(polyline)
         assert len(decoded) >= 2

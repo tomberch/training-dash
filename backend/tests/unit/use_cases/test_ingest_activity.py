@@ -12,6 +12,7 @@ from trainingdash.use_cases import IngestActivity
 
 class MockAsyncSession:
     """Minimal mock for AsyncSession."""
+
     pass
 
 
@@ -56,23 +57,21 @@ def sample_activity():
 
 class TestIngestActivityUseCase:
     @pytest.mark.asyncio
-    async def test_execute_success_returns_activity(
-        self, use_case, sample_parsed_fit, sample_activity
-    ):
+    async def test_execute_success_returns_activity(self, use_case, sample_parsed_fit, sample_activity):
         """Successful ingest returns the created activity."""
         with mock.patch("trainingdash.ingest.parse_records", return_value=sample_parsed_fit):
             with mock.patch("trainingdash.ingest._store_parsed_fit", return_value=sample_activity):
                 with mock.patch("trainingdash.activity_pipeline.ActivityPipeline") as MockPipeline:
                     mock_pipeline = mock.AsyncMock()
                     MockPipeline.return_value = mock_pipeline
-                    
+
                     result = await use_case.execute(
                         user_id=1,
                         fit_data=b"fake fit data",
                         source="upload",
                         source_ref="test.fit",
                     )
-        
+
         assert result is not None
         assert result.id == sample_activity.id
         mock_pipeline.run.assert_called_once()
@@ -87,13 +86,11 @@ class TestIngestActivityUseCase:
                 source="upload",
                 source_ref="bad.fit",
             )
-        
+
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_execute_skips_duplicates_for_provider_sync(
-        self, use_case, sample_parsed_fit
-    ):
+    async def test_execute_skips_duplicates_for_provider_sync(self, use_case, sample_parsed_fit):
         """Duplicate detection skips activity for provider syncs."""
         with mock.patch("trainingdash.ingest.parse_records", return_value=sample_parsed_fit):
             with mock.patch("trainingdash.ingest.is_duplicate_activity", return_value=True):
@@ -103,13 +100,11 @@ class TestIngestActivityUseCase:
                     source="xert",  # Provider sync, not upload
                     source_ref="xert:123",
                 )
-        
+
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_execute_skips_duplicate_check_for_uploads(
-        self, use_case, sample_parsed_fit, sample_activity
-    ):
+    async def test_execute_skips_duplicate_check_for_uploads(self, use_case, sample_parsed_fit, sample_activity):
         """Upload source skips duplicate detection."""
         with mock.patch("trainingdash.ingest.parse_records", return_value=sample_parsed_fit):
             with mock.patch("trainingdash.ingest.is_duplicate_activity") as mock_dup:
@@ -117,29 +112,27 @@ class TestIngestActivityUseCase:
                     with mock.patch("trainingdash.activity_pipeline.ActivityPipeline") as MockPipeline:
                         mock_pipeline = mock.AsyncMock()
                         MockPipeline.return_value = mock_pipeline
-                        
+
                         result = await use_case.execute(
                             user_id=1,
                             fit_data=b"fake fit data",
                             source="upload",
                             source_ref="test.fit",
                         )
-        
+
         # Duplicate check should not be called for uploads
         mock_dup.assert_not_called()
         assert result is not None
 
     @pytest.mark.asyncio
-    async def test_execute_passes_batch_mode_to_pipeline(
-        self, use_case, sample_parsed_fit, sample_activity
-    ):
+    async def test_execute_passes_batch_mode_to_pipeline(self, use_case, sample_parsed_fit, sample_activity):
         """batch_mode flag is passed to ActivityPipeline."""
         with mock.patch("trainingdash.ingest.parse_records", return_value=sample_parsed_fit):
             with mock.patch("trainingdash.ingest._store_parsed_fit", return_value=sample_activity):
                 with mock.patch("trainingdash.activity_pipeline.ActivityPipeline") as MockPipeline:
                     mock_pipeline = mock.AsyncMock()
                     MockPipeline.return_value = mock_pipeline
-                    
+
                     await use_case.execute(
                         user_id=1,
                         fit_data=b"fake fit data",
@@ -147,7 +140,7 @@ class TestIngestActivityUseCase:
                         source_ref="test.fit",
                         batch_mode=True,
                     )
-        
+
         # Verify batch_mode was passed
         call_kwargs = MockPipeline.call_args.kwargs
         assert call_kwargs["batch_mode"] is True

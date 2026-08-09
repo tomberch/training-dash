@@ -23,9 +23,7 @@ class TestListMetrics:
     async def test_list_metrics_returns_entries(self, auth_client, db_session, seed_user):
         """Returns metric entries for the user."""
         # Get FTP metric type
-        result = await db_session.execute(
-            select(MetricType).where(MetricType.key == "ftp")
-        )
+        result = await db_session.execute(select(MetricType).where(MetricType.key == "ftp"))
         ftp_type = result.scalar_one()
 
         # Create metric entry
@@ -50,26 +48,28 @@ class TestListMetrics:
     @pytest.mark.asyncio
     async def test_list_metrics_filter_by_type(self, auth_client, db_session, seed_user):
         """Filters by metric_type parameter."""
-        result = await db_session.execute(
-            select(MetricType).where(MetricType.key.in_(["ftp", "lthr"]))
-        )
+        result = await db_session.execute(select(MetricType).where(MetricType.key.in_(["ftp", "lthr"])))
         types = {mt.key: mt for mt in result.scalars().all()}
 
         # Create entries for both types
-        db_session.add(MetricEntry(
-            user_id=seed_user.id,
-            metric_type_id=types["ftp"].id,
-            effective_date=date(2025, 6, 1),
-            value=Decimal("280"),
-            source="manual",
-        ))
-        db_session.add(MetricEntry(
-            user_id=seed_user.id,
-            metric_type_id=types["lthr"].id,
-            effective_date=date(2025, 6, 1),
-            value=Decimal("165"),
-            source="manual",
-        ))
+        db_session.add(
+            MetricEntry(
+                user_id=seed_user.id,
+                metric_type_id=types["ftp"].id,
+                effective_date=date(2025, 6, 1),
+                value=Decimal("280"),
+                source="manual",
+            )
+        )
+        db_session.add(
+            MetricEntry(
+                user_id=seed_user.id,
+                metric_type_id=types["lthr"].id,
+                effective_date=date(2025, 6, 1),
+                value=Decimal("165"),
+                source="manual",
+            )
+        )
         await db_session.commit()
 
         response = await auth_client.get("/api/me/metrics?metric_type=ftp")
@@ -81,26 +81,28 @@ class TestListMetrics:
     @pytest.mark.asyncio
     async def test_list_metrics_filter_by_category(self, auth_client, db_session, seed_user):
         """Filters by category parameter."""
-        result = await db_session.execute(
-            select(MetricType).where(MetricType.key.in_(["ftp", "weight_kg"]))
-        )
+        result = await db_session.execute(select(MetricType).where(MetricType.key.in_(["ftp", "weight_kg"])))
         types = {mt.key: mt for mt in result.scalars().all()}
 
         # Create entries (ftp=threshold, weight_kg=body)
-        db_session.add(MetricEntry(
-            user_id=seed_user.id,
-            metric_type_id=types["ftp"].id,
-            effective_date=date(2025, 6, 1),
-            value=Decimal("280"),
-            source="manual",
-        ))
-        db_session.add(MetricEntry(
-            user_id=seed_user.id,
-            metric_type_id=types["weight_kg"].id,
-            effective_date=date(2025, 6, 1),
-            value=Decimal("75.5"),
-            source="manual",
-        ))
+        db_session.add(
+            MetricEntry(
+                user_id=seed_user.id,
+                metric_type_id=types["ftp"].id,
+                effective_date=date(2025, 6, 1),
+                value=Decimal("280"),
+                source="manual",
+            )
+        )
+        db_session.add(
+            MetricEntry(
+                user_id=seed_user.id,
+                metric_type_id=types["weight_kg"].id,
+                effective_date=date(2025, 6, 1),
+                value=Decimal("75.5"),
+                source="manual",
+            )
+        )
         await db_session.commit()
 
         response = await auth_client.get("/api/me/metrics?category=body")
@@ -112,20 +114,20 @@ class TestListMetrics:
     @pytest.mark.asyncio
     async def test_list_metrics_filter_by_date_range(self, auth_client, db_session, seed_user):
         """Filters by from_date and to_date parameters."""
-        result = await db_session.execute(
-            select(MetricType).where(MetricType.key == "ftp")
-        )
+        result = await db_session.execute(select(MetricType).where(MetricType.key == "ftp"))
         ftp_type = result.scalar_one()
 
         # Create entries for different dates
         for d in [date(2025, 1, 1), date(2025, 6, 1), date(2025, 12, 1)]:
-            db_session.add(MetricEntry(
-                user_id=seed_user.id,
-                metric_type_id=ftp_type.id,
-                effective_date=d,
-                value=Decimal("280"),
-                source="manual",
-            ))
+            db_session.add(
+                MetricEntry(
+                    user_id=seed_user.id,
+                    metric_type_id=ftp_type.id,
+                    effective_date=d,
+                    value=Decimal("280"),
+                    source="manual",
+                )
+            )
         await db_session.commit()
 
         response = await auth_client.get("/api/me/metrics?from_date=2025-03-01&to_date=2025-09-01")
@@ -137,20 +139,20 @@ class TestListMetrics:
     @pytest.mark.asyncio
     async def test_list_metrics_pagination(self, auth_client, db_session, seed_user):
         """Pagination with limit and offset."""
-        result = await db_session.execute(
-            select(MetricType).where(MetricType.key == "ftp")
-        )
+        result = await db_session.execute(select(MetricType).where(MetricType.key == "ftp"))
         ftp_type = result.scalar_one()
 
         # Create 5 entries
         for i in range(5):
-            db_session.add(MetricEntry(
-                user_id=seed_user.id,
-                metric_type_id=ftp_type.id,
-                effective_date=date(2025, 6, 1) + timedelta(days=i),
-                value=Decimal("280"),
-                source="manual",
-            ))
+            db_session.add(
+                MetricEntry(
+                    user_id=seed_user.id,
+                    metric_type_id=ftp_type.id,
+                    effective_date=date(2025, 6, 1) + timedelta(days=i),
+                    value=Decimal("280"),
+                    source="manual",
+                )
+            )
         await db_session.commit()
 
         response = await auth_client.get("/api/me/metrics?limit=2&offset=2")
@@ -178,7 +180,7 @@ class TestCreateMetric:
                 "effective_date": "2025-06-01",
                 "value": 280,
                 "source": "manual",
-            }
+            },
         )
         assert response.status_code == 201
         data = response.json()
@@ -200,7 +202,7 @@ class TestCreateMetric:
                 "source": "device",
                 "source_detail": "Garmin Edge 540",
                 "notes": "Test from structured workout",
-            }
+            },
         )
         assert response.status_code == 201
         data = response.json()
@@ -217,7 +219,7 @@ class TestCreateMetric:
                 "metric_type": "ftp",
                 "effective_date": "2025-06-01",
                 "value": 280,
-            }
+            },
         )
         assert response.status_code == 201
         first_id = response.json()["id"]
@@ -229,7 +231,7 @@ class TestCreateMetric:
                 "metric_type": "ftp",
                 "effective_date": "2025-06-01",
                 "value": 290,
-            }
+            },
         )
         assert response.status_code == 201
         data = response.json()
@@ -245,7 +247,7 @@ class TestCreateMetric:
                 "metric_type": "not_a_real_metric",
                 "effective_date": "2025-06-01",
                 "value": 100,
-            }
+            },
         )
         assert response.status_code == 404
         assert "not found" in response.json()["detail"].lower()
@@ -259,7 +261,7 @@ class TestCreateMetric:
                 "metric_type": "ftp",  # min_value: 50
                 "effective_date": "2025-06-01",
                 "value": 30,
-            }
+            },
         )
         assert response.status_code == 400
         assert "at least" in response.json()["detail"].lower()
@@ -273,7 +275,7 @@ class TestCreateMetric:
                 "metric_type": "ftp",  # max_value: 500
                 "effective_date": "2025-06-01",
                 "value": 600,
-            }
+            },
         )
         assert response.status_code == 400
         assert "at most" in response.json()["detail"].lower()
@@ -289,7 +291,7 @@ class TestCreateMetric:
                 "effective_date": "2025-06-01",
                 "value": 55,
                 "source": "calculated",
-            }
+            },
         )
         assert response.status_code == 400
         assert "not allowed" in response.json()["detail"].lower()
@@ -303,7 +305,7 @@ class TestCreateMetric:
                 "metric_type": "ftp",
                 "effective_date": "2025-06-01",
                 "value": 280,
-            }
+            },
         )
         assert response.status_code == 401
 
@@ -314,9 +316,7 @@ class TestUpdateMetric:
     @pytest.mark.asyncio
     async def test_update_metric_value(self, auth_client, db_session, seed_user):
         """Updates metric value."""
-        result = await db_session.execute(
-            select(MetricType).where(MetricType.key == "ftp")
-        )
+        result = await db_session.execute(select(MetricType).where(MetricType.key == "ftp"))
         ftp_type = result.scalar_one()
 
         entry = MetricEntry(
@@ -330,10 +330,7 @@ class TestUpdateMetric:
         await db_session.commit()
         await db_session.refresh(entry)
 
-        response = await auth_client.patch(
-            f"/api/me/metrics/{entry.id}",
-            json={"value": 290}
-        )
+        response = await auth_client.patch(f"/api/me/metrics/{entry.id}", json={"value": 290})
         assert response.status_code == 200
         data = response.json()
         assert data["value"] == 290.0
@@ -341,9 +338,7 @@ class TestUpdateMetric:
     @pytest.mark.asyncio
     async def test_update_metric_notes(self, auth_client, db_session, seed_user):
         """Updates metric notes."""
-        result = await db_session.execute(
-            select(MetricType).where(MetricType.key == "ftp")
-        )
+        result = await db_session.execute(select(MetricType).where(MetricType.key == "ftp"))
         ftp_type = result.scalar_one()
 
         entry = MetricEntry(
@@ -357,19 +352,14 @@ class TestUpdateMetric:
         await db_session.commit()
         await db_session.refresh(entry)
 
-        response = await auth_client.patch(
-            f"/api/me/metrics/{entry.id}",
-            json={"notes": "Updated note"}
-        )
+        response = await auth_client.patch(f"/api/me/metrics/{entry.id}", json={"notes": "Updated note"})
         assert response.status_code == 200
         assert response.json()["notes"] == "Updated note"
 
     @pytest.mark.asyncio
     async def test_update_metric_date(self, auth_client, db_session, seed_user):
         """Updates effective date."""
-        result = await db_session.execute(
-            select(MetricType).where(MetricType.key == "ftp")
-        )
+        result = await db_session.execute(select(MetricType).where(MetricType.key == "ftp"))
         ftp_type = result.scalar_one()
 
         entry = MetricEntry(
@@ -383,19 +373,14 @@ class TestUpdateMetric:
         await db_session.commit()
         await db_session.refresh(entry)
 
-        response = await auth_client.patch(
-            f"/api/me/metrics/{entry.id}",
-            json={"effective_date": "2025-07-01"}
-        )
+        response = await auth_client.patch(f"/api/me/metrics/{entry.id}", json={"effective_date": "2025-07-01"})
         assert response.status_code == 200
         assert response.json()["effective_date"] == "2025-07-01"
 
     @pytest.mark.asyncio
     async def test_update_metric_date_conflict(self, auth_client, db_session, seed_user):
         """Rejects date change if entry exists for new date."""
-        result = await db_session.execute(
-            select(MetricType).where(MetricType.key == "ftp")
-        )
+        result = await db_session.execute(select(MetricType).where(MetricType.key == "ftp"))
         ftp_type = result.scalar_one()
 
         # Create two entries
@@ -418,19 +403,14 @@ class TestUpdateMetric:
         await db_session.refresh(entry1)
 
         # Try to move entry1 to entry2's date
-        response = await auth_client.patch(
-            f"/api/me/metrics/{entry1.id}",
-            json={"effective_date": "2025-07-01"}
-        )
+        response = await auth_client.patch(f"/api/me/metrics/{entry1.id}", json={"effective_date": "2025-07-01"})
         assert response.status_code == 409
         assert "already exists" in response.json()["detail"].lower()
 
     @pytest.mark.asyncio
     async def test_update_metric_blocks_device_source(self, auth_client, db_session, seed_user):
         """Cannot modify device-sourced entries."""
-        result = await db_session.execute(
-            select(MetricType).where(MetricType.key == "ftp")
-        )
+        result = await db_session.execute(select(MetricType).where(MetricType.key == "ftp"))
         ftp_type = result.scalar_one()
 
         entry = MetricEntry(
@@ -444,28 +424,20 @@ class TestUpdateMetric:
         await db_session.commit()
         await db_session.refresh(entry)
 
-        response = await auth_client.patch(
-            f"/api/me/metrics/{entry.id}",
-            json={"value": 290}
-        )
+        response = await auth_client.patch(f"/api/me/metrics/{entry.id}", json={"value": 290})
         assert response.status_code == 403
         assert "device" in response.json()["detail"].lower()
 
     @pytest.mark.asyncio
     async def test_update_metric_not_found(self, auth_client):
         """Returns 404 for non-existent entry."""
-        response = await auth_client.patch(
-            "/api/me/metrics/99999",
-            json={"value": 290}
-        )
+        response = await auth_client.patch("/api/me/metrics/99999", json={"value": 290})
         assert response.status_code == 404
 
     @pytest.mark.asyncio
     async def test_update_metric_validates_value(self, auth_client, db_session, seed_user):
         """Validates value against metric_type constraints."""
-        result = await db_session.execute(
-            select(MetricType).where(MetricType.key == "ftp")
-        )
+        result = await db_session.execute(select(MetricType).where(MetricType.key == "ftp"))
         ftp_type = result.scalar_one()
 
         entry = MetricEntry(
@@ -481,7 +453,7 @@ class TestUpdateMetric:
 
         response = await auth_client.patch(
             f"/api/me/metrics/{entry.id}",
-            json={"value": 600}  # Above max_value 500
+            json={"value": 600},  # Above max_value 500
         )
         assert response.status_code == 400
         assert "at most" in response.json()["detail"].lower()
@@ -489,10 +461,7 @@ class TestUpdateMetric:
     @pytest.mark.asyncio
     async def test_update_metric_requires_auth(self, app_client):
         """Requires authentication."""
-        response = await app_client.patch(
-            "/api/me/metrics/1",
-            json={"value": 290}
-        )
+        response = await app_client.patch("/api/me/metrics/1", json={"value": 290})
         assert response.status_code == 401
 
 
@@ -502,9 +471,7 @@ class TestDeleteMetric:
     @pytest.mark.asyncio
     async def test_delete_metric(self, auth_client, db_session, seed_user):
         """Deletes a metric entry."""
-        result = await db_session.execute(
-            select(MetricType).where(MetricType.key == "ftp")
-        )
+        result = await db_session.execute(select(MetricType).where(MetricType.key == "ftp"))
         ftp_type = result.scalar_one()
 
         entry = MetricEntry(
@@ -522,9 +489,7 @@ class TestDeleteMetric:
         assert response.status_code == 204
 
         # Verify deleted
-        result = await db_session.execute(
-            select(MetricEntry).where(MetricEntry.id == entry.id)
-        )
+        result = await db_session.execute(select(MetricEntry).where(MetricEntry.id == entry.id))
         assert result.scalar_one_or_none() is None
 
     @pytest.mark.asyncio
@@ -559,26 +524,28 @@ class TestCurrentMetrics:
     @pytest.mark.asyncio
     async def test_current_metrics_returns_most_recent(self, auth_client, db_session, seed_user):
         """Returns most recent entry for each type."""
-        result = await db_session.execute(
-            select(MetricType).where(MetricType.key == "ftp")
-        )
+        result = await db_session.execute(select(MetricType).where(MetricType.key == "ftp"))
         ftp_type = result.scalar_one()
 
         # Create entries for different dates
-        db_session.add(MetricEntry(
-            user_id=seed_user.id,
-            metric_type_id=ftp_type.id,
-            effective_date=date(2025, 1, 1),
-            value=Decimal("250"),
-            source="manual",
-        ))
-        db_session.add(MetricEntry(
-            user_id=seed_user.id,
-            metric_type_id=ftp_type.id,
-            effective_date=date(2025, 6, 1),
-            value=Decimal("280"),
-            source="manual",
-        ))
+        db_session.add(
+            MetricEntry(
+                user_id=seed_user.id,
+                metric_type_id=ftp_type.id,
+                effective_date=date(2025, 1, 1),
+                value=Decimal("250"),
+                source="manual",
+            )
+        )
+        db_session.add(
+            MetricEntry(
+                user_id=seed_user.id,
+                metric_type_id=ftp_type.id,
+                effective_date=date(2025, 6, 1),
+                value=Decimal("280"),
+                source="manual",
+            )
+        )
         await db_session.commit()
 
         response = await auth_client.get("/api/me/metrics/current")
@@ -600,26 +567,28 @@ class TestEffectiveMetrics:
     @pytest.mark.asyncio
     async def test_effective_metrics_at_date(self, auth_client, db_session, seed_user):
         """Returns effective values at specific date."""
-        result = await db_session.execute(
-            select(MetricType).where(MetricType.key == "ftp")
-        )
+        result = await db_session.execute(select(MetricType).where(MetricType.key == "ftp"))
         ftp_type = result.scalar_one()
 
         # Create entries for different dates
-        db_session.add(MetricEntry(
-            user_id=seed_user.id,
-            metric_type_id=ftp_type.id,
-            effective_date=date(2025, 1, 1),
-            value=Decimal("250"),
-            source="manual",
-        ))
-        db_session.add(MetricEntry(
-            user_id=seed_user.id,
-            metric_type_id=ftp_type.id,
-            effective_date=date(2025, 6, 1),
-            value=Decimal("280"),
-            source="manual",
-        ))
+        db_session.add(
+            MetricEntry(
+                user_id=seed_user.id,
+                metric_type_id=ftp_type.id,
+                effective_date=date(2025, 1, 1),
+                value=Decimal("250"),
+                source="manual",
+            )
+        )
+        db_session.add(
+            MetricEntry(
+                user_id=seed_user.id,
+                metric_type_id=ftp_type.id,
+                effective_date=date(2025, 6, 1),
+                value=Decimal("280"),
+                source="manual",
+            )
+        )
         await db_session.commit()
 
         # Query for date between the two entries
@@ -639,25 +608,27 @@ class TestEffectiveMetrics:
     @pytest.mark.asyncio
     async def test_effective_metrics_filter_types(self, auth_client, db_session, seed_user):
         """Filters to specific metric types."""
-        result = await db_session.execute(
-            select(MetricType).where(MetricType.key.in_(["ftp", "lthr"]))
-        )
+        result = await db_session.execute(select(MetricType).where(MetricType.key.in_(["ftp", "lthr"])))
         types = {mt.key: mt for mt in result.scalars().all()}
 
-        db_session.add(MetricEntry(
-            user_id=seed_user.id,
-            metric_type_id=types["ftp"].id,
-            effective_date=date(2025, 6, 1),
-            value=Decimal("280"),
-            source="manual",
-        ))
-        db_session.add(MetricEntry(
-            user_id=seed_user.id,
-            metric_type_id=types["lthr"].id,
-            effective_date=date(2025, 6, 1),
-            value=Decimal("165"),
-            source="manual",
-        ))
+        db_session.add(
+            MetricEntry(
+                user_id=seed_user.id,
+                metric_type_id=types["ftp"].id,
+                effective_date=date(2025, 6, 1),
+                value=Decimal("280"),
+                source="manual",
+            )
+        )
+        db_session.add(
+            MetricEntry(
+                user_id=seed_user.id,
+                metric_type_id=types["lthr"].id,
+                effective_date=date(2025, 6, 1),
+                value=Decimal("165"),
+                source="manual",
+            )
+        )
         await db_session.commit()
 
         response = await auth_client.get("/api/me/metrics/effective?date=2025-08-01&metric_types=ftp")
@@ -669,18 +640,18 @@ class TestEffectiveMetrics:
     @pytest.mark.asyncio
     async def test_effective_metrics_null_before_first_entry(self, auth_client, db_session, seed_user):
         """Returns null for dates before first entry."""
-        result = await db_session.execute(
-            select(MetricType).where(MetricType.key == "ftp")
-        )
+        result = await db_session.execute(select(MetricType).where(MetricType.key == "ftp"))
         ftp_type = result.scalar_one()
 
-        db_session.add(MetricEntry(
-            user_id=seed_user.id,
-            metric_type_id=ftp_type.id,
-            effective_date=date(2025, 6, 1),
-            value=Decimal("280"),
-            source="manual",
-        ))
+        db_session.add(
+            MetricEntry(
+                user_id=seed_user.id,
+                metric_type_id=ftp_type.id,
+                effective_date=date(2025, 6, 1),
+                value=Decimal("280"),
+                source="manual",
+            )
+        )
         await db_session.commit()
 
         response = await auth_client.get("/api/me/metrics/effective?date=2025-01-01")
@@ -720,9 +691,7 @@ class TestRecalcPreview:
         db_session.add(activity)
         await db_session.commit()
 
-        response = await auth_client.get(
-            "/api/me/metrics/recalc-preview?metric_type=ftp&effective_date=2025-06-01"
-        )
+        response = await auth_client.get("/api/me/metrics/recalc-preview?metric_type=ftp&effective_date=2025-06-01")
         assert response.status_code == 200
         data = response.json()
         assert data["affected_activities"] == 1
@@ -745,9 +714,7 @@ class TestRecalcPreview:
         db_session.add(activity)
         await db_session.commit()
 
-        response = await auth_client.get(
-            "/api/me/metrics/recalc-preview?metric_type=ftp&effective_date=2025-06-01"
-        )
+        response = await auth_client.get("/api/me/metrics/recalc-preview?metric_type=ftp&effective_date=2025-06-01")
         assert response.status_code == 200
         data = response.json()
         assert data["affected_activities"] == 0
@@ -755,9 +722,7 @@ class TestRecalcPreview:
     @pytest.mark.asyncio
     async def test_recalc_preview_invalid_metric_type(self, auth_client):
         """Returns 404 for invalid metric type."""
-        response = await auth_client.get(
-            "/api/me/metrics/recalc-preview?metric_type=invalid&effective_date=2025-06-01"
-        )
+        response = await auth_client.get("/api/me/metrics/recalc-preview?metric_type=invalid&effective_date=2025-06-01")
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -772,7 +737,5 @@ class TestRecalcPreview:
     @pytest.mark.asyncio
     async def test_recalc_preview_requires_auth(self, app_client):
         """Requires authentication."""
-        response = await app_client.get(
-            "/api/me/metrics/recalc-preview?metric_type=ftp&effective_date=2025-06-01"
-        )
+        response = await app_client.get("/api/me/metrics/recalc-preview?metric_type=ftp&effective_date=2025-06-01")
         assert response.status_code == 401

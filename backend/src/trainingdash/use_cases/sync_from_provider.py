@@ -12,14 +12,14 @@ This use case handles the complete flow of syncing activities from a provider:
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from trainingdash.crypto import decrypt, EncryptionError
-from trainingdash.ingest import is_duplicate_activity, finalize_batch_import
+from trainingdash.crypto import EncryptionError, decrypt
+from trainingdash.ingest import finalize_batch_import, is_duplicate_activity
 from trainingdash.integrations.protocols import (
     CredentialInfo,
     SyncProvider,
@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class SyncResult:
     """Result of a sync operation."""
+
     success: bool
     user_id: int
     synced_activities: int = 0
@@ -42,14 +43,14 @@ class SyncResult:
 class SyncFromProvider:
     """
     Use case for syncing activities from an external provider.
-    
+
     This use case coordinates:
     - Credential retrieval and decryption
     - Provider authentication
     - Activity listing and duplicate detection
     - Ingestion of new activities
     - Updating sync timestamps
-    
+
     Example usage:
         use_case = SyncFromProvider(db)
         result = await use_case.execute(user_id=1, provider=XertSyncProvider())
@@ -58,7 +59,7 @@ class SyncFromProvider:
     def __init__(self, db: AsyncSession) -> None:
         """
         Initialize the use case with dependencies.
-        
+
         Args:
             db: Database session for persistence
         """
@@ -71,7 +72,7 @@ class SyncFromProvider:
     ) -> SyncResult:
         """
         Sync activities from a provider for a user.
-        
+
         Steps:
         1. Get and decrypt credentials
         2. Determine sync date range (sync_since for first sync, incremental otherwise)
@@ -81,11 +82,11 @@ class SyncFromProvider:
         6. Ingest new activities (with batch mode for >10)
         7. Finalize batch import if needed
         8. Update last_synced_at
-        
+
         Args:
             user_id: User to sync for
             provider: SyncProvider implementation (XertSyncProvider, GarminSyncProvider)
-        
+
         Returns:
             SyncResult with success status and counts
         """
@@ -106,7 +107,8 @@ class SyncFromProvider:
         except EncryptionError:
             logger.error(
                 "sync_%s: Failed to decrypt credentials for user %s",
-                provider.source_name, user_id,
+                provider.source_name,
+                user_id,
             )
             return SyncResult(
                 success=False,
@@ -118,9 +120,7 @@ class SyncFromProvider:
         existing_refs = await self._get_existing_refs(user_id, provider.source_name)
 
         # Determine sync date range
-        start_date, end_date, is_first_sync = self._determine_sync_range(
-            cred_info, existing_refs
-        )
+        start_date, end_date, is_first_sync = self._determine_sync_range(cred_info, existing_refs)
 
         log_prefix = f"sync_{provider.source_name}"
         self._log_sync_range(log_prefix, user_id, cred_info, is_first_sync)
@@ -143,15 +143,14 @@ class SyncFromProvider:
             except Exception as e:
                 logger.error(
                     "%s: Failed to list activities for user %s: %s",
-                    log_prefix, user_id, e,
+                    log_prefix,
+                    user_id,
+                    e,
                 )
                 return SyncResult(success=False, user_id=user_id, error=str(e))
 
             # Filter to new activities (not already imported from this source)
-            new_activities = [
-                a for a in activities
-                if provider.make_source_ref(a.id) not in existing_refs
-            ]
+            new_activities = [a for a in activities if provider.make_source_ref(a.id) not in existing_refs]
 
             if not new_activities:
                 logger.info("%s: No new activities for user %s", log_prefix, user_id)
@@ -164,7 +163,8 @@ class SyncFromProvider:
             if batch_mode:
                 logger.info(
                     "%s: Using batch mode for %d activities",
-                    log_prefix, len(new_activities),
+                    log_prefix,
+                    len(new_activities),
                 )
 
             # Ingest each activity
@@ -185,38 +185,46 @@ class SyncFromProvider:
                         skipped_duplicates += 1
                         logger.info(
                             "%s: Skipped duplicate %s for user %s",
-                            log_prefix, provider.make_source_ref(activity.id), user_id,
+                            log_prefix,
+                            provider.make_source_ref(activity.id),
+                            user_id,
                         )
                         continue
 
                     # Ingest the activity
-                    result = await provider.ingest_activity(
-                        self._db, user_id, activity, batch_mode
-                    )
+                    result = await provider.ingest_activity(self._db, user_id, activity, batch_mode)
 
                     if result is not None:
                         synced += 1
                         logger.info(
                             "%s: Created activity %s from %s for user %s",
-                            log_prefix, result.id,
-                            provider.make_source_ref(activity.id), user_id,
+                            log_prefix,
+                            result.id,
+                            provider.make_source_ref(activity.id),
+                            user_id,
                         )
                     else:
                         logger.warning(
                             "%s: Failed to ingest activity %s for user %s",
-                            log_prefix, activity.id, user_id,
+                            log_prefix,
+                            activity.id,
+                            user_id,
                         )
 
                 except Exception:
                     logger.exception(
                         "%s: Unexpected error processing activity %s",
-                        log_prefix, activity.id,
+                        log_prefix,
+                        activity.id,
                     )
                     continue
 
             logger.info(
                 "%s: Synced %d activities, skipped %d duplicates for user %s",
-                log_prefix, synced, skipped_duplicates, user_id,
+                log_prefix,
+                synced,
+                skipped_duplicates,
+                user_id,
             )
 
             # Finalize batch import if needed
@@ -243,9 +251,7 @@ class SyncFromProvider:
     ) -> Any | None:
         """Get credentials for a user and provider."""
         model = provider.credentials_model
-        result = await self._db.execute(
-            select(model).where(model.user_id == user_id)
-        )
+        result = await self._db.execute(select(model).where(model.user_id == user_id))
         return result.scalar_one_or_none()
 
     async def _get_existing_refs(
@@ -269,7 +275,7 @@ class SyncFromProvider:
         Called after every successful sync (including no-new-activities runs) so
         that _determine_sync_range can use an incremental 4-hour window next time.
         """
-        creds.last_synced_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        creds.last_synced_at = datetime.now(UTC).replace(tzinfo=None)
         await self._db.commit()
 
     @staticmethod
@@ -287,7 +293,7 @@ class SyncFromProvider:
 
         Returns (start_date, end_date, is_first_sync).
         """
-        end_date = datetime.now(timezone.utc).replace(tzinfo=None)
+        end_date = datetime.now(UTC).replace(tzinfo=None)
         is_first_sync = len(existing_refs) == 0
 
         if is_first_sync:
@@ -323,21 +329,27 @@ class SyncFromProvider:
             if cred_info.sync_since:
                 logger.info(
                     "%s: First sync for user %s, using sync_since %s",
-                    log_prefix, user_id, cred_info.sync_since,
+                    log_prefix,
+                    user_id,
+                    cred_info.sync_since,
                 )
             else:
                 logger.info(
                     "%s: First sync for user %s, no sync_since set, using 90 days",
-                    log_prefix, user_id,
+                    log_prefix,
+                    user_id,
                 )
         else:
             if cred_info.last_synced_at:
                 logger.info(
                     "%s: Incremental sync for user %s, using last_synced_at %s - 4h",
-                    log_prefix, user_id, cred_info.last_synced_at,
+                    log_prefix,
+                    user_id,
+                    cred_info.last_synced_at,
                 )
             else:
                 logger.info(
                     "%s: Subsequent sync for user %s, no last_synced_at, using 90 days",
-                    log_prefix, user_id,
+                    log_prefix,
+                    user_id,
                 )

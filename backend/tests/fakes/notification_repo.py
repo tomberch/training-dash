@@ -1,6 +1,6 @@
 """In-memory fake implementation of NotificationRepo for testing."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
 from trainingdash.repositories.postgres.models import Notification
@@ -9,7 +9,7 @@ from trainingdash.repositories.postgres.models import Notification
 class FakeNotificationRepo:
     """
     In-memory fake implementation of NotificationRepo protocol.
-    
+
     Stores notifications in a dict keyed by (user_id, notification_id).
     """
 
@@ -18,12 +18,8 @@ class FakeNotificationRepo:
 
     # --- Protocol methods ---
 
-    async def list_for_user(
-        self, user_id: int, limit: int = 50, offset: int = 0
-    ) -> list[Notification]:
-        user_notifications = [
-            n for (uid, _), n in self._notifications.items() if uid == user_id
-        ]
+    async def list_for_user(self, user_id: int, limit: int = 50, offset: int = 0) -> list[Notification]:
+        user_notifications = [n for (uid, _), n in self._notifications.items() if uid == user_id]
         # Sort by created_at descending
         user_notifications.sort(key=lambda n: n.created_at or 0, reverse=True)
         return user_notifications[offset : offset + limit]
@@ -36,12 +32,12 @@ class FakeNotificationRepo:
         notification = self._notifications.get(key)
         if notification is None:
             return False
-        notification.read_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        notification.read_at = datetime.now(UTC).replace(tzinfo=None)
         return True
 
     async def mark_all_read(self, user_id: int) -> int:
         count = 0
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        now = datetime.now(UTC).replace(tzinfo=None)
         for (uid, _), notification in self._notifications.items():
             if uid == user_id and notification.read_at is None:
                 notification.read_at = now

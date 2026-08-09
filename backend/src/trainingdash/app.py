@@ -16,8 +16,8 @@ from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from trainingdash.routers import activities, admin, analytics, auth, health, metrics, oauth, tiles, user
 from trainingdash.integrations.xert.mock_client import setup_mock_xert_client
+from trainingdash.routers import activities, admin, analytics, auth, health, metrics, oauth, tiles, user
 
 logger = logging.getLogger(__name__)
 

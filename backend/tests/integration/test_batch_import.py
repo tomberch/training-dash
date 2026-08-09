@@ -1,16 +1,16 @@
 """Integration tests for bulk import mode (#24)."""
+
 import sys
-from datetime import timedelta
 from pathlib import Path
 
 import pytest
 from sqlalchemy import select
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "tests" / "fixtures"))
-from generate_fit import make_test_fit  # noqa: E402
-from trainingdash.repositories.postgres.models import Activity, Notification, FitnessHistory  # noqa: E402
-from trainingdash.ingest import ingest_fit, finalize_batch_import  # noqa: E402
+from generate_fit import make_test_fit
 
+from trainingdash.ingest import finalize_batch_import, ingest_fit
+from trainingdash.repositories.postgres.models import Activity, FitnessHistory, Notification
 
 # These tests mix HTTP client calls with direct DB operations (ingest_fit),
 # which requires TRUNCATE-based isolation for proper commit visibility.
@@ -30,21 +30,19 @@ class TestBatchModeIngest:
                 "ftp_watts": 150,  # Low FTP to trigger divergence
                 "lthr_bpm": 165,
                 "hrmax_bpm": 185,
-            }
+            },
         )
-        
+
         # Upload first activity in batch mode
         fit_data = make_test_fit(num_records=300)
-        activity = await ingest_fit(
-            db_session, seed_user.id, fit_data, "test", "batch:1", batch_mode=True
-        )
+        activity = await ingest_fit(db_session, seed_user.id, fit_data, "test", "batch:1", batch_mode=True)
         assert activity is not None
-        
+
         # No fitness history should be created in batch mode
         result = await db_session.execute(select(FitnessHistory))
         fitness_records = result.scalars().all()
         assert len(fitness_records) == 0
-        
+
         # No notifications should be created in batch mode
         result = await db_session.execute(select(Notification))
         notifications = result.scalars().all()
@@ -61,16 +59,14 @@ class TestBatchModeIngest:
                 "ftp_watts": 150,
                 "lthr_bpm": 165,
                 "hrmax_bpm": 185,
-            }
+            },
         )
-        
+
         # Upload activity without batch mode
         fit_data = make_test_fit(num_records=300)
-        activity = await ingest_fit(
-            db_session, seed_user.id, fit_data, "test", "single:1", batch_mode=False
-        )
+        activity = await ingest_fit(db_session, seed_user.id, fit_data, "test", "single:1", batch_mode=False)
         assert activity is not None
-        
+
         # Fitness history should be created
         result = await db_session.execute(select(FitnessHistory))
         fitness_records = result.scalars().all()
@@ -87,18 +83,16 @@ class TestBatchModeIngest:
                 "ftp_watts": 250,
                 "lthr_bpm": 165,
                 "hrmax_bpm": 185,
-            }
+            },
         )
-        
+
         # Upload in batch mode
         fit_data = make_test_fit(num_records=300)
-        activity = await ingest_fit(
-            db_session, seed_user.id, fit_data, "test", "batch:metrics", batch_mode=True
-        )
-        
+        activity = await ingest_fit(db_session, seed_user.id, fit_data, "test", "batch:metrics", batch_mode=True)
+
         # Refresh to get computed metrics
         await db_session.refresh(activity)
-        
+
         # Metrics should be computed
         assert activity.tss is not None
         assert activity.intensity_factor is not None
@@ -118,23 +112,21 @@ class TestFinalizeBatchImport:
                 "ftp_watts": 150,
                 "lthr_bpm": 165,
                 "hrmax_bpm": 185,
-            }
+            },
         )
-        
+
         # Upload multiple activities in batch mode
         for i in range(5):
             fit_data = make_test_fit(num_records=300)
-            await ingest_fit(
-                db_session, seed_user.id, fit_data, "test", f"batch:{i}", batch_mode=True
-            )
-        
+            await ingest_fit(db_session, seed_user.id, fit_data, "test", f"batch:{i}", batch_mode=True)
+
         # Verify no fitness history yet
         result = await db_session.execute(select(FitnessHistory))
         assert len(result.scalars().all()) == 0
-        
+
         # Finalize batch
         await finalize_batch_import(db_session, seed_user.id, 5)
-        
+
         # Should have exactly 1 fitness history entry
         result = await db_session.execute(select(FitnessHistory))
         fitness_records = result.scalars().all()
@@ -152,28 +144,25 @@ class TestFinalizeBatchImport:
                 "ftp_watts": 150,
                 "lthr_bpm": 165,
                 "hrmax_bpm": 185,
-            }
+            },
         )
-        
+
         # Upload 15 activities in batch mode
         for i in range(15):
             fit_data = make_test_fit(num_records=300)
-            await ingest_fit(
-                db_session, seed_user.id, fit_data, "test", f"batch:{i}", batch_mode=True
-            )
-        
+            await ingest_fit(db_session, seed_user.id, fit_data, "test", f"batch:{i}", batch_mode=True)
+
         # Finalize batch
         await finalize_batch_import(db_session, seed_user.id, 15)
-        
+
         # Should have exactly 1 notification
-        result = await db_session.execute(
-            select(Notification).where(Notification.type == "ftp_suggestion")
-        )
+        result = await db_session.execute(select(Notification).where(Notification.type == "ftp_suggestion"))
         notifications = result.scalars().all()
         assert len(notifications) == 1
-        
+
         # Notification should mention batch import
         import json
+
         n = notifications[0]
         payload = json.loads(n.payload)
         assert payload.get("batch_import") is True
@@ -191,23 +180,19 @@ class TestFinalizeBatchImport:
                 "ftp_watts": 250,
                 "lthr_bpm": 165,
                 "hrmax_bpm": 185,
-            }
+            },
         )
-        
+
         # Upload activities
         for i in range(3):
             fit_data = make_test_fit(num_records=300)
-            await ingest_fit(
-                db_session, seed_user.id, fit_data, "test", f"batch:{i}", batch_mode=True
-            )
-        
+            await ingest_fit(db_session, seed_user.id, fit_data, "test", f"batch:{i}", batch_mode=True)
+
         # Finalize batch
         await finalize_batch_import(db_session, seed_user.id, 3)
-        
+
         # At least one activity should be marked as breakthrough
-        result = await db_session.execute(
-            select(Activity).where(Activity.is_breakthrough == True)
-        )
+        result = await db_session.execute(select(Activity).where(Activity.is_breakthrough == True))
         breakthroughs = result.scalars().all()
         # First activity should be a breakthrough (sets initial PRs)
         assert len(breakthroughs) >= 1
@@ -224,29 +209,26 @@ class TestFinalizeBatchImport:
                 "ftp_watts": 225,  # Closer to typical CP from test data
                 "lthr_bpm": 165,
                 "hrmax_bpm": 185,
-            }
+            },
         )
-        
+
         # Upload activities
         for i in range(5):
             fit_data = make_test_fit(num_records=300)
-            await ingest_fit(
-                db_session, seed_user.id, fit_data, "test", f"batch:{i}", batch_mode=True
-            )
-        
+            await ingest_fit(db_session, seed_user.id, fit_data, "test", f"batch:{i}", batch_mode=True)
+
         # Finalize batch
         await finalize_batch_import(db_session, seed_user.id, 5)
-        
+
         # Check what notification was created (if any)
-        result = await db_session.execute(
-            select(Notification).where(Notification.type == "ftp_suggestion")
-        )
+        result = await db_session.execute(select(Notification).where(Notification.type == "ftp_suggestion"))
         notifications = result.scalars().all()
-        
+
         # If a notification exists, it should still be a batch notification with proper payload
         # The exact CP varies, so we just verify the batch import mechanism works
         if len(notifications) > 0:
             import json
+
             n = notifications[0]
             payload = json.loads(n.payload)
             # Even if notification exists due to CP variance, it should be batch format
@@ -268,37 +250,34 @@ class TestBulkImportEndToEnd:
                 "ftp_watts": 150,
                 "lthr_bpm": 165,
                 "hrmax_bpm": 185,
-            }
+            },
         )
-        
+
         # Upload 15 activities in batch mode
         for i in range(15):
             fit_data = make_test_fit(num_records=300)
-            await ingest_fit(
-                db_session, seed_user.id, fit_data, "test", f"bulk:{i}", batch_mode=True
-            )
-        
+            await ingest_fit(db_session, seed_user.id, fit_data, "test", f"bulk:{i}", batch_mode=True)
+
         # Finalize the batch
         await finalize_batch_import(db_session, seed_user.id, 15)
-        
+
         # Verify: 15 activities created
-        result = await db_session.execute(
-            select(Activity).where(Activity.user_id == seed_user.id)
-        )
+        result = await db_session.execute(select(Activity).where(Activity.user_id == seed_user.id))
         activities = result.scalars().all()
         assert len(activities) == 15
-        
+
         # Verify: exactly 1 fitness history
         result = await db_session.execute(select(FitnessHistory))
         assert len(result.scalars().all()) == 1
-        
+
         # Verify: exactly 1 notification
         result = await db_session.execute(select(Notification))
         notifications = result.scalars().all()
         assert len(notifications) == 1
-        
+
         # Verify notification is batch summary
         import json
+
         n = notifications[0]
         payload = json.loads(n.payload)
         assert payload["batch_import"] is True

@@ -11,7 +11,6 @@ The use case can be called by HTTP routers or background workers.
 """
 
 import logging
-from typing import Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,13 +22,13 @@ logger = logging.getLogger(__name__)
 class IngestActivity:
     """
     Use case for ingesting a FIT file and processing the activity.
-    
+
     This use case coordinates:
     - Parsing the FIT file
     - Duplicate detection
     - Persisting the activity and related records
     - Running the activity pipeline for metrics, peaks, routes
-    
+
     Example usage:
         use_case = IngestActivity(db)
         activity = await use_case.execute(
@@ -43,7 +42,7 @@ class IngestActivity:
     def __init__(self, db: AsyncSession) -> None:
         """
         Initialize the use case with dependencies.
-        
+
         Args:
             db: Database session for persistence
         """
@@ -59,30 +58,30 @@ class IngestActivity:
     ) -> Activity | None:
         """
         Ingest a FIT file and process the activity.
-        
+
         Steps:
         1. Parse FIT file to extract records, laps, and summary data
         2. Check for duplicate activities
         3. Create Activity, Lap, and Record models
         4. Run activity pipeline for metrics, peaks, routes, and titles
-        
+
         Args:
             user_id: User ID to attribute the activity to
             fit_data: Raw FIT file bytes
             source: Source identifier (e.g., "garmin", "xert", "upload")
             source_ref: Unique reference from the source
             batch_mode: If True, skip per-activity fitness updates and geocoding
-        
+
         Returns:
             Created Activity or None if parsing failed or duplicate detected
         """
         # Import here to avoid circular imports
-        from trainingdash.ingest import (
-            parse_records,
-            is_duplicate_activity,
-            _store_parsed_fit,
-        )
         from trainingdash.activity_pipeline import ActivityPipeline
+        from trainingdash.ingest import (
+            _store_parsed_fit,
+            is_duplicate_activity,
+            parse_records,
+        )
 
         # Step 1: Parse FIT file
         try:

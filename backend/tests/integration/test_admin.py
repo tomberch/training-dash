@@ -45,15 +45,11 @@ class TestAdminEndpoints:
         assert response.status_code == 200
 
         # Old password no longer works
-        old_login = await app_client.post(
-            "/api/login", json={"email": "resetme@example.com", "password": "pass"}
-        )
+        old_login = await app_client.post("/api/login", json={"email": "resetme@example.com", "password": "pass"})
         assert old_login.status_code == 401
 
         # New password works
-        new_login = await app_client.post(
-            "/api/login", json={"email": "resetme@example.com", "password": "newpass456"}
-        )
+        new_login = await app_client.post("/api/login", json={"email": "resetme@example.com", "password": "newpass456"})
         assert new_login.status_code == 200
 
     @pytest.mark.asyncio

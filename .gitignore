@@ -16,3 +16,9 @@ dist/
 .kiro/
 .scratch/
 semantic-review/
+
+# Coverage reports
+coverage/
+coverage.json
+htmlcov/
+.coverage

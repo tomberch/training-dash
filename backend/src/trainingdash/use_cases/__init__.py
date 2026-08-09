@@ -21,26 +21,26 @@ Example:
             ...
 """
 
-from trainingdash.use_cases.ingest_activity import IngestActivity
-from trainingdash.use_cases.delete_activity import DeleteActivity
-from trainingdash.use_cases.sync_from_provider import SyncFromProvider, SyncResult
-from trainingdash.use_cases.recalculate_metrics import RecalculateMetrics, RecalculationResult
-from trainingdash.use_cases.fitness_model_updater import FitnessModelUpdater
 from trainingdash.use_cases.breakthrough_evaluator import BreakthroughEvaluator
+from trainingdash.use_cases.delete_activity import DeleteActivity
+from trainingdash.use_cases.fitness_model_updater import FitnessModelUpdater
+from trainingdash.use_cases.hourly_sync_scheduler import HourlySyncScheduler
+from trainingdash.use_cases.ingest_activity import IngestActivity
 from trainingdash.use_cases.match_route import MatchRoute
 from trainingdash.use_cases.recalc_after_delete import RecalcAfterDelete
-from trainingdash.use_cases.hourly_sync_scheduler import HourlySyncScheduler
+from trainingdash.use_cases.recalculate_metrics import RecalculateMetrics, RecalculationResult
+from trainingdash.use_cases.sync_from_provider import SyncFromProvider, SyncResult
 
 __all__ = [
-    "IngestActivity",
-    "DeleteActivity",
-    "SyncFromProvider",
-    "SyncResult",
-    "RecalculateMetrics",
-    "RecalculationResult",
-    "FitnessModelUpdater",
     "BreakthroughEvaluator",
+    "DeleteActivity",
+    "FitnessModelUpdater",
+    "HourlySyncScheduler",
+    "IngestActivity",
     "MatchRoute",
     "RecalcAfterDelete",
-    "HourlySyncScheduler",
+    "RecalculateMetrics",
+    "RecalculationResult",
+    "SyncFromProvider",
+    "SyncResult",
 ]

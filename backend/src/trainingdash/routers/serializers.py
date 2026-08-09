@@ -1,16 +1,15 @@
 """Response serializers for API endpoints."""
 
 import json
-from datetime import datetime
 from typing import Any
 
-from trainingdash.routers.datetime_utils import utc_str
 from trainingdash.repositories.postgres.models import (
     Activity,
-    Record,
     RecalculationJob,
+    Record,
     User,
 )
+from trainingdash.routers.datetime_utils import utc_str
 
 
 def user_response(user: User) -> dict:
@@ -72,24 +71,26 @@ def activity_summary(a: Activity) -> dict[str, Any]:
 def activity_detail(a: Activity) -> dict[str, Any]:
     """Return full activity details including training metrics."""
     result = activity_summary(a)
-    result.update({
-        # Training metrics
-        "np_power_w": a.np_power_w,
-        "intensity_factor": a.intensity_factor,
-        "tss": a.tss,
-        "training_load": a.training_load,
-        # Power source
-        "power_source": a.power_source,
-        "power_confidence": a.power_confidence,
-        # Zone times (parse JSON if present)
-        "power_zone_times": json.loads(a.power_zone_times) if a.power_zone_times else None,
-        "hr_zone_times": json.loads(a.hr_zone_times) if a.hr_zone_times else None,
-        # W'bal
-        "wbal_min_joules": a.wbal_min_joules,
-        "wbal_min_pct": a.wbal_min_pct,
-        # Breakthrough
-        "is_breakthrough": a.is_breakthrough,
-    })
+    result.update(
+        {
+            # Training metrics
+            "np_power_w": a.np_power_w,
+            "intensity_factor": a.intensity_factor,
+            "tss": a.tss,
+            "training_load": a.training_load,
+            # Power source
+            "power_source": a.power_source,
+            "power_confidence": a.power_confidence,
+            # Zone times (parse JSON if present)
+            "power_zone_times": json.loads(a.power_zone_times) if a.power_zone_times else None,
+            "hr_zone_times": json.loads(a.hr_zone_times) if a.hr_zone_times else None,
+            # W'bal
+            "wbal_min_joules": a.wbal_min_joules,
+            "wbal_min_pct": a.wbal_min_pct,
+            # Breakthrough
+            "is_breakthrough": a.is_breakthrough,
+        }
+    )
     return result
 
 
@@ -101,19 +102,22 @@ def records_to_geojson(records: list[Record], props_keys: list[str]) -> dict:
         if "timestamp" in props and props["timestamp"] is not None:
             props["timestamp"] = utc_str(props["timestamp"])
         if r.lat is not None and r.lon is not None:
-            features.append({
-                "type": "Feature",
-                "geometry": {"type": "Point", "coordinates": [r.lon, r.lat]},
-                "properties": props,
-            })
+            features.append(
+                {
+                    "type": "Feature",
+                    "geometry": {"type": "Point", "coordinates": [r.lon, r.lat]},
+                    "properties": props,
+                }
+            )
         else:
-            features.append({
-                "type": "Feature",
-                "geometry": None,
-                "properties": props,
-            })
+            features.append(
+                {
+                    "type": "Feature",
+                    "geometry": None,
+                    "properties": props,
+                }
+            )
     return {"type": "FeatureCollection", "features": features}
-
 
 
 def recalculation_job_response(job: RecalculationJob) -> dict[str, Any]:
