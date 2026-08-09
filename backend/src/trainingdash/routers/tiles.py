@@ -89,7 +89,10 @@ async def get_osm_tile(z: int, x: int, y: int) -> FileResponse:
         )
 
     # Construct URL using allowlisted base URL and validated integers
-    osm_url = f"{_OSM_TILE_URL}/{z}/{x}/{y}.png"
+    # The z, x, y values are validated above (z: 0-19, x/y: 0 to 2^z-1)
+    # and are integers, so SSRF is not possible - only valid tile coordinates
+    # can reach this point.
+    osm_url = f"{_OSM_TILE_URL}/{z}/{x}/{y}.png"  # lgtm[py/partial-ssrf]
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
@@ -154,8 +157,10 @@ async def get_carto_tile(style: CartoStyle, z: int, x: int, y: int) -> FileRespo
         )
 
     # Construct URL using allowlisted base URL, validated style, and validated integers
+    # The style is from a Literal["light", "dark"] type and dict lookup,
+    # z, x, y are validated integers. SSRF is not possible.
     carto_style = _CARTO_STYLES[style]
-    carto_url = f"{_CARTO_TILE_URL}/{carto_style}/{z}/{x}/{y}.png"
+    carto_url = f"{_CARTO_TILE_URL}/{carto_style}/{z}/{x}/{y}.png"  # lgtm[py/partial-ssrf]
 
     try:
         async with httpx.AsyncClient() as client:

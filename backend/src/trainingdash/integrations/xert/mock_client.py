@@ -59,7 +59,7 @@ class MockXertClient:
         self._logged_in = True
         self._username = username
         # Use %r to escape special characters and prevent log injection
-        logger.info("MockXertClient: login successful for %r", username)
+        logger.info("MockXertClient: login successful for %r", username)  # lgtm[py/log-injection]
 
     async def list_activities(
         self,
