@@ -35,12 +35,32 @@ jobs:
         run: uv sync --dev
 
       - name: Run unit tests (fast, fail fast)
-        run: uv run pytest tests/unit/ --tb=short -q
+        run: uv run pytest tests/unit/ --tb=short -q --cov=trainingdash --cov-report=
 
       - name: Run integration tests
-        run: uv run pytest tests/integration/ --tb=short -q
+        run: uv run pytest tests/integration/ --tb=short -q --cov=trainingdash --cov-append --cov-report=json --cov-report=term
         env:
           ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY || 'dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcw==' }}
+
+      - name: Generate coverage summary
+        if: always()
+        run: |
+          echo "## :snake: Python Coverage Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f coverage.json ]; then
+            python -c "
+          import json
+          with open('coverage.json') as f:
+              data = json.load(f)
+          totals = data['totals']
+          print('| Metric | Coverage |')
+          print('|--------|----------|')
+          print(f'| Lines | {totals[\"percent_covered\"]:.1f}% |')
+          print(f'| Covered | {totals[\"covered_lines\"]} / {totals[\"num_statements\"]} |')
+          " >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No coverage data found" >> $GITHUB_STEP_SUMMARY
+          fi
 
   test-frontend:
     runs-on: ubuntu-latest
