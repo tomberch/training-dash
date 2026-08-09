@@ -42,6 +42,8 @@ from trainingdash.repositories.postgres.recalculation_job_repo import (
 )
 from trainingdash.repositories.postgres.settings_repo import PostgresAppSettingsRepo
 from trainingdash.repositories.postgres.user_repo import PostgresUserRepo
+from trainingdash.integrations.geocoding import GeocodingService
+from trainingdash.repositories.postgres.geocoding_cache_repo import PostgresGeocodingCacheRepo
 
 
 async def get_activity_repo(db: DbSession) -> ActivityRepo:
@@ -87,6 +89,17 @@ async def get_recalculation_job_repo(db: DbSession) -> RecalculationJobRepo:
 async def get_oauth_link_repo(db: DbSession) -> OAuthLinkRepo:
     """Create an OAuthLinkRepo bound to the current session."""
     return PostgresOAuthLinkRepo(db)
+
+
+def get_geocoding_service(db: DbSession) -> GeocodingService:
+    """Wire a GeocodingService with a Postgres cache repo.
+
+    Single assembly point for the pipeline and the title endpoint — replaces
+    the inline ``PostgresGeocodingCacheRepo(db) → GeocodingService(repo)``
+    blocks that were duplicated across ``activity_pipeline.py`` and
+    ``routers/activities.py``.
+    """
+    return GeocodingService(PostgresGeocodingCacheRepo(db))
 
 
 # Annotated types for use in router function signatures

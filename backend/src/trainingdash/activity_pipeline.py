@@ -677,13 +677,11 @@ class ActivityPipeline:
             result.title_source = "pending"
         else:
             try:
-                from trainingdash.repositories.postgres.geocoding_cache_repo import PostgresGeocodingCacheRepo
-                from trainingdash.integrations.geocoding import GeocodingService
+                from trainingdash.dependencies import get_geocoding_service
                 from trainingdash.domain.title_generator import generate_activity_title
-                
-                cache_repo = PostgresGeocodingCacheRepo(self.db)
-                geocoding = GeocodingService(cache_repo)
-                
+
+                geocoding = get_geocoding_service(self.db)
+
                 title = await generate_activity_title(
                     self.records, self.activity.started_at, geocoding=geocoding
                 )

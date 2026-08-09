@@ -176,14 +176,12 @@ async def generate_activity_title_endpoint(
         for r in records
     ]
     
-    # Create geocoding service with cache repository
-    from trainingdash.repositories.postgres.geocoding_cache_repo import PostgresGeocodingCacheRepo
-    from trainingdash.integrations.geocoding import GeocodingService
+    # Create geocoding service via the single wiring point in dependencies.py
+    from trainingdash.dependencies import get_geocoding_service
     from trainingdash.domain.title_generator import generate_activity_title
-    
-    cache_repo = PostgresGeocodingCacheRepo(db)
-    geocoding = GeocodingService(cache_repo)
-    
+
+    geocoding = get_geocoding_service(db)
+
     title = await generate_activity_title(records_dicts, activity.started_at, geocoding=geocoding)
     
     if title:
