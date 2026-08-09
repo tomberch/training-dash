@@ -58,7 +58,8 @@ async def enqueue_sync_xert_job(user_id: int) -> str | None:
     if not queue_available():
         return None
     queue = await get_queue()
-    job = await queue.enqueue("sync_xert_job", user_id=user_id)
+    # Sync jobs need longer timeout for external API calls and FIT file processing
+    job = await queue.enqueue("sync_xert_job", user_id=user_id, timeout=300)
     return job.key if job else None
 
 
@@ -67,7 +68,8 @@ async def enqueue_sync_garmin_job(user_id: int) -> str | None:
     if not queue_available():
         return None
     queue = await get_queue()
-    job = await queue.enqueue("sync_garmin_job", user_id=user_id)
+    # Sync jobs need longer timeout for external API calls and FIT file processing
+    job = await queue.enqueue("sync_garmin_job", user_id=user_id, timeout=300)
     return job.key if job else None
 
 
@@ -97,5 +99,6 @@ async def enqueue_recalculate_metrics_job(user_id: int) -> str | None:
     if not queue_available():
         return None
     queue = await get_queue()
-    job = await queue.enqueue("recalculate_metrics_job", user_id=user_id)
+    # Recalculation may process many activities; give it longer timeout
+    job = await queue.enqueue("recalculate_metrics_job", user_id=user_id, timeout=300)
     return job.key if job else None

@@ -737,37 +737,33 @@ async def delete_avatar(db: DbSession, user: CurrentUser):
 @router.post("/me/sync/garmin")
 async def trigger_garmin_sync(garmin_repo: GarminCredentialsRepoD, user: CurrentUser):
     """Trigger a Garmin sync for the current user."""
-    from trainingdash.jobs import create_redis_pool
+    from trainingdash.jobs import enqueue_sync_garmin_job
     
     if not await garmin_repo.exists(user.id):
         raise HTTPException(
             status_code=400, detail="No Garmin credentials configured"
         )
     
-    pool = await create_redis_pool()
-    try:
-        job = await pool.enqueue_job("sync_garmin_job", user.id)
-        return {"success": True, "job_id": job.job_id}
-    finally:
-        await pool.close()
+    job_id = await enqueue_sync_garmin_job(user.id)
+    if job_id is None:
+        raise HTTPException(status_code=503, detail="Job queue not available")
+    return {"success": True, "job_id": job_id}
 
 
 @router.post("/me/sync/xert")
 async def trigger_xert_sync(xert_repo: XertCredentialsRepoD, user: CurrentUser):
     """Trigger a Xert sync for the current user."""
-    from trainingdash.jobs import create_redis_pool
+    from trainingdash.jobs import enqueue_sync_xert_job
     
     if not await xert_repo.exists(user.id):
         raise HTTPException(
             status_code=400, detail="No Xert credentials configured"
         )
     
-    pool = await create_redis_pool()
-    try:
-        job = await pool.enqueue_job("sync_xert_job", user.id)
-        return {"success": True, "job_id": job.job_id}
-    finally:
-        await pool.close()
+    job_id = await enqueue_sync_xert_job(user.id)
+    if job_id is None:
+        raise HTTPException(status_code=503, detail="Job queue not available")
+    return {"success": True, "job_id": job_id}
 
 
 

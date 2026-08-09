@@ -104,12 +104,17 @@ test.describe.serial('Fitness Calculations', () => {
   // Create isolated user for this test suite
   const testUser = generateTestUser('fitness-calc');
 
+  // Reset storage state for this isolated test - don't use the shared auth
+  test.use({ storageState: { cookies: [], origins: [] } });
+
   test.beforeAll(async ({ request }) => {
     // Increase timeout for registration + 5 file uploads
     test.setTimeout(300000);
     
-    // Register and login as isolated test user
+    // Register the isolated test user
     await registerUser(request, testUser.email, testUser.password);
+    
+    // Login to set up threshold
     await loginUser(request, testUser.email, testUser.password);
 
     // Set FTP threshold (needed for TSS calculation)
@@ -121,6 +126,11 @@ test.describe.serial('Fitness Calculations', () => {
         effective_date: '2026-06-01',
       },
     });
+  });
+
+  // Login before each test since storage state is reset
+  test.beforeEach(async ({ request }) => {
+    await loginUser(request, testUser.email, testUser.password);
   });
 
   test('upload all CP test FIT files', async ({ request }) => {

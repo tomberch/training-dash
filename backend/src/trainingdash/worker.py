@@ -89,25 +89,33 @@ async def ingest_job(ctx: dict, *, user_id: int, fit_bytes_b64: str, source: str
             return {"success": False, "activity_id": None}
 
         queue = await get_queue()
-        await queue.enqueue("match_route_job", activity_id=activity.id, user_id=user_id)
+        # Convert UUID to string for JSON serialization
+        await queue.enqueue("match_route_job", activity_id=str(activity.id), user_id=user_id)
 
-        return {"success": True, "activity_id": activity.id}
+        return {"success": True, "activity_id": str(activity.id)}
 
 
-async def match_route_job(ctx: dict, *, activity_id: int, user_id: int):
-    """Match an activity to a route cluster."""
+async def match_route_job(ctx: dict, *, activity_id: str, user_id: int):
+    """Match an activity to a route cluster.
+    
+    Note: activity_id is a string (UUID serialized) for JSON compatibility.
+    """
+    from uuid import UUID as PyUUID
     from sqlalchemy import select
     from trainingdash.repositories.postgres.models import Activity, Record
     from trainingdash.route_matching import find_or_create_route_id
 
+    # Convert string back to UUID
+    activity_uuid = PyUUID(activity_id)
+
     async with worker_db_session(ctx) as db:
-        result = await db.execute(select(Activity).where(Activity.id == activity_id))
+        result = await db.execute(select(Activity).where(Activity.id == activity_uuid))
         activity = result.scalar_one_or_none()
         if activity is None:
             return {"success": False}
 
         records_result = await db.execute(
-            select(Record).where(Record.activity_id == activity_id).order_by(Record.timestamp)
+            select(Record).where(Record.activity_id == activity_uuid).order_by(Record.timestamp)
         )
         all_records = records_result.scalars().all()
         route_id = await find_or_create_route_id(db, activity, all_records)
