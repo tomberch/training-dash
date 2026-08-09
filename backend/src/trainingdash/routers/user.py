@@ -921,7 +921,7 @@ async def has_password(user: CurrentUser) -> dict:
 async def trigger_recalculate_metrics(recalc_repo: RecalculationJobRepoD, user: CurrentUser):
     """Enqueue an async job to recompute training metrics for all activities.
 
-    Upserts a RecalculationJob row to status=pending and enqueues the ARQ
+    Upserts a RecalculationJob row to status=pending and enqueues the SAQ
     job. The job transitions to running → completed | failed asynchronously.
     Poll GET /me/recalculate-metrics to observe progress.
     """

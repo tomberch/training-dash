@@ -678,7 +678,7 @@ class ActivityPipeline:
                 from trainingdash.domain.title_generator import generate_activity_title
                 
                 title = await generate_activity_title(
-                    self.records, self.activity.started_at
+                    self.records, self.activity.started_at, db=self.db
                 )
                 if title:
                     result.title = title

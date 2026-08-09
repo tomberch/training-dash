@@ -13,12 +13,14 @@ import os
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 from trainingdash.integrations.geocoding import (
     GeocodedPlace,
     GeocodingService,
-    get_geocoding_service,
     get_place_rank,
 )
 
@@ -358,6 +360,7 @@ def generate_title(
 async def generate_activity_title(
     records: list[dict],
     activity_date: Optional[datetime] = None,
+    db: Optional["AsyncSession"] = None,
 ) -> Optional[str]:
     """
     Generate a title for an activity from its GPS records.
@@ -365,6 +368,8 @@ async def generate_activity_title(
     Args:
         records: List of record dicts with lat, lon, altitude_m, distance_m
         activity_date: Activity start date for fallback title
+        db: Database session for geocoding cache (optional - if not provided,
+            geocoding will be skipped and a generic title returned)
     
     Returns:
         Generated title string, or None if insufficient data
@@ -383,8 +388,14 @@ async def generate_activity_title(
     # Check if roundtrip
     roundtrip = is_roundtrip(records)
     
-    # Get geocoding service
-    geocoding = await get_geocoding_service()
+    # If no db session, skip geocoding and return generic title
+    if db is None:
+        if activity_date:
+            return f"Activity on {activity_date.strftime('%d %b %Y')}"
+        return "Activity"
+    
+    # Get geocoding service with db session
+    geocoding = GeocodingService(db)
     
     # Geocode start point
     start_point = points[0]

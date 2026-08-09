@@ -179,7 +179,7 @@ async def generate_activity_title_endpoint(
     # Generate title
     from trainingdash.domain.title_generator import generate_activity_title
     
-    title = await generate_activity_title(records_dicts, activity.started_at)
+    title = await generate_activity_title(records_dicts, activity.started_at, db=db)
     
     if title:
         activity.title = title

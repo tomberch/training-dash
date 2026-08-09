@@ -31,8 +31,6 @@ services:
       DATABASE_URL: postgresql+asyncpg://trainingdash_e2e:trainingdash_e2e@db:5432/trainingdash_e2e
       SECRET_KEY: e2e-test-secret-key
       ADMIN_PASSWORD: admin
-      REDIS_HOST: redis
-      REDIS_PORT: "6379"
       TRAININGDASH_ENCRYPTION_KEY: D1prO+2rx2zmauRYJc8yKA2rbW0ABdAo5uf8ZJMoXSQ=
       # Xert mock configuration (set by tests when needed)
       # XERT_CLIENT_CLASS: tests.mocks.mock_xert.MockXertClient
@@ -44,8 +42,6 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      redis:
-        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
       interval: 2s
@@ -61,8 +57,6 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://trainingdash_e2e:trainingdash_e2e@db:5432/trainingdash_e2e
       SECRET_KEY: e2e-test-secret-key
-      REDIS_HOST: redis
-      REDIS_PORT: "6379"
       TRAININGDASH_ENCRYPTION_KEY: D1prO+2rx2zmauRYJc8yKA2rbW0ABdAo5uf8ZJMoXSQ=
       # Xert mock configuration (mirrors app service)
       # XERT_CLIENT_CLASS: tests.mocks.mock_xert.MockXertClient
@@ -72,13 +66,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      redis:
-        condition: service_started
-    command: arq trainingdash.worker.WorkerSettings
-
-  redis:
-    image: redis:7-alpine
-    # No host port exposure - worker connects via Docker network
+    command: saq trainingdash.worker.settings
 
 volumes:
   e2e-tilecache:

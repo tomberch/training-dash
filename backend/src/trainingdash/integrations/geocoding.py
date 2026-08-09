@@ -1,12 +1,11 @@
 """
 Geocoding service for reverse geocoding GPS coordinates to place names.
 
-Uses Photon (Komoot) as the primary geocoding provider with Redis caching
+Uses Photon (Komoot) as the primary geocoding provider with Postgres caching
 to respect rate limits and improve performance.
 """
 
 import asyncio
-import hashlib
 import json
 import logging
 import os
@@ -14,7 +13,8 @@ from dataclasses import dataclass
 from typing import Optional
 
 import httpx
-import redis.asyncio as redis
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -85,49 +85,59 @@ def _round_coordinate(coord: float) -> float:
     return round(coord, COORDINATE_PRECISION)
 
 
-def _cache_key(lat: float, lon: float) -> str:
+def _cache_key(lat: float, lon: float, prefer_locality: bool = False) -> str:
     """Generate cache key for coordinates."""
     rounded_lat = _round_coordinate(lat)
     rounded_lon = _round_coordinate(lon)
-    key = f"geocode:{rounded_lat}:{rounded_lon}"
-    return key
+    suffix = ":loc" if prefer_locality else ""
+    return f"geocode:{rounded_lat}:{rounded_lon}{suffix}"
 
 
 class GeocodingService:
     """
-    Async geocoding service with Redis caching and rate limiting.
+    Async geocoding service with Postgres caching and rate limiting.
     
     Usage:
-        service = GeocodingService()
-        await service.initialize()
+        service = GeocodingService(db_session)
         place = await service.reverse_geocode(46.9480, 7.4474)
-        await service.close()
     """
     
-    def __init__(self):
-        self._redis: Optional[redis.Redis] = None
+    def __init__(self, db: AsyncSession):
+        self._db = db
         self._http: Optional[httpx.AsyncClient] = None
         self._last_request_time: float = 0
         self._lock = asyncio.Lock()
+        self._table_checked = False
 
-
-    async def initialize(self):
-        """Initialize Redis and HTTP connections."""
-        redis_host = os.environ.get("REDIS_HOST", "localhost")
-        redis_port = int(os.environ.get("REDIS_PORT", 6379))
+    async def _ensure_cache_table(self):
+        """Ensure the geocoding cache table exists."""
+        if self._table_checked:
+            return
         
-        self._redis = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
-        self._http = httpx.AsyncClient(
-            timeout=10.0,
-            headers={"User-Agent": "TrainDash fitness app (personal use)"}
-        )
+        await self._db.execute(text("""
+            CREATE TABLE IF NOT EXISTS geocoding_cache (
+                cache_key VARCHAR(100) PRIMARY KEY,
+                result_json TEXT,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        await self._db.commit()
+        self._table_checked = True
+
+    async def _get_http_client(self) -> httpx.AsyncClient:
+        """Get or create HTTP client."""
+        if self._http is None:
+            self._http = httpx.AsyncClient(
+                timeout=10.0,
+                headers={"User-Agent": "TrainDash fitness app (personal use)"}
+            )
+        return self._http
     
     async def close(self):
-        """Close connections."""
-        if self._redis:
-            await self._redis.close()
+        """Close HTTP connection."""
         if self._http:
             await self._http.aclose()
+            self._http = None
     
     async def _rate_limit(self):
         """Enforce rate limiting between requests."""
@@ -138,12 +148,38 @@ class GeocodingService:
                 await asyncio.sleep(RATE_LIMIT_DELAY - elapsed)
             self._last_request_time = asyncio.get_event_loop().time()
     
+    async def _get_from_cache(self, cache_key: str) -> Optional[dict]:
+        """Get cached result from Postgres."""
+        await self._ensure_cache_table()
+        result = await self._db.execute(
+            text("SELECT result_json FROM geocoding_cache WHERE cache_key = :key"),
+            {"key": cache_key}
+        )
+        row = result.fetchone()
+        if row and row[0]:
+            return json.loads(row[0])
+        return None
+    
+    async def _set_cache(self, cache_key: str, value: Optional[dict]):
+        """Store result in Postgres cache."""
+        await self._ensure_cache_table()
+        json_value = json.dumps(value) if value is not None else None
+        await self._db.execute(
+            text("""
+                INSERT INTO geocoding_cache (cache_key, result_json)
+                VALUES (:key, :value)
+                ON CONFLICT (cache_key) DO UPDATE SET result_json = :value, created_at = NOW()
+            """),
+            {"key": cache_key, "value": json_value}
+        )
+        await self._db.commit()
+    
     async def reverse_geocode(self, lat: float, lon: float, prefer_locality: bool = False) -> Optional[GeocodedPlace]:
         """
         Reverse geocode a coordinate to a place name.
         
         Returns the most relevant place (city/town/village) or None if not found.
-        Uses Redis cache to avoid repeated API calls.
+        Uses Postgres cache to avoid repeated API calls.
         
         Args:
             lat: Latitude
@@ -151,28 +187,25 @@ class GeocodingService:
             prefer_locality: If True, prefer specific locality names (for waypoints).
                            If False, prefer settlement names like city/village (for start/end).
         """
-        if self._redis is None or self._http is None:
-            await self.initialize()
+        cache_key = _cache_key(lat, lon, prefer_locality)
         
-        # Include prefer_locality in cache key
-        cache_key = _cache_key(lat, lon) + (":loc" if prefer_locality else "")
+        # Check cache first
         try:
-            cached = await self._redis.get(cache_key)
-            if cached:
-                data = json.loads(cached)
-                if data is None:
-                    return None
-                return GeocodedPlace.from_dict(data)
+            cached = await self._get_from_cache(cache_key)
+            if cached is not None:
+                if cached.get("_null"):
+                    return None  # Negative cache hit
+                return GeocodedPlace.from_dict(cached)
         except Exception as e:
-            logger.warning(f"Redis cache read error: {e}")
+            logger.warning(f"Postgres cache read error: {e}")
         
         # Rate limit before API call
         await self._rate_limit()
 
-
         # Call Photon API
         try:
-            response = await self._http.get(
+            http = await self._get_http_client()
+            response = await http.get(
                 PHOTON_URL,
                 params={"lat": lat, "lon": lon, "limit": 1}
             )
@@ -183,10 +216,12 @@ class GeocodingService:
             
             # Cache the result (including None for negative caching)
             try:
-                cache_value = json.dumps(place.to_dict() if place else None)
-                await self._redis.setex(cache_key, CACHE_TTL_SECONDS, cache_value)
+                if place:
+                    await self._set_cache(cache_key, place.to_dict())
+                else:
+                    await self._set_cache(cache_key, {"_null": True})
             except Exception as e:
-                logger.warning(f"Redis cache write error: {e}")
+                logger.warning(f"Postgres cache write error: {e}")
             
             return place
             
@@ -262,7 +297,7 @@ class GeocodingService:
         coord_to_key = {}
         
         for lat, lon in coordinates:
-            key = _cache_key(lat, lon)
+            key = _cache_key(lat, lon, prefer_locality)
             coord_to_key[(lat, lon)] = key
             if key not in unique_coords:
                 unique_coords[key] = (lat, lon)
@@ -274,16 +309,3 @@ class GeocodingService:
         
         # Map back to original order
         return [results[coord_to_key[coord]] for coord in coordinates]
-
-
-# Module-level singleton for convenience
-_service: Optional[GeocodingService] = None
-
-
-async def get_geocoding_service() -> GeocodingService:
-    """Get or create the singleton geocoding service."""
-    global _service
-    if _service is None:
-        _service = GeocodingService()
-        await _service.initialize()
-    return _service

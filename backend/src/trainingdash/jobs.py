@@ -1,103 +1,81 @@
-import os
+"""
+Job enqueue functions for TrainingDash.
 
-from arq import create_pool
-from arq.connections import RedisSettings
+This module provides functions to enqueue background jobs via SAQ.
+Jobs are processed by the worker defined in worker.py.
+"""
 
-
-def get_redis_settings() -> RedisSettings:
-    host = os.environ.get("REDIS_HOST", "")
-    port = int(os.environ.get("REDIS_PORT", "6379"))
-    return RedisSettings(host=host or "localhost", port=port)
-
-
-def redis_available() -> bool:
-    return bool(os.environ.get("REDIS_HOST"))
-
-
-async def create_redis_pool():
-    return await create_pool(get_redis_settings())
+from trainingdash.queue import get_queue, queue_available
 
 
 async def enqueue_ingest_job(user_id: int, fit_bytes: bytes, source: str, source_ref: str) -> str | None:
-    """Enqueue an ingest job if Redis is available. Returns job_id or None if sync fallback needed."""
-    if not redis_available():
+    """Enqueue an ingest job if queue is available. Returns job key or None if sync fallback needed."""
+    if not queue_available():
         return None
-    pool = await create_redis_pool()
-    try:
-        job = await pool.enqueue_job("ingest_job", user_id=user_id, fit_bytes=fit_bytes, source=source, source_ref=source_ref)
-        return job.job_id
-    finally:
-        await pool.aclose()
+    queue = await get_queue()
+    job = await queue.enqueue("ingest_job", user_id=user_id, fit_bytes=fit_bytes, source=source, source_ref=source_ref)
+    return job.key if job else None
 
 
-async def get_job_status(job_id: str) -> dict:
-    """Get the status of a job by ID. Returns status and result if complete."""
-    if not redis_available():
+async def get_job_status(job_key: str) -> dict:
+    """Get the status of a job by key. Returns status and result if complete."""
+    if not queue_available():
         return {"status": "unknown", "result": None}
-    pool = await create_redis_pool()
-    try:
-        from arq.jobs import Job
-        job = Job(job_id, pool)
-        job_status = await job.status()
-        result = await job.result_info()
-        
-        status_map = {
-            "deferred": "pending",
-            "queued": "pending",
-            "in_progress": "processing",
-            "complete": "complete",
-            "not_found": "not_found",
-        }
-        
-        return {
-            "status": status_map.get(str(job_status).split(".")[-1].lower(), "unknown"),
-            "result": result.result if result else None,
-        }
-    finally:
-        await pool.aclose()
+    
+    queue = await get_queue()
+    job = await queue.job(job_key)
+    
+    if job is None:
+        return {"status": "not_found", "result": None}
+    
+    # Map SAQ status to our API status
+    status_map = {
+        "new": "pending",
+        "deferred": "pending",
+        "queued": "pending",
+        "active": "processing",
+        "complete": "complete",
+        "failed": "failed",
+        "aborted": "aborted",
+        "aborting": "processing",
+    }
+    
+    return {
+        "status": status_map.get(job.status, "unknown"),
+        "result": job.result,
+    }
 
 
 async def enqueue_sync_xert_job(user_id: int) -> str | None:
-    """Enqueue a Xert sync job for a user. Returns job_id or None if Redis not available."""
-    if not redis_available():
+    """Enqueue a Xert sync job for a user. Returns job key or None if queue not available."""
+    if not queue_available():
         return None
-    pool = await create_redis_pool()
-    try:
-        job = await pool.enqueue_job("sync_xert_job", user_id=user_id)
-        return job.job_id
-    finally:
-        await pool.aclose()
+    queue = await get_queue()
+    job = await queue.enqueue("sync_xert_job", user_id=user_id)
+    return job.key if job else None
 
 
 async def enqueue_sync_garmin_job(user_id: int) -> str | None:
-    """Enqueue a Garmin sync job for a user. Returns job_id or None if Redis not available."""
-    if not redis_available():
+    """Enqueue a Garmin sync job for a user. Returns job key or None if queue not available."""
+    if not queue_available():
         return None
-    pool = await create_redis_pool()
-    try:
-        job = await pool.enqueue_job("sync_garmin_job", user_id=user_id)
-        return job.job_id
-    finally:
-        await pool.aclose()
-
+    queue = await get_queue()
+    job = await queue.enqueue("sync_garmin_job", user_id=user_id)
+    return job.key if job else None
 
 
 async def enqueue_recalculate_after_delete_job(user_id: int) -> str | None:
     """
     Enqueue fitness/breakthrough recalculation after an activity is deleted.
 
-    Returns job_id or None if Redis is not available (recalculation is skipped
+    Returns job key or None if queue is not available (recalculation is skipped
     in that case — acceptable for development environments).
     """
-    if not redis_available():
+    if not queue_available():
         return None
-    pool = await create_redis_pool()
-    try:
-        job = await pool.enqueue_job("recalculate_after_delete_job", user_id=user_id)
-        return job.job_id
-    finally:
-        await pool.aclose()
-
+    queue = await get_queue()
+    job = await queue.enqueue("recalculate_after_delete_job", user_id=user_id)
+    return job.key if job else None
 
 
 async def enqueue_recalculate_metrics_job(user_id: int) -> str | None:
@@ -107,13 +85,10 @@ async def enqueue_recalculate_metrics_job(user_id: int) -> str | None:
     Recomputes NP, IF, TSS, W'bal, and zone times for all activities with
     power data. Updates the RecalculationJob row with live status.
 
-    Returns job_id or None if Redis is not available.
+    Returns job key or None if queue is not available.
     """
-    if not redis_available():
+    if not queue_available():
         return None
-    pool = await create_redis_pool()
-    try:
-        job = await pool.enqueue_job("recalculate_metrics_job", user_id=user_id)
-        return job.job_id
-    finally:
-        await pool.aclose()
+    queue = await get_queue()
+    job = await queue.enqueue("recalculate_metrics_job", user_id=user_id)
+    return job.key if job else None

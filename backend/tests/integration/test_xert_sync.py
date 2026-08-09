@@ -254,7 +254,7 @@ class TestSyncXertJob:
             with mock.patch("trainingdash.integrations.xert.get_xert_client", return_value=mock_xert_client):
                 with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
                     from trainingdash.worker import sync_xert_job
-                    result = await sync_xert_job({}, user_with_xert_creds.id)
+                    result = await sync_xert_job({}, user_id=user_with_xert_creds.id)
 
         assert result["success"] is True
         assert result["synced_activities"] == 1
@@ -298,7 +298,7 @@ class TestSyncXertJob:
             with mock.patch("trainingdash.integrations.xert.get_xert_client", return_value=mock_xert_client):
                 with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
                     from trainingdash.worker import sync_xert_job
-                    result = await sync_xert_job({}, user_with_xert_creds.id)
+                    result = await sync_xert_job({}, user_id=user_with_xert_creds.id)
 
         assert result["success"] is True
 
@@ -346,7 +346,7 @@ class TestSyncXertJob:
         with mock.patch("trainingdash.integrations.xert.get_xert_client", return_value=mock_xert_client):
             with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
                 from trainingdash.worker import sync_xert_job
-                result = await sync_xert_job({}, user_with_xert_creds.id)
+                result = await sync_xert_job({}, user_id=user_with_xert_creds.id)
 
         assert result["success"] is True
         assert result["synced_activities"] == 0
@@ -380,7 +380,7 @@ class TestSyncXertJob:
             with mock.patch("trainingdash.integrations.xert.get_xert_client", return_value=mock_xert_client):
                 with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
                     from trainingdash.worker import sync_xert_job
-                    await sync_xert_job({}, user_with_xert_creds.id)
+                    await sync_xert_job({}, user_id=user_with_xert_creds.id)
 
         async with session_factory() as session:
             activity_result = await session.execute(
@@ -426,7 +426,7 @@ class TestSyncXertJob:
             with mock.patch("trainingdash.integrations.xert.get_xert_client", return_value=mock_xert_client):
                 with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
                     from trainingdash.worker import sync_xert_job
-                    await sync_xert_job({}, user_with_xert_creds.id)
+                    await sync_xert_job({}, user_id=user_with_xert_creds.id)
 
         async with session_factory() as session:
             activity_result = await session.execute(
@@ -457,7 +457,7 @@ class TestSyncXertJob:
             with mock.patch("trainingdash.integrations.xert.get_xert_client", return_value=mock_xert_client):
                 with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
                     from trainingdash.worker import sync_xert_job
-                    result = await sync_xert_job({}, user_with_xert_creds.id)
+                    result = await sync_xert_job({}, user_id=user_with_xert_creds.id)
 
         assert result["success"] is True
         assert result["synced_activities"] == 1
@@ -501,7 +501,7 @@ class TestSyncXertJob:
             with mock.patch("trainingdash.integrations.xert.get_xert_client", return_value=mock_xert_client):
                 with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
                     from trainingdash.worker import sync_xert_job
-                    result = await sync_xert_job({}, user_with_xert_creds.id)
+                    result = await sync_xert_job({}, user_id=user_with_xert_creds.id)
 
         assert result["success"] is True
         assert result["synced_activities"] == 0
@@ -518,7 +518,7 @@ class TestSyncXertJob:
 
         with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
             from trainingdash.worker import sync_xert_job
-            result = await sync_xert_job({}, user.id)
+            result = await sync_xert_job({}, user_id=user.id)
 
         assert result["success"] is False
         assert "No Xert credentials" in result["error"]
@@ -535,7 +535,7 @@ class TestSyncXertJob:
         with mock.patch("trainingdash.integrations.xert.get_xert_client", return_value=mock_xert_client):
             with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
                 from trainingdash.worker import sync_xert_job
-                result = await sync_xert_job({}, user_with_xert_creds.id)
+                result = await sync_xert_job({}, user_id=user_with_xert_creds.id)
 
         assert result["success"] is False
         assert "Invalid credentials" in result["error"]
@@ -567,7 +567,7 @@ class TestSyncXertJob:
             with mock.patch("trainingdash.integrations.xert.get_xert_client", return_value=mock_xert_client):
                 with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
                     from trainingdash.worker import sync_xert_job
-                    result = await sync_xert_job({}, user_with_xert_creds.id)
+                    result = await sync_xert_job({}, user_id=user_with_xert_creds.id)
 
         assert result["success"] is True
         assert result["synced_activities"] == 1
@@ -613,11 +613,12 @@ class TestHourlySyncScheduler:
 
         mock_worker_db_session, _ = _make_worker_db_session_ctx(db_engine)
 
-        with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
-            with mock.patch("trainingdash.worker.create_redis_pool") as mock_pool:
-                mock_arq = mock.AsyncMock()
-                mock_pool.return_value = mock_arq
+        # Mock SAQ queue to capture enqueued jobs
+        mock_queue = mock.AsyncMock()
+        mock_queue.enqueue = mock.AsyncMock(return_value=mock.MagicMock(key="test-job-key"))
 
+        with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
+            with mock.patch("trainingdash.worker.get_queue", return_value=mock_queue):
                 from trainingdash.worker import hourly_sync_scheduler
                 result = await hourly_sync_scheduler({})
 
@@ -625,7 +626,7 @@ class TestHourlySyncScheduler:
         assert result["xert_queued"] == 2
 
         enqueued_user_ids = set()
-        for call in mock_arq.enqueue_job.call_args_list:
+        for call in mock_queue.enqueue.call_args_list:
             if call.args[0] == "sync_xert_job":
                 enqueued_user_ids.add(call.kwargs["user_id"])
         assert user1.id in enqueued_user_ids
@@ -644,11 +645,12 @@ class TestHourlySyncScheduler:
 
         mock_worker_db_session, _ = _make_worker_db_session_ctx(db_engine)
 
-        with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
-            with mock.patch("trainingdash.worker.create_redis_pool") as mock_pool:
-                mock_arq = mock.AsyncMock()
-                mock_pool.return_value = mock_arq
+        # Mock SAQ queue to capture enqueued jobs
+        mock_queue = mock.AsyncMock()
+        mock_queue.enqueue = mock.AsyncMock(return_value=mock.MagicMock(key="test-job-key"))
 
+        with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
+            with mock.patch("trainingdash.worker.get_queue", return_value=mock_queue):
                 from trainingdash.worker import hourly_sync_scheduler
                 result = await hourly_sync_scheduler({})
 

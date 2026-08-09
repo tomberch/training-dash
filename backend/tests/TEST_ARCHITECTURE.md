@@ -32,7 +32,7 @@ Integration tests require real Postgres (with PostGIS) and sometimes Redis. They
 
 - **API endpoints**: Full HTTP request/response cycles
 - **Database operations**: Complex queries, PostGIS functions, CASCADE behavior
-- **Background jobs**: ARQ worker processing
+- **Background jobs**: SAQ worker processing
 - **External integrations**: Xert sync (with mocked HTTP)
 
 Run with: `pytest tests/integration/ -q`
@@ -47,7 +47,6 @@ The following tests **cannot** be converted to unit tests:
 | `test_route_matching.py` | PostGIS geometry operations for route matching |
 | `test_comparison.py` | Distance-based gap calculations with real DB |
 | `test_tiles.py` | External HTTP tile proxy calls |
-| `test_arq.py` | Redis + worker job processing |
 | `test_xert_sync.py` | External API integration, credential storage |
 | `test_activities.py` | CASCADE deletes, route maintenance, full ingest |
 | `test_upload.py` | Full ingest pipeline with DB persistence |

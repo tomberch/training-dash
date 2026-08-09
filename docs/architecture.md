@@ -31,8 +31,7 @@ flowchart TB
 
     subgraph Infrastructure
         DB[("PostgreSQL<br/>+ PostGIS")]
-        Redis[("Redis<br/>(Queue)")]
-        Worker["Worker<br/>(arq)"]
+        Worker["Worker<br/>(SAQ)"]
     end
 
     subgraph External["External Services"]
@@ -45,12 +44,10 @@ flowchart TB
     Routers --> Services
     Services --> Models
     Models --> DB
-    Worker --> Redis
     Worker --> Garmin
     Worker --> Xert
     Worker --> FIT
     Backend --> DB
-    Backend --> Redis
 ```
 
 ## Backend Structure
@@ -105,8 +102,9 @@ backend/src/trainingdash/
 ├── dependencies.py     # FastAPI dependency injection factories
 ├── ingest.py           # FIT parsing and legacy ingest functions
 ├── sync_providers.py   # Provider implementations (XertSyncProvider, etc.)
+├── queue.py            # SAQ queue configuration (Postgres backend)
 ├── jobs.py             # Job enqueue helpers
-├── worker.py           # arq worker settings and job definitions
+├── worker.py           # SAQ worker settings and job definitions
 └── init_db.py          # Database initialization script
 ```
 
@@ -222,9 +220,9 @@ The codebase needed clearer boundaries as it grew. Clean Architecture provides:
 
 Route matching needs spatial operations. Hausdorff distance between simplified polylines determines if two activities follow the same route. PostGIS handles this efficiently.
 
-### Why arq + Redis?
+### Why SAQ + Postgres?
 
-Background sync jobs can take minutes (fetching from Garmin, parsing large FIT files). arq provides reliable job processing with retries, and Redis is already lightweight.
+Background sync jobs can take minutes (fetching from Garmin, parsing large FIT files). SAQ provides reliable job processing with retries, using Postgres as the queue backend — eliminating the need for a separate Redis instance and simplifying operations.
 
 ### Why Polyline Thumbnails?
 
@@ -242,4 +240,4 @@ cd frontend
 npm test
 ```
 
-Integration tests use testcontainers to spin up real PostgreSQL and Redis instances.
+Integration tests use testcontainers to spin up real PostgreSQL instances.

@@ -1,19 +1,19 @@
 """
 Background worker jobs for TrainingDash.
 
-This module defines arq worker jobs for:
+This module defines SAQ worker jobs for:
 - FIT file ingestion (from uploads)
 - Route matching
 - Sync jobs for external integrations (Xert, Garmin)
-- Nightly cron jobs to trigger syncs
+- Hourly cron jobs to trigger syncs
 
 The sync jobs use the common orchestration pattern from sync.py with
 provider-specific implementations from sync_providers.py.
 
 Engine lifecycle:
-- A single SQLAlchemy async engine is created at worker startup via on_startup hook
+- A single SQLAlchemy async engine is created at worker startup via startup hook
 - All jobs share this engine through the worker context (ctx)
-- The engine is disposed at worker shutdown via on_shutdown hook
+- The engine is disposed at worker shutdown via shutdown hook
 - This avoids the asyncpg InterfaceError that occurs when multiple engines
   share underlying connections under concurrent load
 """
@@ -21,16 +21,17 @@ Engine lifecycle:
 import logging
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from arq.cron import cron
+from saq import CronJob
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine, AsyncEngine
-from trainingdash.jobs import get_redis_settings, create_redis_pool
+
+from trainingdash.queue import get_queue
 
 logger = logging.getLogger(__name__)
 
 
-async def on_startup(ctx: dict) -> None:
+async def startup(ctx: dict) -> None:
     """Create a shared database engine at worker startup."""
     db_url = os.environ.get("DATABASE_URL")
     if not db_url:
@@ -47,7 +48,7 @@ async def on_startup(ctx: dict) -> None:
     logger.info("Worker started: database engine created")
 
 
-async def on_shutdown(ctx: dict) -> None:
+async def shutdown(ctx: dict) -> None:
     """Dispose the shared database engine at worker shutdown."""
     engine: AsyncEngine | None = ctx.get("db_engine")
     if engine is not None:
@@ -60,13 +61,13 @@ async def worker_db_session(ctx: dict):
     """Create a database session using the shared engine from worker context."""
     session_factory = ctx.get("db_session_factory")
     if session_factory is None:
-        raise RuntimeError("Database session factory not initialized. Was on_startup called?")
+        raise RuntimeError("Database session factory not initialized. Was startup called?")
     
     async with session_factory() as session:
         yield session
 
 
-async def ingest_job(ctx, user_id: int, fit_bytes: bytes, source: str, source_ref: str):
+async def ingest_job(ctx: dict, *, user_id: int, fit_bytes: bytes, source: str, source_ref: str):
     """Ingest a FIT file and enqueue route matching."""
     from trainingdash.use_cases import IngestActivity
 
@@ -76,16 +77,13 @@ async def ingest_job(ctx, user_id: int, fit_bytes: bytes, source: str, source_re
         if activity is None:
             return {"success": False, "activity_id": None}
 
-        pool = await create_redis_pool()
-        try:
-            await pool.enqueue_job("match_route_job", activity_id=activity.id, user_id=user_id)
-        finally:
-            await pool.aclose()
+        queue = await get_queue()
+        await queue.enqueue("match_route_job", activity_id=activity.id, user_id=user_id)
 
         return {"success": True, "activity_id": activity.id}
 
 
-async def match_route_job(ctx, activity_id: int, user_id: int):
+async def match_route_job(ctx: dict, *, activity_id: int, user_id: int):
     """Match an activity to a route cluster."""
     from sqlalchemy import select
     from trainingdash.repositories.postgres.models import Activity, Record
@@ -108,7 +106,7 @@ async def match_route_job(ctx, activity_id: int, user_id: int):
         return {"success": True, "route_id": route_id}
 
 
-async def recalculate_after_delete_job(ctx, user_id: int) -> dict:
+async def recalculate_after_delete_job(ctx: dict, *, user_id: int) -> dict:
     """
     Recompute fitness model and breakthrough flags after an activity is deleted.
 
@@ -120,9 +118,8 @@ async def recalculate_after_delete_job(ctx, user_id: int) -> dict:
     Idempotent — safe to re-run after partial failure.
     """
     import logging
-    from datetime import datetime, timezone
 
-    from sqlalchemy import select, update
+    from sqlalchemy import select
     from trainingdash.repositories.postgres.models import Activity, ActivityPeakPower
     from trainingdash.ingest import _update_fitness_model
     from trainingdash.domain.fitness import detect_breakthrough, get_all_time_bests
@@ -184,7 +181,7 @@ async def recalculate_after_delete_job(ctx, user_id: int) -> dict:
         return {"success": True, "user_id": user_id}
 
 
-async def sync_xert_job(ctx, user_id: int):
+async def sync_xert_job(ctx: dict, *, user_id: int):
     """
     Sync activities from Xert for a user.
     
@@ -209,7 +206,7 @@ async def sync_xert_job(ctx, user_id: int):
         }
 
 
-async def sync_garmin_job(ctx, user_id: int):
+async def sync_garmin_job(ctx: dict, *, user_id: int):
     """
     Sync activities from Garmin Connect for a user.
     
@@ -234,14 +231,13 @@ async def sync_garmin_job(ctx, user_id: int):
         }
 
 
-async def hourly_sync_scheduler(ctx):
+async def hourly_sync_scheduler(ctx: dict):
     """
     Hourly cron job: enqueue sync jobs for users whose sync_hour matches current hour.
     
     Garmin syncs are enqueued immediately (at :00).
     Xert syncs are deferred by 15 minutes to stagger API calls.
     """
-    from datetime import datetime, timezone
     from sqlalchemy import select
     from trainingdash.repositories.postgres.models import GarminCredentials, XertCredentials, User
     
@@ -269,27 +265,25 @@ async def hourly_sync_scheduler(ctx):
         logger.info(f"hourly_sync_scheduler: No users scheduled for hour {current_hour}")
         return {"success": True, "garmin_queued": 0, "xert_queued": 0}
     
-    pool = await create_redis_pool()
-    try:
-        # Enqueue Garmin syncs immediately
-        for user_id in garmin_user_ids:
-            await pool.enqueue_job("sync_garmin_job", user_id=user_id)
-            logger.info(f"hourly_sync_scheduler: Enqueued Garmin sync for user {user_id}")
-        
-        # Enqueue Xert syncs with 15 minute delay to stagger
-        from datetime import timedelta
-        defer_until = datetime.now(timezone.utc) + timedelta(minutes=15)
-        for user_id in xert_user_ids:
-            await pool.enqueue_job("sync_xert_job", user_id=user_id, _defer_until=defer_until)
-            logger.info(f"hourly_sync_scheduler: Enqueued Xert sync for user {user_id} (deferred 15min)")
-    finally:
-        await pool.aclose()
+    queue = await get_queue()
+    
+    # Enqueue Garmin syncs immediately
+    for user_id in garmin_user_ids:
+        await queue.enqueue("sync_garmin_job", user_id=user_id)
+        logger.info(f"hourly_sync_scheduler: Enqueued Garmin sync for user {user_id}")
+    
+    # Enqueue Xert syncs with 15 minute delay to stagger
+    import time
+    defer_until = time.time() + (15 * 60)  # 15 minutes from now
+    for user_id in xert_user_ids:
+        await queue.enqueue("sync_xert_job", user_id=user_id, scheduled=defer_until)
+        logger.info(f"hourly_sync_scheduler: Enqueued Xert sync for user {user_id} (deferred 15min)")
     
     logger.info(f"hourly_sync_scheduler: Queued {len(garmin_user_ids)} Garmin, {len(xert_user_ids)} Xert syncs")
     return {"success": True, "garmin_queued": len(garmin_user_ids), "xert_queued": len(xert_user_ids)}
 
 
-async def recalculate_metrics_job(ctx, user_id: int) -> dict:
+async def recalculate_metrics_job(ctx: dict, *, user_id: int) -> dict:
     """
     Recompute training metrics (NP, IF, TSS, W'bal, zone times) for all
     activities with power data that are missing metrics.
@@ -317,26 +311,36 @@ async def recalculate_metrics_job(ctx, user_id: int) -> dict:
         }
 
 
-class WorkerSettings:
-    functions = [
-        ingest_job,
-        match_route_job,
-        recalculate_after_delete_job,
-        recalculate_metrics_job,
-        sync_xert_job,
-        sync_garmin_job,
-        hourly_sync_scheduler,
-    ]
-    redis_settings = get_redis_settings()
-    max_tries = 3
-    retry_delay = 10  # seconds between retries
-    job_timeout = 300  # 5 minutes max per job
+# SAQ worker settings - this is what `saq worker.settings` loads
+async def get_settings() -> dict:
+    """
+    Return SAQ worker settings.
     
-    # Lifecycle hooks for shared database engine
-    on_startup = on_startup
-    on_shutdown = on_shutdown
+    This is a callable that returns the settings dict, allowing
+    lazy initialization of the queue connection.
+    """
+    queue = await get_queue()
     
-    # Cron schedule: run the sync scheduler at the top of every hour
-    cron_jobs = [
-        cron(hourly_sync_scheduler, minute=0, unique=True),
-    ]
+    return {
+        "queue": queue,
+        "functions": [
+            ingest_job,
+            match_route_job,
+            recalculate_after_delete_job,
+            recalculate_metrics_job,
+            sync_xert_job,
+            sync_garmin_job,
+            hourly_sync_scheduler,
+        ],
+        "concurrency": 10,
+        "startup": startup,
+        "shutdown": shutdown,
+        # Cron schedule: run the sync scheduler at the top of every hour
+        "cron_jobs": [
+            CronJob(hourly_sync_scheduler, cron="0 * * * *", unique=True),
+        ],
+    }
+
+
+# For `saq trainingdash.worker.settings` command
+settings = get_settings
