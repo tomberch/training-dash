@@ -12,16 +12,14 @@ FROM python:3.12-slim AS backend
 WORKDIR /app
 
 # Install system dependencies for psycopg (libpq) and curl for healthchecks
+# hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     curl \
-    && rm -rf /var/lib/apt/lists/*
-
-# Upgrade pip to fix security vulnerabilities (CVE-2025-8869, CVE-2026-*)
-RUN pip install --no-cache-dir --upgrade pip
-
-# Install uv once (cached layer)
-RUN pip install --no-cache-dir uv
+    && rm -rf /var/lib/apt/lists/* \
+    # Upgrade pip (CVE-2025-8869, CVE-2026-*) and install uv in same layer
+    && pip install --no-cache-dir pip==26.2.1 \
+    && pip install --no-cache-dir uv==0.7.19
 
 # Copy only dependency file first (cached layer for deps)
 COPY backend/pyproject.toml ./
