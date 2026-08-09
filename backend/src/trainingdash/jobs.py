@@ -62,7 +62,11 @@ async def enqueue_sync_xert_job(user_id: int, scheduled: float | None = None) ->
         return None
     queue = await get_queue()
     # Sync jobs need longer timeout for external API calls and FIT file processing
-    job = await queue.enqueue("sync_xert_job", user_id=user_id, timeout=300, scheduled=scheduled)
+    # Only pass scheduled if explicitly set (None would cause NOT NULL violation)
+    kwargs = {"user_id": user_id, "timeout": 300}
+    if scheduled is not None:
+        kwargs["scheduled"] = scheduled
+    job = await queue.enqueue("sync_xert_job", **kwargs)
     return job.key if job else None
 
 
@@ -75,7 +79,11 @@ async def enqueue_sync_garmin_job(user_id: int, scheduled: float | None = None) 
         return None
     queue = await get_queue()
     # Sync jobs need longer timeout for external API calls and FIT file processing
-    job = await queue.enqueue("sync_garmin_job", user_id=user_id, timeout=300, scheduled=scheduled)
+    # Only pass scheduled if explicitly set (None would cause NOT NULL violation)
+    kwargs = {"user_id": user_id, "timeout": 300}
+    if scheduled is not None:
+        kwargs["scheduled"] = scheduled
+    job = await queue.enqueue("sync_garmin_job", **kwargs)
     return job.key if job else None
 
 
