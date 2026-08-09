@@ -219,7 +219,7 @@ class TestHROnlyRideEstimation:
     """Tests for power estimation on HR-only rides."""
 
     @pytest.mark.asyncio
-    async def test_hr_only_ride_gets_estimated_power(self, auth_client, db_session):
+    async def test_hr_only_ride_gets_estimated_power(self, auth_client, db_session, seed_user):
         """HR-only rides get estimated power when model exists."""
         # Enable HR-derived power
         await auth_client.patch("/api/me", json={"hr_derived_power_enabled": True})
@@ -244,7 +244,7 @@ class TestHROnlyRideEstimation:
             )
         
         # Verify model exists
-        result = await db_session.execute(select(EFModel).where(EFModel.user_id == 1))
+        result = await db_session.execute(select(EFModel).where(EFModel.user_id == seed_user.id))
         model = result.scalar_one()
         assert model is not None
         

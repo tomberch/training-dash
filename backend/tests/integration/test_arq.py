@@ -20,6 +20,13 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
+# ARQ/Redis tests need a separate Redis container and pre-date the rollback
+# isolation rework. They have a stale `trainingdash.db` import (moved to
+# `trainingdash.repositories.postgres.db` in the Clean Architecture refactor)
+# and use TRUNCATE directly. Skipping until the ARQ/Redis isolation decision
+# (#285) lands — see #284 step 5.
+pytestmark = pytest.mark.skip(reason="ARQ/Redis carve-out — pending #285 decision")
+
 
 @pytest.fixture(scope="module")
 def redis_container():

@@ -14,7 +14,6 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
-from sqlalchemy.pool import NullPool
 from testcontainers.postgres import PostgresContainer
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "tests" / "fixtures"))
@@ -189,28 +188,31 @@ def pg_container():
         yield pg
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def db_engine_session(pg_container):
     """
     Session-scoped database engine. Creates schema once at session start.
-    This dramatically reduces test overhead by avoiding schema recreation per test.
-    
-    NOTE: pytest-xdist parallel execution is NOT supported due to PostGIS constraints.
-    The geography type is only available in the public schema where postgis extension
-    is installed. Schema-per-worker isolation doesn't work. Use sequential execution
-    or run test files in parallel with external orchestration.
+
+    Uses the default pool (not NullPool) so each test can check out its own
+    connection for per-test transaction rollback. ``loop_scope="session"`` keeps
+    one event loop for the whole session so asyncpg connections don't cross
+    loops.
+
+    Parallelism (pytest-xdist) is added in a later layer: each worker gets its
+    own schema in this same DB. See the worker-schema fixture. The serial-only
+    rationale that lived here previously ("geography only in public") is false
+    for PostGIS 3.4 — see research/xdist-postgis-patterns.md and ADR 0003.
     """
     url = pg_container.get_connection_url()
-    engine = create_async_engine(url, poolclass=NullPool)
-    
+    engine = create_async_engine(url, pool_pre_ping=True)
+
     # Create schema once at session start
     async with engine.begin() as conn:
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis"))
         await conn.run_sync(Base.metadata.create_all)
-    
+
     # Seed metric_types once at session start (reference data, never changes)
     async with engine.begin() as conn:
-        # Use raw SQL for speed - avoid ORM overhead
         await conn.execute(text("""
             INSERT INTO metric_types (key, display_name, unit, category, data_type, min_value, max_value, allowed_sources, recalc_targets, sort_order)
             VALUES 
@@ -223,7 +225,7 @@ async def db_engine_session(pg_container):
                 ('hrv', 'Heart Rate Variability', 'ms', 'recovery', 'integer', 10, 200, ARRAY['manual', 'device'], NULL, 7)
             ON CONFLICT (key) DO NOTHING
         """))
-    
+
     yield engine
     await engine.dispose()
 
@@ -231,39 +233,67 @@ async def db_engine_session(pg_container):
 # =============================================================================
 # DATABASE FIXTURES
 # =============================================================================
-# Default fixtures use TRUNCATE for test isolation. This is reliable and works
-# with all test patterns (HTTP clients, direct DB access, mixed usage).
+# Per-test isolation uses SAVEPOINT rollback, not TRUNCATE.
 #
-# Transaction rollback is faster but only works when all DB access goes through
-# the same connection, which doesn't work with tests that mix HTTP clients
-# with direct ingest_fit() calls.
+# Each test checks out one connection from the pool, begins an outer
+# transaction, and yields that connection. ``db_session`` and the ``get_db``
+# override (used by HTTP requests) both bind sessions to that connection with
+# ``join_transaction_mode="create_savepoint"`` — so HTTP writes and direct
+# writes (e.g. ``ingest_fit(db, ...)``) share one rollback-able transaction.
+# On teardown the outer transaction is rolled back, undoing every write the
+# test made, regardless of which code path produced it.
+#
+# This is the SQLAlchemy 2.0 test-suite recipe (see ADR 0003). The previous
+# TRUNCATE-per-test approach is gone; its ~700-800ms per-test setup cost was
+# 96% of every test's wall time.
 
 
-@pytest_asyncio.fixture
-async def db_engine(db_engine_session):
+@pytest_asyncio.fixture(loop_scope="session")
+async def _test_conn(db_engine_session):
+    """Per-test: one connection with an outer transaction that is rolled back.
+
+    Both ``db_session`` and the ``get_db`` override bind sessions to this
+    connection. Explicit ``trans.rollback()`` on teardown — the ``async with
+    conn.begin()`` context manager did not roll back reliably with asyncpg
+    (verified during the #280 prototype).
     """
-    Function-scoped fixture that cleans data between tests via TRUNCATE.
-    Excludes metric_types which is seeded once at session start.
+    async with db_engine_session.connect() as conn:
+        trans = await conn.begin()
+        try:
+            yield conn
+        finally:
+            await trans.rollback()
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def db_engine(_test_conn):
+    """Per-test connection (kept under the ``db_engine`` name for tests that
+    reference it directly; most tests want ``db_session``/``app_client``).
     """
-    # Truncate all tables EXCEPT metric_types (reference data seeded at session start)
-    async with db_engine_session.begin() as conn:
-        tables = [t for t in Base.metadata.tables.keys() if t != "metric_types"]
-        if tables:
-            table_list = ", ".join(f'"{t}"' for t in tables)
-            await conn.execute(text(f"TRUNCATE {table_list} RESTART IDENTITY CASCADE"))
-    
-    yield db_engine_session
+    return _test_conn
 
 
-@pytest_asyncio.fixture
-async def db_session(db_engine):
+def _session_factory_for(conn):
+    """Session factory bound to a single connection, joining its transaction
+    via SAVEPOINT so app code can ``commit()``/``rollback()`` freely without
+    ending the outer test transaction.
+    """
+    return async_sessionmaker(
+        bind=conn,
+        expire_on_commit=False,
+        join_transaction_mode="create_savepoint",
+    )
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def db_session(_test_conn):
     """Database session for direct DB access in tests."""
-    session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
+    session_factory = _session_factory_for(_test_conn)
     async with session_factory() as session:
         yield session
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(loop_scope="session")
 async def seed_user(db_session):
     user = User(
         email="testuser@example.com",
@@ -276,12 +306,18 @@ async def seed_user(db_session):
     return user
 
 
-@pytest_asyncio.fixture
-async def app_client(db_engine, seed_user):
-    """App client for HTTP requests in tests."""
+@pytest_asyncio.fixture(loop_scope="session")
+async def app_client(_test_conn, seed_user):
+    """App client for HTTP requests in tests.
+
+    The ``get_db`` override yields sessions bound to the test's shared
+    connection with ``join_transaction_mode="create_savepoint"`` so HTTP
+    writes join the same outer transaction as direct writes, and the whole
+    transaction is rolled back at teardown.
+    """
     import trainingdash.auth as authmod
 
-    session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
+    session_factory = _session_factory_for(_test_conn)
 
     async def override_get_db():
         async with session_factory() as session:
@@ -294,7 +330,7 @@ async def app_client(db_engine, seed_user):
         yield client
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(loop_scope="session")
 async def auth_client(app_client, seed_user):
     response = await app_client.post(
         "/api/login", json={"email": "testuser@example.com", "password": "testpass"}
@@ -308,7 +344,7 @@ async def http_client():
     """Lightweight app client with no database dependency.
 
     For tests that only hit unauthenticated HTTP endpoints (e.g. tile proxy).
-    Avoids the db_engine TRUNCATE and seed_user bcrypt login overhead.
+    Avoids the per-test connection and seed_user login overhead.
     """
     app = create_app()
     transport = ASGITransport(app=app)
@@ -316,7 +352,9 @@ async def http_client():
         yield client
 
 
-# Aliases for tests that explicitly want TRUNCATE (same as default now)
+# Backward-compat aliases: older tests referenced the TRUNCATE-named fixtures.
+# They now delegate to the rollback fixtures (semantically equivalent — both
+# deliver a clean DB per test).
 truncate_db_engine = db_engine
 truncate_db_session = db_session
 truncate_seed_user = seed_user

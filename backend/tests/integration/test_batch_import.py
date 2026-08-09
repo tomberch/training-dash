@@ -20,7 +20,7 @@ class TestBatchModeIngest:
     """Tests for batch_mode parameter in ingest_fit."""
 
     @pytest.mark.asyncio
-    async def test_batch_mode_skips_fitness_recalc(self, auth_client, db_session):
+    async def test_batch_mode_skips_fitness_recalc(self, auth_client, db_session, seed_user):
         """In batch mode, fitness model is not recalculated per-activity."""
         # Create threshold to enable fitness features
         await auth_client.post(
@@ -36,7 +36,7 @@ class TestBatchModeIngest:
         # Upload first activity in batch mode
         fit_data = make_test_fit(num_records=300)
         activity = await ingest_fit(
-            db_session, 1, fit_data, "test", "batch:1", batch_mode=True
+            db_session, seed_user.id, fit_data, "test", "batch:1", batch_mode=True
         )
         assert activity is not None
         
@@ -51,7 +51,7 @@ class TestBatchModeIngest:
         assert len(notifications) == 0
 
     @pytest.mark.asyncio
-    async def test_non_batch_mode_triggers_fitness_recalc(self, auth_client, db_session):
+    async def test_non_batch_mode_triggers_fitness_recalc(self, auth_client, db_session, seed_user):
         """Without batch mode, fitness model is recalculated per-activity."""
         # Create threshold
         await auth_client.post(
@@ -67,7 +67,7 @@ class TestBatchModeIngest:
         # Upload activity without batch mode
         fit_data = make_test_fit(num_records=300)
         activity = await ingest_fit(
-            db_session, 1, fit_data, "test", "single:1", batch_mode=False
+            db_session, seed_user.id, fit_data, "test", "single:1", batch_mode=False
         )
         assert activity is not None
         
@@ -77,7 +77,7 @@ class TestBatchModeIngest:
         assert len(fitness_records) >= 1
 
     @pytest.mark.asyncio
-    async def test_metrics_still_computed_in_batch_mode(self, auth_client, db_session):
+    async def test_metrics_still_computed_in_batch_mode(self, auth_client, db_session, seed_user):
         """Metrics (TSS, peaks) are still computed per-activity in batch mode."""
         # Create threshold
         await auth_client.post(
@@ -93,7 +93,7 @@ class TestBatchModeIngest:
         # Upload in batch mode
         fit_data = make_test_fit(num_records=300)
         activity = await ingest_fit(
-            db_session, 1, fit_data, "test", "batch:metrics", batch_mode=True
+            db_session, seed_user.id, fit_data, "test", "batch:metrics", batch_mode=True
         )
         
         # Refresh to get computed metrics
@@ -108,7 +108,7 @@ class TestFinalizeBatchImport:
     """Tests for finalize_batch_import function."""
 
     @pytest.mark.asyncio
-    async def test_finalize_creates_single_fitness_history(self, auth_client, db_session):
+    async def test_finalize_creates_single_fitness_history(self, auth_client, db_session, seed_user):
         """Finalize creates exactly one fitness history entry."""
         # Create threshold
         await auth_client.post(
@@ -125,7 +125,7 @@ class TestFinalizeBatchImport:
         for i in range(5):
             fit_data = make_test_fit(num_records=300)
             await ingest_fit(
-                db_session, 1, fit_data, "test", f"batch:{i}", batch_mode=True
+                db_session, seed_user.id, fit_data, "test", f"batch:{i}", batch_mode=True
             )
         
         # Verify no fitness history yet
@@ -133,7 +133,7 @@ class TestFinalizeBatchImport:
         assert len(result.scalars().all()) == 0
         
         # Finalize batch
-        await finalize_batch_import(db_session, 1, 5)
+        await finalize_batch_import(db_session, seed_user.id, 5)
         
         # Should have exactly 1 fitness history entry
         result = await db_session.execute(select(FitnessHistory))
@@ -142,7 +142,7 @@ class TestFinalizeBatchImport:
 
     @pytest.mark.slow
     @pytest.mark.asyncio
-    async def test_finalize_creates_single_summary_notification(self, auth_client, db_session):
+    async def test_finalize_creates_single_summary_notification(self, auth_client, db_session, seed_user):
         """Finalize creates a single summary notification, not per-activity."""
         # Create threshold with low FTP to trigger notification
         await auth_client.post(
@@ -159,11 +159,11 @@ class TestFinalizeBatchImport:
         for i in range(15):
             fit_data = make_test_fit(num_records=300)
             await ingest_fit(
-                db_session, 1, fit_data, "test", f"batch:{i}", batch_mode=True
+                db_session, seed_user.id, fit_data, "test", f"batch:{i}", batch_mode=True
             )
         
         # Finalize batch
-        await finalize_batch_import(db_session, 1, 15)
+        await finalize_batch_import(db_session, seed_user.id, 15)
         
         # Should have exactly 1 notification
         result = await db_session.execute(
@@ -181,7 +181,7 @@ class TestFinalizeBatchImport:
         assert "15 activities" in n.message
 
     @pytest.mark.asyncio
-    async def test_finalize_marks_breakthroughs(self, auth_client, db_session):
+    async def test_finalize_marks_breakthroughs(self, auth_client, db_session, seed_user):
         """Finalize correctly marks breakthrough activities."""
         # Create threshold
         await auth_client.post(
@@ -198,11 +198,11 @@ class TestFinalizeBatchImport:
         for i in range(3):
             fit_data = make_test_fit(num_records=300)
             await ingest_fit(
-                db_session, 1, fit_data, "test", f"batch:{i}", batch_mode=True
+                db_session, seed_user.id, fit_data, "test", f"batch:{i}", batch_mode=True
             )
         
         # Finalize batch
-        await finalize_batch_import(db_session, 1, 3)
+        await finalize_batch_import(db_session, seed_user.id, 3)
         
         # At least one activity should be marked as breakthrough
         result = await db_session.execute(
@@ -213,7 +213,7 @@ class TestFinalizeBatchImport:
         assert len(breakthroughs) >= 1
 
     @pytest.mark.asyncio
-    async def test_finalize_no_notification_when_cp_close_to_ftp(self, auth_client, db_session):
+    async def test_finalize_no_notification_when_cp_close_to_ftp(self, auth_client, db_session, seed_user):
         """No notification when CP is within 5% of FTP."""
         # Create threshold close to expected CP
         # Test FIT generates power around 200-279, model CP tends to ~225
@@ -231,11 +231,11 @@ class TestFinalizeBatchImport:
         for i in range(5):
             fit_data = make_test_fit(num_records=300)
             await ingest_fit(
-                db_session, 1, fit_data, "test", f"batch:{i}", batch_mode=True
+                db_session, seed_user.id, fit_data, "test", f"batch:{i}", batch_mode=True
             )
         
         # Finalize batch
-        await finalize_batch_import(db_session, 1, 5)
+        await finalize_batch_import(db_session, seed_user.id, 5)
         
         # Check what notification was created (if any)
         result = await db_session.execute(
@@ -258,7 +258,7 @@ class TestBulkImportEndToEnd:
 
     @pytest.mark.slow
     @pytest.mark.asyncio
-    async def test_bulk_upload_15_activities_single_notification(self, auth_client, db_session):
+    async def test_bulk_upload_15_activities_single_notification(self, auth_client, db_session, seed_user):
         """Acceptance test: upload 15 activities, verify single notification."""
         # Create threshold with low FTP
         await auth_client.post(
@@ -275,15 +275,15 @@ class TestBulkImportEndToEnd:
         for i in range(15):
             fit_data = make_test_fit(num_records=300)
             await ingest_fit(
-                db_session, 1, fit_data, "test", f"bulk:{i}", batch_mode=True
+                db_session, seed_user.id, fit_data, "test", f"bulk:{i}", batch_mode=True
             )
         
         # Finalize the batch
-        await finalize_batch_import(db_session, 1, 15)
+        await finalize_batch_import(db_session, seed_user.id, 15)
         
         # Verify: 15 activities created
         result = await db_session.execute(
-            select(Activity).where(Activity.user_id == 1)
+            select(Activity).where(Activity.user_id == seed_user.id)
         )
         activities = result.scalars().all()
         assert len(activities) == 15

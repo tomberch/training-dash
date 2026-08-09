@@ -25,11 +25,11 @@ class TestNotificationsEndpoint:
         assert len(data) == 0
 
     @pytest.mark.asyncio
-    async def test_notifications_includes_required_fields(self, auth_client, db_session):
+    async def test_notifications_includes_required_fields(self, auth_client, db_session, seed_user):
         """Notifications include all required fields."""
         # Create a notification directly
         notification = Notification(
-            user_id=1,  # Test user
+            user_id=seed_user.id,  # Test user
             type="ftp_suggestion",
             message="Test message",
             payload='{"suggested_ftp": 280}',
@@ -53,12 +53,12 @@ class TestNotificationsEndpoint:
         assert n["payload"]["suggested_ftp"] == 280
 
     @pytest.mark.asyncio
-    async def test_notifications_only_shows_pending(self, auth_client, db_session):
+    async def test_notifications_only_shows_pending(self, auth_client, db_session, seed_user):
         """Only pending notifications are returned."""
         # Create notifications with different statuses
         for status in ["pending", "accepted", "dismissed"]:
             notification = Notification(
-                user_id=1,
+                user_id=seed_user.id,
                 type="ftp_suggestion",
                 message=f"Status: {status}",
                 status=status,
@@ -84,10 +84,10 @@ class TestAcceptNotification:
     """Tests for accepting notifications."""
 
     @pytest.mark.asyncio
-    async def test_accept_notification(self, auth_client, db_session):
+    async def test_accept_notification(self, auth_client, db_session, seed_user):
         """Accept notification marks it as accepted."""
         notification = Notification(
-            user_id=1,
+            user_id=seed_user.id,
             type="test_type",
             message="Test",
             status="pending",
@@ -105,14 +105,14 @@ class TestAcceptNotification:
         assert notification.status == "accepted"
 
     @pytest.mark.asyncio
-    async def test_accept_ftp_suggestion_creates_threshold(self, auth_client, db_session):
+    async def test_accept_ftp_suggestion_creates_threshold(self, auth_client, db_session, seed_user):
         """Accepting FTP suggestion creates a new threshold."""
         from datetime import date as date_type
         
         # Create existing threshold using metric_entries
         await create_threshold_entries(
             db_session,
-            user_id=1,
+            user_id=seed_user.id,
             effective_date=date_type(2024, 1, 1),
             ftp_watts=250,
             lthr_bpm=165,
@@ -123,7 +123,7 @@ class TestAcceptNotification:
         
         # Create FTP suggestion
         notification = Notification(
-            user_id=1,
+            user_id=seed_user.id,
             type="ftp_suggestion",
             message="Suggest FTP update",
             payload='{"suggested_ftp": 280, "current_ftp": 250}',
@@ -145,7 +145,7 @@ class TestAcceptNotification:
         
         result = await db_session.execute(
             select(MetricEntry)
-            .where(MetricEntry.user_id == 1, MetricEntry.metric_type_id == ftp_type_id)
+            .where(MetricEntry.user_id == seed_user.id, MetricEntry.metric_type_id == ftp_type_id)
             .order_by(MetricEntry.effective_date.desc())
         )
         entries = result.scalars().all()
@@ -162,10 +162,10 @@ class TestAcceptNotification:
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_accept_already_processed(self, auth_client, db_session):
+    async def test_accept_already_processed(self, auth_client, db_session, seed_user):
         """Accept returns 400 for already processed notification."""
         notification = Notification(
-            user_id=1,
+            user_id=seed_user.id,
             type="test_type",
             message="Test",
             status="accepted",  # Already processed
@@ -182,10 +182,10 @@ class TestDismissNotification:
     """Tests for dismissing notifications."""
 
     @pytest.mark.asyncio
-    async def test_dismiss_notification(self, auth_client, db_session):
+    async def test_dismiss_notification(self, auth_client, db_session, seed_user):
         """Dismiss notification marks it as dismissed."""
         notification = Notification(
-            user_id=1,
+            user_id=seed_user.id,
             type="test_type",
             message="Test",
             status="pending",
@@ -209,10 +209,10 @@ class TestDismissNotification:
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_dismiss_already_processed(self, auth_client, db_session):
+    async def test_dismiss_already_processed(self, auth_client, db_session, seed_user):
         """Dismiss returns 400 for already processed notification."""
         notification = Notification(
-            user_id=1,
+            user_id=seed_user.id,
             type="test_type",
             message="Test",
             status="dismissed",  # Already processed
