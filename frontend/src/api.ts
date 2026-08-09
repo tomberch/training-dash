@@ -173,6 +173,17 @@ export interface User {
   power_zone_percentages: Record<string, [number, number | null]> | null;
   hr_zone_percentages: Record<string, [number, number | null]> | null;
   hr_derived_power_enabled: boolean;
+  hr_power_model: HrPowerModelStatus | null;
+}
+
+export interface HrPowerModelStatus {
+  enabled: boolean;
+  model_exists: boolean;
+  ef_value: number | null;
+  confidence: number | null;
+  ride_count: number;
+  computed_at: string | null;
+  is_stale: boolean | null;
 }
 
 export interface XertCredentialsStatus {

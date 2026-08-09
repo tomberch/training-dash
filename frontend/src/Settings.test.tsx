@@ -60,6 +60,7 @@ const mockUser: User = {
   power_zone_percentages: null,
   hr_zone_percentages: null,
   hr_derived_power_enabled: false,
+  hr_power_model: null,
 };
 
 // Helper to wrap Settings with Router context

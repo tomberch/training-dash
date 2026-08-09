@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import {
   updatePreferences,
   fetchMyXertCredentials,
@@ -127,6 +127,22 @@ interface SettingsProps {
 
 
 export function Settings({ user, onBack, onUserUpdate }: SettingsProps) {
+  const location = useLocation();
+
+  // Scroll to section when URL has hash (e.g., /settings#power-heart-rate)
+  useEffect(() => {
+    if (location.hash) {
+      const elementId = location.hash.slice(1); // Remove '#'
+      const element = document.getElementById(elementId);
+      if (element) {
+        // Small delay to ensure DOM is rendered
+        setTimeout(() => {
+          element.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 100);
+      }
+    }
+  }, [location.hash]);
+
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-2xl mx-auto px-4 py-6">
@@ -139,6 +155,7 @@ export function Settings({ user, onBack, onUserUpdate }: SettingsProps) {
         <div className="space-y-6">
           <ProfileSection user={user} onUserUpdate={onUserUpdate} />
           <PreferencesSection user={user} onUserUpdate={onUserUpdate} />
+          <PowerHeartRateSection user={user} onUserUpdate={onUserUpdate} />
           <ConnectedAccountsSection />
           <ZonesSection user={user} onUserUpdate={onUserUpdate} />
           <IntegrationsSection />
@@ -464,6 +481,121 @@ function PreferencesSection({ user, onUserUpdate }: { user: User; onUserUpdate: 
   );
 }
 
+
+function PowerHeartRateSection({ user, onUserUpdate }: { user: User; onUserUpdate: (user: User) => void }) {
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  const hrPowerModel = user.hr_power_model;
+  const minRidesRequired = 5;
+  const rideCount = hrPowerModel?.ride_count ?? 0;
+  const modelReady = rideCount >= minRidesRequired;
+  const isEnabled = user.hr_derived_power_enabled;
+
+  async function handleToggle() {
+    if (!modelReady) return;
+    
+    const newValue = !isEnabled;
+    setSaving(true);
+    setFeedback(null);
+    try {
+      const updated = await updatePreferences({ hr_derived_power_enabled: newValue });
+      onUserUpdate(updated);
+      setFeedback({ 
+        type: "success", 
+        message: newValue ? "HR-derived power enabled" : "HR-derived power disabled" 
+      });
+      setTimeout(() => setFeedback(null), 3000);
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Failed to update setting";
+      setFeedback({ type: "error", message });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // Format confidence as percentage
+  const confidencePercent = hrPowerModel?.confidence 
+    ? Math.round(hrPowerModel.confidence * 100) 
+    : null;
+
+  // Format confidence level label
+  const confidenceLabel = confidencePercent !== null
+    ? confidencePercent >= 80 ? "High" : confidencePercent >= 60 ? "Medium" : "Low"
+    : null;
+
+  return (
+    <Card id="power-heart-rate">
+      <CardHeader>
+        <CardTitle>Power & Heart Rate</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* HR-Derived Power Toggle */}
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1">
+            <p className="text-sm font-medium text-foreground">HR-Derived Power</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Estimate power from heart rate on activities without a power meter.
+              Uses an Efficiency Factor model trained from your dual-sensor rides.
+            </p>
+            
+            {!modelReady && (
+              <p className="text-sm text-warning mt-2">
+                Record {minRidesRequired - rideCount} more {minRidesRequired - rideCount === 1 ? "activity" : "activities"} with 
+                both power meter and heart rate to enable this feature.
+              </p>
+            )}
+            
+            {modelReady && hrPowerModel?.model_exists && (
+              <div className="mt-3 p-3 rounded-lg bg-muted/50 text-sm">
+                <div className="flex items-center gap-4 text-muted-foreground">
+                  <span>Model trained on <span className="font-medium text-foreground">{rideCount}</span> rides</span>
+                  {confidenceLabel && (
+                    <span className={cn(
+                      "px-2 py-0.5 rounded-full text-xs font-medium",
+                      confidencePercent && confidencePercent >= 80 
+                        ? "bg-success/20 text-success" 
+                        : confidencePercent && confidencePercent >= 60
+                          ? "bg-warning/20 text-warning"
+                          : "bg-muted text-muted-foreground"
+                    )}>
+                      {confidenceLabel} confidence
+                    </span>
+                  )}
+                </div>
+                {hrPowerModel.is_stale && (
+                  <p className="text-warning mt-2 text-xs">
+                    Model may be outdated. Record new dual-sensor activities to improve accuracy.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+          
+          <button
+            onClick={handleToggle}
+            disabled={saving || !modelReady}
+            aria-pressed={isEnabled}
+            className={cn(
+              "relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
+              isEnabled ? "bg-primary" : "bg-muted",
+              (!modelReady || saving) && "opacity-50 cursor-not-allowed"
+            )}
+          >
+            <span
+              className={cn(
+                "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                isEnabled ? "translate-x-5" : "translate-x-0"
+              )}
+            />
+          </button>
+        </div>
+        
+        <FeedbackAlert feedback={feedback} />
+      </CardContent>
+    </Card>
+  );
+}
 
 
 function ZonesSection({ user, onUserUpdate }: { user: User; onUserUpdate: (user: User) => void }) {
