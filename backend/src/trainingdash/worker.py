@@ -71,9 +71,16 @@ async def worker_db_session(ctx: dict):
         yield session
 
 
-async def ingest_job(ctx: dict, *, user_id: int, fit_bytes: bytes, source: str, source_ref: str):
-    """Ingest a FIT file and enqueue route matching."""
+async def ingest_job(ctx: dict, *, user_id: int, fit_bytes_b64: str, source: str, source_ref: str):
+    """Ingest a FIT file and enqueue route matching.
+    
+    Note: fit_bytes_b64 is base64-encoded because SAQ uses JSON serialization.
+    """
+    import base64
     from trainingdash.use_cases import IngestActivity
+
+    # Decode base64 back to bytes
+    fit_bytes = base64.b64decode(fit_bytes_b64)
 
     async with worker_db_session(ctx) as db:
         use_case = IngestActivity(db)
@@ -316,17 +323,28 @@ async def recalculate_metrics_job(ctx: dict, *, user_id: int) -> dict:
 
 
 # SAQ worker settings - this is what `saq worker.settings` loads
-async def get_settings() -> dict:
+# Note: SAQ supports settings as a callable, which delays queue creation
+# until the worker actually starts. This is crucial for Docker Compose
+# where the worker container may start before the database is ready.
+def settings():
     """
     Return SAQ worker settings.
     
-    This is a callable that returns the settings dict, allowing
-    lazy initialization of the queue connection.
+    This is a callable (not a dict) so that PostgresQueue.from_url() is not
+    called at module import time. The queue connection is deferred until
+    the worker process actually starts, giving the database container time
+    to become healthy.
     """
-    queue = await get_queue()
+    from saq.queue.postgres import PostgresQueue
+    from trainingdash.queue import get_queue_url
     
     return {
-        "queue": queue,
+        "queue": PostgresQueue.from_url(
+            get_queue_url(),
+            name="default",
+            min_size=2,
+            max_size=10,
+        ),
         "functions": [
             ingest_job,
             match_route_job,
@@ -344,7 +362,3 @@ async def get_settings() -> dict:
             CronJob(hourly_sync_scheduler, cron="0 * * * *", unique=True),
         ],
     }
-
-
-# For `saq trainingdash.worker.settings` command
-settings = get_settings

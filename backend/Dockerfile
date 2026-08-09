@@ -11,6 +11,11 @@ FROM python:3.12-slim AS backend
 
 WORKDIR /app
 
+# Install system dependencies for psycopg (libpq)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install uv once (cached layer)
 RUN pip install --no-cache-dir uv
 

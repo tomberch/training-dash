@@ -54,6 +54,16 @@ def _get_queue_instance() -> Queue:
     )
 
 
+def get_queue_sync() -> Queue:
+    """
+    Get the SAQ queue instance synchronously (for worker settings).
+    
+    The queue will connect when the worker starts. This just returns
+    the unconnected queue instance.
+    """
+    return _get_queue_instance()
+
+
 async def get_queue() -> Queue:
     """
     Get the SAQ queue instance, connecting if needed.

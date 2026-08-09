@@ -3,7 +3,12 @@ Job enqueue functions for TrainingDash.
 
 This module provides functions to enqueue background jobs via SAQ.
 Jobs are processed by the worker defined in worker.py.
+
+Note: SAQ with Postgres uses JSON serialization, so binary data must be
+base64-encoded before enqueueing.
 """
+
+import base64
 
 from trainingdash.queue import get_queue, queue_available
 
@@ -13,7 +18,9 @@ async def enqueue_ingest_job(user_id: int, fit_bytes: bytes, source: str, source
     if not queue_available():
         return None
     queue = await get_queue()
-    job = await queue.enqueue("ingest_job", user_id=user_id, fit_bytes=fit_bytes, source=source, source_ref=source_ref)
+    # Base64 encode bytes for JSON serialization
+    fit_bytes_b64 = base64.b64encode(fit_bytes).decode('ascii')
+    job = await queue.enqueue("ingest_job", user_id=user_id, fit_bytes_b64=fit_bytes_b64, source=source, source_ref=source_ref)
     return job.key if job else None
 
 
