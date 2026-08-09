@@ -2,6 +2,44 @@
 
 This directory contains pre-built FIT files for E2E testing.
 
+## Xert Mock Integration
+
+These FIT files are used by the **MockXertClient** when `MOCK_XERT_ENABLED=true`.
+
+When a test triggers a Xert sync:
+1. `MockXertClient.list_activities()` returns one activity per FIT file in this directory
+2. `MockXertClient.download_fit(activity_id)` returns the bytes from `{activity_id}.fit`
+3. Activity IDs are the filenames without extension (e.g., `cp-ride1-2min`)
+
+### Using in E2E Tests
+
+```typescript
+import { setXertCredentials, triggerXertSync, MOCK_ACTIVITY_IDS } from './fixtures/xert';
+
+test('xert sync imports activities', async ({ page, request }) => {
+  // Set up Xert credentials (mock accepts any password except "invalid")
+  await setXertCredentials(request, 'test@xert.com', 'anypassword');
+
+  // Trigger sync - will import all FIT files from this directory
+  await triggerXertSync(request);
+
+  // Activities will have IDs like: cp-ride1-2min, cp-ride2-5min, etc.
+});
+```
+
+### Mock XSS Values
+
+Each activity has a predefined XSS (Xert Strain Score):
+
+| Activity ID | XSS |
+|-------------|-----|
+| cp-ride1-2min | 45.0 |
+| cp-ride2-5min | 65.0 |
+| cp-ride3-10min | 85.0 |
+| cp-ride4-20min | 95.0 |
+| cp-ride5-mixed | 120.0 |
+| test-ride | 50.0 |
+
 ## CP Model Test Files
 
 Files prefixed with `cp-ride` are designed to produce **CP=220W, W'=15000J** when

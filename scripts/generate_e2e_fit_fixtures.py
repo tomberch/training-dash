@@ -162,6 +162,22 @@ def main():
     simple_path.write_bytes(simple_ride)
     print(f"✓ test-ride.fit ({len(simple_ride):,} bytes) - Simple test ride for upload tests")
     
+    # Generate breakthrough file for threshold update test
+    # This file has a 5-min effort at 295W (higher than the 270W in cp-ride2)
+    # When combined with existing rides, should produce CP ≈ 240W
+    breakthrough_intervals = [
+        (300, 130),   # 5 min warmup at 130W
+        (300, 295),   # 5 min BREAKTHROUGH effort at 295W (new PR!)
+        (300, 100),   # 5 min cooldown at 100W
+    ]
+    breakthrough_bytes = make_test_fit_with_profile(
+        breakthrough_intervals,
+        start_time=datetime(2026, 8, 1, 9, 0, 0, tzinfo=timezone.utc),
+    )
+    breakthrough_path = OUTPUT_DIR / "breakthrough-5min.fit"
+    breakthrough_path.write_bytes(breakthrough_bytes)
+    print(f"✓ breakthrough-5min.fit ({len(breakthrough_bytes):,} bytes) - Breakthrough 5-min @ 295W")
+    
     print()
     print("Done! Files ready for E2E tests.")
 

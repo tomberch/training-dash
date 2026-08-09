@@ -27,8 +27,12 @@ from saq import CronJob
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine, AsyncEngine
 
 from trainingdash.queue import get_queue
+from trainingdash.integrations.xert.mock_client import setup_mock_xert_client
 
 logger = logging.getLogger(__name__)
+
+# Initialize mock Xert client if enabled (for E2E testing)
+setup_mock_xert_client()
 
 
 async def startup(ctx: dict) -> None:

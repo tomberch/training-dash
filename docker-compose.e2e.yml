@@ -32,9 +32,9 @@ services:
       SECRET_KEY: e2e-test-secret-key
       ADMIN_PASSWORD: admin
       TRAININGDASH_ENCRYPTION_KEY: D1prO+2rx2zmauRYJc8yKA2rbW0ABdAo5uf8ZJMoXSQ=
-      # Xert mock configuration (set by tests when needed)
-      # XERT_CLIENT_CLASS: tests.mocks.mock_xert.MockXertClient
-      # MOCK_XERT_FIXTURES_DIR: /app/e2e-fixtures
+      # Xert mock configuration - enabled by default for E2E tests
+      MOCK_XERT_ENABLED: "true"
+      MOCK_XERT_FIXTURES_DIR: /app/e2e-fixtures/fit-files
     volumes:
       - e2e-tilecache:/app/tile-cache
       # Mount fixture files for mock Xert client (when tests provide them)
@@ -58,9 +58,9 @@ services:
       DATABASE_URL: postgresql+asyncpg://trainingdash_e2e:trainingdash_e2e@db:5432/trainingdash_e2e
       SECRET_KEY: e2e-test-secret-key
       TRAININGDASH_ENCRYPTION_KEY: D1prO+2rx2zmauRYJc8yKA2rbW0ABdAo5uf8ZJMoXSQ=
-      # Xert mock configuration (mirrors app service)
-      # XERT_CLIENT_CLASS: tests.mocks.mock_xert.MockXertClient
-      # MOCK_XERT_FIXTURES_DIR: /app/e2e-fixtures
+      # Xert mock configuration - enabled by default for E2E tests
+      MOCK_XERT_ENABLED: "true"
+      MOCK_XERT_FIXTURES_DIR: /app/e2e-fixtures/fit-files
     volumes:
       - ./frontend/e2e/fixtures:/app/e2e-fixtures:ro
     depends_on:

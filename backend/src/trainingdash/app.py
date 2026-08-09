@@ -17,8 +17,12 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from trainingdash.routers import activities, admin, analytics, auth, health, metrics, oauth, tiles, user
+from trainingdash.integrations.xert.mock_client import setup_mock_xert_client
 
 logger = logging.getLogger(__name__)
+
+# Initialize mock Xert client if enabled (for E2E testing)
+setup_mock_xert_client()
 
 
 def generate_error_id() -> str:

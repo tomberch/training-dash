@@ -300,7 +300,6 @@ class TestThresholdHistory:
         assert response.status_code == 200
         assert response.json() == []
 
-    @pytest.mark.xfail(reason="stale: threshold API no longer returns 'id' (#286)", strict=True)
     @pytest.mark.asyncio
     async def test_get_thresholds_creates_defaults_when_dob_set(self, auth_client):
         """GET /me/thresholds auto-creates defaults when user has DOB."""
@@ -315,7 +314,6 @@ class TestThresholdHistory:
         # Check defaults match Tanaka formula: HRmax = 208 - 0.7 * age
         # Age ~36 (in 2026), HRmax ~183, LTHR ~170
         threshold = data[0]
-        assert "id" in threshold
         assert "effective_date" in threshold
         assert threshold["ftp_watts"] == 200  # Default when no weight
         assert 160 <= threshold["hrmax_bpm"] <= 190  # Age-based range
@@ -333,7 +331,6 @@ class TestThresholdHistory:
         assert len(data) == 1
         assert data[0]["ftp_watts"] == 200  # 80 * 2.5 = 200
 
-    @pytest.mark.xfail(reason="stale: threshold API no longer returns 'id' (#286)", strict=True)
     @pytest.mark.asyncio
     async def test_create_threshold(self, auth_client):
         """POST /me/thresholds creates a new threshold entry."""
@@ -347,7 +344,6 @@ class TestThresholdHistory:
         assert data["lthr_bpm"] == 165
         assert data["hrmax_bpm"] == 185
         assert "effective_date" in data
-        assert "id" in data
 
     @pytest.mark.asyncio
     async def test_first_threshold_without_date_uses_sentinel(self, auth_client):
@@ -506,7 +502,6 @@ class TestRecalculateMetrics:
         assert data["activities_updated"] is None
         assert data["error_message"] is None
 
-    @pytest.mark.xfail(reason="stale: pending job has started_at=None, not is not None (#286)", strict=True)
     @pytest.mark.asyncio
     async def test_get_recalculate_metrics_returns_job_after_trigger(self, auth_client):
         """GET /me/recalculate-metrics returns the job after POST has been called."""
@@ -517,7 +512,6 @@ class TestRecalculateMetrics:
         assert data["status"] == "pending"
         assert data["started_at"] is not None
 
-    @pytest.mark.xfail(reason="stale: pending job has started_at=None, not is not None (#286)", strict=True)
     @pytest.mark.asyncio
     async def test_post_recalculate_metrics_is_idempotent(self, auth_client):
         """POST /me/recalculate-metrics can be called multiple times (upserts)."""
@@ -550,10 +544,9 @@ class TestZones:
         assert data["power_zones"] == []
         assert data["hr_zones"] == []
 
-    @pytest.mark.xfail(reason="stale: zone fields renamed zone_number->zone, min_value->min_watts (#286)", strict=True)
     @pytest.mark.asyncio
     async def test_get_zones_creates_defaults_from_thresholds(self, auth_client):
-        """GET /me/zones auto-creates default zones when thresholds exist."""
+        """GET /me/zones returns default zones when thresholds exist."""
         # First set DOB to trigger default thresholds
         await auth_client.patch("/api/me", json={"date_of_birth": "1990-01-01"})
         # Fetch thresholds to trigger creation
@@ -565,17 +558,16 @@ class TestZones:
         
         # Should have 7 power zones (Coggan)
         assert len(data["power_zones"]) == 7
-        assert data["power_zones"][0]["zone_number"] == 1
-        assert data["power_zones"][0]["name"] == "Recovery"
-        assert data["power_zones"][6]["zone_number"] == 7
+        assert data["power_zones"][0]["zone"] == 1
+        assert data["power_zones"][0]["name"] == "Active Recovery"
+        assert data["power_zones"][6]["zone"] == 7
         assert data["power_zones"][6]["name"] == "Neuromuscular"
         
-        # Should have 5 HR zones (Friel)
+        # Should have 5 HR zones
         assert len(data["hr_zones"]) == 5
-        assert data["hr_zones"][0]["zone_number"] == 1
-        assert data["hr_zones"][4]["zone_number"] == 5
+        assert data["hr_zones"][0]["zone"] == 1
+        assert data["hr_zones"][4]["zone"] == 5
 
-    @pytest.mark.xfail(reason="stale: zone fields renamed + expected value may need recalculation (#286)", strict=True)
     @pytest.mark.asyncio
     async def test_zones_calculated_from_ftp(self, auth_client):
         """Power zones are calculated as percentages of FTP."""
@@ -589,16 +581,16 @@ class TestZones:
         assert response.status_code == 200
         data = response.json()
         
-        # Zone 1 Recovery: 0-55% of 200 = 0-110W
+        # Zone 1 Active Recovery: 0-55% of 200 = 0-110W
         assert data["power_zones"][0]["min_watts"] == 0
         assert data["power_zones"][0]["max_watts"] == 110
         
-        # Zone 4 Threshold: 90-105% of 200 = 180-210W
-        assert data["power_zones"][3]["min_watts"] == 180
+        # Zone 4 Threshold: 91-105% of 200 = 182-210W
+        assert data["power_zones"][3]["min_watts"] == 182
         assert data["power_zones"][3]["max_watts"] == 210
         
-        # Zone 7 Neuromuscular: 150%+ = 300W+, no upper limit
-        assert data["power_zones"][6]["min_watts"] == 300
+        # Zone 7 Neuromuscular: 151%+ = 302W+, no upper limit
+        assert data["power_zones"][6]["min_watts"] == 302
         assert data["power_zones"][6]["max_watts"] is None
 
     @pytest.mark.asyncio
@@ -621,77 +613,94 @@ class TestZones:
         assert data["hr_zones"][4]["min_bpm"] == 170
         assert data["hr_zones"][4]["max_bpm"] is None
 
-    @pytest.mark.xfail(reason="stale: zone fields renamed zone_number->zone (#286)", strict=True)
     @pytest.mark.asyncio
-    async def test_update_zone_marks_as_custom(self, auth_client):
-        """PUT /me/zones with zone updates marks zones as custom."""
-        # Create thresholds and zones
+    async def test_update_zone_percentages(self, auth_client):
+        """PUT /me/zones with custom percentages changes zone boundaries."""
+        # Create thresholds first
         await auth_client.post(
             "/api/me/thresholds",
             json={"ftp_watts": 200, "lthr_bpm": 170, "hrmax_bpm": 185}
         )
-        await auth_client.get("/api/me/zones")  # Trigger zone creation
         
-        # Update a power zone
+        # Get default zones
+        response = await auth_client.get("/api/me/zones")
+        assert response.status_code == 200
+        default_z4 = response.json()["power_zones"][3]
+        assert default_z4["min_watts"] == 182  # 91% of 200
+        
+        # Update zone 4 percentages to custom range (85-100%)
         response = await auth_client.put(
             "/api/me/zones",
             json={
-                "power_zones": [
-                    {"zone_number": 4, "name": "Sweet Spot", "min_value": 175, "max_value": 195}
-                ]
+                "power_zone_percentages": {
+                    "1": [0, 55],
+                    "2": [56, 75],
+                    "3": [76, 84],
+                    "4": [85, 100],  # Custom: was 91-105
+                    "5": [101, 120],
+                    "6": [121, 150],
+                    "7": [151, None],
+                }
             }
         )
         assert response.status_code == 200
         data = response.json()
         
-        # Zone 4 should be updated and marked custom
-        zone4 = next(z for z in data["power_zones"] if z["zone_number"] == 4)
-        assert zone4["name"] == "Sweet Spot"
-        assert zone4["min_watts"] == 175
-        assert zone4["max_watts"] == 195
-        assert zone4["is_custom"] is True
+        # Zone 4 should now be 85-100% of 200 = 170-200W
+        zone4 = data["power_zones"][3]
+        assert zone4["min_watts"] == 170
+        assert zone4["max_watts"] == 200
 
-    @pytest.mark.xfail(reason="stale: zone fields renamed zone_number->zone (#286)", strict=True)
     @pytest.mark.asyncio
     async def test_reset_zones_to_defaults(self, auth_client):
-        """PUT /me/zones with reset_to_defaults recalculates from thresholds."""
-        # Create thresholds and zones
+        """PUT /me/zones with reset_power_zones recalculates from default percentages."""
+        # Create thresholds
         await auth_client.post(
             "/api/me/thresholds",
             json={"ftp_watts": 200, "lthr_bpm": 170, "hrmax_bpm": 185}
         )
-        await auth_client.get("/api/me/zones")
         
-        # Customize a zone
+        # Customize zone percentages
         await auth_client.put(
             "/api/me/zones",
-            json={"power_zones": [{"zone_number": 4, "name": "Custom Zone"}]}
+            json={
+                "power_zone_percentages": {
+                    "1": [0, 50],  # Different from default
+                    "2": [51, 70],
+                    "3": [71, 85],
+                    "4": [86, 100],
+                    "5": [101, 115],
+                    "6": [116, 145],
+                    "7": [146, None],
+                }
+            }
         )
+        
+        # Verify custom percentages are applied
+        response = await auth_client.get("/api/me/zones")
+        assert response.json()["power_zones"][0]["max_watts"] == 100  # 50% of 200
         
         # Reset to defaults
         response = await auth_client.put(
             "/api/me/zones",
-            json={"reset_to_defaults": True}
+            json={"reset_power_zones": True}
         )
         assert response.status_code == 200
         data = response.json()
         
-        # Zone 4 should be back to default name and not custom
-        zone4 = next(z for z in data["power_zones"] if z["zone_number"] == 4)
-        assert zone4["name"] == "Threshold"
-        assert zone4["is_custom"] is False
+        # Zone 1 should be back to default (0-55% = 0-110W)
+        assert data["power_zones"][0]["max_watts"] == 110
 
-    @pytest.mark.xfail(reason="stale: zone fields renamed zone_number->zone (#286)", strict=True)
     @pytest.mark.asyncio
-    async def test_new_threshold_regenerates_non_custom_zones(self, auth_client):
-        """Creating a new threshold regenerates zones that aren't custom."""
-        # Create initial thresholds and zones
+    async def test_new_threshold_updates_zone_values(self, auth_client):
+        """Creating a new threshold recalculates zone boundaries."""
+        # Create initial threshold
         await auth_client.post(
             "/api/me/thresholds",
             json={"ftp_watts": 200, "lthr_bpm": 170, "hrmax_bpm": 185}
         )
         response = await auth_client.get("/api/me/zones")
-        initial_zone4 = next(z for z in response.json()["power_zones"] if z["zone_number"] == 4)
+        initial_zone4 = response.json()["power_zones"][3]
         assert initial_zone4["max_watts"] == 210  # 105% of 200
         
         # Create new threshold with higher FTP
@@ -700,56 +709,80 @@ class TestZones:
             json={"ftp_watts": 250, "lthr_bpm": 175, "hrmax_bpm": 190}
         )
         
-        # Zones should be regenerated
+        # Zones should be recalculated with new FTP
         response = await auth_client.get("/api/me/zones")
-        new_zone4 = next(z for z in response.json()["power_zones"] if z["zone_number"] == 4)
+        new_zone4 = response.json()["power_zones"][3]
         assert new_zone4["max_watts"] == 262  # 105% of 250
 
-    @pytest.mark.xfail(reason="stale: zone fields renamed zone_number->zone (#286)", strict=True)
     @pytest.mark.asyncio
-    async def test_new_threshold_preserves_custom_zones(self, auth_client):
-        """Creating a new threshold preserves zones marked as custom."""
-        # Create initial thresholds and zones
+    async def test_custom_percentages_persist_across_threshold_changes(self, auth_client):
+        """Custom zone percentages persist when thresholds change."""
+        # Create initial threshold
         await auth_client.post(
             "/api/me/thresholds",
             json={"ftp_watts": 200, "lthr_bpm": 170, "hrmax_bpm": 185}
         )
-        await auth_client.get("/api/me/zones")
         
-        # Customize a zone
+        # Set custom percentages for zone 4 (80-95% instead of 91-105%)
         await auth_client.put(
             "/api/me/zones",
-            json={"power_zones": [{"zone_number": 4, "name": "My Custom Zone"}]}
+            json={
+                "power_zone_percentages": {
+                    "1": [0, 55],
+                    "2": [56, 75],
+                    "3": [76, 79],
+                    "4": [80, 95],  # Custom range
+                    "5": [96, 120],
+                    "6": [121, 150],
+                    "7": [151, None],
+                }
+            }
         )
         
-        # Create new threshold
+        # Verify custom percentages at FTP=200
+        response = await auth_client.get("/api/me/zones")
+        zone4 = response.json()["power_zones"][3]
+        assert zone4["min_watts"] == 160  # 80% of 200
+        assert zone4["max_watts"] == 190  # 95% of 200
+        
+        # Create new threshold with higher FTP
         await auth_client.post(
             "/api/me/thresholds",
             json={"ftp_watts": 250, "lthr_bpm": 175, "hrmax_bpm": 190}
         )
         
-        # Custom zone should be preserved
+        # Custom percentages should still apply with new FTP
         response = await auth_client.get("/api/me/zones")
-        zone4 = next(z for z in response.json()["power_zones"] if z["zone_number"] == 4)
-        assert zone4["name"] == "My Custom Zone"
-        assert zone4["is_custom"] is True
+        zone4 = response.json()["power_zones"][3]
+        assert zone4["min_watts"] == 200  # 80% of 250
+        assert zone4["max_watts"] == 237  # 95% of 250 (floor)
 
-    @pytest.mark.xfail(reason="stale: zone-99 validation may have changed (#286)", strict=True)
     @pytest.mark.asyncio
-    async def test_update_nonexistent_zone_returns_error(self, auth_client):
-        """PUT /me/zones with invalid zone_number returns error."""
+    async def test_update_hr_zone_percentages(self, auth_client):
+        """PUT /me/zones can update HR zone percentages."""
         await auth_client.post(
             "/api/me/thresholds",
             json={"ftp_watts": 200, "lthr_bpm": 170, "hrmax_bpm": 185}
         )
-        await auth_client.get("/api/me/zones")
         
+        # Update HR zone percentages
         response = await auth_client.put(
             "/api/me/zones",
-            json={"power_zones": [{"zone_number": 99, "name": "Invalid"}]}
+            json={
+                "hr_zone_percentages": {
+                    "1": [0, 75],  # Different from default 0-81
+                    "2": [76, 85],
+                    "3": [86, 92],
+                    "4": [93, 99],
+                    "5": [100, None],
+                }
+            }
         )
-        assert response.status_code == 400
-        assert "99" in response.json()["detail"]
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Zone 1 should now be 0-75% of 170 = 0-127 bpm
+        assert data["hr_zones"][0]["max_bpm"] == 127
 
     @pytest.mark.asyncio
     async def test_zones_endpoints_require_auth(self, app_client):

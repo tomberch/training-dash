@@ -918,7 +918,9 @@ async def has_password(user: CurrentUser) -> dict:
 
 
 @router.post("/me/recalculate-metrics")
-async def trigger_recalculate_metrics(recalc_repo: RecalculationJobRepoD, user: CurrentUser):
+async def trigger_recalculate_metrics(
+    db: DbSession, recalc_repo: RecalculationJobRepoD, user: CurrentUser
+):
     """Enqueue an async job to recompute training metrics for all activities.
 
     Upserts a RecalculationJob row to status=pending and enqueues the SAQ
@@ -926,6 +928,7 @@ async def trigger_recalculate_metrics(recalc_repo: RecalculationJobRepoD, user: 
     Poll GET /me/recalculate-metrics to observe progress.
     """
     await recalc_repo.upsert_pending(user.id)
+    await db.commit()
 
     try:
         await enqueue_recalculate_metrics_job(user.id)
@@ -935,6 +938,7 @@ async def trigger_recalculate_metrics(recalc_repo: RecalculationJobRepoD, user: 
         )
         # Mark job as failed so user sees accurate state
         await recalc_repo.upsert_failed(user.id)
+        await db.commit()
 
     job = await recalc_repo.get_by_user_id(user.id)
     return recalculation_job_response(job)
