@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     # Upgrade pip (CVE-2025-8869, CVE-2026-*) and install uv in same layer
     && pip install --no-cache-dir pip==26.2.1 \
-    && pip install --no-cache-dir uv==0.7.19
+    && pip install --no-cache-dir uv==0.12.3
 
 # Copy only dependency file first (cached layer for deps)
 COPY backend/pyproject.toml ./
