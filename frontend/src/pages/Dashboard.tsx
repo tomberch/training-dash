@@ -451,7 +451,7 @@ export function Dashboard() {
           
           {pmcData.length > 0 ? (
             <div className="h-40">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height={160}>
                 <LineChart data={pmcData} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
                   {TSB_ZONES.map((zone) => (
                     <ReferenceArea
@@ -765,7 +765,7 @@ export function Dashboard() {
         </div>
         {powerCurve.length > 0 ? (
           <div className="h-32 overflow-hidden">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height={128}>
               <LineChart 
                 data={powerCurve.map(p => ({ ...p, logDuration: Math.log10(p.duration_seconds) }))}
                 margin={{ top: 10, right: 15, bottom: 5, left: 5 }}
