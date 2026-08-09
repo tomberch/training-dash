@@ -188,30 +188,73 @@ def pg_container():
         yield pg
 
 
-@pytest_asyncio.fixture(scope="session", loop_scope="session")
-async def db_engine_session(pg_container):
+@pytest.fixture(scope="session")
+def worker_schema():
+    """Per-worker Postgres schema name for xdist isolation.
+
+    Under pytest-xdist each worker (``gw0``, ``gw1``, ...) gets its own schema
+    in the shared DB; under serial runs this is ``public`` so behavior is
+    unchanged. Tables are created in the worker's schema via ``search_path``;
+    the ``postgis`` extension (and its ``geography`` type / ``ST_*`` functions)
+    lives in ``public`` and is shared read-only across workers.
     """
-    Session-scoped database engine. Creates schema once at session start.
+    worker_id = os.environ.get("PYTEST_XDIST_WORKER", "main")
+    if worker_id == "main":
+        return "public"
+    return f"test_{worker_id}"
+
+
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
+async def db_engine_session(pg_container, worker_schema):
+    """
+    Session-scoped database engine. Creates schema once per worker session.
+
+    Under xdist each worker gets its own schema (``test_gw0``, ``test_gw1``,
+    ...); under serial runs this is ``public``. The ``postgis`` extension is
+    installed once in ``public`` (idempotent ``CREATE EXTENSION IF NOT EXISTS``
+    is safe under concurrency — concurrent workers just see "already exists,
+    skipping"). Every connection from this engine sets
+    ``search_path = <worker_schema>,public`` so tables land in the worker's
+    schema and ``geography``/``ST_*`` resolve from ``public``.
 
     Uses the default pool (not NullPool) so each test can check out its own
-    connection for per-test transaction rollback. ``loop_scope="session"`` keeps
-    one event loop for the whole session so asyncpg connections don't cross
-    loops.
+    connection for per-test transaction rollback. ``loop_scope="session"``
+    keeps one event loop for the whole session so asyncpg connections don't
+    cross loops.
 
-    Parallelism (pytest-xdist) is added in a later layer: each worker gets its
-    own schema in this same DB. See the worker-schema fixture. The serial-only
-    rationale that lived here previously ("geography only in public") is false
-    for PostGIS 3.4 — see research/xdist-postgis-patterns.md and ADR 0003.
+    See ADR 0003 for the isolation model and the PostGIS constraint that
+    motivated it (the prior "geography only in public" claim was false for
+    PostGIS 3.4 — see docs/research/xdist-postgis-patterns.md).
     """
     url = pg_container.get_connection_url()
-    engine = create_async_engine(url, pool_pre_ping=True)
+    engine = create_async_engine(
+        url,
+        pool_pre_ping=True,
+        connect_args={"server_settings": {"search_path": f"{worker_schema},public"}},
+    )
 
-    # Create schema once at session start
     async with engine.begin() as conn:
-        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis"))
+        if worker_schema != "public":
+            # Per-worker schema: drop any leftover from a prior run, then create.
+            # No FileLock needed — each worker owns a distinct schema name.
+            await conn.execute(text(f'DROP SCHEMA IF EXISTS "{worker_schema}" CASCADE'))
+            await conn.execute(text(f'CREATE SCHEMA "{worker_schema}"'))
+        # postgis lives in `public` and is shared across all workers. Install it
+        # under a transaction-level advisory lock so only one worker does the
+        # CREATE EXTENSION; others block until it's done, then see it present.
+        # (CREATE EXTENSION IF NOT EXISTS raises UniqueViolation under asyncpg
+        # when raced; CREATE EXTENSION ... SCHEMA public puts objects in public
+        # regardless of the worker's search_path.)
+        await conn.execute(text("SELECT pg_advisory_xact_lock(42)"))
+        existing = await conn.execute(
+            text("SELECT 1 FROM pg_extension WHERE extname = 'postgis'")
+        )
+        if existing.scalar() is None:
+            await conn.execute(text("CREATE EXTENSION postgis SCHEMA public"))
+        # Tables go in the worker's schema (search_path leads with it).
         await conn.run_sync(Base.metadata.create_all)
 
-    # Seed metric_types once at session start (reference data, never changes)
+    # Seed metric_types once per worker (lives in the worker's schema).
     async with engine.begin() as conn:
         await conn.execute(text("""
             INSERT INTO metric_types (key, display_name, unit, category, data_type, min_value, max_value, allowed_sources, recalc_targets, sort_order)
