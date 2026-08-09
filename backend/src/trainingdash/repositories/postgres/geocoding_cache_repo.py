@@ -12,8 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 class PostgresGeocodingCacheRepo:
     """
     PostgreSQL-backed geocoding cache repository.
-    
-    Creates the cache table on first use if it doesn't exist.
+
+    The ``geocoding_cache`` table is created by Alembic migration 013. The
+    ``_ensure_table`` no-op guard below keeps tests working (the table isn't a
+    SQLAlchemy model, so ``Base.metadata.create_all`` doesn't cover it) without
+    committing on the caller's session — the previous version committed, a
+    transaction-safety bug.
     """
 
     def __init__(self, db: AsyncSession):
@@ -21,10 +25,15 @@ class PostgresGeocodingCacheRepo:
         self._table_ensured = False
 
     async def _ensure_table(self) -> None:
-        """Create cache table if it doesn't exist."""
+        """Create the cache table if it doesn't exist (idempotent, no commit).
+
+        In prod the table is created by migration 013; this guard exists so
+        tests (which build the schema via ``Base.metadata.create_all`` and
+        don't run Alembic) still work. It does not commit — the caller owns
+        the transaction.
+        """
         if self._table_ensured:
             return
-        
         await self._db.execute(text("""
             CREATE TABLE IF NOT EXISTS geocoding_cache (
                 cache_key VARCHAR(100) PRIMARY KEY,
@@ -32,7 +41,6 @@ class PostgresGeocodingCacheRepo:
                 created_at TIMESTAMP DEFAULT NOW()
             )
         """))
-        await self._db.commit()
         self._table_ensured = True
 
     async def get(self, cache_key: str) -> str | None:
