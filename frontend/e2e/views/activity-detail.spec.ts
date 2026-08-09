@@ -190,6 +190,42 @@ test.describe.serial('Activity Detail', () => {
     }
   });
 
+  test('analysis section renders power curve and wbal charts', async ({ page }) => {
+    await loginTestUser(page);
+    
+    await page.goto(`/activities/${sharedActivityId}`);
+    await expect(page.getByRole('button', { name: 'Back' })).toBeVisible({ timeout: 15000 });
+
+    // Scroll down to trigger lazy loading of Analysis section
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    
+    // Wait for the Analysis section header to be visible
+    const analysisHeader = page.getByRole('heading', { name: 'Analysis' });
+    await expect(analysisHeader).toBeVisible({ timeout: 10000 });
+
+    // Find the Analysis section by its header, then look for charts within main content
+    const mainContent = page.getByRole('main');
+    
+    // Check that Power Curve chart renders (not skeleton)
+    // Look for the Power Curve heading within main content area
+    const powerCurveHeading = mainContent.getByText('Power Curve', { exact: true });
+    await expect(powerCurveHeading).toBeVisible({ timeout: 10000 });
+    
+    // Get the card containing Power Curve and verify it has an SVG chart
+    const powerCurveCard = mainContent.locator('section').filter({ hasText: 'Analysis' }).locator('.bg-card').filter({ hasText: 'Power Curve' });
+    const powerCurveSvg = powerCurveCard.locator('svg.recharts-surface');
+    await expect(powerCurveSvg).toBeVisible({ timeout: 5000 });
+
+    // Check that W'bal chart renders
+    const wbalHeading = mainContent.getByText("W'bal", { exact: true });
+    await expect(wbalHeading).toBeVisible({ timeout: 5000 });
+    
+    // Verify W'bal chart has actual SVG content
+    const wbalCard = mainContent.locator('section').filter({ hasText: 'Analysis' }).locator('.bg-card').filter({ hasText: "W'bal" });
+    const wbalSvg = wbalCard.locator('svg.recharts-surface');
+    await expect(wbalSvg).toBeVisible({ timeout: 5000 });
+  });
+
   test('back button navigates to activities list', async ({ page }) => {
     await loginTestUser(page);
     
