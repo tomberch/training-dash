@@ -64,8 +64,28 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Run tests
-        run: npm test
+      - name: Run tests with coverage
+        run: npm test -- --coverage
+
+      - name: Generate coverage summary
+        if: always()
+        run: |
+          echo "## :test_tube: Vitest Coverage Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f coverage/coverage-summary.json ]; then
+            node -e "
+              const c = require('./coverage/coverage-summary.json').total;
+              const fmt = (m) => m.pct.toFixed(1) + '%';
+              console.log('| Metric | Coverage |');
+              console.log('|--------|----------|');
+              console.log('| Lines | ' + fmt(c.lines) + ' |');
+              console.log('| Statements | ' + fmt(c.statements) + ' |');
+              console.log('| Functions | ' + fmt(c.functions) + ' |');
+              console.log('| Branches | ' + fmt(c.branches) + ' |');
+            " >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No coverage data found" >> $GITHUB_STEP_SUMMARY
+          fi
 
       - name: Build
         run: npm run build
