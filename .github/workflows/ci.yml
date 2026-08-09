@@ -41,12 +41,55 @@ jobs:
         run: uv run ruff format --check .
 
       - name: Run unit tests (fast, fail fast)
-        run: uv run pytest tests/unit/ --tb=short -q --cov=trainingdash --cov-report=
+        run: uv run pytest tests/unit/ --tb=short -q --cov=trainingdash --cov-report= --json-report --json-report-file=unit-results.json
 
       - name: Run integration tests
-        run: uv run pytest tests/integration/ --tb=short -q --cov=trainingdash --cov-append --cov-report=json --cov-report=term
+        run: uv run pytest tests/integration/ --tb=short -q --cov=trainingdash --cov-append --cov-report=json --cov-report=term --json-report --json-report-file=integration-results.json
         env:
           ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY || 'dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcw==' }}
+
+      - name: Generate test summary
+        if: always()
+        run: |
+          echo "## :snake: Python Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          python -c "
+          import json
+          from pathlib import Path
+
+          def summarize(name, filepath):
+              if not Path(filepath).exists():
+                  return f'### {name}\nNo results found.\n'
+              
+              with open(filepath) as f:
+                  data = json.load(f)
+              
+              summary = data.get('summary', {})
+              passed = summary.get('passed', 0)
+              failed = summary.get('failed', 0)
+              skipped = summary.get('skipped', 0)
+              total = summary.get('total', passed + failed + skipped)
+              duration = data.get('duration', 0)
+              
+              status = ':white_check_mark: Passed' if failed == 0 else f':x: {failed} Failed'
+              
+              lines = [f'### {name}', '', '| Passed | Failed | Skipped | Total | Duration |',
+                       '|--------|--------|---------|-------|----------|',
+                       f'| {passed} | {failed} | {skipped} | {total} | {duration:.1f}s |', '']
+              
+              # List failed tests
+              if failed > 0:
+                  lines.append('**Failed tests:**')
+                  for test in data.get('tests', []):
+                      if test.get('outcome') == 'failed':
+                          lines.append(f'- {test[\"nodeid\"]}')
+                  lines.append('')
+              
+              return '\n'.join(lines)
+
+          print(summarize('Unit Tests', 'unit-results.json'))
+          print(summarize('Integration Tests', 'integration-results.json'))
+          " >> $GITHUB_STEP_SUMMARY
 
       - name: Generate coverage summary
         if: always()
