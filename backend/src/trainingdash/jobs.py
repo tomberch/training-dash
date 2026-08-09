@@ -20,8 +20,10 @@ async def enqueue_ingest_job(user_id: int, fit_bytes: bytes, source: str, source
     queue = await get_queue()
     # Base64 encode bytes for JSON serialization
     fit_bytes_b64 = base64.b64encode(fit_bytes).decode("ascii")
+    # Ingest needs longer timeout than SAQ default (10s) due to geocoding rate limits
+    # (1 req/sec) and potential network latency
     job = await queue.enqueue(
-        "ingest_job", user_id=user_id, fit_bytes_b64=fit_bytes_b64, source=source, source_ref=source_ref
+        "ingest_job", user_id=user_id, fit_bytes_b64=fit_bytes_b64, source=source, source_ref=source_ref, timeout=60
     )
     return job.key if job else None
 

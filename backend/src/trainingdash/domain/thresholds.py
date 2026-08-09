@@ -31,9 +31,7 @@ class ThresholdHistoryEntry:
     created_at: object | None = None  # datetime, typed as object to avoid datetime import in pure domain
 
 
-def pick_effective_threshold(
-    entries: list[ThresholdHistoryEntry], target_date: date
-) -> ThresholdValues:
+def pick_effective_threshold(entries: list[ThresholdHistoryEntry], target_date: date) -> ThresholdValues:
     """Pick the most recent threshold values effective on ``target_date``.
 
     For each metric (FTP, LTHR, HRmax), returns the value from the most

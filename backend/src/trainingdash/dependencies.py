@@ -156,6 +156,4 @@ async def get_ensure_default_thresholds_use_case(db: DbSession) -> EnsureDefault
 
 IngestActivityD = Annotated[IngestActivity, Depends(get_ingest_activity_use_case)]
 DeleteActivityD = Annotated[DeleteActivity, Depends(get_delete_activity_use_case)]
-EnsureDefaultThresholdsD = Annotated[
-    EnsureDefaultThresholds, Depends(get_ensure_default_thresholds_use_case)
-]
+EnsureDefaultThresholdsD = Annotated[EnsureDefaultThresholds, Depends(get_ensure_default_thresholds_use_case)]

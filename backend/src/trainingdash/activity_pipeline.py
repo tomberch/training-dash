@@ -240,9 +240,7 @@ class ActivityPipeline:
         """Get the threshold effective at the given date."""
         from trainingdash.repositories.postgres.threshold_repo import PostgresThresholdRepo
 
-        return await PostgresThresholdRepo(self.db).get_for_date(
-            self.activity.user_id, activity_date
-        )
+        return await PostgresThresholdRepo(self.db).get_for_date(self.activity.user_id, activity_date)
 
     async def _compute_power_metrics(
         self,

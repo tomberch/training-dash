@@ -96,7 +96,7 @@ async def get_osm_tile(z: int, x: int, y: int) -> FileResponse:
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                osm_url,  # lgtm[py/partial-ssrf]
+                osm_url,  # nosec B310 - URL uses allowlisted base + validated integers
                 headers={"User-Agent": TILE_USER_AGENT},
                 timeout=10.0,
             )
@@ -165,7 +165,7 @@ async def get_carto_tile(style: CartoStyle, z: int, x: int, y: int) -> FileRespo
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                carto_url,  # lgtm[py/partial-ssrf]
+                carto_url,  # nosec B310 - URL uses allowlisted base + validated integers
                 headers={"User-Agent": TILE_USER_AGENT},
                 timeout=10.0,
             )

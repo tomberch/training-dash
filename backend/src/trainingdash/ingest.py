@@ -516,9 +516,7 @@ async def _auto_create_threshold_if_needed(
 
     # Check if there's already a threshold covering the earliest activity
     threshold_repo = PostgresThresholdRepo(db)
-    existing_ftp = (
-        await threshold_repo.get_for_date(user_id, earliest_date)
-    ).ftp_watts
+    existing_ftp = (await threshold_repo.get_for_date(user_id, earliest_date)).ftp_watts
 
     if existing_ftp is not None:
         # Already have coverage for historical activities

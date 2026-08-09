@@ -21,9 +21,7 @@ class EnsureDefaultThresholds:
         self._db = db
         self._repo = PostgresThresholdRepo(db)
 
-    async def execute(
-        self, user_id: int, dob: date | None, weight_kg: float | None
-    ) -> bool:
+    async def execute(self, user_id: int, dob: date | None, weight_kg: float | None) -> bool:
         """Returns True if defaults were created, False otherwise."""
         if dob is None:
             return False

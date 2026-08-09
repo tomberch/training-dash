@@ -99,9 +99,7 @@ class FitnessModelUpdater:
         ``batch_import: True`` and ``activity_count``). Otherwise dedupes by
         updating an existing pending notification in place.
         """
-        current_ftp = (
-            await PostgresThresholdRepo(self._db).get_for_date(user_id, date.today())
-        ).ftp_watts
+        current_ftp = (await PostgresThresholdRepo(self._db).get_for_date(user_id, date.today())).ftp_watts
 
         if current_ftp is None:
             return

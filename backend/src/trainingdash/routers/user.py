@@ -332,9 +332,7 @@ async def get_my_thresholds(
 ):
     """Get the current user's threshold history, most recent first."""
     # Ensure defaults exist if user has DOB
-    await ensure_defaults.execute(
-        user.id, user.date_of_birth, float(user.weight_kg) if user.weight_kg else None
-    )
+    await ensure_defaults.execute(user.id, user.date_of_birth, float(user.weight_kg) if user.weight_kg else None)
 
     thresholds = await threshold_repo.get_history(user.id)
     return [
@@ -413,13 +411,9 @@ async def create_threshold(
     # Determine final values - use new value if provided, else carry forward
     # Note: Once a threshold value is set, it cannot be removed - only changed.
     # Omitting a field preserves the previous value.
-    final_ftp = (
-        request.ftp_watts if request.ftp_watts is not None else (previous.ftp_watts if previous else None)
-    )
+    final_ftp = request.ftp_watts if request.ftp_watts is not None else (previous.ftp_watts if previous else None)
     final_lthr = request.lthr_bpm if request.lthr_bpm is not None else (previous.lthr_bpm if previous else None)
-    final_hrmax = (
-        request.hrmax_bpm if request.hrmax_bpm is not None else (previous.hrmax_bpm if previous else None)
-    )
+    final_hrmax = request.hrmax_bpm if request.hrmax_bpm is not None else (previous.hrmax_bpm if previous else None)
 
     # If user has previous thresholds but provided no new values, reject
     # (they should use the existing values or provide updates)

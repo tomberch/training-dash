@@ -206,7 +206,9 @@ async def get_activity_records(db: DbSession, repo: ActivityRepoD, user: Current
 
 
 @router.get("/activities/{activity_id}/wbal")
-async def get_activity_wbal(db: DbSession, repo: ActivityRepoD, threshold_repo: ThresholdRepoD, user: CurrentUser, activity_id: UUID):
+async def get_activity_wbal(
+    db: DbSession, repo: ActivityRepoD, threshold_repo: ThresholdRepoD, user: CurrentUser, activity_id: UUID
+):
     """Get W'bal time series for an activity."""
     activity = await _get_owned_activity(repo, user, activity_id)
 

@@ -27,14 +27,10 @@ class PostgresThresholdRepo:
 
     async def _get_metric_type_id(self, key: str) -> int | None:
         """Resolve a metric key (e.g. 'ftp') to its metric_type id."""
-        result = await self._session.execute(
-            select(MetricType.id).where(MetricType.key == key)
-        )
+        result = await self._session.execute(select(MetricType.id).where(MetricType.key == key))
         return result.scalar_one_or_none()
 
-    async def get_for_date(
-        self, user_id: int, target_date: date
-    ) -> ThresholdValues:
+    async def get_for_date(self, user_id: int, target_date: date) -> ThresholdValues:
         """Threshold values (FTP, LTHR, HRmax) effective on ``target_date``."""
         ftp = await self._get_metric_for_date(user_id, "ftp", target_date)
         lthr = await self._get_metric_for_date(user_id, "lthr", target_date)
@@ -46,9 +42,7 @@ class PostgresThresholdRepo:
             effective_date=target_date,
         )
 
-    async def _get_metric_for_date(
-        self, user_id: int, metric_key: str, target_date: date
-    ) -> int | None:
+    async def _get_metric_for_date(self, user_id: int, metric_key: str, target_date: date) -> int | None:
         """Most recent metric value effective on ``target_date``."""
         type_id = await self._get_metric_type_id(metric_key)
         if not type_id:
