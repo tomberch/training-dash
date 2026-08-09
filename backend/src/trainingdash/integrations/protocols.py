@@ -42,7 +42,7 @@ class SyncProvider(ABC, Generic[TActivity]):
     Abstract base class for sync providers (Xert, Garmin, etc).
 
     Subclasses implement provider-specific authentication and activity fetching,
-    while the common sync orchestration logic lives in run_sync().
+    while the common sync orchestration logic lives in the SyncFromProvider use case.
     """
 
     @property
@@ -60,7 +60,7 @@ class SyncProvider(ABC, Generic[TActivity]):
     @abstractmethod
     def extract_credentials(self, creds: Any) -> CredentialInfo:
         """
-        Extract all credential fields needed by run_sync() from the model.
+        Extract all credential fields needed by the SyncFromProvider use case from the model.
 
         Hides the field-name differences between providers (e.g.
         XertCredentials.xert_email vs GarminCredentials.garmin_email).

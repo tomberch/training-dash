@@ -272,8 +272,8 @@ class SyncFromProvider:
         creds.last_synced_at = datetime.now(timezone.utc).replace(tzinfo=None)
         await self._db.commit()
 
+    @staticmethod
     def _determine_sync_range(
-        self,
         cred_info: CredentialInfo,
         existing_refs: set[str],
     ) -> tuple[datetime, datetime, bool]:

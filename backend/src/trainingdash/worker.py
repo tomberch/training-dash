@@ -26,8 +26,12 @@ from datetime import datetime, timedelta, timezone
 from saq import CronJob
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine, AsyncEngine
 
-from trainingdash.queue import get_queue
 from trainingdash.integrations.xert.mock_client import setup_mock_xert_client
+from trainingdash.jobs import (
+    enqueue_match_route_job,
+    enqueue_sync_garmin_job,
+    enqueue_sync_xert_job,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -71,9 +75,16 @@ async def worker_db_session(ctx: dict):
         yield session
 
 
-async def ingest_job(ctx: dict, *, user_id: int, fit_bytes: bytes, source: str, source_ref: str):
-    """Ingest a FIT file and enqueue route matching."""
+async def ingest_job(ctx: dict, *, user_id: int, fit_bytes_b64: str, source: str, source_ref: str):
+    """Ingest a FIT file and enqueue route matching.
+    
+    Note: fit_bytes_b64 is base64-encoded because SAQ uses JSON serialization.
+    """
+    import base64
     from trainingdash.use_cases import IngestActivity
+
+    # Decode base64 back to bytes
+    fit_bytes = base64.b64decode(fit_bytes_b64)
 
     async with worker_db_session(ctx) as db:
         use_case = IngestActivity(db)
@@ -81,26 +92,32 @@ async def ingest_job(ctx: dict, *, user_id: int, fit_bytes: bytes, source: str, 
         if activity is None:
             return {"success": False, "activity_id": None}
 
-        queue = await get_queue()
-        await queue.enqueue("match_route_job", activity_id=activity.id, user_id=user_id)
+        await enqueue_match_route_job(str(activity.id), user_id)
 
-        return {"success": True, "activity_id": activity.id}
+        return {"success": True, "activity_id": str(activity.id)}
 
 
-async def match_route_job(ctx: dict, *, activity_id: int, user_id: int):
-    """Match an activity to a route cluster."""
+async def match_route_job(ctx: dict, *, activity_id: str, user_id: int):
+    """Match an activity to a route cluster.
+    
+    Note: activity_id is a string (UUID serialized) for JSON compatibility.
+    """
+    from uuid import UUID as PyUUID
     from sqlalchemy import select
     from trainingdash.repositories.postgres.models import Activity, Record
     from trainingdash.route_matching import find_or_create_route_id
 
+    # Convert string back to UUID
+    activity_uuid = PyUUID(activity_id)
+
     async with worker_db_session(ctx) as db:
-        result = await db.execute(select(Activity).where(Activity.id == activity_id))
+        result = await db.execute(select(Activity).where(Activity.id == activity_uuid))
         activity = result.scalar_one_or_none()
         if activity is None:
             return {"success": False}
 
         records_result = await db.execute(
-            select(Record).where(Record.activity_id == activity_id).order_by(Record.timestamp)
+            select(Record).where(Record.activity_id == activity_uuid).order_by(Record.timestamp)
         )
         all_records = records_result.scalars().all()
         route_id = await find_or_create_route_id(db, activity, all_records)
@@ -268,19 +285,17 @@ async def hourly_sync_scheduler(ctx: dict):
     if not garmin_user_ids and not xert_user_ids:
         logger.info(f"hourly_sync_scheduler: No users scheduled for hour {current_hour}")
         return {"success": True, "garmin_queued": 0, "xert_queued": 0}
-    
-    queue = await get_queue()
-    
+
     # Enqueue Garmin syncs immediately
     for user_id in garmin_user_ids:
-        await queue.enqueue("sync_garmin_job", user_id=user_id)
+        await enqueue_sync_garmin_job(user_id)
         logger.info(f"hourly_sync_scheduler: Enqueued Garmin sync for user {user_id}")
-    
+
     # Enqueue Xert syncs with 15 minute delay to stagger
     import time
     defer_until = time.time() + (15 * 60)  # 15 minutes from now
     for user_id in xert_user_ids:
-        await queue.enqueue("sync_xert_job", user_id=user_id, scheduled=defer_until)
+        await enqueue_sync_xert_job(user_id, scheduled=defer_until)
         logger.info(f"hourly_sync_scheduler: Enqueued Xert sync for user {user_id} (deferred 15min)")
     
     logger.info(f"hourly_sync_scheduler: Queued {len(garmin_user_ids)} Garmin, {len(xert_user_ids)} Xert syncs")
@@ -316,17 +331,28 @@ async def recalculate_metrics_job(ctx: dict, *, user_id: int) -> dict:
 
 
 # SAQ worker settings - this is what `saq worker.settings` loads
-async def get_settings() -> dict:
+# Note: SAQ supports settings as a callable, which delays queue creation
+# until the worker actually starts. This is crucial for Docker Compose
+# where the worker container may start before the database is ready.
+def settings():
     """
     Return SAQ worker settings.
     
-    This is a callable that returns the settings dict, allowing
-    lazy initialization of the queue connection.
+    This is a callable (not a dict) so that PostgresQueue.from_url() is not
+    called at module import time. The queue connection is deferred until
+    the worker process actually starts, giving the database container time
+    to become healthy.
     """
-    queue = await get_queue()
+    from saq.queue.postgres import PostgresQueue
+    from trainingdash.queue import get_queue_url
     
     return {
-        "queue": queue,
+        "queue": PostgresQueue.from_url(
+            get_queue_url(),
+            name="default",
+            min_size=2,
+            max_size=10,
+        ),
         "functions": [
             ingest_job,
             match_route_job,
@@ -344,7 +370,3 @@ async def get_settings() -> dict:
             CronJob(hourly_sync_scheduler, cron="0 * * * *", unique=True),
         ],
     }
-
-
-# For `saq trainingdash.worker.settings` command
-settings = get_settings

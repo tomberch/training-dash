@@ -1,6 +1,6 @@
 import math
 
-from sqlalchemy import text, update
+from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from trainingdash.repositories.postgres.models import Activity, Record, Route
@@ -37,6 +37,14 @@ async def find_or_create_route_id(
     records: list[Record],
     threshold_m: float = HAUSDORFF_THRESHOLD_M,
 ) -> int | None:
+    """
+    Find an existing route matching this activity's GPS track, or create a new one.
+    
+    Uses Hausdorff distance to compare simplified polylines. If a match is found
+    within threshold, increments the route's ride_count. Otherwise creates a new route.
+    
+    Returns the route_id or None if the activity has no GPS data.
+    """
     wkt = build_linestring_wkt(records)
     if wkt is None:
         return None
@@ -53,6 +61,7 @@ async def find_or_create_route_id(
 
     simplified_expr = _simplified_geometry_sql(":wkt")
 
+    # Find closest matching route
     query = text(f"""
         SELECT id, ST_HausdorffDistance(
             {simplified_expr},
@@ -65,15 +74,19 @@ async def find_or_create_route_id(
     """).params(wkt=wkt, tolerance=tolerance_deg, user_id=activity.user_id)
 
     result = await db.execute(query)
-    match = result.first()
+    rows = result.all()  # Fully consume result to release asyncpg cursor
+    match = rows[0] if rows else None
 
     if match is not None and match.distance is not None and match.distance <= threshold_deg:
+        # Found a matching route - increment ride count
         route_id = match.id
         await db.execute(
             update(Route).where(Route.id == route_id).values(ride_count=Route.ride_count + 1)
         )
+        await db.flush()
         return route_id
 
+    # No match found - create new route
     insert_sql = text(f"""
         INSERT INTO routes (user_id, simplified_polyline, first_seen_activity_id, ride_count)
         VALUES (:user_id,
@@ -88,5 +101,6 @@ async def find_or_create_route_id(
         activity_id=activity.id,
     )
     result = await db.execute(insert_sql)
-    route_id = result.scalar()
+    route_id = result.scalar_one()
+    await db.flush()
     return route_id

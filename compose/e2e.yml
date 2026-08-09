@@ -52,16 +52,18 @@ services:
     build:
       context: ..
       dockerfile: backend/Dockerfile
+    restart: on-failure:5
     environment:
       DATABASE_URL: postgresql+asyncpg://trainingdash_e2e:trainingdash_e2e@db:5432/trainingdash_e2e
       SECRET_KEY: e2e-test-secret-key
       TRAININGDASH_ENCRYPTION_KEY: D1prO+2rx2zmauRYJc8yKA2rbW0ABdAo5uf8ZJMoXSQ=
       MOCK_XERT_ENABLED: "true"
       MOCK_XERT_FIXTURES_DIR: /app/e2e-fixtures/fit-files
+      DISABLE_GEOCODING: "true"
     volumes:
       - ../frontend/e2e/fixtures:/app/e2e-fixtures:ro
     depends_on:
-      db:
+      app:
         condition: service_healthy
     command: saq trainingdash.worker.settings
 

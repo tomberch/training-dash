@@ -174,13 +174,11 @@ class ActivityPipeline:
         if not self.batch_mode:
             self.result.breakthrough = await self.detect_breakthrough()
 
-        # Step 6 & 7: Route matching and title generation (parallel)
-        route_task = self.match_route()
-        title_task = self.generate_title()
-        
-        route_result, title_result = await asyncio.gather(route_task, title_task)
-        self.result.route = route_result
-        self.result.title = title_result
+        # Step 6 & 7: Route matching and title generation (sequential)
+        # Note: These run sequentially because both use the same db session,
+        # and asyncpg doesn't support concurrent operations on one connection.
+        self.result.route = await self.match_route()
+        self.result.title = await self.generate_title()
 
         # Single commit for the entire pipeline — all steps flush() to get
         # auto-assigned IDs but only run() commits, keeping the activity
@@ -669,8 +667,12 @@ class ActivityPipeline:
         """
         result = TitleResult()
         
-        if self.batch_mode:
-            # Use time-of-day title for batch imports
+        # Skip geocoding in batch mode or when disabled via environment
+        import os
+        skip_geocoding = self.batch_mode or os.environ.get("DISABLE_GEOCODING", "").lower() in ("1", "true", "yes")
+        
+        if skip_geocoding:
+            # Use time-of-day title for batch imports or when geocoding disabled
             result.title = _time_of_day_title(self.activity.started_at)
             result.title_source = "pending"
         else:
