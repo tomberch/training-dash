@@ -3,6 +3,7 @@
 import os
 from datetime import datetime
 from pathlib import Path
+from typing import Literal
 
 import httpx
 from fastapi import APIRouter, HTTPException
@@ -14,10 +15,32 @@ TILE_CACHE_DIR = Path(os.environ.get("TILE_CACHE_DIR", "/app/tile-cache"))
 TILE_CACHE_MAX_AGE_DAYS = 30
 TILE_USER_AGENT = "TrainingDash fitness app (personal use)"
 
-_CARTO_STYLES: dict[str, str] = {
+# Allowlisted tile providers - only these URLs are fetched
+_OSM_TILE_URL = "https://tile.openstreetmap.org"
+_CARTO_TILE_URL = "https://a.basemaps.cartocdn.com"
+
+# Carto style mapping (Literal type ensures only these values are accepted)
+CartoStyle = Literal["light", "dark"]
+_CARTO_STYLES: dict[CartoStyle, str] = {
     "light": "light_all",
     "dark": "dark_all",
 }
+
+
+def _safe_cache_path(base_dir: Path, *parts: str) -> Path:
+    """
+    Construct a cache path with traversal protection.
+
+    Raises ValueError if the resulting path would escape base_dir.
+    """
+    # Resolve both paths to absolute to handle any ../ attempts
+    base_resolved = base_dir.resolve()
+    target = base_dir.joinpath(*parts).resolve()
+
+    if not target.is_relative_to(base_resolved):
+        raise ValueError("Path traversal detected")
+
+    return target
 
 
 def _cache_hit(cache_path: Path) -> bool:
@@ -43,14 +66,20 @@ async def get_osm_tile(z: int, x: int, y: int) -> FileResponse:
     Tiles are cached to disk for 30 days to reduce load on OSM servers
     and improve performance.
     """
+    # Validate zoom level (0-19 is standard for web maps)
     if z < 0 or z > 19:
         raise HTTPException(status_code=400, detail="Invalid zoom level")
 
+    # Validate tile coordinates for the given zoom level
     max_coord = 2**z - 1
     if x < 0 or x > max_coord or y < 0 or y > max_coord:
         raise HTTPException(status_code=400, detail="Invalid tile coordinates")
 
-    cache_path = TILE_CACHE_DIR / str(z) / str(x) / f"{y}.png"
+    # Construct cache path with traversal protection
+    try:
+        cache_path = _safe_cache_path(TILE_CACHE_DIR, str(z), str(x), f"{y}.png")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid tile path")
 
     if _cache_hit(cache_path):
         return FileResponse(
@@ -59,7 +88,8 @@ async def get_osm_tile(z: int, x: int, y: int) -> FileResponse:
             headers=_cache_headers(hit=True),
         )
 
-    osm_url = f"https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+    # Construct URL using allowlisted base URL and validated integers
+    osm_url = f"{_OSM_TILE_URL}/{z}/{x}/{y}.png"
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
@@ -84,7 +114,7 @@ async def get_osm_tile(z: int, x: int, y: int) -> FileResponse:
 
 
 @router.get("/tiles/carto/{style}/{z}/{x}/{y}.png")
-async def get_carto_tile(style: str, z: int, x: int, y: int) -> FileResponse:
+async def get_carto_tile(style: CartoStyle, z: int, x: int, y: int) -> FileResponse:
     """
     Proxy and cache CartoDB (CARTO) raster tiles.
 
@@ -94,20 +124,29 @@ async def get_carto_tile(style: str, z: int, x: int, y: int) -> FileResponse:
 
     Tiles are cached to disk for 30 days.
     """
+    # Style is validated by Literal type, but check dict membership for safety
     if style not in _CARTO_STYLES:
         raise HTTPException(
             status_code=400,
             detail=f"Unknown style '{style}'. Use 'light' or 'dark'.",
         )
 
+    # Validate zoom level (0-19 is standard for web maps)
     if z < 0 or z > 19:
         raise HTTPException(status_code=400, detail="Invalid zoom level")
 
+    # Validate tile coordinates for the given zoom level
     max_coord = 2**z - 1
     if x < 0 or x > max_coord or y < 0 or y > max_coord:
         raise HTTPException(status_code=400, detail="Invalid tile coordinates")
 
-    cache_path = TILE_CACHE_DIR / "carto" / style / str(z) / str(x) / f"{y}.png"
+    # Construct cache path with traversal protection
+    try:
+        cache_path = _safe_cache_path(
+            TILE_CACHE_DIR, "carto", style, str(z), str(x), f"{y}.png"
+        )
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid tile path")
 
     if _cache_hit(cache_path):
         return FileResponse(
@@ -116,8 +155,9 @@ async def get_carto_tile(style: str, z: int, x: int, y: int) -> FileResponse:
             headers=_cache_headers(hit=True),
         )
 
+    # Construct URL using allowlisted base URL, validated style, and validated integers
     carto_style = _CARTO_STYLES[style]
-    carto_url = f"https://a.basemaps.cartocdn.com/{carto_style}/{z}/{x}/{y}.png"
+    carto_url = f"{_CARTO_TILE_URL}/{carto_style}/{z}/{x}/{y}.png"
 
     try:
         async with httpx.AsyncClient() as client:

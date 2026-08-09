@@ -178,10 +178,10 @@ class TestCartoTileProxy:
         assert mock_client.get.call_count == 1
 
     @pytest.mark.asyncio
-    async def test_unknown_style_returns_400(self, http_client):
+    async def test_unknown_style_returns_422(self, http_client):
+        # FastAPI returns 422 for invalid Literal type values
         response = await http_client.get("/tiles/carto/satellite/10/512/512.png")
-        assert response.status_code == 400
-        assert "style" in response.json()["detail"].lower()
+        assert response.status_code == 422
 
     @pytest.mark.asyncio
     async def test_invalid_zoom_returns_400(self, http_client):
