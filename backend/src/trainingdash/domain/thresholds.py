@@ -5,7 +5,7 @@ The I/O (load-by-date, create entries, cache) lives in ``ThresholdRepo``
 shapes and the date-effectiveness rule.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date
 
 

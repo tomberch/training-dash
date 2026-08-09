@@ -17,8 +17,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     curl \
     && rm -rf /var/lib/apt/lists/* \
-    # Upgrade pip (CVE-2025-8869, CVE-2026-*) and install uv in same layer
-    && pip install --no-cache-dir pip==26.2.1 \
+    # Upgrade pip, setuptools (CVE-2025-47273, CVE-2026-59890), msgpack (GHSA-6v7p-g79w-8964) and install uv
+    && pip install --no-cache-dir pip==26.2.1 setuptools==83.0.0 msgpack==1.2.1 \
     && pip install --no-cache-dir uv==0.12.3
 
 # Copy only dependency file first (cached layer for deps)

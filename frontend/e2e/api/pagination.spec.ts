@@ -130,7 +130,7 @@ test.describe('Activity List Pagination', () => {
     await page.getByRole('button', { name: 'Previous' }).click();
     
     // Should be back on page 1 (either /activities or /activities?page=1)
-    await expect(page).toHaveURL(/\/activities(?:\?page=1)?$/);
+    await expect(page).toHaveURL(/^[^?]*\/activities(?:\?page=1)?$/);
     
     // Previous should be disabled again
     await expect(page.getByRole('button', { name: 'Previous' })).toBeDisabled();

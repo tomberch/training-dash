@@ -20,7 +20,6 @@ from trainingdash.dependencies import (
     ThresholdRepoD,
     XertCredentialsRepoD,
 )
-from trainingdash.domain.thresholds import ThresholdValues
 from trainingdash.domain.zones import compute_hr_zones, compute_power_zones
 from trainingdash.integrations.garmin import GarminAPIError, GarminMFARequired, get_garmin_client
 from trainingdash.integrations.xert import XertAPIError, get_xert_client
