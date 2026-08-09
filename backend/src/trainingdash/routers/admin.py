@@ -6,7 +6,13 @@ from sqlalchemy import select, func, delete, update
 
 from trainingdash.auth import AdminUser, DbSession, hash_password
 from trainingdash.crypto import encrypt, EncryptionError
-from trainingdash.models import (
+from trainingdash.dependencies import (
+    AuditLogRepoD,
+    GarminCredentialsRepoD,
+    UserRepoD,
+    XertCredentialsRepoD,
+)
+from trainingdash.repositories.postgres.models import (
     Activity,
     ActivityPeakPower,
     AppSettings,
@@ -28,10 +34,9 @@ from trainingdash.routers.serializers import user_summary
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 
-async def _get_user_or_404(db: DbSession, user_id: int) -> User:
+async def _get_user_or_404(user_repo: UserRepoD, user_id: int) -> User:
     """Fetch a user by ID or raise 404."""
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
+    user = await user_repo.get_by_id(user_id)
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
@@ -43,10 +48,9 @@ async def _get_user_or_404(db: DbSession, user_id: int) -> User:
 
 
 @router.get("/users")
-async def admin_list_users(db: DbSession, admin: AdminUser):
+async def admin_list_users(user_repo: UserRepoD, admin: AdminUser):
     """List all users (admin only)."""
-    result = await db.execute(select(User).order_by(User.id))
-    users = result.scalars().all()
+    users = await user_repo.list_all()
     return [user_summary(u) for u in users]
 
 
@@ -56,11 +60,10 @@ class CreateUserRequest(BaseModel):
 
 
 @router.post("/users")
-async def admin_create_user(db: DbSession, admin: AdminUser, request: CreateUserRequest):
+async def admin_create_user(user_repo: UserRepoD, admin: AdminUser, request: CreateUserRequest):
     """Create a new user account (admin only)."""
     # Check if email already exists
-    existing = await db.execute(select(User).where(User.email == request.email))
-    if existing.scalar_one_or_none() is not None:
+    if await user_repo.exists_by_email(request.email):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Email already exists"
         )
@@ -71,9 +74,7 @@ async def admin_create_user(db: DbSession, admin: AdminUser, request: CreateUser
         is_admin=False,
         is_approved=True,  # Admin-created users are pre-approved
     )
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
+    user = await user_repo.save(user)
     return user_summary(user)
 
 
@@ -83,38 +84,38 @@ class ResetPasswordRequest(BaseModel):
 
 @router.post("/users/{user_id}/reset-password")
 async def admin_reset_password(
-    db: DbSession, admin: AdminUser, user_id: int, request: ResetPasswordRequest
+    db: DbSession, user_repo: UserRepoD, admin: AdminUser, user_id: int, request: ResetPasswordRequest
 ):
     """Reset a user's password (admin only)."""
-    user = await _get_user_or_404(db, user_id)
+    user = await _get_user_or_404(user_repo, user_id)
     user.password_hash = hash_password(request.password)
     await db.commit()
     return {"success": True}
 
 
 @router.post("/users/{user_id}/sync")
-async def admin_trigger_sync(db: DbSession, admin: AdminUser, user_id: int):
+async def admin_trigger_sync(
+    xert_repo: XertCredentialsRepoD,
+    garmin_repo: GarminCredentialsRepoD,
+    user_repo: UserRepoD,
+    admin: AdminUser,
+    user_id: int,
+):
     """Trigger sync for a user (admin only). Triggers both Xert and Garmin if configured."""
-    await _get_user_or_404(db, user_id)
+    await _get_user_or_404(user_repo, user_id)
 
     from trainingdash.jobs import enqueue_sync_garmin_job, enqueue_sync_xert_job
 
     job_ids = {}
 
     # Check if user has Xert credentials and trigger sync
-    xert_result = await db.execute(
-        select(XertCredentials).where(XertCredentials.user_id == user_id)
-    )
-    if xert_result.scalar_one_or_none() is not None:
+    if await xert_repo.exists(user_id):
         job_id = await enqueue_sync_xert_job(user_id)
         if job_id:
             job_ids["xert"] = job_id
 
     # Check if user has Garmin credentials and trigger sync
-    garmin_result = await db.execute(
-        select(GarminCredentials).where(GarminCredentials.user_id == user_id)
-    )
-    if garmin_result.scalar_one_or_none() is not None:
+    if await garmin_repo.exists(user_id):
         job_id = await enqueue_sync_garmin_job(user_id)
         if job_id:
             job_ids["garmin"] = job_id
@@ -137,13 +138,12 @@ class XertCredentialsRequest(BaseModel):
 
 
 @router.get("/users/{user_id}/xert-credentials")
-async def admin_get_xert_credentials(db: DbSession, admin: AdminUser, user_id: int):
+async def admin_get_xert_credentials(
+    xert_repo: XertCredentialsRepoD, user_repo: UserRepoD, admin: AdminUser, user_id: int
+):
     """Get Xert credentials status for a user (admin only). Never returns the password."""
-    await _get_user_or_404(db, user_id)
-    result = await db.execute(
-        select(XertCredentials).where(XertCredentials.user_id == user_id)
-    )
-    creds = result.scalar_one_or_none()
+    await _get_user_or_404(user_repo, user_id)
+    creds = await xert_repo.get_by_user_id(user_id)
     if creds is None:
         return {"configured": False, "xert_email": None}
     return {"configured": True, "xert_email": creds.xert_email}
@@ -151,10 +151,14 @@ async def admin_get_xert_credentials(db: DbSession, admin: AdminUser, user_id: i
 
 @router.put("/users/{user_id}/xert-credentials")
 async def admin_set_xert_credentials(
-    db: DbSession, admin: AdminUser, user_id: int, request: XertCredentialsRequest
+    xert_repo: XertCredentialsRepoD,
+    user_repo: UserRepoD,
+    admin: AdminUser,
+    user_id: int,
+    request: XertCredentialsRequest,
 ):
     """Set or update Xert credentials for a user (admin only). Password is encrypted at rest."""
-    await _get_user_or_404(db, user_id)
+    await _get_user_or_404(user_repo, user_id)
 
     try:
         encrypted_password = encrypt(request.xert_password)
@@ -163,37 +167,21 @@ async def admin_set_xert_credentials(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
         )
 
-    result = await db.execute(
-        select(XertCredentials).where(XertCredentials.user_id == user_id)
+    await xert_repo.save(
+        user_id=user_id,
+        xert_email=request.xert_email,
+        encrypted_password=encrypted_password,
     )
-    creds = result.scalar_one_or_none()
-
-    if creds is None:
-        creds = XertCredentials(
-            user_id=user_id,
-            xert_email=request.xert_email,
-            encrypted_password=encrypted_password,
-        )
-        db.add(creds)
-    else:
-        creds.xert_email = request.xert_email
-        creds.encrypted_password = encrypted_password
-
-    await db.commit()
     return {"success": True, "xert_email": request.xert_email}
 
 
 @router.delete("/users/{user_id}/xert-credentials")
-async def admin_delete_xert_credentials(db: DbSession, admin: AdminUser, user_id: int):
+async def admin_delete_xert_credentials(
+    xert_repo: XertCredentialsRepoD, user_repo: UserRepoD, admin: AdminUser, user_id: int
+):
     """Delete Xert credentials for a user (admin only)."""
-    await _get_user_or_404(db, user_id)
-    result = await db.execute(
-        select(XertCredentials).where(XertCredentials.user_id == user_id)
-    )
-    creds = result.scalar_one_or_none()
-    if creds is not None:
-        await db.delete(creds)
-        await db.commit()
+    await _get_user_or_404(user_repo, user_id)
+    await xert_repo.delete(user_id)
     return {"success": True}
 
 
@@ -202,19 +190,16 @@ async def admin_delete_xert_credentials(db: DbSession, admin: AdminUser, user_id
 
 
 @router.get("/users/pending")
-async def admin_list_pending_users(db: DbSession, admin: AdminUser):
+async def admin_list_pending_users(user_repo: UserRepoD, admin: AdminUser):
     """List all users pending approval (admin only)."""
-    result = await db.execute(
-        select(User).where(User.is_approved == False).order_by(User.created_at)
-    )
-    users = result.scalars().all()
+    users = await user_repo.list_pending_approval()
     return [user_summary(u) for u in users]
 
 
 @router.post("/users/{user_id}/approve")
-async def admin_approve_user(db: DbSession, admin: AdminUser, user_id: int):
+async def admin_approve_user(db: DbSession, user_repo: UserRepoD, admin: AdminUser, user_id: int):
     """Approve a pending user (admin only)."""
-    user = await _get_user_or_404(db, user_id)
+    user = await _get_user_or_404(user_repo, user_id)
     if user.is_approved:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="User is already approved"
@@ -225,9 +210,9 @@ async def admin_approve_user(db: DbSession, admin: AdminUser, user_id: int):
 
 
 @router.post("/users/{user_id}/reject")
-async def admin_reject_user(db: DbSession, admin: AdminUser, user_id: int):
+async def admin_reject_user(db: DbSession, user_repo: UserRepoD, admin: AdminUser, user_id: int):
     """Reject and delete a pending user (admin only)."""
-    user = await _get_user_or_404(db, user_id)
+    user = await _get_user_or_404(user_repo, user_id)
     if user.is_approved:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -296,9 +281,9 @@ async def admin_update_setting(
 
 
 @router.get("/users/{user_id}/nuke-preview")
-async def admin_nuke_preview(db: DbSession, admin: AdminUser, user_id: int):
+async def admin_nuke_preview(db: DbSession, user_repo: UserRepoD, admin: AdminUser, user_id: int):
     """Get counts of what would be deleted for each nuke action."""
-    user = await _get_user_or_404(db, user_id)
+    user = await _get_user_or_404(user_repo, user_id)
     
     counts = await _get_user_data_counts(db, user_id)
     
@@ -444,10 +429,10 @@ async def _log_nuke_action(
 
 @router.post("/users/{user_id}/nuke/activities")
 async def admin_nuke_activities(
-    db: DbSession, admin: AdminUser, user_id: int, request: NukeRequest
+    db: DbSession, user_repo: UserRepoD, admin: AdminUser, user_id: int, request: NukeRequest
 ):
     """Delete all activities and related data for a user (keeps account, credentials, and fitness settings)."""
-    user = await _get_user_or_404(db, user_id)
+    user = await _get_user_or_404(user_repo, user_id)
     _validate_nuke_request(user, admin, request.confirm_email, allow_self=True)
     
     # Get counts for audit log
@@ -474,10 +459,10 @@ async def admin_nuke_activities(
 
 @router.post("/users/{user_id}/nuke/integrations")
 async def admin_nuke_integrations(
-    db: DbSession, admin: AdminUser, user_id: int, request: NukeRequest
+    db: DbSession, user_repo: UserRepoD, admin: AdminUser, user_id: int, request: NukeRequest
 ):
     """Delete all integration credentials for a user."""
-    user = await _get_user_or_404(db, user_id)
+    user = await _get_user_or_404(user_repo, user_id)
     _validate_nuke_request(user, admin, request.confirm_email, allow_self=True)
     
     # Get counts for audit log
@@ -502,10 +487,10 @@ async def admin_nuke_integrations(
 
 @router.post("/users/{user_id}/nuke/account")
 async def admin_nuke_account(
-    db: DbSession, admin: AdminUser, user_id: int, request: NukeRequest
+    db: DbSession, user_repo: UserRepoD, admin: AdminUser, user_id: int, request: NukeRequest
 ):
     """Delete a user account and all associated data."""
-    user = await _get_user_or_404(db, user_id)
+    user = await _get_user_or_404(user_repo, user_id)
     _validate_nuke_request(user, admin, request.confirm_email)
     
     # Get counts for audit log

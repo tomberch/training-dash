@@ -14,16 +14,33 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
-from sqlalchemy.pool import NullPool
 from testcontainers.postgres import PostgresContainer
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "tests" / "fixtures"))
 from generate_fit import make_test_fit  # noqa: E402
 
 from trainingdash.app import create_app
-from trainingdash.db import Base
-from trainingdash.models import User
+from trainingdash.repositories.postgres.db import Base
+from trainingdash.repositories.postgres.models import User
 from tests.integration.fixtures import CACHED_HASH_TESTPASS
+
+
+@pytest.fixture(autouse=True)
+def _mock_geocoding(monkeypatch):
+    """Skip reverse geocoding in integration tests.
+
+    generate_activity_title normally calls out to photon.komoot.io with a
+    1-second rate-limit sleep per request (3-12 per upload). Patching it out
+    eliminates the sleep tax without losing coverage — the real title logic is
+    untested today (see #259) and is independent of the integration suite.
+    """
+    async def _fake_title(records, activity_date=None):
+        return "Test Ride"
+
+    monkeypatch.setattr(
+        "trainingdash.domain.title_generator.generate_activity_title", _fake_title
+    )
+
 
 # Dedicated test container settings
 TEST_CONTAINER_NAME = "traindash-test-db"
@@ -171,50 +188,155 @@ def pg_container():
         yield pg
 
 
-@pytest_asyncio.fixture(scope="session")
-async def db_engine_session(pg_container):
+@pytest.fixture(scope="session")
+def worker_schema():
+    """Per-worker Postgres schema name for xdist isolation.
+
+    Under pytest-xdist each worker (``gw0``, ``gw1``, ...) gets its own schema
+    in the shared DB; under serial runs this is ``public`` so behavior is
+    unchanged. Tables are created in the worker's schema via ``search_path``;
+    the ``postgis`` extension (and its ``geography`` type / ``ST_*`` functions)
+    lives in ``public`` and is shared read-only across workers.
     """
-    Session-scoped database engine. Creates schema once at session start.
-    This dramatically reduces test overhead by avoiding schema recreation per test.
+    worker_id = os.environ.get("PYTEST_XDIST_WORKER", "main")
+    if worker_id == "main":
+        return "public"
+    return f"test_{worker_id}"
+
+
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
+async def db_engine_session(pg_container, worker_schema):
+    """
+    Session-scoped database engine. Creates schema once per worker session.
+
+    Under xdist each worker gets its own schema (``test_gw0``, ``test_gw1``,
+    ...); under serial runs this is ``public``. The ``postgis`` extension is
+    installed once in ``public`` (idempotent ``CREATE EXTENSION IF NOT EXISTS``
+    is safe under concurrency — concurrent workers just see "already exists,
+    skipping"). Every connection from this engine sets
+    ``search_path = <worker_schema>,public`` so tables land in the worker's
+    schema and ``geography``/``ST_*`` resolve from ``public``.
+
+    Uses the default pool (not NullPool) so each test can check out its own
+    connection for per-test transaction rollback. ``loop_scope="session"``
+    keeps one event loop for the whole session so asyncpg connections don't
+    cross loops.
+
+    See ADR 0003 for the isolation model and the PostGIS constraint that
+    motivated it (the prior "geography only in public" claim was false for
+    PostGIS 3.4 — see docs/research/xdist-postgis-patterns.md).
     """
     url = pg_container.get_connection_url()
-    engine = create_async_engine(url, poolclass=NullPool)
-    
-    # Create schema once at session start
+    engine = create_async_engine(
+        url,
+        pool_pre_ping=True,
+        connect_args={"server_settings": {"search_path": f"{worker_schema},public"}},
+    )
+
     async with engine.begin() as conn:
-        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis"))
+        if worker_schema != "public":
+            # Per-worker schema: drop any leftover from a prior run, then create.
+            # No FileLock needed — each worker owns a distinct schema name.
+            await conn.execute(text(f'DROP SCHEMA IF EXISTS "{worker_schema}" CASCADE'))
+            await conn.execute(text(f'CREATE SCHEMA "{worker_schema}"'))
+        # postgis lives in `public` and is shared across all workers. Install it
+        # under a transaction-level advisory lock so only one worker does the
+        # CREATE EXTENSION; others block until it's done, then see it present.
+        # (CREATE EXTENSION IF NOT EXISTS raises UniqueViolation under asyncpg
+        # when raced; CREATE EXTENSION ... SCHEMA public puts objects in public
+        # regardless of the worker's search_path.)
+        await conn.execute(text("SELECT pg_advisory_xact_lock(42)"))
+        existing = await conn.execute(
+            text("SELECT 1 FROM pg_extension WHERE extname = 'postgis'")
+        )
+        if existing.scalar() is None:
+            await conn.execute(text("CREATE EXTENSION postgis SCHEMA public"))
+        # Tables go in the worker's schema (search_path leads with it).
         await conn.run_sync(Base.metadata.create_all)
-    
+
+    # Seed metric_types once per worker (lives in the worker's schema).
+    async with engine.begin() as conn:
+        await conn.execute(text("""
+            INSERT INTO metric_types (key, display_name, unit, category, data_type, min_value, max_value, allowed_sources, recalc_targets, sort_order)
+            VALUES 
+                ('ftp', 'Functional Threshold Power', 'W', 'threshold', 'integer', 50, 500, ARRAY['manual', 'calculated', 'device'], ARRAY['power_zones', 'tss', 'if'], 1),
+                ('lthr', 'Lactate Threshold HR', 'bpm', 'threshold', 'integer', 80, 220, ARRAY['manual', 'calculated', 'device'], ARRAY['hr_zones'], 2),
+                ('hrmax', 'Maximum Heart Rate', 'bpm', 'threshold', 'integer', 100, 250, ARRAY['manual', 'calculated', 'device'], ARRAY['hr_zones'], 3),
+                ('weight_kg', 'Weight', 'kg', 'body', 'decimal', 30, 200, ARRAY['manual', 'device'], ARRAY['vo2max', 'w_per_kg'], 4),
+                ('vo2max', 'VO2 Max', 'ml/kg/min', 'fitness', 'decimal', 20, 90, ARRAY['manual', 'calculated', 'device'], NULL, 5),
+                ('resting_hr', 'Resting Heart Rate', 'bpm', 'recovery', 'integer', 30, 100, ARRAY['manual', 'device'], NULL, 6),
+                ('hrv', 'Heart Rate Variability', 'ms', 'recovery', 'integer', 10, 200, ARRAY['manual', 'device'], NULL, 7)
+            ON CONFLICT (key) DO NOTHING
+        """))
+
     yield engine
     await engine.dispose()
 
 
-@pytest_asyncio.fixture
-async def db_engine(db_engine_session):
-    """
-    Function-scoped fixture that cleans data between tests via TRUNCATE.
-    Much faster than DROP/CREATE schema (~10ms vs ~1000ms).
-    """
-    # Truncate all tables before each test (CASCADE handles FK constraints)
-    async with db_engine_session.begin() as conn:
-        # Get all table names - use metadata.tables to avoid sort issues with circular FKs
-        tables = list(Base.metadata.tables.keys())
-        if tables:
-            table_list = ", ".join(f'"{t}"' for t in tables)
-            await conn.execute(text(f"TRUNCATE {table_list} RESTART IDENTITY CASCADE"))
-    
-    yield db_engine_session
+# =============================================================================
+# DATABASE FIXTURES
+# =============================================================================
+# Per-test isolation uses SAVEPOINT rollback, not TRUNCATE.
+#
+# Each test checks out one connection from the pool, begins an outer
+# transaction, and yields that connection. ``db_session`` and the ``get_db``
+# override (used by HTTP requests) both bind sessions to that connection with
+# ``join_transaction_mode="create_savepoint"`` — so HTTP writes and direct
+# writes (e.g. ``ingest_fit(db, ...)``) share one rollback-able transaction.
+# On teardown the outer transaction is rolled back, undoing every write the
+# test made, regardless of which code path produced it.
+#
+# This is the SQLAlchemy 2.0 test-suite recipe (see ADR 0003). The previous
+# TRUNCATE-per-test approach is gone; its ~700-800ms per-test setup cost was
+# 96% of every test's wall time.
 
 
-@pytest_asyncio.fixture
-async def db_session(db_engine):
-    session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
+@pytest_asyncio.fixture(loop_scope="session")
+async def _test_conn(db_engine_session):
+    """Per-test: one connection with an outer transaction that is rolled back.
+
+    Both ``db_session`` and the ``get_db`` override bind sessions to this
+    connection. Explicit ``trans.rollback()`` on teardown — the ``async with
+    conn.begin()`` context manager did not roll back reliably with asyncpg
+    (verified during the #280 prototype).
+    """
+    async with db_engine_session.connect() as conn:
+        trans = await conn.begin()
+        try:
+            yield conn
+        finally:
+            await trans.rollback()
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def db_engine(_test_conn):
+    """Per-test connection (kept under the ``db_engine`` name for tests that
+    reference it directly; most tests want ``db_session``/``app_client``).
+    """
+    return _test_conn
+
+
+def _session_factory_for(conn):
+    """Session factory bound to a single connection, joining its transaction
+    via SAVEPOINT so app code can ``commit()``/``rollback()`` freely without
+    ending the outer test transaction.
+    """
+    return async_sessionmaker(
+        bind=conn,
+        expire_on_commit=False,
+        join_transaction_mode="create_savepoint",
+    )
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def db_session(_test_conn):
+    """Database session for direct DB access in tests."""
+    session_factory = _session_factory_for(_test_conn)
     async with session_factory() as session:
         yield session
-        await session.rollback()
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(loop_scope="session")
 async def seed_user(db_session):
     user = User(
         email="testuser@example.com",
@@ -227,11 +349,18 @@ async def seed_user(db_session):
     return user
 
 
-@pytest_asyncio.fixture
-async def app_client(db_engine, seed_user):
+@pytest_asyncio.fixture(loop_scope="session")
+async def app_client(_test_conn, seed_user):
+    """App client for HTTP requests in tests.
+
+    The ``get_db`` override yields sessions bound to the test's shared
+    connection with ``join_transaction_mode="create_savepoint"`` so HTTP
+    writes join the same outer transaction as direct writes, and the whole
+    transaction is rolled back at teardown.
+    """
     import trainingdash.auth as authmod
 
-    session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
+    session_factory = _session_factory_for(_test_conn)
 
     async def override_get_db():
         async with session_factory() as session:
@@ -244,10 +373,29 @@ async def app_client(db_engine, seed_user):
         yield client
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(loop_scope="session")
 async def auth_client(app_client, seed_user):
     response = await app_client.post(
         "/api/login", json={"email": "testuser@example.com", "password": "testpass"}
     )
     assert response.status_code == 200
     return app_client
+
+
+@pytest_asyncio.fixture
+async def http_client():
+    """Lightweight app client with no database dependency.
+
+    For tests that only hit unauthenticated HTTP endpoints (e.g. tile proxy).
+    Avoids the per-test connection and seed_user login overhead.
+    """
+    app = create_app()
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        yield client
+
+
+# Backward-compat aliases removed: `truncate_*` fixtures had zero references
+# after the rollback rewrite (verified via grep). If a future test needs a
+# TRUNCATE-style clean-DB fixture, add it back explicitly — rollback now
+# provides the same guarantee faster.

@@ -20,8 +20,8 @@ from dotenv import load_dotenv
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from trainingdash.models import Activity, Record, User, XertCredentials
-from trainingdash.xert import XertActivity, XertAPIError
+from trainingdash.repositories.postgres.models import Activity, Record, User, XertCredentials
+from trainingdash.integrations.xert import XertActivity, XertAPIError
 from tests.integration.fixtures import CACHED_HASH_TESTPASS, CACHED_HASH_PASS
 
 # Load .env.test if it exists (for local Xert API testing)
@@ -251,7 +251,7 @@ class TestSyncXertJob:
         mock_worker_db_session, session_factory = _make_worker_db_session_ctx(db_engine)
 
         with _patch_pipeline():
-            with mock.patch("trainingdash.xert.get_xert_client", return_value=mock_xert_client):
+            with mock.patch("trainingdash.integrations.xert.get_xert_client", return_value=mock_xert_client):
                 with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
                     from trainingdash.worker import sync_xert_job
                     result = await sync_xert_job({}, user_with_xert_creds.id)
@@ -295,7 +295,7 @@ class TestSyncXertJob:
         mock_worker_db_session, session_factory = _make_worker_db_session_ctx(db_engine)
 
         with _patch_pipeline():
-            with mock.patch("trainingdash.xert.get_xert_client", return_value=mock_xert_client):
+            with mock.patch("trainingdash.integrations.xert.get_xert_client", return_value=mock_xert_client):
                 with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
                     from trainingdash.worker import sync_xert_job
                     result = await sync_xert_job({}, user_with_xert_creds.id)
@@ -343,7 +343,7 @@ class TestSyncXertJob:
 
         mock_worker_db_session, session_factory = _make_worker_db_session_ctx(db_engine)
 
-        with mock.patch("trainingdash.xert.get_xert_client", return_value=mock_xert_client):
+        with mock.patch("trainingdash.integrations.xert.get_xert_client", return_value=mock_xert_client):
             with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
                 from trainingdash.worker import sync_xert_job
                 result = await sync_xert_job({}, user_with_xert_creds.id)
@@ -377,7 +377,7 @@ class TestSyncXertJob:
         mock_worker_db_session, session_factory = _make_worker_db_session_ctx(db_engine)
 
         with _patch_pipeline():
-            with mock.patch("trainingdash.xert.get_xert_client", return_value=mock_xert_client):
+            with mock.patch("trainingdash.integrations.xert.get_xert_client", return_value=mock_xert_client):
                 with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
                     from trainingdash.worker import sync_xert_job
                     await sync_xert_job({}, user_with_xert_creds.id)
@@ -423,7 +423,7 @@ class TestSyncXertJob:
         mock_worker_db_session, session_factory = _make_worker_db_session_ctx(db_engine)
 
         with _patch_pipeline():
-            with mock.patch("trainingdash.xert.get_xert_client", return_value=mock_xert_client):
+            with mock.patch("trainingdash.integrations.xert.get_xert_client", return_value=mock_xert_client):
                 with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
                     from trainingdash.worker import sync_xert_job
                     await sync_xert_job({}, user_with_xert_creds.id)
@@ -454,7 +454,7 @@ class TestSyncXertJob:
         mock_worker_db_session, session_factory = _make_worker_db_session_ctx(db_engine)
 
         with _patch_pipeline():
-            with mock.patch("trainingdash.xert.get_xert_client", return_value=mock_xert_client):
+            with mock.patch("trainingdash.integrations.xert.get_xert_client", return_value=mock_xert_client):
                 with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
                     from trainingdash.worker import sync_xert_job
                     result = await sync_xert_job({}, user_with_xert_creds.id)
@@ -498,7 +498,7 @@ class TestSyncXertJob:
         mock_worker_db_session, _ = _make_worker_db_session_ctx(db_engine)
 
         with _patch_pipeline():
-            with mock.patch("trainingdash.xert.get_xert_client", return_value=mock_xert_client):
+            with mock.patch("trainingdash.integrations.xert.get_xert_client", return_value=mock_xert_client):
                 with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
                     from trainingdash.worker import sync_xert_job
                     result = await sync_xert_job({}, user_with_xert_creds.id)
@@ -532,7 +532,7 @@ class TestSyncXertJob:
 
         mock_worker_db_session, _ = _make_worker_db_session_ctx(db_engine)
 
-        with mock.patch("trainingdash.xert.get_xert_client", return_value=mock_xert_client):
+        with mock.patch("trainingdash.integrations.xert.get_xert_client", return_value=mock_xert_client):
             with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
                 from trainingdash.worker import sync_xert_job
                 result = await sync_xert_job({}, user_with_xert_creds.id)
@@ -564,7 +564,7 @@ class TestSyncXertJob:
         mock_worker_db_session, session_factory = _make_worker_db_session_ctx(db_engine)
 
         with _patch_pipeline():
-            with mock.patch("trainingdash.xert.get_xert_client", return_value=mock_xert_client):
+            with mock.patch("trainingdash.integrations.xert.get_xert_client", return_value=mock_xert_client):
                 with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
                     from trainingdash.worker import sync_xert_job
                     result = await sync_xert_job({}, user_with_xert_creds.id)
@@ -671,7 +671,7 @@ class TestXertClientRealAPI:
     @pytest_asyncio.fixture
     async def live_client(self):
         """Authenticated XertClient connected to the real API."""
-        from trainingdash.xert import XertClient
+        from trainingdash.integrations.xert import XertClient
 
         client = XertClient()
         await client.login(
@@ -731,7 +731,7 @@ class TestXertClientRealAPI:
     @pytest.mark.asyncio
     async def test_real_xert_invalid_credentials(self):
         """Invalid credentials raise XertAPIError."""
-        from trainingdash.xert import XertClient, XertAPIError
+        from trainingdash.integrations.xert import XertClient, XertAPIError
 
         client = XertClient()
         try:

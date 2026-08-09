@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "tests" / "fixtures"))
 from generate_fit import make_test_fit  # noqa: E402
-from trainingdash.models import Activity, Record  # noqa: E402
+from trainingdash.repositories.postgres.models import Activity, Record  # noqa: E402
 
 
 class TestActivityEndpoints:
@@ -173,7 +173,7 @@ class TestDeleteActivity:
         """Records belonging to the deleted activity are removed via CASCADE."""
         activity_id = await self._upload(auth_client)
         from uuid import UUID
-        from trainingdash.models import Record
+        from trainingdash.repositories.postgres.models import Record
         records_before = (await db_session.execute(
             select(Record).where(Record.activity_id == UUID(activity_id))
         )).scalars().all()
@@ -198,7 +198,7 @@ class TestDeleteActivity:
     ):
         """A user cannot delete another user's activity (404, not 403)."""
         from tests.integration.fixtures import CACHED_HASH_TESTPASS
-        from trainingdash.models import User, Activity as ActivityModel
+        from trainingdash.repositories.postgres.models import User, Activity as ActivityModel
         from trainingdash.routers.datetime_utils import utc_str
         import datetime
 
@@ -240,7 +240,7 @@ class TestDeleteActivity:
     async def test_delete_decrements_route_ride_count(self, auth_client, db_session):
         """Route.ride_count is decremented when one of its activities is deleted."""
         from uuid import UUID
-        from trainingdash.models import Activity as ActivityModel, Route
+        from trainingdash.repositories.postgres.models import Activity as ActivityModel, Route
         import datetime
 
         # Upload two activities so they can share a route
@@ -279,7 +279,7 @@ class TestDeleteActivity:
     async def test_delete_first_seen_repairs_route(self, auth_client, db_session):
         """first_seen_activity_id is nulled (ON DELETE SET NULL) when the first-seen activity is deleted."""
         from uuid import UUID
-        from trainingdash.models import Activity as ActivityModel, Route
+        from trainingdash.repositories.postgres.models import Activity as ActivityModel, Route
         import datetime
 
         id1 = await self._upload(auth_client)
@@ -317,7 +317,7 @@ class TestDeleteActivity:
     async def test_delete_sole_activity_removes_route(self, auth_client, db_session):
         """Route is deleted when the last activity on it is removed."""
         from uuid import UUID
-        from trainingdash.models import Activity as ActivityModel, Route
+        from trainingdash.repositories.postgres.models import Activity as ActivityModel, Route
 
         activity_id = await self._upload(auth_client)
         act = (await db_session.execute(

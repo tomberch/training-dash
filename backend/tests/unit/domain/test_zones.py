@@ -2,7 +2,7 @@
 
 import pytest
 
-from trainingdash.zones import (
+from trainingdash.domain.zones import (
     compute_power_zones,
     compute_hr_zones,
     get_zone_for_power,

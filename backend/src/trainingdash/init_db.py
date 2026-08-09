@@ -5,8 +5,8 @@ import sys
 
 from sqlalchemy import text
 
-from trainingdash.db import async_session, engine
-from trainingdash.models import User
+from trainingdash.repositories.postgres.db import async_session, engine
+from trainingdash.repositories.postgres.models import User
 from trainingdash.auth import hash_password
 
 

@@ -32,7 +32,7 @@ import pytest
 def freeze_now():
     """Pin datetime.now() to _FROZEN for all tests in this module."""
     with mock.patch(
-        "trainingdash.sync.datetime",
+        "trainingdash.use_cases.sync_from_provider.datetime",
         wraps=datetime,
     ) as m:
         m.now.return_value = _FROZEN

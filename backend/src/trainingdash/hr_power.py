@@ -4,7 +4,7 @@ from datetime import datetime, timezone, timedelta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from trainingdash.models import Activity, User, EFModel
+from trainingdash.repositories.postgres.models import Activity, User, EFModel
 
 
 # Minimum rides needed to build EF model

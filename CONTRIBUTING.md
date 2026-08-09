@@ -115,10 +115,16 @@ function ActivityCard({ activity, onClick }: ActivityCardProps): JSX.Element {
 traindash/
 ├── backend/
 │   ├── src/trainingdash/    # Python package
+│   │   ├── domain/          # Pure business logic (no I/O)
+│   │   ├── repositories/    # Data access (protocols + postgres/)
+│   │   ├── use_cases/       # Application workflows
+│   │   ├── integrations/    # External API clients
 │   │   ├── routers/         # API endpoints
-│   │   ├── models.py        # SQLAlchemy models
-│   │   └── ...
+│   │   └── dependencies.py  # Dependency injection
 │   ├── tests/               # pytest tests
+│   │   ├── unit/            # Fast tests (domain/, use_cases/)
+│   │   ├── integration/     # Tests requiring Postgres/Redis
+│   │   └── fakes/           # Fake repository implementations
 │   └── migrations/          # Alembic migrations
 ├── frontend/
 │   ├── src/
@@ -128,6 +134,8 @@ traindash/
 │   └── ...
 └── docs/
 ```
+
+See `docs/architecture.md` and `docs/adr/0002-clean-architecture-refactor.md` for detailed backend structure.
 
 ## Making Changes
 
@@ -160,15 +168,40 @@ Review the generated migration before committing!
 
 ## Testing
 
+### Test Architecture
+
+The backend test suite is organized into two categories:
+
+- **Unit tests** (`tests/unit/`): Fast tests with no external dependencies
+- **Integration tests** (`tests/integration/`): Tests requiring real Postgres/Redis
+
+See `backend/tests/TEST_ARCHITECTURE.md` for detailed documentation.
+
+### Performance Targets
+
+| Test Suite | Target | Notes |
+|------------|--------|-------|
+| Unit tests | < 10 seconds | Pure Python, no I/O |
+| Integration tests | < 4 minutes | Includes testcontainer startup |
+| Full suite | < 5 minutes | Sequential execution |
+
 ### Backend Tests
 
 Tests use [testcontainers](https://testcontainers.com/) to spin up real PostgreSQL and Redis instances:
 
 ```bash
 cd backend
-pytest                          # Run all tests
-pytest tests/test_activities.py # Run specific file
-pytest -v --tb=short            # Verbose with short tracebacks
+pytest tests/unit/ -q             # Fast unit tests (~5s)
+pytest tests/integration/ -q      # Integration tests (~3-4min)
+pytest                            # All tests
+pytest -v --tb=short              # Verbose with short tracebacks
+```
+
+For faster integration test iteration, the test suite auto-manages a persistent postgres container named `traindash-test-db` on port 5433. The first run creates it (~6s), subsequent runs reuse it (instant startup).
+
+```bash
+# Reset the test database if needed
+docker rm -f traindash-test-db
 ```
 
 ### Frontend Tests

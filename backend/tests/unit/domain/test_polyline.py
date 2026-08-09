@@ -1,7 +1,7 @@
 """Tests for the polyline encoding/decoding module."""
 
 import pytest
-from trainingdash.polyline import (
+from trainingdash.domain.polyline import (
     encode_polyline,
     decode_polyline,
     simplify_coords,

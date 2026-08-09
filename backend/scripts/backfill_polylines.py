@@ -19,8 +19,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
-from trainingdash.models import Activity, Record
-from trainingdash.polyline import generate_map_polyline
+from trainingdash.repositories.postgres.models import Activity, Record
+from trainingdash.domain.polyline import generate_map_polyline
 
 
 async def backfill_polylines(db_url: str) -> None:

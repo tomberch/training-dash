@@ -8,8 +8,9 @@ from pydantic import BaseModel
 from sqlalchemy import select, func
 
 from trainingdash.auth import CurrentUser, DbSession
-from trainingdash.models import Activity, ActivityPeakPower, Record
-from trainingdash.thresholds import get_thresholds_for_date
+from trainingdash.dependencies import ActivityRepoD, DeleteActivityD
+from trainingdash.repositories.postgres.models import Activity, ActivityPeakPower, Record
+from trainingdash.domain.thresholds import get_thresholds_for_date
 from trainingdash.routers.datetime_utils import utc_str
 from trainingdash.routers.serializers import (
     activity_detail,
@@ -39,13 +40,10 @@ class ActivityUpdateRequest(BaseModel):
 
 
 async def _get_owned_activity(
-    db: DbSession, user: CurrentUser, activity_id: UUID
+    repo: ActivityRepoD, user: CurrentUser, activity_id: UUID
 ) -> Activity:
     """Fetch an activity owned by the current user or raise 404."""
-    result = await db.execute(
-        select(Activity).where(Activity.id == activity_id, Activity.user_id == user.id)
-    )
-    activity = result.scalar_one_or_none()
+    activity = await repo.get_by_id(activity_id, user.id)
     if activity is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Activity not found"
@@ -55,7 +53,7 @@ async def _get_owned_activity(
 
 @router.get("/activities")
 async def list_activities(
-    db: DbSession,
+    repo: ActivityRepoD,
     user: CurrentUser,
     page: int = Query(DEFAULT_PAGE, ge=1, description="Page number (1-indexed)"),
     per_page: int = Query(DEFAULT_PER_PAGE, ge=1, le=MAX_PER_PAGE, description="Items per page"),
@@ -67,24 +65,14 @@ async def list_activities(
         pagination: Pagination metadata (total, page, per_page, total_pages)
     """
     # Count total activities
-    count_result = await db.execute(
-        select(func.count(Activity.id)).where(Activity.user_id == user.id)
-    )
-    total = count_result.scalar() or 0
+    total = await repo.count_for_user(user.id)
     
     # Calculate pagination
     total_pages = (total + per_page - 1) // per_page if total > 0 else 1
     offset = (page - 1) * per_page
     
     # Fetch page of activities
-    result = await db.execute(
-        select(Activity)
-        .where(Activity.user_id == user.id)
-        .order_by(Activity.started_at.desc())
-        .offset(offset)
-        .limit(per_page)
-    )
-    activities = result.scalars().all()
+    activities = await repo.list_for_user(user.id, limit=per_page, offset=offset)
     
     return {
         "activities": [activity_summary(a) for a in activities],
@@ -98,9 +86,9 @@ async def list_activities(
 
 
 @router.get("/activities/{activity_id}")
-async def get_activity(db: DbSession, user: CurrentUser, activity_id: UUID):
+async def get_activity(db: DbSession, repo: ActivityRepoD, user: CurrentUser, activity_id: UUID):
     """Get full details for an activity including peak powers."""
-    activity = await _get_owned_activity(db, user, activity_id)
+    activity = await _get_owned_activity(repo, user, activity_id)
     result = activity_detail(activity)
 
     # Fetch peak powers for this activity
@@ -144,10 +132,10 @@ async def get_activity(db: DbSession, user: CurrentUser, activity_id: UUID):
 
 @router.patch("/activities/{activity_id}")
 async def update_activity(
-    db: DbSession, user: CurrentUser, activity_id: UUID, request: ActivityUpdateRequest
+    db: DbSession, repo: ActivityRepoD, user: CurrentUser, activity_id: UUID, request: ActivityUpdateRequest
 ):
     """Update an activity (currently only title)."""
-    activity = await _get_owned_activity(db, user, activity_id)
+    activity = await _get_owned_activity(repo, user, activity_id)
     
     if request.title is not None:
         activity.title = request.title
@@ -161,14 +149,14 @@ async def update_activity(
 
 @router.post("/activities/{activity_id}/generate-title")
 async def generate_activity_title_endpoint(
-    db: DbSession, user: CurrentUser, activity_id: UUID
+    db: DbSession, repo: ActivityRepoD, user: CurrentUser, activity_id: UUID
 ):
     """Generate title for an activity using geocoding.
     
     This is useful for activities that were bulk-imported and skipped
     title generation due to rate limits.
     """
-    activity = await _get_owned_activity(db, user, activity_id)
+    activity = await _get_owned_activity(repo, user, activity_id)
     
     # Don't overwrite manually set titles
     if activity.title_source == "manual":
@@ -189,7 +177,7 @@ async def generate_activity_title_endpoint(
     ]
     
     # Generate title
-    from trainingdash.title_generator import generate_activity_title
+    from trainingdash.domain.title_generator import generate_activity_title
     
     title = await generate_activity_title(records_dicts, activity.started_at)
     
@@ -203,9 +191,9 @@ async def generate_activity_title_endpoint(
 
 
 @router.get("/activities/{activity_id}/records")
-async def get_activity_records(db: DbSession, user: CurrentUser, activity_id: UUID):
+async def get_activity_records(db: DbSession, repo: ActivityRepoD, user: CurrentUser, activity_id: UUID):
     """Get GPS and sensor records for an activity as GeoJSON."""
-    await _get_owned_activity(db, user, activity_id)
+    await _get_owned_activity(repo, user, activity_id)
     result = await db.execute(
         select(Record)
         .where(Record.activity_id == activity_id)
@@ -229,9 +217,9 @@ async def get_activity_records(db: DbSession, user: CurrentUser, activity_id: UU
 
 
 @router.get("/activities/{activity_id}/wbal")
-async def get_activity_wbal(db: DbSession, user: CurrentUser, activity_id: UUID):
+async def get_activity_wbal(db: DbSession, repo: ActivityRepoD, user: CurrentUser, activity_id: UUID):
     """Get W'bal time series for an activity."""
-    activity = await _get_owned_activity(db, user, activity_id)
+    activity = await _get_owned_activity(repo, user, activity_id)
 
     # Get threshold effective at activity date
     activity_date = activity.started_at.date()
@@ -252,7 +240,7 @@ async def get_activity_wbal(db: DbSession, user: CurrentUser, activity_id: UUID)
     records = result.scalars().all()
 
     # Compute W'bal series using differential equation model
-    from trainingdash.wbal import compute_wbal_series
+    from trainingdash.domain.wbal import compute_wbal_series
 
     power_values = [r.power_w for r in records]
     first_ts = records[0].timestamp if records else None
@@ -351,24 +339,15 @@ def _is_same_direction(gps_a: list, gps_b: list) -> bool:
 
 @router.get("/activities/{activity_id}/same-route")
 async def get_same_route_activities(
-    db: DbSession, user: CurrentUser, activity_id: UUID
+    db: DbSession, repo: ActivityRepoD, user: CurrentUser, activity_id: UUID
 ):
     """Get other activities on the same route, filtered to same direction only."""
-    activity = await _get_owned_activity(db, user, activity_id)
+    activity = await _get_owned_activity(repo, user, activity_id)
     if activity.route_id is None:
         return {"route_id": None, "activities": []}
     
     # Get all activities on the same route
-    result = await db.execute(
-        select(Activity)
-        .where(
-            Activity.route_id == activity.route_id,
-            Activity.user_id == user.id,
-            Activity.id != activity_id,
-        )
-        .order_by(Activity.started_at.desc())
-    )
-    others = result.scalars().all()
+    others = await repo.list_by_route(activity.route_id, user.id, exclude_activity_id=activity_id)
     
     if not others:
         return {"route_id": activity.route_id, "activities": []}
@@ -412,13 +391,14 @@ async def get_same_route_activities(
 @router.get("/activities/{activity_id}/compare")
 async def compare_activities(
     db: DbSession,
+    repo: ActivityRepoD,
     user: CurrentUser,
     activity_id: UUID,
     other_activity_id: UUID = Query(alias="other"),
 ):
     """Compare two activities on the same route."""
-    activity_a = await _get_owned_activity(db, user, activity_id)
-    activity_b = await _get_owned_activity(db, user, other_activity_id)
+    activity_a = await _get_owned_activity(repo, user, activity_id)
+    activity_b = await _get_owned_activity(repo, user, other_activity_id)
 
     if activity_a.route_id is None or activity_a.route_id != activity_b.route_id:
         return {"comparable": False, "gap_series": [], "other_geojson": None, "reason": "different_routes"}
@@ -460,7 +440,7 @@ async def compare_activities(
             for r in records
         ]
 
-    from trainingdash.resampler import compute_time_gap_series
+    from trainingdash.domain.resampler import compute_time_gap_series
 
     gap_series = compute_time_gap_series(
         to_resample_input(records_a, first_ts_a),
@@ -495,9 +475,10 @@ async def upload_activity(
             content={"job_id": job_id, "source_ref": source_ref},
         )
 
-    from trainingdash.ingest import ingest_fit
+    from trainingdash.use_cases import IngestActivity
 
-    activity = await ingest_fit(db, user.id, fit_bytes, "upload", source_ref)
+    use_case = IngestActivity(db)
+    activity = await use_case.execute(user.id, fit_bytes, "upload", source_ref)
     if activity is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to parse FIT file"
@@ -516,9 +497,9 @@ async def get_job_status(user: CurrentUser, job_id: str):
 
 @router.delete("/activities/{activity_id}", status_code=204)
 async def delete_activity(
-    db: DbSession,
     user: CurrentUser,
     activity_id: UUID,
+    delete_use_case: DeleteActivityD,
 ):
     """
     Permanently delete an activity owned by the current user.
@@ -528,53 +509,8 @@ async def delete_activity(
     deletion to avoid FK violations (routes.first_seen_activity_id has no ondelete).
     A background job then recomputes the fitness model and breakthrough flags.
     """
-    from trainingdash.models import Route
-    from trainingdash.jobs import enqueue_recalculate_after_delete_job
-
-    activity = await _get_owned_activity(db, user, activity_id)
-
-    # --- Route maintenance and activity deletion ---
-    # routes.first_seen_activity_id has ON DELETE SET NULL, so deleting the
-    # activity automatically nulls that field. We only need to maintain
-    # ride_count and clean up orphan routes ourselves.
-    from sqlalchemy import text as sql_text
-
-    if activity.route_id is not None:
-        route_result = await db.execute(
-            select(Route).where(Route.id == activity.route_id)
+    deleted = await delete_use_case.execute(user.id, activity_id)
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Activity not found"
         )
-        route = route_result.scalar_one_or_none()
-        if route is not None:
-            if route.ride_count <= 1:
-                # Sole activity — delete the route after nulling activity.route_id
-                # (activities.route_id → routes.id has no ondelete; null it first).
-                await db.execute(
-                    sql_text("UPDATE activities SET route_id = NULL WHERE id = :aid"),
-                    {"aid": activity.id},
-                )
-                await db.execute(
-                    sql_text("DELETE FROM routes WHERE id = :rid"),
-                    {"rid": route.id},
-                )
-            else:
-                # Decrement ride_count; ON DELETE SET NULL handles first_seen repair.
-                await db.execute(
-                    sql_text(
-                        "UPDATE routes SET ride_count = ride_count - 1 WHERE id = :rid"
-                    ),
-                    {"rid": route.id},
-                )
-                await db.execute(
-                    sql_text("UPDATE activities SET route_id = NULL WHERE id = :aid"),
-                    {"aid": activity.id},
-                )
-
-    # Delete the activity (cascades Records, Laps, ActivityPeakPower)
-    await db.execute(
-        sql_text("DELETE FROM activities WHERE id = :aid"),
-        {"aid": activity.id},
-    )
-    await db.commit()
-
-    # --- Enqueue async recalculation (fitness model + breakthrough flags) ---
-    await enqueue_recalculate_after_delete_job(user.id)

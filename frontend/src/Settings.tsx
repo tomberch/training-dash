@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { Link } from "react-router-dom";
 import {
   updatePreferences,
   fetchMyXertCredentials,
@@ -8,31 +9,22 @@ import {
   saveMyGarminCredentials,
   completeGarminMfa,
   deleteMyGarminCredentials,
-  fetchThresholds,
-  createThreshold,
-  fetchZones,
-  updateZones,
   uploadAvatar,
   deleteAvatar,
   triggerGarminSync,
   triggerXertSync,
-  triggerRecalculation,
-  fetchRecalculationStatus,
   fetchOAuthLinks,
   disconnectOAuthProvider,
   setPassword,
   hasPassword,
+  fetchCurrentMetrics,
   ApiError,
 } from "./api";
 import type { 
   User, 
   XertCredentialsStatus, 
   GarminCredentialsStatus,
-  ThresholdEntry,
-  PowerZone,
-  HrZone,
   OAuthLink,
-  RecalculationJob,
 } from "./api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,6 +32,13 @@ import { Label } from "@/components/ui/label";
 import { Card, CardHeader, CardTitle, CardContent, CardAction } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import {
+  DEFAULT_POWER_ZONES,
+  DEFAULT_HR_ZONES,
+  computePowerZones,
+  computeHrZones,
+  type ZonePercentages,
+} from "@/lib/zones";
 import { useTheme } from "./hooks/useTheme";
 import type { Theme } from "./hooks/useTheme";
 import { SunIcon, MoonIcon, MonitorIcon } from "./components/icons/ThemeIcons";
@@ -141,8 +140,7 @@ export function Settings({ user, onBack, onUserUpdate }: SettingsProps) {
           <ProfileSection user={user} onUserUpdate={onUserUpdate} />
           <PreferencesSection user={user} onUserUpdate={onUserUpdate} />
           <ConnectedAccountsSection />
-          <ThresholdsSection />
-          <ZonesSection />
+          <ZonesSection user={user} onUserUpdate={onUserUpdate} />
           <IntegrationsSection />
         </div>
       </div>
@@ -468,364 +466,67 @@ function PreferencesSection({ user, onUserUpdate }: { user: User; onUserUpdate: 
 
 
 
-function ThresholdsSection(): React.JSX.Element {
-  const [thresholds, setThresholds] = useState<ThresholdEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({
-    effective_date: new Date().toISOString().split("T")[0],
-    ftp_watts: "",
-    lthr_bpm: "",
-    hrmax_bpm: "",
-  });
-  const [saving, setSaving] = useState(false);
-  const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
-  const [recalcJob, setRecalcJob] = useState<RecalculationJob | null>(null);
-  const [recalcTriggering, setRecalcTriggering] = useState(false);
-  const recalcIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  function isJobActive(job: RecalculationJob | null): boolean {
-    return job?.status === "pending" || job?.status === "running";
-  }
-
-  function startRecalcPolling(): void {
-    if (recalcIntervalRef.current !== null) return; // already polling
-    recalcIntervalRef.current = setInterval(async () => {
-      try {
-        const job = await fetchRecalculationStatus();
-        setRecalcJob(job);
-        if (!isJobActive(job) && recalcIntervalRef.current !== null) {
-          clearInterval(recalcIntervalRef.current);
-          recalcIntervalRef.current = null;
-        }
-      } catch {
-        // ignore transient polling errors
-      }
-    }, 3000);
-  }
-
-  useEffect(() => {
-    fetchThresholds()
-      .then(setThresholds)
-      .catch(() => setThresholds([]))
-      .finally(() => setLoading(false));
-  }, []);
-
-  // On mount: fetch current status and start polling if already active
-  useEffect(() => {
-    fetchRecalculationStatus()
-      .then((job) => {
-        setRecalcJob(job);
-        if (isJobActive(job)) startRecalcPolling();
-      })
-      .catch(() => {/* ignore */});
-
-    return () => {
-      if (recalcIntervalRef.current !== null) {
-        clearInterval(recalcIntervalRef.current);
-        recalcIntervalRef.current = null;
-      }
-    };
-  // startRecalcPolling is stable (no deps); linter disable avoids spurious warning
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const currentThreshold = thresholds.length > 0 ? thresholds[0] : null;
-
-  async function handleRecalculate(): Promise<void> {
-    setRecalcTriggering(true);
+function ZonesSection({ user, onUserUpdate }: { user: User; onUserUpdate: (user: User) => void }) {
+  // Fetch current FTP and LTHR from metrics API
+  const [ftp, setFtp] = useState<number | null>(null);
+  const [lthr, setLthr] = useState<number | null>(null);
+  const [loadingThresholds, setLoadingThresholds] = useState(true);
+  
+  const loadThresholds = useCallback(async () => {
     try {
-      const job = await triggerRecalculation();
-      setRecalcJob(job);
-      startRecalcPolling();
+      const currentMetrics = await fetchCurrentMetrics();
+      setFtp(currentMetrics.ftp?.value ?? null);
+      setLthr(currentMetrics.lthr?.value ?? null);
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : "Failed to trigger recalculation";
-      setFeedback({ type: "error", message });
+      console.error("Failed to load thresholds:", err);
     } finally {
-      setRecalcTriggering(false);
+      setLoadingThresholds(false);
     }
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    
-    // Check at least one value is provided
-    const hasFtp = formData.ftp_watts !== "";
-    const hasLthr = formData.lthr_bpm !== "";
-    const hasHrmax = formData.hrmax_bpm !== "";
-    
-    if (!hasFtp && !hasLthr && !hasHrmax) {
-      setFeedback({ type: "error", message: "Please enter at least one threshold value" });
-      return;
-    }
-    
-    setSaving(true);
-    setFeedback(null);
-    try {
-      const newThreshold = await createThreshold({
-        effective_date: formData.effective_date,
-        ftp_watts: hasFtp ? parseInt(formData.ftp_watts) : undefined,
-        lthr_bpm: hasLthr ? parseInt(formData.lthr_bpm) : undefined,
-        hrmax_bpm: hasHrmax ? parseInt(formData.hrmax_bpm) : undefined,
-      });
-      setThresholds([newThreshold, ...thresholds]);
-      setShowForm(false);
-      setFormData({
-        effective_date: new Date().toISOString().split("T")[0],
-        ftp_watts: "",
-        lthr_bpm: "",
-        hrmax_bpm: "",
-      });
-      setFeedback({ type: "success", message: "Threshold saved" });
-      setTimeout(() => setFeedback(null), 3000);
-    } catch (err) {
-      const message = err instanceof ApiError ? err.message : "Failed to save threshold";
-      setFeedback({ type: "error", message });
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  if (loading) {
-    return (
-      <Card>
-        <CardContent className="animate-pulse">
-          <div className="h-5 bg-muted rounded w-1/4 mb-4"></div>
-          <div className="h-20 bg-muted rounded"></div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Thresholds</CardTitle>
-        <CardAction>
-          <Button variant="ghost" size="sm" onClick={() => setShowForm(!showForm)}>
-            {showForm ? "Cancel" : currentThreshold ? "Update" : "+ Add"}
-          </Button>
-        </CardAction>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Current values */}
-        {currentThreshold && (
-          <div className="grid grid-cols-3 gap-4 p-4 bg-muted/50 rounded-lg">
-            <div>
-              <div className="text-xs text-muted-foreground uppercase tracking-wide">FTP</div>
-              <div className="text-xl font-bold text-foreground">
-                {currentThreshold.ftp_watts ? `${currentThreshold.ftp_watts}W` : "—"}
-              </div>
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground uppercase tracking-wide">LTHR</div>
-              <div className="text-xl font-bold text-foreground">
-                {currentThreshold.lthr_bpm ? `${currentThreshold.lthr_bpm} bpm` : "—"}
-              </div>
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground uppercase tracking-wide">HRmax</div>
-              <div className="text-xl font-bold text-foreground">
-                {currentThreshold.hrmax_bpm ? `${currentThreshold.hrmax_bpm} bpm` : "—"}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Add/Update form */}
-        {showForm && (
-          <form onSubmit={handleSubmit} className="p-4 bg-primary/5 rounded-lg space-y-3">
-            <p className="text-xs text-muted-foreground mb-2">
-              {currentThreshold 
-                ? "Enter values to update. Empty fields keep current values (previously set values cannot be removed)."
-                : "Enter at least one threshold value. You can add the others later."}
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Effective Date</Label>
-                <Input
-                  type="date"
-                  value={formData.effective_date}
-                  onChange={(e) => setFormData({ ...formData, effective_date: e.target.value })}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">FTP (watts)</Label>
-                <Input
-                  type="number"
-                  value={formData.ftp_watts}
-                  onChange={(e) => setFormData({ ...formData, ftp_watts: e.target.value })}
-                  placeholder={currentThreshold?.ftp_watts ? `Current: ${currentThreshold.ftp_watts}` : "e.g. 250"}
-                  min="50"
-                  max="600"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">LTHR (bpm)</Label>
-                <Input
-                  type="number"
-                  value={formData.lthr_bpm}
-                  onChange={(e) => setFormData({ ...formData, lthr_bpm: e.target.value })}
-                  placeholder={currentThreshold?.lthr_bpm ? `Current: ${currentThreshold.lthr_bpm}` : "e.g. 165"}
-                  min="80"
-                  max="220"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">HRmax (bpm)</Label>
-                <Input
-                  type="number"
-                  value={formData.hrmax_bpm}
-                  onChange={(e) => setFormData({ ...formData, hrmax_bpm: e.target.value })}
-                  placeholder={currentThreshold?.hrmax_bpm ? `Current: ${currentThreshold.hrmax_bpm}` : "e.g. 185"}
-                  min="100"
-                  max="250"
-                />
-              </div>
-            </div>
-            <Button type="submit" disabled={saving} className="w-full">
-              {saving ? "Saving..." : "Save Threshold"}
-            </Button>
-          </form>
-        )}
-
-
-
-        {/* History table */}
-        {thresholds.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs text-muted-foreground uppercase tracking-wide border-b border-border">
-                  <th className="pb-2">Date</th>
-                  <th className="pb-2 text-right">FTP</th>
-                  <th className="pb-2 text-right">LTHR</th>
-                  <th className="pb-2 text-right">HRmax</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {thresholds.map((t, i) => (
-                  <tr key={i} className={i === 0 ? "text-foreground font-medium" : "text-muted-foreground"}>
-                    <td className="py-2">{new Date(t.effective_date).toLocaleDateString()}</td>
-                    <td className="py-2 text-right">{t.ftp_watts ? `${t.ftp_watts}W` : "—"}</td>
-                    <td className="py-2 text-right">{t.lthr_bpm ? `${t.lthr_bpm} bpm` : "—"}</td>
-                    <td className="py-2 text-right">{t.hrmax_bpm ? `${t.hrmax_bpm} bpm` : "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {thresholds.length === 0 && !showForm && (
-          <p className="text-sm text-muted-foreground">No thresholds configured. Add your first threshold to enable zone calculations.</p>
-        )}
-
-        {/* Recalculation status */}
-        <div className="flex items-center justify-between pt-2 border-t border-border">
-          <div className="text-sm">
-            {recalcJob === null ? (
-              <span className="text-muted-foreground">Metrics have never been recalculated</span>
-            ) : recalcJob.status === "pending" || recalcJob.status === "running" ? (
-              <span className="flex items-center gap-2 text-muted-foreground">
-                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-                Recalculating…
-              </span>
-            ) : recalcJob.status === "completed" ? (
-              <span className="text-muted-foreground">
-                Last recalculated{" "}
-                <span className="text-foreground font-medium">
-                  {recalcJob.completed_at
-                    ? new Date(recalcJob.completed_at).toLocaleString()
-                    : "—"}
-                </span>
-                {recalcJob.activities_updated !== null && (
-                  <> — {recalcJob.activities_updated} {recalcJob.activities_updated === 1 ? "activity" : "activities"} updated</>
-                )}
-              </span>
-            ) : (
-              <span className="text-destructive text-sm">
-                Recalculation failed: {recalcJob.error_message ?? "unknown error"}
-              </span>
-            )}
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleRecalculate}
-            disabled={recalcTriggering || recalcJob?.status === "pending" || recalcJob?.status === "running"}
-          >
-            Recalculate
-          </Button>
-        </div>
-
-        <FeedbackAlert feedback={feedback} />
-      </CardContent>
-    </Card>
-  );
-}
-
-
-
-function ZonesSection() {
-  const [powerZones, setPowerZones] = useState<PowerZone[]>([]);
-  const [hrZones, setHrZones] = useState<HrZone[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  }, []);
+  
+  useEffect(() => {
+    loadThresholds();
+  }, [loadThresholds]);
+  
   const [editMode, setEditMode] = useState(false);
-  const [editedPowerZones, setEditedPowerZones] = useState<PowerZone[]>([]);
-  const [editedHrZones, setEditedHrZones] = useState<HrZone[]>([]);
-
-  useEffect(() => {
-    fetchZones()
-      .then(({ power_zones, hr_zones }) => {
-        setPowerZones(power_zones);
-        setHrZones(hr_zones);
-      })
-      .catch(() => {
-        setPowerZones([]);
-        setHrZones([]);
-      })
-      .finally(() => setLoading(false));
-  }, []);
-
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  
+  // Current percentages from user or defaults
+  const powerPercentages = user.power_zone_percentages ?? DEFAULT_POWER_ZONES;
+  const hrPercentages = user.hr_zone_percentages ?? DEFAULT_HR_ZONES;
+  
+  // Edited percentages (only used in edit mode)
+  const [editedPowerPct, setEditedPowerPct] = useState<ZonePercentages>(powerPercentages);
+  const [editedHrPct, setEditedHrPct] = useState<ZonePercentages>(hrPercentages);
+  
+  // Compute zones from percentages and thresholds
+  const powerZones = ftp ? computePowerZones(ftp, editMode ? editedPowerPct : powerPercentages) : [];
+  const hrZones = lthr ? computeHrZones(lthr, editMode ? editedHrPct : hrPercentages) : [];
+  
   function startEdit() {
-    setEditedPowerZones([...powerZones]);
-    setEditedHrZones([...hrZones]);
+    setEditedPowerPct({ ...powerPercentages });
+    setEditedHrPct({ ...hrPercentages });
     setEditMode(true);
+    setFeedback(null);
   }
-
+  
   function cancelEdit() {
     setEditMode(false);
     setFeedback(null);
   }
-
+  
   async function handleSave() {
     setSaving(true);
     setFeedback(null);
     try {
-      const result = await updateZones({
-        power_zones: editedPowerZones.map(z => ({
-          zone_number: z.zone_number,
-          min_value: z.min_watts,
-          max_value: z.max_watts ?? undefined,
-        })),
-        hr_zones: editedHrZones.map(z => ({
-          zone_number: z.zone_number,
-          min_value: z.min_bpm,
-          max_value: z.max_bpm ?? undefined,
-        })),
+      const updated = await updatePreferences({
+        power_zone_percentages: editedPowerPct,
+        hr_zone_percentages: editedHrPct,
       });
-      setPowerZones(result.power_zones);
-      setHrZones(result.hr_zones);
+      onUserUpdate(updated);
       setEditMode(false);
-      setFeedback({ type: "success", message: "Zones saved" });
+      setFeedback({ type: "success", message: "Zone percentages saved" });
       setTimeout(() => setFeedback(null), 3000);
     } catch (err) {
       const message = err instanceof ApiError ? err.message : "Failed to save zones";
@@ -834,17 +535,17 @@ function ZonesSection() {
       setSaving(false);
     }
   }
-
-
-
+  
   async function handleReset() {
-    if (!confirm("Reset all zones to defaults based on current thresholds?")) return;
+    if (!confirm("Reset zone percentages to defaults?")) return;
     setSaving(true);
     setFeedback(null);
     try {
-      const result = await updateZones({ reset_to_defaults: true });
-      setPowerZones(result.power_zones);
-      setHrZones(result.hr_zones);
+      const updated = await updatePreferences({
+        power_zone_percentages: null,
+        hr_zone_percentages: null,
+      });
+      onUserUpdate(updated);
       setEditMode(false);
       setFeedback({ type: "success", message: "Zones reset to defaults" });
       setTimeout(() => setFeedback(null), 3000);
@@ -855,44 +556,43 @@ function ZonesSection() {
       setSaving(false);
     }
   }
-
-  function updatePowerZone(index: number, field: "min_watts" | "max_watts", value: string) {
-    const updated = [...editedPowerZones];
+  
+  function updatePowerPct(zone: string, field: "min" | "max", value: string) {
     const numVal = parseInt(value) || 0;
-    if (field === "max_watts") {
-      updated[index] = { ...updated[index], [field]: value === "" ? null : numVal };
-    } else {
-      updated[index] = { ...updated[index], [field]: numVal };
-    }
-    setEditedPowerZones(updated);
+    setEditedPowerPct(prev => ({
+      ...prev,
+      [zone]: field === "min" 
+        ? [numVal, prev[zone][1]]
+        : [prev[zone][0], value === "" ? null : numVal],
+    }));
   }
-
-  function updateHrZone(index: number, field: "min_bpm" | "max_bpm", value: string) {
-    const updated = [...editedHrZones];
+  
+  function updateHrPct(zone: string, field: "min" | "max", value: string) {
     const numVal = parseInt(value) || 0;
-    if (field === "max_bpm") {
-      updated[index] = { ...updated[index], [field]: value === "" ? null : numVal };
-    } else {
-      updated[index] = { ...updated[index], [field]: numVal };
-    }
-    setEditedHrZones(updated);
+    setEditedHrPct(prev => ({
+      ...prev,
+      [zone]: field === "min"
+        ? [numVal, prev[zone][1]]
+        : [prev[zone][0], value === "" ? null : numVal],
+    }));
   }
+  
+  // Check if user has thresholds set
+  const hasFtp = ftp !== null && ftp > 0;
+  const hasLthr = lthr !== null && lthr > 0;
 
-  if (loading) {
+  if (loadingThresholds) {
     return (
       <Card>
-        <CardContent className="animate-pulse">
-          <div className="h-5 bg-muted rounded w-1/4 mb-4"></div>
-          <div className="h-32 bg-muted rounded"></div>
+        <CardHeader>
+          <CardTitle>Training Zones</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Skeleton className="h-[200px] w-full" />
         </CardContent>
       </Card>
     );
   }
-
-  const displayPowerZones = editMode ? editedPowerZones : powerZones;
-  const displayHrZones = editMode ? editedHrZones : hrZones;
-
-
 
   return (
     <Card>
@@ -911,10 +611,10 @@ function ZonesSection() {
               </>
             ) : (
               <>
-                <Button variant="ghost" size="sm" onClick={handleReset} disabled={saving || powerZones.length === 0}>
+                <Button variant="ghost" size="sm" onClick={handleReset} disabled={saving}>
                   Reset
                 </Button>
-                <Button variant="ghost" size="sm" onClick={startEdit} disabled={powerZones.length === 0}>
+                <Button variant="ghost" size="sm" onClick={startEdit}>
                   Edit
                 </Button>
               </>
@@ -923,109 +623,137 @@ function ZonesSection() {
         </CardAction>
       </CardHeader>
       <CardContent>
-        {powerZones.length === 0 && hrZones.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Add thresholds first to generate training zones.</p>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Power Zones */}
-            <div>
-              <h3 className="text-sm font-medium text-foreground mb-2">Power Zones</h3>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-muted-foreground uppercase tracking-wide border-b border-border">
-                    <th className="pb-2 w-8">Zone</th>
-                    <th className="pb-2">Name</th>
-                    <th className="pb-2 text-right">Min</th>
-                    <th className="pb-2 text-right">Max</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {displayPowerZones.map((z, i) => (
-                    <tr key={z.zone_number}>
-                      <td className="py-2 font-medium text-foreground">Z{z.zone_number}</td>
-                      <td className="py-2 text-muted-foreground">{z.name}</td>
-                      <td className="py-2 text-right">
-                        {editMode ? (
-                          <Input
-                            type="number"
-                            value={z.min_watts}
-                            onChange={(e) => updatePowerZone(i, "min_watts", e.target.value)}
-                            className="w-16 text-right"
-                          />
-                        ) : (
-                          <span className="text-foreground">{z.min_watts}W</span>
-                        )}
-                      </td>
-                      <td className="py-2 text-right">
-                        {editMode ? (
-                          <Input
-                            type="number"
-                            value={z.max_watts ?? ""}
-                            onChange={(e) => updatePowerZone(i, "max_watts", e.target.value)}
-                            placeholder="∞"
-                            className="w-16 text-right"
-                          />
-                        ) : (
-                          <span className="text-foreground">{z.max_watts ? `${z.max_watts}W` : "∞"}</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-
-
-            {/* HR Zones */}
-            <div>
-              <h3 className="text-sm font-medium text-foreground mb-2">Heart Rate Zones</h3>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-muted-foreground uppercase tracking-wide border-b border-border">
-                    <th className="pb-2 w-8">Zone</th>
-                    <th className="pb-2">Name</th>
-                    <th className="pb-2 text-right">Min</th>
-                    <th className="pb-2 text-right">Max</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {displayHrZones.map((z, i) => (
-                    <tr key={z.zone_number}>
-                      <td className="py-2 font-medium text-foreground">Z{z.zone_number}</td>
-                      <td className="py-2 text-muted-foreground">{z.name}</td>
-                      <td className="py-2 text-right">
-                        {editMode ? (
-                          <Input
-                            type="number"
-                            value={z.min_bpm}
-                            onChange={(e) => updateHrZone(i, "min_bpm", e.target.value)}
-                            className="w-16 text-right"
-                          />
-                        ) : (
-                          <span className="text-foreground">{z.min_bpm} bpm</span>
-                        )}
-                      </td>
-                      <td className="py-2 text-right">
-                        {editMode ? (
-                          <Input
-                            type="number"
-                            value={z.max_bpm ?? ""}
-                            onChange={(e) => updateHrZone(i, "max_bpm", e.target.value)}
-                            placeholder="∞"
-                            className="w-16 text-right"
-                          />
-                        ) : (
-                          <span className="text-foreground">{z.max_bpm ? `${z.max_bpm} bpm` : "∞"}</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+        {/* No threshold warning */}
+        {!hasFtp && !hasLthr && (
+          <div className="mb-4 p-3 rounded-lg bg-warning/10 border border-warning/20">
+            <p className="text-sm text-warning">
+              Set your FTP and LTHR thresholds to see computed zones.{" "}
+              <Link to="/athlete?tab=thresholds" className="underline hover:no-underline">
+                Go to Athlete → Thresholds
+              </Link>
+            </p>
           </div>
         )}
+        
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Power Zones */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-medium text-foreground">Power Zones</h3>
+              {hasFtp && (
+                <span className="text-xs text-muted-foreground">Based on FTP: {ftp} W</span>
+              )}
+            </div>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-muted-foreground uppercase tracking-wide border-b border-border">
+                  <th className="pb-2 w-8">Zone</th>
+                  <th className="pb-2">Name</th>
+                  <th className="pb-2 text-right">%FTP</th>
+                  <th className="pb-2 text-right">Watts</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {powerZones.map((z) => (
+                  <tr key={z.zone}>
+                    <td className="py-2 font-medium text-foreground">Z{z.zone}</td>
+                    <td className="py-2 text-muted-foreground">{z.name}</td>
+                    <td className="py-2 text-right">
+                      {editMode ? (
+                        <div className="flex items-center justify-end gap-1">
+                          <Input
+                            type="number"
+                            value={editedPowerPct[z.zone.toString()][0]}
+                            onChange={(e) => updatePowerPct(z.zone.toString(), "min", e.target.value)}
+                            className="w-14 text-right text-xs h-7"
+                          />
+                          <span className="text-muted-foreground">-</span>
+                          <Input
+                            type="number"
+                            value={editedPowerPct[z.zone.toString()][1] ?? ""}
+                            onChange={(e) => updatePowerPct(z.zone.toString(), "max", e.target.value)}
+                            placeholder="∞"
+                            className="w-14 text-right text-xs h-7"
+                          />
+                        </div>
+                      ) : (
+                        <span className="text-foreground">
+                          {z.minPct}-{z.maxPct ?? "∞"}%
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2 text-right text-muted-foreground">
+                      {hasFtp ? (
+                        <span>{z.minValue}-{z.maxValue ?? "∞"}</span>
+                      ) : (
+                        <span>—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* HR Zones */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-medium text-foreground">Heart Rate Zones</h3>
+              {hasLthr && (
+                <span className="text-xs text-muted-foreground">Based on LTHR: {lthr} bpm</span>
+              )}
+            </div>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-muted-foreground uppercase tracking-wide border-b border-border">
+                  <th className="pb-2 w-8">Zone</th>
+                  <th className="pb-2">Name</th>
+                  <th className="pb-2 text-right">%LTHR</th>
+                  <th className="pb-2 text-right">BPM</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {hrZones.map((z) => (
+                  <tr key={z.zone}>
+                    <td className="py-2 font-medium text-foreground">Z{z.zone}</td>
+                    <td className="py-2 text-muted-foreground">{z.name}</td>
+                    <td className="py-2 text-right">
+                      {editMode ? (
+                        <div className="flex items-center justify-end gap-1">
+                          <Input
+                            type="number"
+                            value={editedHrPct[z.zone.toString()][0]}
+                            onChange={(e) => updateHrPct(z.zone.toString(), "min", e.target.value)}
+                            className="w-14 text-right text-xs h-7"
+                          />
+                          <span className="text-muted-foreground">-</span>
+                          <Input
+                            type="number"
+                            value={editedHrPct[z.zone.toString()][1] ?? ""}
+                            onChange={(e) => updateHrPct(z.zone.toString(), "max", e.target.value)}
+                            placeholder="∞"
+                            className="w-14 text-right text-xs h-7"
+                          />
+                        </div>
+                      ) : (
+                        <span className="text-foreground">
+                          {z.minPct}-{z.maxPct ?? "∞"}%
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2 text-right text-muted-foreground">
+                      {hasLthr ? (
+                        <span>{z.minValue}-{z.maxValue ?? "∞"}</span>
+                      ) : (
+                        <span>—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
 
         <FeedbackAlert feedback={feedback} />
       </CardContent>

@@ -301,7 +301,7 @@ async def generate_title_with_provider(
 
 async def get_activity_records(db: AsyncSession, activity_id: int) -> list[dict]:
     """Get GPS records for an activity."""
-    from trainingdash.models import Record
+    from trainingdash.repositories.postgres.models import Record
     
     result = await db.execute(
         select(Record)
@@ -319,7 +319,7 @@ async def get_activity_records(db: AsyncSession, activity_id: int) -> list[dict]
 
 async def get_activities(db: AsyncSession, limit: int) -> list:
     """Get recent activities with GPS data."""
-    from trainingdash.models import Activity
+    from trainingdash.repositories.postgres.models import Activity
     
     result = await db.execute(
         select(Activity)

@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "tests" / "fixtures"))
 from generate_fit import make_test_fit  # noqa: E402
-from trainingdash.models import Activity, User, Route  # noqa: E402
+from trainingdash.repositories.postgres.models import Activity, User, Route  # noqa: E402
 from tests.integration.fixtures import CACHED_HASH_PASS  # noqa: E402
 
 

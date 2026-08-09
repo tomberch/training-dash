@@ -3,7 +3,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from tests.integration.fixtures import CACHED_HASH_PASS
-from trainingdash.models import User
+from trainingdash.repositories.postgres.models import User
 
 
 class TestAdminEndpoints:

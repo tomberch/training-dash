@@ -8,33 +8,37 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
-from sqlalchemy import select, delete
+from sqlalchemy import select
 
 from trainingdash.auth import CurrentUser, DbSession, hash_password
 from trainingdash.crypto import encrypt, EncryptionError
-from trainingdash.garmin import get_garmin_client, GarminAPIError, GarminMFARequired
+from trainingdash.dependencies import (
+    GarminCredentialsRepoD,
+    NotificationRepoD,
+    OAuthLinkRepoD,
+    RecalculationJobRepoD,
+    XertCredentialsRepoD,
+)
+from trainingdash.integrations.garmin import get_garmin_client, GarminAPIError, GarminMFARequired
 from trainingdash.jobs import enqueue_recalculate_metrics_job
-from trainingdash.models import (
+from trainingdash.repositories.postgres.models import (
     GarminCredentials,
     Notification,
-    RecalculationJob,
-    UserOAuthLink,
     XertCredentials,
 )
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from trainingdash.routers.serializers import (
     recalculation_job_response,
     user_response,
 )
 from trainingdash.routers.datetime_utils import utc_str
-from trainingdash.thresholds import (
+from trainingdash.domain.thresholds import (
     ensure_default_thresholds,
     get_all_threshold_entries,
     get_thresholds_for_date,
     create_threshold_entries,
 )
-from trainingdash.zones import compute_power_zones, compute_hr_zones
-from trainingdash.xert import get_xert_client, XertAPIError
+from trainingdash.domain.zones import compute_power_zones, compute_hr_zones
+from trainingdash.integrations.xert import get_xert_client, XertAPIError
 
 logger = logging.getLogger(__name__)
 
@@ -147,12 +151,9 @@ async def update_me(db: DbSession, user: CurrentUser, request: UpdateMeRequest):
 
 
 @router.get("/me/xert-credentials")
-async def get_my_xert_credentials(db: DbSession, user: CurrentUser):
+async def get_my_xert_credentials(xert_repo: XertCredentialsRepoD, user: CurrentUser):
     """Get the current user's Xert credentials status. Never returns the password."""
-    result = await db.execute(
-        select(XertCredentials).where(XertCredentials.user_id == user.id)
-    )
-    creds = result.scalar_one_or_none()
+    creds = await xert_repo.get_by_user_id(user.id)
     if creds is None:
         return {"configured": False, "xert_email": None, "sync_since": None}
     return {
@@ -176,7 +177,7 @@ class MyXertCredentialsRequest(BaseModel):
 
 @router.put("/me/xert-credentials")
 async def put_my_xert_credentials(
-    db: DbSession, user: CurrentUser, request: MyXertCredentialsRequest
+    xert_repo: XertCredentialsRepoD, user: CurrentUser, request: MyXertCredentialsRequest
 ):
     """Set or update the current user's Xert credentials. Validates via login attempt."""
     # Validate credentials by attempting to log in
@@ -204,39 +205,19 @@ async def put_my_xert_credentials(
             days=90
         )
 
-    # Upsert credentials
-    result = await db.execute(
-        select(XertCredentials).where(XertCredentials.user_id == user.id)
+    await xert_repo.save(
+        user_id=user.id,
+        xert_email=request.xert_email,
+        encrypted_password=encrypted_password,
+        sync_since=sync_since_dt,
     )
-    creds = result.scalar_one_or_none()
-
-    if creds is None:
-        creds = XertCredentials(
-            user_id=user.id,
-            xert_email=request.xert_email,
-            encrypted_password=encrypted_password,
-            sync_since=sync_since_dt,
-        )
-        db.add(creds)
-    else:
-        creds.xert_email = request.xert_email
-        creds.encrypted_password = encrypted_password
-        creds.sync_since = sync_since_dt
-
-    await db.commit()
     return {"success": True, "xert_email": request.xert_email}
 
 
 @router.delete("/me/xert-credentials")
-async def delete_my_xert_credentials(db: DbSession, user: CurrentUser):
+async def delete_my_xert_credentials(xert_repo: XertCredentialsRepoD, user: CurrentUser):
     """Delete the current user's Xert credentials (disconnect Xert)."""
-    result = await db.execute(
-        select(XertCredentials).where(XertCredentials.user_id == user.id)
-    )
-    creds = result.scalar_one_or_none()
-    if creds is not None:
-        await db.delete(creds)
-        await db.commit()
+    await xert_repo.delete(user.id)
     return {"success": True}
 
 
@@ -244,12 +225,9 @@ async def delete_my_xert_credentials(db: DbSession, user: CurrentUser):
 
 
 @router.get("/me/garmin-credentials")
-async def get_my_garmin_credentials(db: DbSession, user: CurrentUser):
+async def get_my_garmin_credentials(garmin_repo: GarminCredentialsRepoD, user: CurrentUser):
     """Get the current user's Garmin credentials status. Never returns the password."""
-    result = await db.execute(
-        select(GarminCredentials).where(GarminCredentials.user_id == user.id)
-    )
-    creds = result.scalar_one_or_none()
+    creds = await garmin_repo.get_by_user_id(user.id)
     if creds is None:
         return {"configured": False, "garmin_email": None, "sync_since": None}
     return {
@@ -273,7 +251,7 @@ class MyGarminCredentialsRequest(BaseModel):
 
 @router.put("/me/garmin-credentials")
 async def put_my_garmin_credentials(
-    db: DbSession, user: CurrentUser, request: MyGarminCredentialsRequest
+    garmin_repo: GarminCredentialsRepoD, user: CurrentUser, request: MyGarminCredentialsRequest
 ):
     """
     Set or update the current user's Garmin credentials.
@@ -298,7 +276,7 @@ async def put_my_garmin_credentials(
 
     # Login succeeded without MFA - save credentials
     return await _save_garmin_credentials(
-        db, user, request.garmin_email, request.garmin_password, request.sync_since
+        garmin_repo, user, request.garmin_email, request.garmin_password, request.sync_since
     )
 
 
@@ -308,7 +286,7 @@ class GarminMFARequest(BaseModel):
 
 @router.post("/me/garmin-credentials/mfa")
 async def complete_garmin_mfa(
-    db: DbSession, user: CurrentUser, request: GarminMFARequest
+    garmin_repo: GarminCredentialsRepoD, user: CurrentUser, request: GarminMFARequest
 ):
     """Complete Garmin MFA authentication and save credentials."""
     pending = _pending_garmin_mfa.get(user.id)
@@ -336,11 +314,11 @@ async def complete_garmin_mfa(
     sync_since = pending.get("sync_since")
     _pending_garmin_mfa.pop(user.id, None)
 
-    return await _save_garmin_credentials(db, user, email, password, sync_since)
+    return await _save_garmin_credentials(garmin_repo, user, email, password, sync_since)
 
 
 async def _save_garmin_credentials(
-    db: DbSession,
+    garmin_repo: GarminCredentialsRepoD,
     user: CurrentUser,
     email: str,
     password: str,
@@ -362,42 +340,21 @@ async def _save_garmin_credentials(
             days=90
         )
 
-    # Upsert credentials
-    result = await db.execute(
-        select(GarminCredentials).where(GarminCredentials.user_id == user.id)
+    await garmin_repo.save(
+        user_id=user.id,
+        garmin_email=email,
+        encrypted_password=encrypted_password,
+        sync_since=sync_since_dt,
     )
-    creds = result.scalar_one_or_none()
-
-    if creds is None:
-        creds = GarminCredentials(
-            user_id=user.id,
-            garmin_email=email,
-            encrypted_password=encrypted_password,
-            sync_since=sync_since_dt,
-        )
-        db.add(creds)
-    else:
-        creds.garmin_email = email
-        creds.encrypted_password = encrypted_password
-        creds.sync_since = sync_since_dt
-
-    await db.commit()
     return {"success": True, "garmin_email": email}
 
 
 @router.delete("/me/garmin-credentials")
-async def delete_my_garmin_credentials(db: DbSession, user: CurrentUser):
+async def delete_my_garmin_credentials(garmin_repo: GarminCredentialsRepoD, user: CurrentUser):
     """Delete the current user's Garmin credentials (disconnect Garmin)."""
     # Clean up any pending MFA session
     _pending_garmin_mfa.pop(user.id, None)
-
-    result = await db.execute(
-        select(GarminCredentials).where(GarminCredentials.user_id == user.id)
-    )
-    creds = result.scalar_one_or_none()
-    if creds is not None:
-        await db.delete(creds)
-        await db.commit()
+    await garmin_repo.delete(user.id)
     return {"success": True}
 
 
@@ -423,7 +380,10 @@ class CreateThresholdRequest(BaseModel):
 
 @router.post("/me/thresholds")
 async def create_threshold(
-    db: DbSession, user: CurrentUser, request: CreateThresholdRequest
+    db: DbSession,
+    user: CurrentUser,
+    recalculation_job_repo: RecalculationJobRepoD,
+    request: CreateThresholdRequest,
 ):
     """Create a new threshold entry for the current user.
     
@@ -520,15 +480,7 @@ async def create_threshold(
     await db.commit()
 
     # Enqueue async metric recalculation — observable via GET /me/recalculate-metrics
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
-    await db.execute(
-        pg_insert(RecalculationJob)
-        .values(user_id=user.id, status="pending", started_at=now)
-        .on_conflict_do_update(
-            index_elements=["user_id"],
-            set_={"status": "pending", "started_at": now, "completed_at": None, "error_message": None},
-        )
-    )
+    await recalculation_job_repo.upsert_pending(user.id)
     await db.commit()
 
     try:
@@ -539,18 +491,8 @@ async def create_threshold(
             user.id,
         )
         # Mark job as failed so user sees accurate state
-        await db.execute(
-            pg_insert(RecalculationJob)
-            .values(user_id=user.id, status="failed", started_at=now)
-            .on_conflict_do_update(
-                index_elements=["user_id"],
-                set_={
-                    "status": "failed",
-                    "completed_at": now,
-                    "error_message": "Failed to enqueue job. Please try again.",
-                    "activities_updated": None,
-                },
-            )
+        await recalculation_job_repo.mark_failed(
+            user.id, "Failed to enqueue job. Please try again."
         )
         await db.commit()
 
@@ -792,49 +734,40 @@ async def delete_avatar(db: DbSession, user: CurrentUser):
 # --- User Sync ---
 
 
-async def _trigger_user_sync(
-    db: DbSession, 
-    user_id: int, 
-    cred_model: type, 
-    job_name: str,
-    integration_name: str
-) -> dict:
-    """Generic helper to trigger a sync job for a user's integration."""
+@router.post("/me/sync/garmin")
+async def trigger_garmin_sync(garmin_repo: GarminCredentialsRepoD, user: CurrentUser):
+    """Trigger a Garmin sync for the current user."""
     from trainingdash.jobs import create_redis_pool
     
-    # Check if user has credentials for this integration
-    result = await db.execute(
-        select(cred_model).where(cred_model.user_id == user_id)
-    )
-    creds = result.scalar_one_or_none()
-    if creds is None:
+    if not await garmin_repo.exists(user.id):
         raise HTTPException(
-            status_code=400, detail=f"No {integration_name} credentials configured"
+            status_code=400, detail="No Garmin credentials configured"
         )
     
-    # Enqueue sync job
     pool = await create_redis_pool()
     try:
-        job = await pool.enqueue_job(job_name, user_id)
+        job = await pool.enqueue_job("sync_garmin_job", user.id)
         return {"success": True, "job_id": job.job_id}
     finally:
         await pool.close()
 
 
-@router.post("/me/sync/garmin")
-async def trigger_garmin_sync(db: DbSession, user: CurrentUser):
-    """Trigger a Garmin sync for the current user."""
-    return await _trigger_user_sync(
-        db, user.id, GarminCredentials, "sync_garmin_job", "Garmin"
-    )
-
-
 @router.post("/me/sync/xert")
-async def trigger_xert_sync(db: DbSession, user: CurrentUser):
+async def trigger_xert_sync(xert_repo: XertCredentialsRepoD, user: CurrentUser):
     """Trigger a Xert sync for the current user."""
-    return await _trigger_user_sync(
-        db, user.id, XertCredentials, "sync_xert_job", "Xert"
-    )
+    from trainingdash.jobs import create_redis_pool
+    
+    if not await xert_repo.exists(user.id):
+        raise HTTPException(
+            status_code=400, detail="No Xert credentials configured"
+        )
+    
+    pool = await create_redis_pool()
+    try:
+        job = await pool.enqueue_job("sync_xert_job", user.id)
+        return {"success": True, "job_id": job.job_id}
+    finally:
+        await pool.close()
 
 
 
@@ -842,23 +775,20 @@ async def trigger_xert_sync(db: DbSession, user: CurrentUser):
 
 
 @router.get("/me/oauth-links")
-async def list_oauth_links(db: DbSession, user: CurrentUser) -> list[dict]:
+async def list_oauth_links(oauth_repo: OAuthLinkRepoD, user: CurrentUser) -> list[dict]:
     """List connected OAuth providers for the current user.
 
     Returns a list of OAuth provider connections with their details.
 
     Args:
-        db: Database session.
+        oauth_repo: OAuth link repository.
         user: The authenticated user.
 
     Returns:
         List of OAuth link objects with provider, email, display_name,
         avatar_url, and created_at fields.
     """
-    result = await db.execute(
-        select(UserOAuthLink).where(UserOAuthLink.user_id == user.id)
-    )
-    links = result.scalars().all()
+    links = await oauth_repo.list_for_user(user.id)
     
     return [
         {
@@ -874,7 +804,7 @@ async def list_oauth_links(db: DbSession, user: CurrentUser) -> list[dict]:
 
 @router.delete("/me/oauth-links/{provider}")
 async def disconnect_oauth_provider(
-    db: DbSession, user: CurrentUser, provider: str
+    oauth_repo: OAuthLinkRepoD, user: CurrentUser, provider: str
 ) -> dict:
     """Disconnect an OAuth provider from the current user's account.
 
@@ -882,7 +812,7 @@ async def disconnect_oauth_provider(
     the user with no way to sign in (no password and no other OAuth links).
 
     Args:
-        db: Database session.
+        oauth_repo: OAuth link repository.
         user: The authenticated user.
         provider: The OAuth provider to disconnect ('github' or 'google').
 
@@ -894,13 +824,7 @@ async def disconnect_oauth_provider(
             would lock the user out.
     """
     # Check if the link exists
-    result = await db.execute(
-        select(UserOAuthLink).where(
-            UserOAuthLink.user_id == user.id,
-            UserOAuthLink.provider == provider,
-        )
-    )
-    link = result.scalar_one_or_none()
+    link = await oauth_repo.get_for_user(user.id, provider)
     
     if not link:
         raise HTTPException(status_code=404, detail=f"No {provider} account connected")
@@ -910,24 +834,17 @@ async def disconnect_oauth_provider(
     has_password = user.password_hash is not None and user.password_hash != ""
     
     if not has_password:
-        # Count other OAuth links
-        other_links_result = await db.execute(
-            select(UserOAuthLink).where(
-                UserOAuthLink.user_id == user.id,
-                UserOAuthLink.provider != provider,
-            )
-        )
-        other_links = other_links_result.scalars().all()
+        # Count other OAuth links (total - 1 for current provider)
+        total_links = await oauth_repo.count_for_user(user.id)
         
-        if len(other_links) == 0:
+        if total_links <= 1:
             raise HTTPException(
                 status_code=400,
                 detail="Cannot disconnect: this is your only sign-in method. Set a password or connect another provider first.",
             )
     
     # Safe to delete
-    await db.delete(link)
-    await db.commit()
+    await oauth_repo.delete(user.id, provider)
     
     return {"success": True}
 
@@ -1001,23 +918,14 @@ async def has_password(user: CurrentUser) -> dict:
 
 
 @router.post("/me/recalculate-metrics")
-async def trigger_recalculate_metrics(db: DbSession, user: CurrentUser):
+async def trigger_recalculate_metrics(recalc_repo: RecalculationJobRepoD, user: CurrentUser):
     """Enqueue an async job to recompute training metrics for all activities.
 
     Upserts a RecalculationJob row to status=pending and enqueues the ARQ
     job. The job transitions to running → completed | failed asynchronously.
     Poll GET /me/recalculate-metrics to observe progress.
     """
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
-    await db.execute(
-        pg_insert(RecalculationJob)
-        .values(user_id=user.id, status="pending", started_at=now)
-        .on_conflict_do_update(
-            index_elements=["user_id"],
-            set_={"status": "pending", "started_at": now, "completed_at": None, "error_message": None},
-        )
-    )
-    await db.commit()
+    await recalc_repo.upsert_pending(user.id)
 
     try:
         await enqueue_recalculate_metrics_job(user.id)
@@ -1026,38 +934,19 @@ async def trigger_recalculate_metrics(db: DbSession, user: CurrentUser):
             "Failed to enqueue metric recalculation for user %s", user.id
         )
         # Mark job as failed so user sees accurate state
-        await db.execute(
-            pg_insert(RecalculationJob)
-            .values(user_id=user.id, status="failed", started_at=now)
-            .on_conflict_do_update(
-                index_elements=["user_id"],
-                set_={
-                    "status": "failed",
-                    "completed_at": now,
-                    "error_message": "Failed to enqueue job. Please try again.",
-                    "activities_updated": None,
-                },
-            )
-        )
-        await db.commit()
+        await recalc_repo.upsert_failed(user.id)
 
-    result = await db.execute(
-        select(RecalculationJob).where(RecalculationJob.user_id == user.id)
-    )
-    job = result.scalar_one()
+    job = await recalc_repo.get_by_user_id(user.id)
     return recalculation_job_response(job)
 
 
 @router.get("/me/recalculate-metrics")
-async def get_recalculate_metrics_status(db: DbSession, user: CurrentUser):
+async def get_recalculate_metrics_status(recalc_repo: RecalculationJobRepoD, user: CurrentUser):
     """Return the current recalculation job status for the authenticated user.
 
     Returns null if no recalculation has ever been triggered.
     """
-    result = await db.execute(
-        select(RecalculationJob).where(RecalculationJob.user_id == user.id)
-    )
-    job = result.scalar_one_or_none()
+    job = await recalc_repo.get_by_user_id(user.id)
     if job is None:
         return None
     return recalculation_job_response(job)

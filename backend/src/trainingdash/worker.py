@@ -24,11 +24,8 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 from arq.cron import cron
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine, AsyncEngine
 from trainingdash.jobs import get_redis_settings, create_redis_pool
-from trainingdash.ingest import backfill_activity_metrics
-from trainingdash.models import RecalculationJob
 
 logger = logging.getLogger(__name__)
 
@@ -71,10 +68,11 @@ async def worker_db_session(ctx: dict):
 
 async def ingest_job(ctx, user_id: int, fit_bytes: bytes, source: str, source_ref: str):
     """Ingest a FIT file and enqueue route matching."""
-    from trainingdash.ingest import ingest_fit
+    from trainingdash.use_cases import IngestActivity
 
     async with worker_db_session(ctx) as db:
-        activity = await ingest_fit(db, user_id, fit_bytes, source, source_ref)
+        use_case = IngestActivity(db)
+        activity = await use_case.execute(user_id, fit_bytes, source, source_ref)
         if activity is None:
             return {"success": False, "activity_id": None}
 
@@ -90,7 +88,7 @@ async def ingest_job(ctx, user_id: int, fit_bytes: bytes, source: str, source_re
 async def match_route_job(ctx, activity_id: int, user_id: int):
     """Match an activity to a route cluster."""
     from sqlalchemy import select
-    from trainingdash.models import Activity, Record
+    from trainingdash.repositories.postgres.models import Activity, Record
     from trainingdash.route_matching import find_or_create_route_id
 
     async with worker_db_session(ctx) as db:
@@ -125,9 +123,9 @@ async def recalculate_after_delete_job(ctx, user_id: int) -> dict:
     from datetime import datetime, timezone
 
     from sqlalchemy import select, update
-    from trainingdash.models import Activity, ActivityPeakPower
+    from trainingdash.repositories.postgres.models import Activity, ActivityPeakPower
     from trainingdash.ingest import _update_fitness_model
-    from trainingdash.fitness import detect_breakthrough, get_all_time_bests
+    from trainingdash.domain.fitness import detect_breakthrough, get_all_time_bests
 
     logger = logging.getLogger(__name__)
 
@@ -190,16 +188,17 @@ async def sync_xert_job(ctx, user_id: int):
     """
     Sync activities from Xert for a user.
     
-    Uses the common sync orchestration with XertSyncProvider.
+    Uses the SyncFromProvider use case with XertSyncProvider.
     Activities are ingested via session_data (not FIT files) and
     routed through the full metric pipeline.
     """
-    from trainingdash.sync import run_sync
+    from trainingdash.use_cases import SyncFromProvider
     from trainingdash.sync_providers import XertSyncProvider
     
     async with worker_db_session(ctx) as db:
         provider = XertSyncProvider()
-        result = await run_sync(db, user_id, provider)
+        use_case = SyncFromProvider(db)
+        result = await use_case.execute(user_id, provider)
         
         return {
             "success": result.success,
@@ -214,16 +213,17 @@ async def sync_garmin_job(ctx, user_id: int):
     """
     Sync activities from Garmin Connect for a user.
     
-    Uses the common sync orchestration with GarminSyncProvider.
+    Uses the SyncFromProvider use case with GarminSyncProvider.
     Activities are ingested via FIT file download through the
     standard ingest pipeline.
     """
-    from trainingdash.sync import run_sync
+    from trainingdash.use_cases import SyncFromProvider
     from trainingdash.sync_providers import GarminSyncProvider
     
     async with worker_db_session(ctx) as db:
         provider = GarminSyncProvider()
-        result = await run_sync(db, user_id, provider)
+        use_case = SyncFromProvider(db)
+        result = await use_case.execute(user_id, provider)
         
         return {
             "success": result.success,
@@ -243,7 +243,7 @@ async def hourly_sync_scheduler(ctx):
     """
     from datetime import datetime, timezone
     from sqlalchemy import select
-    from trainingdash.models import GarminCredentials, XertCredentials, User
+    from trainingdash.repositories.postgres.models import GarminCredentials, XertCredentials, User
     
     current_hour = datetime.now(timezone.utc).hour
     logger.info(f"hourly_sync_scheduler: Running for hour {current_hour}")
@@ -289,76 +289,32 @@ async def hourly_sync_scheduler(ctx):
     return {"success": True, "garmin_queued": len(garmin_user_ids), "xert_queued": len(xert_user_ids)}
 
 
-async def _upsert_recalculation_job(db, user_id: int, **fields) -> None:
-    """Upsert a RecalculationJob row for user_id with the given field values.
-
-    On INSERT, all supplied fields (including started_at) are written.
-    On UPDATE (conflict), started_at is preserved from the existing row;
-    only the other supplied fields are updated.
-    """
-    update_fields = {k: v for k, v in fields.items() if k != "started_at"}
-    await db.execute(
-        pg_insert(RecalculationJob)
-        .values(user_id=user_id, **fields)
-        .on_conflict_do_update(
-            index_elements=["user_id"],
-            set_=update_fields,
-        )
-    )
-
-
 async def recalculate_metrics_job(ctx, user_id: int) -> dict:
     """
     Recompute training metrics (NP, IF, TSS, W'bal, zone times) for all
     activities with power data that are missing metrics.
 
-    Upserts a RecalculationJob row throughout:
-      pending → running → completed | failed
+    Uses the RecalculateMetrics use case which tracks job status
+    (pending → running → completed | failed) via RecalculationJobRepo.
 
     Returns a dict with success flag and count of activities updated.
     """
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
-
+    from trainingdash.use_cases import RecalculateMetrics
+    from trainingdash.repositories.postgres.recalculation_job_repo import (
+        PostgresRecalculationJobRepo,
+    )
+    
     async with worker_db_session(ctx) as db:
-        await _upsert_recalculation_job(
-            db, user_id, status="running", started_at=now,
-            completed_at=None, error_message=None,
-        )
-        await db.commit()
-
-        try:
-            count = await backfill_activity_metrics(db, user_id)
-            completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
-            await _upsert_recalculation_job(
-                db, user_id, status="completed", started_at=now,
-                completed_at=completed_at, activities_updated=count, error_message=None,
-            )
-            await db.commit()
-            logger.info(
-                "recalculate_metrics_job: completed for user %s — %d activities updated",
-                user_id,
-                count,
-            )
-            return {"success": True, "user_id": user_id, "activities_updated": count}
-
-        except Exception as exc:
-            completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
-            error_msg = str(exc)[:500]
-            try:
-                await _upsert_recalculation_job(
-                    db, user_id, status="failed", started_at=now,
-                    completed_at=completed_at, error_message=error_msg, activities_updated=None,
-                )
-                await db.commit()
-            except Exception:
-                logger.exception(
-                    "recalculate_metrics_job: failed to persist failure state for user %s",
-                    user_id,
-                )
-            logger.exception(
-                "recalculate_metrics_job: failed for user %s", user_id
-            )
-            return {"success": False, "user_id": user_id, "error": error_msg}
+        job_repo = PostgresRecalculationJobRepo(db)
+        use_case = RecalculateMetrics(db, job_repo)
+        result = await use_case.execute(user_id)
+        
+        return {
+            "success": result.success,
+            "user_id": result.user_id,
+            "activities_updated": result.activities_updated,
+            "error": result.error,
+        }
 
 
 class WorkerSettings:

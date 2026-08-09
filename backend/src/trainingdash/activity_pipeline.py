@@ -18,23 +18,23 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from trainingdash.metrics import (
+from trainingdash.domain.metrics import (
     compute_normalized_power,
     compute_intensity_factor,
     compute_tss,
 )
-from trainingdash.zones import compute_zone_times
-from trainingdash.models import (
+from trainingdash.domain.zones import compute_zone_times
+from trainingdash.repositories.postgres.models import (
     Activity,
     ActivityPeakPower,
     FitnessHistory,
     Notification,
     User,
 )
-from trainingdash.peaks import extract_peak_powers
-from trainingdash.thresholds import get_thresholds_for_date, ThresholdValues
-from trainingdash.wbal import compute_wbal_series
-from trainingdash.fitness import detect_breakthrough, get_all_time_bests, fit_cp_model
+from trainingdash.domain.peaks import extract_peak_powers
+from trainingdash.domain.thresholds import get_thresholds_for_date, ThresholdValues
+from trainingdash.domain.wbal import compute_wbal_series
+from trainingdash.domain.fitness import detect_breakthrough, get_all_time_bests, fit_cp_model
 
 logger = logging.getLogger(__name__)
 
@@ -589,6 +589,9 @@ class ActivityPipeline:
             return
         
         current_ftp = threshold.ftp_watts
+        if current_ftp is None:
+            return
+            
         ratio = cp_watts / current_ftp
         
         if 0.95 <= ratio <= 1.05:
@@ -672,7 +675,7 @@ class ActivityPipeline:
             result.title_source = "pending"
         else:
             try:
-                from trainingdash.title_generator import generate_activity_title
+                from trainingdash.domain.title_generator import generate_activity_title
                 
                 title = await generate_activity_title(
                     self.records, self.activity.started_at

@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "tests" / "fixtures"))
 from generate_fit import make_test_fit  # noqa: E402
-from trainingdash.models import Activity, Route  # noqa: E402
+from trainingdash.repositories.postgres.models import Activity, Route  # noqa: E402
 
 
 async def upload_and_get_activity(auth_client, db_session, name, fit_data):
