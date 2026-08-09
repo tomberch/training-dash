@@ -140,17 +140,16 @@ async def recalculate_after_delete_job(ctx: dict, *, user_id: int) -> dict:
     """
     import logging
 
-    from sqlalchemy import select
-    from trainingdash.repositories.postgres.models import Activity, ActivityPeakPower
-    from trainingdash.ingest import _update_fitness_model
-    from trainingdash.domain.fitness import detect_breakthrough, get_all_time_bests
+    from trainingdash.use_cases.fitness_model_updater import FitnessModelUpdater
+    from trainingdash.use_cases.breakthrough_evaluator import BreakthroughEvaluator
 
     logger = logging.getLogger(__name__)
 
     async with worker_db_session(ctx) as db:
         # Step 1: Recompute fitness model (FitnessHistory snapshot)
         try:
-            await _update_fitness_model(db, user_id)
+            await FitnessModelUpdater(db).execute(user_id)
+            await db.commit()
         except Exception:
             logger.exception(
                 "recalculate_after_delete_job: fitness model update failed for user %s",
@@ -159,40 +158,8 @@ async def recalculate_after_delete_job(ctx: dict, *, user_id: int) -> dict:
 
         # Step 2: Re-evaluate is_breakthrough on all remaining activities
         try:
-            activities_result = await db.execute(
-                select(Activity)
-                .where(Activity.user_id == user_id)
-                .order_by(Activity.started_at.asc())
-            )
-            activities = activities_result.scalars().all()
-
-            if activities:
-                # Load all peak powers for this user's activities
-                activity_ids = [a.id for a in activities]
-                peaks_result = await db.execute(
-                    select(ActivityPeakPower).where(
-                        ActivityPeakPower.activity_id.in_(activity_ids)
-                    )
-                )
-                all_peaks = peaks_result.scalars().all()
-
-                peaks_by_activity: dict = {}
-                for p in all_peaks:
-                    peaks_by_activity.setdefault(p.activity_id, {})[p.duration_seconds] = p.watts
-
-                # Walk chronologically, re-evaluating breakthroughs
-                seen_peaks: list[dict[int, int]] = []
-                for activity in activities:
-                    activity_peaks = peaks_by_activity.get(activity.id, {})
-                    all_time_bests = get_all_time_bests(seen_peaks)
-                    is_bt = detect_breakthrough(activity_peaks, all_time_bests) if activity_peaks else False
-                    if activity.is_breakthrough != is_bt:
-                        activity.is_breakthrough = is_bt
-                    if activity_peaks:
-                        seen_peaks.append(activity_peaks)
-
-                await db.commit()
-
+            await BreakthroughEvaluator(db).execute(user_id)
+            await db.commit()
         except Exception:
             logger.exception(
                 "recalculate_after_delete_job: breakthrough re-evaluation failed for user %s",

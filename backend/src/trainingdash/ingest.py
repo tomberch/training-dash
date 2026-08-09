@@ -451,131 +451,6 @@ async def ingest_fit(
 
     return activity
 
-async def _update_fitness_model(
-    db: AsyncSession,
-    user_id: int,
-) -> None:
-    """
-    Recalculate and store the user's fitness model.
-    """
-    # Get all activities with peaks for this user
-    result = await db.execute(
-        select(Activity)
-        .where(Activity.user_id == user_id)
-        .order_by(Activity.started_at.desc())
-    )
-    activities = result.scalars().all()
-    
-    if not activities:
-        return
-    
-    # Get peaks for all activities
-    activity_ids = [a.id for a in activities]
-    result = await db.execute(
-        select(ActivityPeakPower)
-        .where(ActivityPeakPower.activity_id.in_(activity_ids))
-    )
-    all_peaks = result.scalars().all()
-    
-    # Group peaks by activity
-    peaks_by_activity: dict[int, dict[int, int]] = {}
-    for p in all_peaks:
-        if p.activity_id not in peaks_by_activity:
-            peaks_by_activity[p.activity_id] = {}
-        peaks_by_activity[p.activity_id][p.duration_seconds] = p.watts
-    
-    # Build lists for model fitting
-    peak_powers = []
-    activity_dates = []
-    for a in activities:
-        if a.id in peaks_by_activity:
-            peak_powers.append(peaks_by_activity[a.id])
-            activity_dates.append(a.started_at)
-    
-    if not peak_powers:
-        return
-    
-    # Fit the model
-    model = fit_cp_model(peak_powers, activity_dates)
-    
-    if model is None:
-        return
-    
-    # Store new fitness snapshot
-    fitness = FitnessHistory(
-        user_id=user_id,
-        computed_at=datetime.now(timezone.utc).replace(tzinfo=None),
-        pp_watts=model["pp_watts"],
-        w_prime_joules=model["w_prime_joules"],
-        cp_watts=model["cp_watts"],
-    )
-    db.add(fitness)
-    await db.commit()
-    
-    # Check if CP diverges from current FTP and create notification
-    await _check_ftp_notification(db, user_id, model["cp_watts"])
-
-
-
-async def _check_ftp_notification(
-    db: AsyncSession,
-    user_id: int,
-    cp_watts: int,
-) -> None:
-    """
-    Check if CP diverges from current FTP by >5% and create notification.
-    """
-    from datetime import date as date_type
-    
-    # Get current FTP
-    current_ftp = await get_ftp_for_date(db, user_id, date_type.today())
-    
-    if current_ftp is None:
-        return
-    
-    # Check for >5% divergence
-    ratio = cp_watts / current_ftp
-    if 0.95 <= ratio <= 1.05:
-        # Within 5%, no notification needed
-        return
-    
-    # Check if there's already a pending FTP notification
-    result = await db.execute(
-        select(Notification)
-        .where(
-            Notification.user_id == user_id,
-            Notification.type == "ftp_suggestion",
-            Notification.status == "pending",
-        )
-    )
-    existing = result.scalar_one_or_none()
-    
-    if existing is not None:
-        # Update existing notification with new suggestion
-        existing.message = f"Your fitness model suggests updating your FTP from {current_ftp}W to {cp_watts}W"
-        existing.payload = json.dumps({
-            "current_ftp": current_ftp,
-            "suggested_ftp": cp_watts,
-            "divergence_pct": round((ratio - 1) * 100, 1),
-        })
-        await db.commit()
-        return
-    
-    # Create new notification
-    notification = Notification(
-        user_id=user_id,
-        type="ftp_suggestion",
-        message=f"Your fitness model suggests updating your FTP from {current_ftp}W to {cp_watts}W",
-        payload=json.dumps({
-            "current_ftp": current_ftp,
-            "suggested_ftp": cp_watts,
-            "divergence_pct": round((ratio - 1) * 100, 1),
-        }),
-        status="pending",
-    )
-    db.add(notification)
-    await db.commit()
-
 
 
 async def finalize_batch_import(
@@ -586,65 +461,47 @@ async def finalize_batch_import(
     """
     Finalize a batch import: detect breakthroughs, update fitness model once,
     auto-create threshold if needed, backfill metrics, and create summary notification.
-    
+
     Called after ingesting multiple activities in batch_mode=True.
     """
-    # Get all activities for this user to check for breakthroughs
+    from trainingdash.use_cases.breakthrough_evaluator import BreakthroughEvaluator
+    from trainingdash.use_cases.fitness_model_updater import FitnessModelUpdater
+
+    # Re-evaluate breakthrough flags across all activities
+    await BreakthroughEvaluator(db).execute(user_id)
+    await db.commit()
+
+    # Recompute fitness model (CP model snapshot) — batch mode: pass
+    # activity_count so the FTP-divergence notification carries the
+    # batch-summary shape (replaces existing pending FTP notifications).
+    await FitnessModelUpdater(db).execute(user_id, activity_count=activity_count)
+    await db.commit()
+
+    # Load activities + peaks for the threshold helper below
     result = await db.execute(
         select(Activity)
         .where(Activity.user_id == user_id)
         .order_by(Activity.started_at.asc())
     )
     activities = result.scalars().all()
-    
+
     if not activities:
         return
-    
-    # Get all peaks grouped by activity
+
     activity_ids = [a.id for a in activities]
     result = await db.execute(
         select(ActivityPeakPower)
         .where(ActivityPeakPower.activity_id.in_(activity_ids))
     )
     all_peaks = result.scalars().all()
-    
+
     peaks_by_activity: dict[int, dict[int, int]] = {}
     for p in all_peaks:
-        if p.activity_id not in peaks_by_activity:
-            peaks_by_activity[p.activity_id] = {}
-        peaks_by_activity[p.activity_id][p.duration_seconds] = p.watts
-    
-    # Walk through activities chronologically, marking breakthroughs
-    all_time_bests: dict[int, int] = {}
-    breakthroughs_detected = 0
-    
-    for activity in activities:
-        if activity.id not in peaks_by_activity:
-            continue
-        
-        activity_peaks = peaks_by_activity[activity.id]
-        
-        # Check if this is a breakthrough vs all-time bests so far
-        is_breakthrough = detect_breakthrough(activity_peaks, all_time_bests)
-        
-        if is_breakthrough and not activity.is_breakthrough:
-            activity.is_breakthrough = True
-            breakthroughs_detected += 1
-        
-        # Update all-time bests
-        for duration, watts in activity_peaks.items():
-            if duration not in all_time_bests or watts > all_time_bests[duration]:
-                all_time_bests[duration] = watts
-    
-    await db.commit()
-    
-    # If any breakthroughs (i.e., we have meaningful power data), update fitness model
-    if breakthroughs_detected > 0:
-        await _update_fitness_model_batch(db, user_id, activity_count)
-    
+        peaks_by_activity.setdefault(p.activity_id, {})[p.duration_seconds] = p.watts
+
     # Auto-create threshold for historical activities if needed
     await _auto_create_threshold_if_needed(db, user_id, activities, peaks_by_activity)
-    
+
     # Backfill metrics for activities that are missing them
     await backfill_activity_metrics(db, user_id)
 
@@ -743,126 +600,6 @@ def _estimate_hr_thresholds(activities: list[Activity]) -> tuple[int, int]:
         lthr = 167
     
     return lthr, hrmax
-
-
-async def _update_fitness_model_batch(
-    db: AsyncSession,
-    user_id: int,
-    activity_count: int,
-) -> None:
-    """
-    Update fitness model after batch import with a summary notification.
-    """
-    # Get all activities with peaks for this user
-    result = await db.execute(
-        select(Activity)
-        .where(Activity.user_id == user_id)
-        .order_by(Activity.started_at.desc())
-    )
-    activities = result.scalars().all()
-    
-    if not activities:
-        return
-    
-    # Get peaks for all activities
-    activity_ids = [a.id for a in activities]
-    result = await db.execute(
-        select(ActivityPeakPower)
-        .where(ActivityPeakPower.activity_id.in_(activity_ids))
-    )
-    all_peaks = result.scalars().all()
-    
-    # Group peaks by activity
-    peaks_by_activity: dict[int, dict[int, int]] = {}
-    for p in all_peaks:
-        if p.activity_id not in peaks_by_activity:
-            peaks_by_activity[p.activity_id] = {}
-        peaks_by_activity[p.activity_id][p.duration_seconds] = p.watts
-    
-    # Build lists for model fitting
-    peak_powers = []
-    activity_dates = []
-    for a in activities:
-        if a.id in peaks_by_activity:
-            peak_powers.append(peaks_by_activity[a.id])
-            activity_dates.append(a.started_at)
-    
-    if not peak_powers:
-        return
-    
-    # Fit the model
-    model = fit_cp_model(peak_powers, activity_dates)
-    
-    if model is None:
-        return
-    
-    # Store new fitness snapshot
-    fitness = FitnessHistory(
-        user_id=user_id,
-        computed_at=datetime.now(timezone.utc).replace(tzinfo=None),
-        pp_watts=model["pp_watts"],
-        w_prime_joules=model["w_prime_joules"],
-        cp_watts=model["cp_watts"],
-    )
-    db.add(fitness)
-    await db.commit()
-    
-    # Check for FTP notification with batch summary
-    await _check_ftp_notification_batch(db, user_id, model["cp_watts"], activity_count)
-
-
-async def _check_ftp_notification_batch(
-    db: AsyncSession,
-    user_id: int,
-    cp_watts: int,
-    activity_count: int,
-) -> None:
-    """
-    Check if CP diverges from current FTP and create a batch summary notification.
-    """
-    from datetime import date as date_type
-    
-    # Get current FTP
-    current_ftp = await get_ftp_for_date(db, user_id, date_type.today())
-    
-    if current_ftp is None:
-        return
-    
-    # Check for >5% divergence
-    ratio = cp_watts / current_ftp
-    if 0.95 <= ratio <= 1.05:
-        return
-    
-    # Remove any existing pending FTP notifications (will be replaced with summary)
-    result = await db.execute(
-        select(Notification)
-        .where(
-            Notification.user_id == user_id,
-            Notification.type == "ftp_suggestion",
-            Notification.status == "pending",
-        )
-    )
-    existing = result.scalars().all()
-    for n in existing:
-        await db.delete(n)
-    
-    # Create batch summary notification
-    notification = Notification(
-        user_id=user_id,
-        type="ftp_suggestion",
-        message=f"After importing {activity_count} activities, your fitness model suggests updating your FTP from {current_ftp}W to {cp_watts}W",
-        payload=json.dumps({
-            "current_ftp": current_ftp,
-            "suggested_ftp": cp_watts,
-            "divergence_pct": round((ratio - 1) * 100, 1),
-            "batch_import": True,
-            "activity_count": activity_count,
-        }),
-        status="pending",
-    )
-    db.add(notification)
-    await db.commit()
-
 
 
 
