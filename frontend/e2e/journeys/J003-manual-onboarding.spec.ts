@@ -75,7 +75,7 @@ test.describe('J003: Manual Onboarding Flow', () => {
     // Step 3: Upload FIT file
     // =========================================
     // Use cp-ride2-5min.fit: 5 minutes at 270W average
-    const fitFilePath = path.join(__dirname, 'fixtures/fit-files/cp-ride2-5min.fit');
+    const fitFilePath = path.join(__dirname, '../fixtures/fit-files/cp-ride2-5min.fit');
     expect(fs.existsSync(fitFilePath)).toBe(true);
 
     // Find the hidden file input and upload
@@ -181,7 +181,7 @@ test.describe('J003: Manual Onboarding Flow', () => {
     await expect(page.getByText('Threshold saved')).toBeVisible({ timeout: 10000 });
 
     // Upload a FIT file
-    const fitFilePath = path.join(__dirname, 'fixtures/fit-files/cp-ride2-5min.fit');
+    const fitFilePath = path.join(__dirname, '../fixtures/fit-files/cp-ride2-5min.fit');
     const fileInput = page.locator('input[type="file"][accept=".fit"]');
     await fileInput.setInputFiles(fitFilePath);
     await expect(page.getByRole('button', { name: 'Upload FIT' })).toBeVisible({ timeout: 60000 });

@@ -91,7 +91,7 @@ async function loginUser(
  * Helper to get list of FIT fixture files.
  */
 function getCpRideFitFiles(): string[] {
-  const fixturesDir = path.join(__dirname, 'fixtures/fit-files');
+  const fixturesDir = path.join(__dirname, '../fixtures/fit-files');
   const files = fs.readdirSync(fixturesDir);
   return files
     .filter((f) => f.startsWith('cp-ride') && f.endsWith('.fit'))
