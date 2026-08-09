@@ -49,7 +49,8 @@ class MockXertClient:
         self._fixtures_dir = Path(os.environ.get("MOCK_XERT_FIXTURES_DIR", DEFAULT_FIXTURES_DIR))
         self._logged_in = False
         self._username: str | None = None
-        logger.info("MockXertClient initialized with fixtures_dir=%s", self._fixtures_dir)
+        # Use %r to escape special characters and prevent log injection
+        logger.info("MockXertClient initialized with fixtures_dir=%r", self._fixtures_dir)
 
     async def login(self, username: str, password: str) -> None:
         """Simulate Xert login. Always succeeds unless password is 'invalid'."""
@@ -57,7 +58,8 @@ class MockXertClient:
             raise XertAPIError("Invalid Xert credentials")
         self._logged_in = True
         self._username = username
-        logger.info("MockXertClient: login successful for %s", username)
+        # Use %r to escape special characters and prevent log injection
+        logger.info("MockXertClient: login successful for %r", username)
 
     async def list_activities(
         self,
@@ -71,8 +73,9 @@ class MockXertClient:
         the filename (e.g., 'cp-ride1-2min.fit' -> 'cp-ride1-2min').
         """
         if not self._fixtures_dir.exists():
+            # Use %r to escape special characters and prevent log injection
             logger.warning(
-                "MockXertClient: fixtures directory does not exist: %s",
+                "MockXertClient: fixtures directory does not exist: %r",
                 self._fixtures_dir,
             )
             return []
@@ -112,13 +115,15 @@ class MockXertClient:
         if not fit_path.exists():
             raise XertAPIError(f"FIT file not found for activity: {activity_id}")
 
-        logger.info("MockXertClient: download_fit returning %s", fit_path)
+        # Use %r to escape special characters and prevent log injection
+        logger.info("MockXertClient: download_fit returning %r", fit_path)
         return fit_path.read_bytes()
 
     async def get_xss(self, activity_id: str) -> float | None:
         """Return mock XSS value for the activity."""
         xss = MOCK_XSS_VALUES.get(activity_id)
-        logger.info("MockXertClient: get_xss(%s) = %s", activity_id, xss)
+        # Use %r to escape special characters and prevent log injection
+        logger.info("MockXertClient: get_xss(%r) = %s", activity_id, xss)
         return xss
 
     async def close(self) -> None:
