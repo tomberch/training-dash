@@ -17,6 +17,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Upgrade pip to fix security vulnerabilities (CVE-2025-8869, CVE-2026-*)
+RUN pip install --no-cache-dir --upgrade pip
+
 # Install uv once (cached layer)
 RUN pip install --no-cache-dir uv
 
