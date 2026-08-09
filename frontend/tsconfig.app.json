@@ -23,13 +23,9 @@
     "noFallthroughCasesInSwitch": true,
 
     /* Path aliases for shadcn/ui */
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
-    },
-
-    /* Silence baseUrl deprecation warning in TS 6.0 */
-    "ignoreDeprecations": "6.0"
+    }
   },
   "include": ["src"]
 }

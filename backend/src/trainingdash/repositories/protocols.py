@@ -394,13 +394,53 @@ class GeocodingCacheRepo(Protocol):
         ...
 
 
+class AnalyticsRepo(Protocol):
+    """
+    Read-only repository protocol for analytics / dashboard queries.
+
+    All methods are read-only (no commits). The router serializes the ORM
+    objects returned, with the exception of ``get_records`` which returns a
+    typed ``RecordsView`` composite.
+    """
+
+    async def get_latest_fitness(self, user_id: int) -> "FitnessHistory | None":
+        """Most recent fitness snapshot for the user, or None."""
+        ...
+
+    async def get_fitness_history(
+        self, user_id: int, limit: int = 10
+    ) -> "list[FitnessHistory]":
+        """Recent fitness snapshots, most recent first."""
+        ...
+
+    async def list_activities_for_pmc(self, user_id: int) -> "list[Activity]":
+        """All activities for the user, ordered by started_at ASC."""
+        ...
+
+    async def get_power_curve(
+        self,
+        user_id: int,
+        start: "date | None" = None,
+        end: "date | None" = None,
+    ) -> "list[Any]":
+        """Peak powers joined with activity start time, date-filtered."""
+        ...
+
+    async def get_records(self, user_id: int) -> "RecordsView":
+        """Lifetime + per-route PRs as a composite view."""
+        ...
+
+
 # Import types for type hints (avoid circular import at runtime)
-from datetime import datetime
-from typing import TYPE_CHECKING
+from datetime import date, datetime
+from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from trainingdash.repositories.postgres.analytics_repo import RecordsView
     from trainingdash.repositories.postgres.models import (
+        Activity,
         AppSettings,
+        FitnessHistory,
         GarminCredentials,
         Notification,
         RecalculationJob,
