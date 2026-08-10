@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings Zones Edit v2 - Fixed Spacing</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            primary: '#a855f7',
+            'primary-hover': '#9333ea',
+            zone: {
+              1: '#3b82f6',
+              2: '#10b981',
+              3: '#f59e0b',
+              4: '#ef4444',
+              5: '#8b5cf6'
+            },
+            dark: {
+              900: '#0f0f1a',
+              800: '#1a1a2e',
+              700: '#252542',
+              600: '#2d2d4a',
+              500: '#3a3a5c'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    .card-hover { transition: all 0.3s ease; }
+    .card-hover:hover { transform: translateY(-2px); box-shadow: 0 10px 40px rgba(0,0,0,0.3); }
+  </style>
+</head>
+<body class="bg-dark-900 text-gray-100">
+  <div class="flex">
+    <!-- Sidebar -->
+    <aside class="w-64 bg-dark-800 min-h-screen border-r border-dark-600 p-4">
+      <div class="flex items-center gap-3 mb-8 px-2">
+        <div class="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
+          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a8 8 0 100 16 8 8 0 000-16zm0 14a6 6 0 110-12 6 6 0 010 12z"/></svg>
+        </div>
+        <span class="font-bold text-lg">TrainDash</span>
+      </div>
+      
+      <nav class="space-y-1">
+        <a href="#" class="flex items-center gap-3 px-3 py-2.5 text-primary bg-primary/10 rounded-lg">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          <span>Settings</span>
+        </a>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 p-8">
+      <div class="max-w-5xl mx-auto">
+        <!-- Header -->
+        <div class="mb-8">
+          <button class="flex items-center gap-2 text-gray-400 hover:text-gray-100 mb-4 transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+            <span>Back</span>
+          </button>
+          <h1 class="text-3xl font-bold">Settings</h1>
+          <p class="text-gray-400 mt-1">Manage your profile, preferences, and integrations</p>
+        </div>
+
+        <!-- IMPROVEMENT 6: Warning Moved Outside Edit Frame -->
+        <div class="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-5 mb-6">
+          <div class="flex items-start gap-3">
+            <svg class="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+            <div class="flex-1">
+              <p class="text-sm text-gray-300 font-semibold mb-1">Threshold Required</p>
+              <p class="text-sm text-gray-400">Set your FTP and LTHR thresholds to see computed zones. Until then, you can customize zone names and percentages.</p>
+              <a href="/athlete?tab=thresholds" class="inline-flex items-center gap-1 text-primary hover:text-primary-hover text-sm font-medium mt-2">
+                <span>Go to Athlete → Thresholds</span>
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <!-- Training Zones Edit Mode -->
+        <div class="bg-dark-800 border-2 border-primary/50 rounded-xl p-8 pt-24 mb-6 card-hover relative">
+          <!-- Edit Mode Indicator -->
+          <div class="absolute top-0 right-0 bg-primary text-white px-4 py-2 rounded-bl-xl rounded-tr-lg text-sm font-medium">
+            Editing Zones
+          </div>
+          
+          <div class="flex items-center justify-between mb-12 pb-6 border-b border-dark-600">
+            <div class="flex items-center gap-2">
+              <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+              <h2 class="text-xl font-semibold">Training Zones</h2>
+            </div>
+            <div class="flex gap-3">
+              <button class="bg-dark-600 hover:bg-dark-500 px-6 py-2.5 rounded-lg transition text-sm font-medium">
+                Cancel
+              </button>
+              <button class="bg-primary hover:bg-primary-hover px-6 py-2.5 rounded-lg transition text-sm font-medium flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                Save Changes
+              </button>
+            </div>
+          </div>
+
+          <!-- Power Zones -->
+          <div class="mb-10">
+            <div class="flex items-center gap-2 mb-5">
+              <svg class="w-5 h-5 text-zone-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+              <h3 class="text-lg font-semibold">Power Zones</h3>
+              <span class="text-gray-500 text-sm ml-2">Based on FTP threshold</span>
+            </div>
+            
+            <div class="bg-dark-700 rounded-lg overflow-hidden">
+              <!-- Table Header -->
+              <div class="grid grid-cols-12 gap-4 px-5 py-3 bg-dark-600 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                <div class="col-span-1">Zone</div>
+                <div class="col-span-3">Name</div>
+                <div class="col-span-3">% FTP</div>
+                <div class="col-span-3">Watts</div>
+                <div class="col-span-2">Color</div>
+              </div>
+              
+              <!-- Zone 1 -->
+              <div class="grid grid-cols-12 gap-4 px-5 py-4 border-t border-dark-600 items-center hover:bg-dark-600/50 transition">
+                <div class="col-span-1">
+                  <span class="inline-flex items-center justify-center w-8 h-8 bg-zone-1 rounded-full text-white font-bold text-sm">1</span>
+                </div>
+                <div class="col-span-3">
+                  <input type="text" value="Active Recovery" class="w-full bg-dark-800 border border-dark-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
+                </div>
+                <div class="col-span-3">
+                  <div class="flex items-center gap-2">
+                    <input type="number" value="< 55" class="w-full bg-dark-800 border border-dark-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
+                    <span class="text-gray-500 text-xs">%</span>
+                  </div>
+                </div>
+                <div class="col-span-3">
+                  <div class="flex items-center gap-2">
+                    <input type="number" placeholder="Auto" class="w-full bg-dark-800 border border-dark-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" disabled>
+                    <span class="text-gray-500 text-xs">W</span>
+                  </div>
+                  <p class="text-xs text-gray-500 mt-1">Set FTP to calculate</p>
+                </div>
+                <div class="col-span-2">
+                  <div class="flex items-center gap-2">
+                    <div class="w-6 h-6 rounded bg-zone-1"></div>
+                    <input type="color" value="#3b82f6" class="w-8 h-8 rounded cursor-pointer bg-transparent border-0">
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Zone 2 -->
+              <div class="grid grid-cols-12 gap-4 px-5 py-4 border-t border-dark-600 items-center hover:bg-dark-600/50 transition">
+                <div class="col-span-1">
+                  <span class="inline-flex items-center justify-center w-8 h-8 bg-zone-2 rounded-full text-white font-bold text-sm">2</span>
+                </div>
+                <div class="col-span-3">
+                  <input type="text" value="Endurance" class="w-full bg-dark-800 border border-dark-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
+                </div>
+                <div class="col-span-3">
+                  <div class="flex items-center gap-2">
+                    <input type="number" value="55-75" class="w-full bg-dark-800 border border-dark-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
+                    <span class="text-gray-500 text-xs">%</span>
+                  </div>
+                </div>
+                <div class="col-span-3">
+                  <div class="flex items-center gap-2">
+                    <input type="number" placeholder="Auto" class="w-full bg-dark-800 border border-dark-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" disabled>
+                    <span class="text-gray-500 text-xs">W</span>
+                  </div>
+                  <p class="text-xs text-gray-500 mt-1">Set FTP to calculate</p>
+                </div>
+                <div class="col-span-2">
+                  <div class="flex items-center gap-2">
+                    <div class="w-6 h-6 rounded bg-zone-2"></div>
+                    <input type="color" value="#10b981" class="w-8 h-8 rounded cursor-pointer bg-transparent border-0">
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Zone 3 -->
+              <div class="grid grid-cols-12 gap-4 px-5 py-4 border-t border-dark-600 items-center hover:bg-dark-600/50 transition">
+                <div class="col-span-1">
+                  <span class="inline-flex items-center justify-center w-8 h-8 bg-zone-3 rounded-full text-white font-bold text-sm">3</span>
+                </div>
+                <div class="col-span-3">
+                  <input type="text" value="Tempo" class="w-full bg-dark-800 border border-dark-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
+                </div>
+                <div class="col-span-3">
+                  <div class="flex items-center gap-2">
+                    <input type="number" value="75-90" class="w-full bg-dark-800 border border-dark-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
+                    <span class="text-gray-500 text-xs">%</span>
+                  </div>
+                </div>
+                <div class="col-span-3">
+                  <div class="flex items-center gap-2">
+                    <input type="number" placeholder="Auto" class="w-full bg-dark-800 border border-dark-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" disabled>
+                    <span class="text-gray-500 text-xs">W</span>
+                  </div>
+                  <p class="text-xs text-gray-500 mt-1">Set FTP to calculate</p>
+                </div>
+                <div class="col-span-2">
+                  <div class="flex items-center gap-2">
+                    <div class="w-6 h-6 rounded bg-zone-3"></div>
+                    <input type="color" value="#f59e0b" class="w-8 h-8 rounded cursor-pointer bg-transparent border-0">
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Zone 4 -->
+              <div class="grid grid-cols-12 gap-4 px-5 py-4 border-t border-dark-600 items-center hover:bg-dark-600/50 transition">
+                <div class="col-span-1">
+                  <span class="inline-flex items-center justify-center w-8 h-8 bg-zone-4 rounded-full text-white font-bold text-sm">4</span>
+                </div>
+                <div class="col-span-3">
+                  <input type="text" value="Threshold" class="w-full bg-dark-800 border border-dark-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
+                </div>
+                <div class="col-span-3">
+                  <div class="flex items-center gap-2">
+                    <input type="number" value="90-105" class="w-full bg-dark-800 border border-dark-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
+                    <span class="text-gray-500 text-xs">%</span>
+                  </div>
+                </div>
+                <div class="col-span-3">
+                  <div class="flex items-center gap-2">
+                    <input type="number" placeholder="Auto" class="w-full bg-dark-800 border border-dark-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" disabled>
+                    <span class="text-gray-500 text-xs">W</span>
+                  </div>
+                  <p class="text-xs text-gray-500 mt-1">Set FTP to calculate</p>
+                </div>
+                <div class="col-span-2">
+                  <div class="flex items-center gap-2">
+                    <div class="w-6 h-6 rounded bg-zone-4"></div>
+                    <input type="color" value="#ef4444" class="w-8 h-8 rounded cursor-pointer bg-transparent border-0">
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Zone 5 -->
+              <div class="grid grid-cols-12 gap-4 px-5 py-4 border-t border-dark-600 items-center hover:bg-dark-600/50 transition">
+                <div class="col-span-1">
+                  <span class="inline-flex items-center justify-center w-8 h-8 bg-zone-5 rounded-full text-white font-bold text-sm">5</span>
+                </div>
+                <div class="col-span-3">
+                  <input type="text" value="VO2 Max" class="w-full bg-dark-800 border border-dark-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
+                </div>
+                <div class="col-span-3">
+                  <div class="flex items-center gap-2">
+                    <input type="number" value="> 105" class="w-full bg-dark-800 border border-dark-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
+                    <span class="text-gray-500 text-xs">%</span>
+                  </div>
+                </div>
+                <div class="col-span-3">
+                  <div class="flex items-center gap-2">
+                    <input type="number" placeholder="Auto" class="w-full bg-dark-800 border border-dark-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" disabled>
+                    <span class="text-gray-500 text-xs">W</span>
+                  </div>
+                  <p class="text-xs text-gray-500 mt-1">Set FTP to calculate</p>
+                </div>
+                <div class="col-span-2">
+                  <div class="flex items-center gap-2">
+                    <div class="w-6 h-6 rounded bg-zone-5"></div>
+                    <input type="color" value="#8b5cf6" class="w-8 h-8 rounded cursor-pointer bg-transparent border-0">
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="mt-4 flex items-center justify-between text-xs text-gray-500">
+              <p>Power zones use Coggan's 7-zone model. Customize names and ranges as needed.</p>
+              <button class="text-primary hover:text-primary-hover font-medium">Reset to defaults</button>
+            </div>
+          </div>
+
+          <!-- Heart Rate Zones -->
+          <div>
+            <div class="flex items-center gap-2 mb-5">
+              <svg class="w-5 h-5 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+              <h3 class="text-lg font-semibold">Heart Rate Zones</h3>
+              <span class="text-gray-500 text-sm ml-2">Based on LTHR threshold</span>
+            </div>
+            
+            <div class="bg-dark-700 rounded-lg overflow-hidden">
+              <!-- Table Header -->
+              <div class="grid grid-cols-12 gap-4 px-5 py-3 bg-dark-600 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                <div class="col-span-1">Zone</div>
+                <div class="col-span-3">Name</div>
+                <div class="col-span-3">% LTHR</div>
+                <div class="col-span-3">BPM</div>
+                <div class="col-span-2">Color</div>
+              </div>
+              
+              <!-- HR Zone 1 -->
+              <div class="grid grid-cols-12 gap-4 px-5 py-4 border-t border-dark-600 items-center hover:bg-dark-600/50 transition">
+                <div class="col-span-1">
+                  <span class="inline-flex items-center justify-center w-8 h-8 bg-zone-1 rounded-full text-white font-bold text-sm">1</span>
+                </div>
+                <div class="col-span-3">
+                  <input type="text" value="Recovery" class="w-full bg-dark-800 border border-dark-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
+                </div>
+                <div class="col-span-3">
+                  <div class="flex items-center gap-2">
+                    <input type="number" value="< 81" class="w-full bg-dark-800 border border-dark-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
+                    <span class="text-gray-500 text-xs">%</span>
+                  </div>
+                </div>
+                <div class="col-span-3">
+                  <div class="flex items-center gap-2">
+                    <input type="number" placeholder="Auto" class="w-full bg-dark-800 border border-dark-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" disabled>
+                    <span class="text-gray-500 text-xs">bpm</span>
+                  </div>
+                  <p class="text-xs text-gray-500 mt-1">Set LTHR to calculate</p>
+                </div>
+                <div class="col-span-2">
+                  <div class="flex items-center gap-2">
+                    <div class="w-6 h-6 rounded bg-zone-1"></div>
+                    <input type="color" value="#3b82f6" class="w-8 h-8 rounded cursor-pointer bg-transparent border-0">
+                  </div>
+                </div>
+              </div>
+              
+              <!-- More HR zones would follow same pattern -->
+            </div>
+            
+            <div class="mt-4 flex items-center justify-between text-xs text-gray-500">
+              <p>Heart rate zones use the Friel method. Adjust percentages to match your training methodology.</p>
+              <button class="text-primary hover:text-primary-hover font-medium">Reset to defaults</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

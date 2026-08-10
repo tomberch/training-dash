@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Compare - Mockup</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            primary: '#a855f7',
+            'primary-hover': '#9333ea',
+            secondary: '#3b82f6',
+            dark: {
+              900: '#0f0f1a',
+              800: '#1a1a2e',
+              700: '#252542',
+              600: '#2d2d4a',
+              500: '#3a3a5c'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    .card-hover { transition: all 0.3s ease; }
+    .card-hover:hover { transform: translateY(-2px); box-shadow: 0 10px 40px rgba(0,0,0,0.3); }
+  </style>
+</head>
+<body class="bg-dark-900 text-gray-100">
+  <div class="flex">
+    <!-- Sidebar -->
+    <aside class="w-64 bg-dark-800 min-h-screen border-r border-dark-600 p-4">
+      <div class="flex items-center gap-3 mb-8 px-2">
+        <div class="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
+          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a8 8 0 100 16 8 8 0 000-16zm0 14a6 6 0 110-12 6 6 0 010 12z"/></svg>
+        </div>
+        <span class="font-bold text-lg">TrainDash</span>
+      </div>
+      
+      <nav class="space-y-1">
+        <a href="#" class="flex items-center gap-3 px-3 py-2.5 text-gray-400 hover:text-gray-100 hover:bg-dark-600 rounded-lg transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+          <span>Activities</span>
+        </a>
+        
+        <a href="#" class="flex items-center gap-3 px-3 py-2.5 text-primary bg-primary/10 rounded-lg">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+          <span>Compare</span>
+        </a>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 p-8">
+      <!-- IMPROVEMENT 1: Side-by-Side Activity Selectors -->
+      <div class="grid grid-cols-2 gap-6 mb-8">
+        <!-- Base Activity -->
+        <div>
+          <div class="flex items-center gap-2 mb-3">
+            <div class="w-3 h-3 rounded-full bg-primary"></div>
+            <label class="block text-sm font-medium text-gray-300">Base Activity</label>
+          </div>
+          <div class="relative">
+            <select class="w-full bg-dark-800 border-2 border-primary/30 rounded-xl px-4 py-3 pr-10 text-lg focus:outline-none focus:ring-2 focus:ring-primary/50 appearance-none">
+              <option value="">Select the base ride...</option>
+              <option value="1">Zürich to Wallisellen - 1 Aug 2026</option>
+            </select>
+            <svg class="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </div>
+        </div>
+        
+        <!-- Compare With -->
+        <div>
+          <div class="flex items-center gap-2 mb-3">
+            <div class="w-3 h-3 rounded-full bg-secondary"></div>
+            <label class="block text-sm font-medium text-gray-300">Compare With</label>
+          </div>
+          <div class="relative">
+            <select class="w-full bg-dark-800 border-2 border-dark-600 rounded-xl px-4 py-3 pr-10 text-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 appearance-none" disabled>
+              <option value="">Select a base activity first</option>
+            </select>
+            <svg class="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-600 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- IMPROVEMENT 2: Better Empty State -->
+      <div class="bg-dark-800 border border-dark-600 rounded-xl p-12">
+        <div class="max-w-3xl mx-auto text-center">
+          <svg class="w-24 h-24 text-gray-600 mx-auto mb-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+          </svg>
+          <h2 class="text-2xl font-bold mb-3">Compare Two Activities</h2>
+          <p class="text-gray-400 mb-8">Select two activities to compare their performance metrics, routes, and training load side by side.</p>
+          
+          <div class="grid grid-cols-2 gap-6 text-left max-w-2xl mx-auto">
+            <div class="bg-dark-700 rounded-lg p-5 border-l-4 border-primary">
+              <h3 class="font-semibold mb-2 flex items-center gap-2">
+                <div class="w-2 h-2 rounded-full bg-primary"></div>
+                What You Can Compare
+              </h3>
+              <ul class="space-y-2 text-sm text-gray-400">
+                <li class="flex items-start gap-2">
+                  <svg class="w-4 h-4 text-primary mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                  <span>Power profiles and zones</span>
+                </li>
+                <li class="flex items-start gap-2">
+                  <svg class="w-4 h-4 text-primary mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                  <span>Heart rate distribution</span>
+                </li>
+                <li class="flex items-start gap-2">
+                  <svg class="w-4 h-4 text-primary mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                  <span>Speed and elevation profiles</span>
+                </li>
+                <li class="flex items-start gap-2">
+                  <svg class="w-4 h-4 text-primary mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                  <span>Route maps overlaid</span>
+                </li>
+              </ul>
+            </div>
+            
+            <div class="bg-dark-700 rounded-lg p-5 border-l-4 border-secondary">
+              <h3 class="font-semibold mb-2 flex items-center gap-2">
+                <div class="w-2 h-2 rounded-full bg-secondary"></div>
+                Tips for Comparison
+              </h3>
+              <ul class="space-y-2 text-sm text-gray-400">
+                <li class="flex items-start gap-2">
+                  <svg class="w-4 h-4 text-secondary mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                  <span>Compare same route on different days</span>
+                </li>
+                <li class="flex items-start gap-2">
+                  <svg class="w-4 h-4 text-secondary mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                  <span>Track fitness improvements over time</span>
+                </li>
+                <li class="flex items-start gap-2">
+                  <svg class="w-4 h-4 text-secondary mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                  <span>Analyze different pacing strategies</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- IMPROVEMENT 3: Recent Activities Quick Select -->
+      <div class="mt-8">
+        <h3 class="text-lg font-semibold mb-4">Recent Activities</h3>
+        <div class="grid grid-cols-3 gap-4">
+          <div class="bg-dark-800 border border-dark-600 rounded-xl p-4 card-hover cursor-pointer hover:border-primary/50">
+            <div class="flex items-start justify-between mb-3">
+              <div class="w-16 h-12 bg-dark-700 rounded-lg overflow-hidden">
+                <img src="https://maps.wikimedia.org/img/osm-intl,12,47.3769,8.5417,100x80.png" alt="Map" class="w-full h-full object-cover">
+              </div>
+              <span class="text-xs bg-primary/20 text-primary px-2 py-1 rounded-full">Best Power</span>
+            </div>
+            <h4 class="font-medium mb-1">Zürich to Wallisellen</h4>
+            <p class="text-sm text-gray-500 mb-3">1 Aug 2026</p>
+            <div class="flex gap-3 text-xs">
+              <div>
+                <span class="text-gray-500">7.9 km</span>
+              </div>
+              <div>
+                <span class="text-gray-500">175W</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="bg-dark-800 border-2 border-dashed border-dark-600 rounded-xl p-4 flex items-center justify-center cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition">
+            <div class="text-center">
+              <svg class="w-8 h-8 text-gray-600 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+              <p class="text-sm text-gray-500">View all activities</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

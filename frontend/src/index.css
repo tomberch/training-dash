@@ -285,6 +285,16 @@ body {
     border-color: var(--primary);
   }
   
+  /* Card hover lift effect for grouped metrics */
+  .card-hover {
+    transition: all 0.3s ease;
+  }
+  
+  .card-hover:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  }
+  
   /* Button press effect */
   .btn-press:active {
     transform: scale(0.97);

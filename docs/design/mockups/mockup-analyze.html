@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Analyze - Mockup</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            primary: '#a855f7',
+            'primary-hover': '#9333ea',
+            dark: {
+              900: '#0f0f1a',
+              800: '#1a1a2e',
+              700: '#252542',
+              600: '#2d2d4a',
+              500: '#3a3a5c'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    .card-hover { transition: all 0.3s ease; }
+    .card-hover:hover { transform: translateY(-2px); box-shadow: 0 10px 40px rgba(0,0,0,0.3); }
+  </style>
+</head>
+<body class="bg-dark-900 text-gray-100">
+  <div class="flex">
+    <!-- Sidebar -->
+    <aside class="w-64 bg-dark-800 min-h-screen border-r border-dark-600 p-4">
+      <div class="flex items-center gap-3 mb-8 px-2">
+        <div class="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
+          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a8 8 0 100 16 8 8 0 000-16zm0 14a6 6 0 110-12 6 6 0 010 12z"/></svg>
+        </div>
+        <span class="font-bold text-lg">TrainDash</span>
+      </div>
+      
+      <nav class="space-y-1">
+        <a href="#" class="flex items-center gap-3 px-3 py-2.5 text-gray-400 hover:text-gray-100 hover:bg-dark-600 rounded-lg transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+          <span>Activities</span>
+        </a>
+        
+        <a href="#" class="flex items-center gap-3 px-3 py-2.5 text-primary bg-primary/10 rounded-lg">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+          <span>Analyze</span>
+        </a>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 p-8">
+      <!-- IMPROVEMENT 1: Better Activity Selector -->
+      <div class="mb-6">
+        <label class="block text-sm font-medium text-gray-400 mb-2">Select Activity</label>
+        <div class="relative">
+          <select class="w-full bg-dark-800 border border-dark-600 rounded-xl px-4 py-3 pr-10 text-lg focus:outline-none focus:ring-2 focus:ring-primary/50 appearance-none">
+            <option value="">Choose an activity to analyze...</option>
+            <option value="1">Zürich to Wallisellen - 1 Aug 2026 - 7.9 km</option>
+          </select>
+          <svg class="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </div>
+      </div>
+
+      <!-- IMPROVEMENT 2: Empty State with Preview -->
+      <div class="bg-dark-800 border border-dark-600 rounded-xl p-12">
+        <div class="max-w-2xl mx-auto text-center">
+          <svg class="w-24 h-24 text-gray-600 mx-auto mb-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+          </svg>
+          <h2 class="text-2xl font-bold mb-3">Select an Activity to Analyze</h2>
+          <p class="text-gray-400 mb-8">Choose an activity from the dropdown above to see detailed performance metrics, power analysis, and training insights.</p>
+          
+          <div class="grid grid-cols-3 gap-4 text-left">
+            <div class="bg-dark-700 rounded-lg p-4">
+              <div class="flex items-center gap-2 mb-2">
+                <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                <span class="font-medium text-sm">Power Analysis</span>
+              </div>
+              <p class="text-xs text-gray-500">Power curve, normalized power, and intensity factor</p>
+            </div>
+            
+            <div class="bg-dark-700 rounded-lg p-4">
+              <div class="flex items-center gap-2 mb-2">
+                <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+                <span class="font-medium text-sm">Heart Rate</span>
+              </div>
+              <p class="text-xs text-gray-500">Zone distribution and time in zone analysis</p>
+            </div>
+            
+            <div class="bg-dark-700 rounded-lg p-4">
+              <div class="flex items-center gap-2 mb-2">
+                <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
+                <span class="font-medium text-sm">Elevation</span>
+              </div>
+              <p class="text-xs text-gray-500">Grade analysis and climbing performance</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- IMPROVEMENT 3: Quick Stats Preview (shown when activity selected) -->
+      <div class="mt-6 grid grid-cols-5 gap-4 opacity-50">
+        <div class="bg-dark-800 border border-dark-600 rounded-xl p-4 text-center">
+          <p class="text-gray-500 text-xs uppercase tracking-wider mb-1">Distance</p>
+          <p class="text-2xl font-bold">—</p>
+        </div>
+        <div class="bg-dark-800 border border-dark-600 rounded-xl p-4 text-center">
+          <p class="text-gray-500 text-xs uppercase tracking-wider mb-1">Time</p>
+          <p class="text-2xl font-bold">—</p>
+        </div>
+        <div class="bg-dark-800 border border-dark-600 rounded-xl p-4 text-center">
+          <p class="text-gray-500 text-xs uppercase tracking-wider mb-1">Power</p>
+          <p class="text-2xl font-bold">—</p>
+        </div>
+        <div class="bg-dark-800 border border-dark-600 rounded-xl p-4 text-center">
+          <p class="text-gray-500 text-xs uppercase tracking-wider mb-1">HR</p>
+          <p class="text-2xl font-bold">—</p>
+        </div>
+        <div class="bg-dark-800 border border-dark-600 rounded-xl p-4 text-center">
+          <p class="text-gray-500 text-xs uppercase tracking-wider mb-1">TSS</p>
+          <p class="text-2xl font-bold">—</p>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

@@ -56,12 +56,22 @@ function ActivityDetailLoadingSkeleton(): React.JSX.Element {
           <Skeleton className="h-4 w-48" />
         </div>
         
-        {/* Stats row */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+        {/* Grouped metric cards skeleton */}
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
           {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div key={i} className="bg-card rounded-lg border border-border p-4">
-              <Skeleton className="h-3 w-16 mb-2" />
-              <Skeleton className="h-7 w-20" />
+            <div key={i} className="bg-card rounded-xl border border-border p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <Skeleton className="w-5 h-5 rounded" />
+                <Skeleton className="h-3 w-24" />
+              </div>
+              <div className="space-y-3">
+                {[1, 2, 3].map((j) => (
+                  <div key={j} className="flex justify-between items-baseline">
+                    <Skeleton className="h-3 w-16" />
+                    <Skeleton className="h-5 w-20" />
+                  </div>
+                ))}
+              </div>
             </div>
           ))}
         </div>
@@ -564,44 +574,135 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
           )}
         </div>
 
-        {/* Stats Grid - Row 1: Ride Basics */}
-        <div className="mb-3">
-          <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Ride Basics</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-            <StatTile label="Distance" value={formatDistance(activity.total_distance_m, unitSystem)} />
-            <StatTile label="Moving Time" value={formatTime(activity.moving_time_s)} />
-            <StatTile label="Elevation" value={formatElevation(activity.elevation_gain_m, unitSystem)} />
-            <StatTile label="Avg Speed" value={formatSpeed(activity.avg_speed_mps, unitSystem)} />
-            <StatTile label="Avg HR" value={activity.avg_hr_bpm ? `${activity.avg_hr_bpm} bpm` : "—"} />
-          </div>
-        </div>
+        {/* Grouped Metric Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+          {/* Time & Distance Card */}
+          <MetricGroupCard
+            icon={
+              <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            }
+            title="Time & Distance"
+          >
+            <MetricEntry label="Elapsed" value={formatTime(activity.elapsed_time_s)} />
+            <MetricEntry label="Moving" value={formatTime(activity.moving_time_s)} />
+            <MetricEntry 
+              label="Distance" 
+              value={formatDistance(activity.total_distance_m, unitSystem)} 
+              prominent 
+            />
+          </MetricGroupCard>
 
-        {/* Stats Grid - Row 2: Training Metrics */}
-        <div className="mb-6">
-          <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Training Metrics</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            <StatTile 
-              label="Avg Power" 
+          {/* Elevation Card */}
+          <MetricGroupCard
+            icon={
+              <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+              </svg>
+            }
+            title="Elevation"
+          >
+            <MetricEntry 
+              label="Gain" 
+              value={formatElevation(activity.elevation_gain_m, unitSystem)} 
+              valueClass="text-green-400"
+            />
+            <MetricEntry 
+              label="Avg Grade" 
+              value="—" 
+            />
+          </MetricGroupCard>
+
+          {/* Speed Card */}
+          <MetricGroupCard
+            icon={
+              <svg className="w-5 h-5 text-cyan-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            }
+            title="Speed"
+          >
+            <MetricEntry 
+              label="Average" 
+              value={formatSpeed(activity.avg_speed_mps, unitSystem)} 
+            />
+            <MetricEntry 
+              label="Max" 
+              value={activity.max_speed_mps ? formatSpeed(activity.max_speed_mps, unitSystem) : "—"} 
+            />
+          </MetricGroupCard>
+
+          {/* Heart Rate Card */}
+          <MetricGroupCard
+            icon={
+              <svg className="w-5 h-5 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+              </svg>
+            }
+            title="Heart Rate"
+          >
+            <MetricEntry 
+              label="Average" 
+              value={activity.avg_hr_bpm ? `${activity.avg_hr_bpm} bpm` : "—"} 
+            />
+            <MetricEntry 
+              label="Max" 
+              value={activity.max_hr_bpm ? `${activity.max_hr_bpm} bpm` : "—"} 
+            />
+          </MetricGroupCard>
+
+          {/* Power Card */}
+          <MetricGroupCard
+            icon={
+              <svg className="w-5 h-5 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            }
+            title="Power"
+          >
+            <MetricEntry 
+              label="Average" 
               value={activity.avg_power_w ? `${activity.avg_power_w} W` : "—"} 
               subtitle={activity.power_source === "hr_derived" ? "HR-derived" : undefined}
             />
-            <StatTile label="NP" value={activity.np_power_w ? `${activity.np_power_w} W` : "—"} />
-            <StatTile 
-              label="IF" 
-              value={activity.intensity_factor ? activity.intensity_factor.toFixed(2) : "—"} 
-              tooltip={!ftpWatts && !activity.intensity_factor ? "Set FTP in Settings to calculate" : undefined}
+            <MetricEntry 
+              label="Normalized" 
+              value={activity.np_power_w ? `${activity.np_power_w} W` : "—"} 
             />
-            <StatTile 
+          </MetricGroupCard>
+
+          {/* Training Load Card */}
+          <MetricGroupCard
+            icon={
+              <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+            }
+            title="Training Load"
+          >
+            <MetricEntry 
               label="TSS" 
               value={activity.tss ? Math.round(activity.tss).toString() : "—"} 
               tooltip={!ftpWatts && !activity.tss ? "Set FTP in Settings to calculate" : undefined}
             />
-            <StatTile 
+            <MetricEntry 
+              label="IF" 
+              value={activity.intensity_factor ? activity.intensity_factor.toFixed(2) : "—"} 
+              tooltip={!ftpWatts && !activity.intensity_factor ? "Set FTP in Settings to calculate" : undefined}
+            />
+            <MetricEntry 
               label="W'bal Min" 
               value={activity.wbal_min_pct != null ? `${Math.round(activity.wbal_min_pct)}%` : "—"} 
             />
-            <StatTile label="Max HR" value={activity.max_hr_bpm ? `${activity.max_hr_bpm} bpm` : "—"} />
-          </div>
+            {!ftpWatts && (
+              <div className="pt-3 border-t border-border">
+                <p className="text-xs text-muted-foreground">
+                  Set FTP in Athlete profile to calculate training load metrics
+                </p>
+              </div>
+            )}
+          </MetricGroupCard>
         </div>
 
         {/* Map - Above the fold */}
@@ -868,31 +969,81 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
   );
 }
 
-function StatTile({ label, value, subtitle, tooltip }: { label: string; value: string; subtitle?: string; tooltip?: string }) {
-  const content = (
-    <div className="bg-card rounded-lg border border-border p-3 text-center">
-      <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
-        {label}
-        {tooltip && (
-          <span className="ml-1 text-warning">⚠</span>
-        )}
+function MetricGroupCard({ 
+  icon, 
+  title, 
+  children 
+}: { 
+  icon: React.ReactNode; 
+  title: string; 
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="bg-card rounded-xl border border-border p-5 card-hover transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
+      <div className="flex items-center gap-2 mb-4">
+        {icon}
+        <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">{title}</h3>
       </div>
-      <div className="text-lg font-semibold text-foreground tabular-nums">
-        {value}
+      <div className="space-y-3">
+        {children}
       </div>
-      {subtitle && (
-        <div className="text-xs text-primary mt-0.5">
-          {subtitle}
-        </div>
-      )}
     </div>
   );
+}
+
+function MetricEntry({ 
+  label, 
+  value, 
+  subtitle,
+  tooltip,
+  valueClass,
+  prominent 
+}: { 
+  label: string; 
+  value: string; 
+  subtitle?: string;
+  tooltip?: string;
+  valueClass?: string;
+  prominent?: boolean;
+}) {
+  const content = (
+    <div className="flex justify-between items-baseline">
+      <span className="text-muted-foreground text-sm">{label}</span>
+      <span className={`font-semibold ${prominent ? "text-xl" : "text-lg"} ${valueClass || "text-foreground"} tabular-nums`}>
+        {value}
+      </span>
+    </div>
+  );
+
+  const withSubtitle = subtitle ? (
+    <div className="flex justify-between items-baseline">
+      <span className="text-muted-foreground text-sm">{label}</span>
+      <div className="text-right">
+        <span className={`font-semibold ${prominent ? "text-xl" : "text-lg"} ${valueClass || "text-foreground"} tabular-nums`}>
+          {value}
+        </span>
+        {subtitle && (
+          <div className="text-xs text-primary">{subtitle}</div>
+        )}
+      </div>
+    </div>
+  ) : content;
 
   if (tooltip) {
     return (
       <Tooltip>
         <TooltipTrigger asChild>
-          <div className="cursor-help">{content}</div>
+          <div className="cursor-help flex justify-between items-baseline">
+            <span className="text-muted-foreground text-sm flex items-center gap-1">
+              {label}
+              <svg className="w-3 h-3 text-muted-foreground" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+              </svg>
+            </span>
+            <span className={`font-semibold ${prominent ? "text-xl" : "text-lg"} ${valueClass || "text-foreground"} tabular-nums`}>
+              {value}
+            </span>
+          </div>
         </TooltipTrigger>
         <TooltipContent>
           {tooltip}
@@ -901,7 +1052,7 @@ function StatTile({ label, value, subtitle, tooltip }: { label: string; value: s
     );
   }
 
-  return content;
+  return withSubtitle;
 }
 
 function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }): React.JSX.Element {
