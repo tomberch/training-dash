@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import type { RecordsResponse } from "./api";
 import { ApiError, fetchRecords } from "./api";
 import { prsFromRecords, routePRsFromRecords } from "./prs";
@@ -14,14 +15,41 @@ function PRTile({ pr, variant }: { pr: PR; variant: "lifetime" | "route" }) {
       ? "bg-primary/10 border-primary/30"
       : "bg-success/10 border-success/30";
 
-  return (
-    <div className={`p-4 rounded-lg border ${bgClass} text-center min-w-36`}>
+  const content = (
+    <>
       <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
         {pr.label}
       </div>
-      <div className="text-xl font-bold text-foreground tabular-nums">
+      <div className="text-3xl font-bold text-foreground tabular-nums mb-2">
         {pr.value}
       </div>
+      {pr.activityId ? (
+        <div className="group flex items-center justify-center gap-1.5 text-primary hover:text-primary-hover text-xs font-medium transition mt-auto pt-3 border-t border-current border-opacity-20 cursor-pointer">
+          <span>View activity</span>
+          <svg className="w-3.5 h-3.5 transform group-hover:translate-x-0.5 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+      ) : (
+        <div className="h-4 mt-auto" />
+      )}
+    </>
+  );
+
+  if (pr.activityId) {
+    return (
+      <Link
+        to={`/activities/${pr.activityId}`}
+        className={`p-5 rounded-lg border ${bgClass} text-center min-w-40 flex flex-col hover:shadow-lg transition-shadow`}
+      >
+        {content}
+      </Link>
+    );
+  }
+
+  return (
+    <div className={`p-5 rounded-lg border ${bgClass} text-center min-w-40 flex flex-col`}>
+      {content}
     </div>
   );
 }
@@ -62,10 +90,10 @@ export function RecordsView({ unitSystem = "metric" }: RecordsViewProps) {
           <Skeleton className="h-6 w-32 mb-4" />
           <div className="flex flex-wrap gap-4">
             {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="p-4 rounded-lg border border-border bg-card text-center min-w-36">
+              <div key={i} className="p-5 rounded-lg border border-border bg-card text-center min-w-40 flex flex-col">
                 <Skeleton className="h-3 w-20 mx-auto mb-2" />
-                <Skeleton className="h-7 w-16 mx-auto mb-1" />
-                <Skeleton className="h-3 w-24 mx-auto" />
+                <Skeleton className="h-9 w-16 mx-auto mb-2" />
+                <Skeleton className="h-3 w-24 mx-auto mt-auto" />
               </div>
             ))}
           </div>
@@ -80,9 +108,10 @@ export function RecordsView({ unitSystem = "metric" }: RecordsViewProps) {
                 <Skeleton className="h-5 w-48 mb-3" />
                 <div className="flex flex-wrap gap-3">
                   {[1, 2, 3, 4].map((j) => (
-                    <div key={j} className="p-3 rounded border border-border text-center min-w-28">
+                    <div key={j} className="p-4 rounded border border-border text-center min-w-32 flex flex-col">
                       <Skeleton className="h-3 w-16 mx-auto mb-1" />
-                      <Skeleton className="h-5 w-12 mx-auto" />
+                      <Skeleton className="h-6 w-12 mx-auto mb-2" />
+                      <Skeleton className="h-3 w-20 mx-auto mt-auto" />
                     </div>
                   ))}
                 </div>

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { RecordsView } from "./RecordsView";
 
 vi.mock("./api", () => ({
@@ -9,6 +10,10 @@ vi.mock("./api", () => ({
 import { fetchRecords } from "./api";
 
 const mockFetchRecords = vi.mocked(fetchRecords);
+
+function renderWithRouter(ui: React.ReactElement) {
+  return render(<MemoryRouter>{ui}</MemoryRouter>);
+}
 
 const fullResponse = {
   lifetime_prs: {
@@ -36,7 +41,7 @@ describe("RecordsView", () => {
   it("renders lifetime PR tiles from mocked API response", async () => {
     mockFetchRecords.mockResolvedValue(fullResponse);
 
-    render(<RecordsView />);
+    renderWithRouter(<RecordsView />);
 
     await waitFor(() => {
       expect(screen.getByText("Lifetime PRs")).toBeInTheDocument();
@@ -49,7 +54,7 @@ describe("RecordsView", () => {
   it("renders per-route PR tiles when route data is present", async () => {
     mockFetchRecords.mockResolvedValue(fullResponse);
 
-    render(<RecordsView />);
+    renderWithRouter(<RecordsView />);
 
     await waitFor(() => {
       expect(screen.getByText("Route PRs")).toBeInTheDocument();
@@ -75,7 +80,7 @@ describe("RecordsView", () => {
       route_prs: [],
     });
 
-    render(<RecordsView />);
+    renderWithRouter(<RecordsView />);
 
     await waitFor(() => {
       expect(screen.getByText("Lifetime PRs")).toBeInTheDocument();
@@ -99,7 +104,7 @@ describe("RecordsView", () => {
       route_prs: [],
     });
 
-    render(<RecordsView />);
+    renderWithRouter(<RecordsView />);
 
     await waitFor(() => {
       expect(screen.getByText("No personal records yet")).toBeInTheDocument();

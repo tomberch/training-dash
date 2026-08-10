@@ -5,6 +5,7 @@ import type { UnitSystem } from "./format";
 export interface PR {
   label: string;
   value: string;
+  activityId?: string;
 }
 
 interface PRDef {
@@ -30,7 +31,11 @@ export function prsFromRecords(records: Records, unitSystem: UnitSystem = "metri
   for (const def of PR_DEFS) {
     const pr = records[def.key];
     if (pr) {
-      prs.push({ label: def.label, value: def.format(pr.value, unitSystem) });
+      prs.push({ 
+        label: def.label, 
+        value: def.format(pr.value, unitSystem),
+        activityId: pr.activity_id,
+      });
     }
   }
   return prs;
@@ -40,5 +45,6 @@ export function routePRsFromRecords(routePrs: RoutePR[]): PR[] {
   return routePrs.map((rp) => ({
     label: `Route ${rp.route_label}`,
     value: formatTime(rp.fastest_time_s),
+    activityId: rp.activity_id ?? undefined,
   }));
 }
