@@ -75,20 +75,22 @@ function DashboardLoadingSkeleton() {
           <Skeleton className="h-6 w-36" />
           <Skeleton className="h-4 w-16" />
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {[1, 2, 3, 4].map((i) => (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[1, 2, 3].map((i) => (
             <div key={i} className="bg-card rounded-xl border border-border overflow-hidden">
-              <Skeleton className="h-32 rounded-none" />
+              <Skeleton className="h-40 rounded-none" />
               <div className="p-4 space-y-3">
                 <Skeleton className="h-5 w-48" />
                 <Skeleton className="h-3 w-32" />
-                <div className="grid grid-cols-4 gap-2">
-                  {[1, 2, 3, 4].map((j) => (
+                <div className="grid grid-cols-3 gap-2">
+                  {[1, 2, 3].map((j) => (
                     <div key={j} className="text-center">
-                      <Skeleton className="h-4 w-12 mx-auto mb-1" />
-                      <Skeleton className="h-3 w-10 mx-auto" />
+                      <Skeleton className="h-3 w-12 mx-auto" />
                     </div>
                   ))}
+                </div>
+                <div className="pt-3 border-t border-border">
+                  <Skeleton className="h-3 w-24" />
                 </div>
               </div>
             </div>
@@ -569,24 +571,24 @@ export function Dashboard() {
         </div>
         
         {recentActivities.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {recentActivities.map(activity => (
               <div 
                 key={activity.id}
-                className="bg-card rounded-xl border border-border overflow-hidden cursor-pointer card-interactive"
+                className="bg-card rounded-xl border border-border overflow-hidden cursor-pointer card-interactive transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
                 onClick={() => navigate(`/activities/${activity.id}`)}
               >
                 {/* Map thumbnail */}
-                <div className="h-32 relative">
+                <div className="relative h-40">
                   <PolylineMap 
                     polyline={activity.map_polyline} 
-                    className="w-full h-full" 
+                    className="w-full h-full opacity-80 hover:opacity-100 transition-opacity" 
                     showMarkers={true}
                   />
                   {/* Breakthrough badge overlay */}
                   {activity.is_breakthrough && (
-                    <div className="absolute top-2 right-2">
-                      <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold text-warning-foreground bg-warning/90 rounded-full shadow">
+                    <div className="absolute top-3 right-3">
+                      <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold text-warning-foreground bg-warning/90 rounded-full shadow">
                         <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                           <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                         </svg>
@@ -595,8 +597,8 @@ export function Dashboard() {
                     </div>
                   )}
                   {/* Relative time badge */}
-                  <div className="absolute bottom-2 left-2">
-                    <span className="px-2 py-1 text-xs font-medium text-white bg-black/60 rounded-full">
+                  <div className="absolute bottom-3 left-3">
+                    <span className="px-3 py-1 text-xs font-medium text-white bg-black/60 backdrop-blur rounded-full">
                       {formatRelativeTime(activity.started_at)}
                     </span>
                   </div>
@@ -616,58 +618,33 @@ export function Dashboard() {
                     </p>
                   )}
                   
-                  {/* Metrics grid */}
-                  <div className="grid grid-cols-4 gap-2 text-center">
+                  {/* Metrics grid - 3 columns */}
+                  <div className="grid grid-cols-3 gap-2 text-center mb-3">
                     <div>
-                      <div className="text-sm font-semibold text-foreground tabular-nums">
-                        {formatDistance(activity.total_distance_m)}
-                      </div>
-                      <div className="text-xs text-muted-foreground">Distance</div>
+                      <p className="text-xs text-muted-foreground">{formatDistance(activity.total_distance_m)}</p>
                     </div>
                     <div>
-                      <div className="text-sm font-semibold text-foreground tabular-nums">
-                        {formatDuration(activity.moving_time_s)}
-                      </div>
-                      <div className="text-xs text-muted-foreground">Time</div>
+                      <p className="text-xs text-muted-foreground">{formatDuration(activity.moving_time_s)}</p>
                     </div>
                     <div>
-                      <div className="text-sm font-semibold text-foreground tabular-nums">
-                        {formatElevation(activity.elevation_gain_m)}
-                      </div>
-                      <div className="text-xs text-muted-foreground">Elevation</div>
-                    </div>
-                    <div>
-                      <div className="text-sm font-semibold text-foreground tabular-nums">
-                        {activity.tss ? Math.round(activity.tss) : "—"}
-                      </div>
-                      <div className="text-xs text-muted-foreground">TSS</div>
+                      <p className="text-xs text-muted-foreground">{formatElevation(activity.elevation_gain_m)}</p>
                     </div>
                   </div>
                   
                   {/* Secondary metrics row */}
-                  <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
-                    <div className="flex items-center gap-4 text-sm">
+                  <div className="flex items-center justify-between pt-3 border-t border-border text-xs">
+                    <div className="flex items-center gap-3">
                       {activity.avg_power_w && (
                         <span className="text-muted-foreground">
-                          <span className="font-medium text-foreground">{activity.avg_power_w}</span> W
+                          <span className="font-semibold text-foreground">{activity.avg_power_w}</span> W
                         </span>
                       )}
                       {activity.avg_hr_bpm && (
                         <span className="text-muted-foreground">
-                          <span className="font-medium text-foreground">{activity.avg_hr_bpm}</span> bpm
-                        </span>
-                      )}
-                      {activity.np_power_w && (
-                        <span className="text-muted-foreground">
-                          NP <span className="font-medium text-foreground">{activity.np_power_w}</span>
+                          <span className="font-semibold text-foreground">{activity.avg_hr_bpm}</span> bpm
                         </span>
                       )}
                     </div>
-                    {activity.intensity_factor && (
-                      <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">
-                        IF {activity.intensity_factor.toFixed(2)}
-                      </span>
-                    )}
                   </div>
                 </div>
               </div>
