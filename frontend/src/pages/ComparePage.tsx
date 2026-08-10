@@ -19,7 +19,7 @@ import { useResizableMap } from "../hooks/useResizableMap";
 import { ChartErrorBoundary } from "../components/ErrorBoundary";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChartSkeleton } from "@/components/ui/skeletons";
-import { formatDistance, formatSpeed, formatTime, formatElevation, formatActivityDate } from "../format";
+import { formatDistance, formatSpeed, formatTime, formatElevation, formatActivityDate, formatRelativeTime } from "../format";
 
 // Gap coloring thresholds
 function gapColor(gap: number): string {
@@ -1008,6 +1008,57 @@ export function ComparePage() {
 
       {/* Comparison content area */}
       <div className="flex-1 min-h-0 p-4 pt-0 overflow-y-auto">
+        {/* Suggested Comparisons - shown when base activity is selected but no comparison yet */}
+        {baseActivity && !compareActivity && sameRouteData && (
+          <div className="mb-8">
+            <h3 className="text-lg font-semibold mb-2">Suggested Comparisons</h3>
+            <p className="text-sm text-muted-foreground mb-4">Activities similar to your selected ride</p>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* Same Route suggestions */}
+              {sameRouteData.activities.slice(0, 3).map((activity) => (
+                <div
+                  key={activity.id}
+                  onClick={() => handleCompareSelect(activity)}
+                  className="bg-card rounded-xl border border-border p-4 card-hover cursor-pointer hover:border-primary/50 transition-all duration-300"
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="w-16 h-12 bg-muted/30 rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center">
+                      <svg className="w-8 h-8 text-primary/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                      </svg>
+                    </div>
+                    <span className="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded-full flex items-center gap-1">
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+                      </svg>
+                      Same Route
+                    </span>
+                  </div>
+                  <h4 className="font-medium mb-1 truncate">
+                    {activity.title || formatActivityDate(activity.started_at, activity.utc_offset_minutes, { weekday: "short", month: "short", day: "numeric" })}
+                  </h4>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    {formatRelativeTime(activity.started_at)}
+                  </p>
+                  <div className="flex gap-3 text-xs text-muted-foreground">
+                    <div>{formatDistance(activity.total_distance_m)}</div>
+                    <div>{formatTime(activity.moving_time_s)}</div>
+                    <div>{activity.avg_power_w ? `${Math.round(activity.avg_power_w)}W` : "—"}</div>
+                  </div>
+                </div>
+              ))}
+              
+              {/* If no same-route activities */}
+              {sameRouteData.activities.length === 0 && (
+                <div className="col-span-full text-center py-8 text-muted-foreground">
+                  <p>No same-route activities found. Try selecting a different base activity.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <div className="space-y-4">
             {/* Activity summary skeletons */}
