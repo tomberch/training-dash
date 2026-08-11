@@ -232,12 +232,12 @@ export function ActivityList({
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-4">
-          <h1 className="text-xl font-bold text-foreground">Activities</h1>
+          <h1 className="text-3xl font-bold text-foreground">Activities</h1>
           <button
             onClick={() => navigate("/activities/table")}
-            className="text-sm text-primary hover:underline flex items-center gap-1"
+            className="text-sm text-primary hover:text-primary/80 flex items-center gap-1 transition"
             title="View as table"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
