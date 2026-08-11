@@ -947,7 +947,7 @@ export function ComparePage() {
               excludeIds={compareActivity ? [compareActivity.id] : []}
               label=""
               placeholder="Select the base ride..."
-              className="border-2 border-primary/30 focus-within:ring-2 focus-within:ring-primary/50"
+              className="border-2 border-primary/30 rounded-xl focus-within:ring-2 focus-within:ring-primary/50"
             />
             {baseActivity && (
               <Link
@@ -963,7 +963,7 @@ export function ComparePage() {
           {/* Compare activity selector */}
           <div>
             <div className="flex items-center gap-2 mb-3">
-              <div className="w-3 h-3 rounded-full bg-blue-500" />
+              <div className="w-3 h-3 rounded-full bg-accent" />
               <label className="text-sm font-medium text-muted-foreground">Compare With</label>
             </div>
             {baseActivity ? (
@@ -976,14 +976,14 @@ export function ComparePage() {
                     excludeIds={[baseActivity.id]}
                     label=""
                     placeholder="Select ride to compare..."
-                    className="border-2 border-border focus-within:ring-2 focus-within:ring-blue-500/50"
+                    className="border-2 border-border rounded-xl focus-within:ring-2 focus-within:ring-accent/50"
                   />
                   {compareActivity && (
                     <Link
                       to={`/activities/${compareActivity.id}`}
-                      className="inline-flex items-center mt-2 text-sm text-blue-500 hover:underline"
+                      className="inline-flex items-center mt-2 text-sm text-accent hover:underline"
                     >
-                      <span className="w-2 h-2 rounded-full bg-blue-500 mr-2" />
+                      <span className="w-2 h-2 rounded-full bg-accent mr-2" />
                       {compareActivity.title || "Untitled"} →
                     </Link>
                   )}
@@ -1292,22 +1292,22 @@ export function ComparePage() {
                   </ul>
                 </div>
                 
-                <div className="bg-muted/30 rounded-lg p-5 border-l-4 border-blue-500">
+                <div className="bg-muted/30 rounded-lg p-5 border-l-4 border-accent">
                   <h3 className="font-semibold mb-2 flex items-center gap-2 text-foreground">
-                    <div className="w-2 h-2 rounded-full bg-blue-500" />
+                    <div className="w-2 h-2 rounded-full bg-accent" />
                     Comparison Tips
                   </h3>
                   <ul className="space-y-2 text-sm text-muted-foreground">
                     <li className="flex items-start gap-2">
-                      <svg className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                      <svg className="w-4 h-4 text-accent mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                       <span>Same route on different days</span>
                     </li>
                     <li className="flex items-start gap-2">
-                      <svg className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                      <svg className="w-4 h-4 text-accent mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                       <span>Track fitness improvements</span>
                     </li>
                     <li className="flex items-start gap-2">
-                      <svg className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                      <svg className="w-4 h-4 text-accent mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                       <span>Different pacing strategies</span>
                     </li>
                   </ul>
