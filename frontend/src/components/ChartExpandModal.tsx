@@ -142,7 +142,7 @@ export function ChartExpandModal({
               <h2 className="text-lg font-semibold text-foreground">
                 {chart.label}
               </h2>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-body-secondary">
                 Expanded view
               </p>
             </div>
@@ -276,7 +276,7 @@ export function ChartExpandModal({
         {/* Footer with threshold legend if applicable */}
         {(showFtpLine || showLthrLine) && (
           <div className="px-6 py-3 border-t border-border flex-shrink-0">
-            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+            <div className="flex items-center gap-4 text-body-secondary">
               {showFtpLine && (
                 <div className="flex items-center gap-2">
                   <div className="w-6 h-0.5 bg-amber-500" style={{ backgroundImage: 'linear-gradient(90deg, #f59e0b 50%, transparent 50%)', backgroundSize: '8px 100%' }} />

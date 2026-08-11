@@ -80,15 +80,15 @@ function MetricSummaryCard({ name, current, previous, unit, decimals = 0, onClic
       role="button"
     >
       <CardContent className="py-4">
-        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
+        <p className="text-metric-label mb-1">
           {name}
         </p>
         {current ? (
           <>
-            <p className="text-2xl font-bold text-foreground">
+            <p className="text-metric">
               {decimals > 0 ? current.value.toFixed(decimals) : current.value} {unit}
             </p>
-            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+            <p className="text-caption mt-1 flex items-center gap-1">
               {trend === "up" && (
                 <span className="text-success">+{decimals > 0 ? Math.abs(diff!).toFixed(decimals) : Math.abs(diff!)}</span>
               )}
@@ -135,11 +135,11 @@ function StaticValueCard({ name, value, unit, onClick }: StaticValueCardProps) {
       role="button"
     >
       <CardContent className="py-4">
-        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
+        <p className="text-metric-label mb-1">
           {name}
         </p>
         {displayValue ? (
-          <p className="text-2xl font-bold text-foreground">{displayValue}</p>
+          <p className="text-metric">{displayValue}</p>
         ) : (
           <p className="text-xl text-muted-foreground">Not set</p>
         )}
@@ -151,7 +151,7 @@ function StaticValueCard({ name, value, unit, onClick }: StaticValueCardProps) {
 // Section header
 function SectionHeader({ title }: { title: string }) {
   return (
-    <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+    <h2 className="text-section-heading mb-3">
       {title}
     </h2>
   );

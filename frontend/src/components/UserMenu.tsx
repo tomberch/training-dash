@@ -142,7 +142,7 @@ export function UserMenu({
             <p className="text-sm font-medium text-foreground truncate">
               {displayName || email.split("@")[0]}
             </p>
-            <p className="text-xs text-muted-foreground truncate">{email}</p>
+            <p className="text-caption truncate">{email}</p>
           </div>
 
           {/* Theme toggle */}

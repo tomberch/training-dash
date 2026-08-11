@@ -313,7 +313,7 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
         <div className="p-3 border-t border-border">
           <button
             onClick={() => setCollapsed(!collapsed)}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground rounded-lg transition-colors"
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 text-body-secondary hover:bg-muted hover:text-foreground rounded-lg transition-colors"
             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             {collapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}

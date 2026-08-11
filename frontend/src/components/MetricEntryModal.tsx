@@ -276,7 +276,7 @@ export function MetricEntryModal({
                 disabled={isDeviceEntry}
               />
               {(metricType.min_value !== undefined || metricType.max_value !== undefined) && (
-                <p className="text-xs text-muted-foreground">
+                <p className="text-caption">
                   Range: {metricType.min_value ?? "—"} – {metricType.max_value ?? "—"} {metricType.unit}
                 </p>
               )}

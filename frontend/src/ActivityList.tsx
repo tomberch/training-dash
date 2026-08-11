@@ -50,7 +50,7 @@ function ActivityRow({
           )}
         </div>
         {activity.title && (
-          <p className="text-sm text-muted-foreground mt-0.5">
+          <p className="text-body-secondary mt-0.5">
             {formatActivityDate(activity.started_at, activity.utc_offset_minutes)}
           </p>
         )}
@@ -62,26 +62,26 @@ function ActivityRow({
           <div className="font-semibold text-foreground tabular-nums">
             {formatDistance(activity.total_distance_m, unitSystem)}
           </div>
-          <div className="text-xs text-muted-foreground">Distance</div>
+          <div className="text-caption">Distance</div>
         </div>
         <div className="text-center">
           <div className="font-semibold text-foreground tabular-nums">
             {formatTime(activity.moving_time_s)}
           </div>
-          <div className="text-xs text-muted-foreground">Time</div>
+          <div className="text-caption">Time</div>
         </div>
         <div className="text-center">
           <div className="font-semibold text-foreground tabular-nums">
             {formatElevation(activity.elevation_gain_m, unitSystem)}
           </div>
-          <div className="text-xs text-muted-foreground">Elev</div>
+          <div className="text-caption">Elev</div>
         </div>
         {activity.tss != null && (
           <div className="text-center">
             <div className="font-semibold text-foreground tabular-nums">
               {Math.round(activity.tss)}
             </div>
-            <div className="text-xs text-muted-foreground">TSS</div>
+            <div className="text-caption">TSS</div>
           </div>
         )}
         {activity.avg_power_w != null && (
@@ -89,7 +89,7 @@ function ActivityRow({
             <div className="font-semibold text-foreground tabular-nums">
               {activity.avg_power_w}W
             </div>
-            <div className="text-xs text-muted-foreground">Avg Power</div>
+            <div className="text-caption">Avg Power</div>
           </div>
         )}
         {activity.avg_hr_bpm != null && (
@@ -97,13 +97,13 @@ function ActivityRow({
             <div className="font-semibold text-foreground tabular-nums">
               {activity.avg_hr_bpm}
             </div>
-            <div className="text-xs text-muted-foreground">Avg HR</div>
+            <div className="text-caption">Avg HR</div>
           </div>
         )}
       </div>
       
       {/* Mobile metrics (compact) */}
-      <div className="flex sm:hidden items-center gap-2 text-xs text-muted-foreground">
+      <div className="flex sm:hidden items-center gap-2 text-caption">
         <span className="font-medium">{formatDistance(activity.total_distance_m, unitSystem)}</span>
         <span>•</span>
         <span>{formatTime(activity.moving_time_s)}</span>
@@ -499,7 +499,7 @@ export function PendingApproval({ onLogout }: { onLogout: () => void }) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-foreground mb-2">
+          <h1 className="text-metric mb-2">
             Account Pending Approval
           </h1>
           <p className="text-muted-foreground mb-6">

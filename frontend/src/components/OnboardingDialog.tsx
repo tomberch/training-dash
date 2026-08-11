@@ -245,7 +245,7 @@ export function OnboardingDialog({ open, onDone }: Props): React.JSX.Element {
                   max={new Date().toISOString().split("T")[0]}
                 />
                 {displayAge !== null && (
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-caption">
                     Age: {displayAge} years
                   </p>
                 )}
@@ -265,7 +265,7 @@ export function OnboardingDialog({ open, onDone }: Props): React.JSX.Element {
                     onChange={(e) => setWeight(e.target.value)}
                     className="flex-1"
                   />
-                  <span className="text-sm text-muted-foreground w-8">kg</span>
+                  <span className="text-body-secondary w-8">kg</span>
                 </div>
               </div>
 
@@ -295,7 +295,7 @@ export function OnboardingDialog({ open, onDone }: Props): React.JSX.Element {
 
             <div className="space-y-4 py-2">
               <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
-                <p className="text-xs text-muted-foreground">
+                <p className="text-caption">
                   These are estimates based on your age and weight. They'll
                   improve automatically as you add activities.
                 </p>
@@ -321,7 +321,7 @@ export function OnboardingDialog({ open, onDone }: Props): React.JSX.Element {
                     onChange={(e) => setHrmax(e.target.value)}
                     className="flex-1"
                   />
-                  <span className="text-sm text-muted-foreground w-12">bpm</span>
+                  <span className="text-body-secondary w-12">bpm</span>
                 </div>
               </div>
 
@@ -345,7 +345,7 @@ export function OnboardingDialog({ open, onDone }: Props): React.JSX.Element {
                     onChange={(e) => setLthr(e.target.value)}
                     className="flex-1"
                   />
-                  <span className="text-sm text-muted-foreground w-12">bpm</span>
+                  <span className="text-body-secondary w-12">bpm</span>
                 </div>
               </div>
 
@@ -369,7 +369,7 @@ export function OnboardingDialog({ open, onDone }: Props): React.JSX.Element {
                     onChange={(e) => setFtp(e.target.value)}
                     className="flex-1"
                   />
-                  <span className="text-sm text-muted-foreground w-12">W</span>
+                  <span className="text-body-secondary w-12">W</span>
                 </div>
               </div>
 
@@ -422,7 +422,7 @@ export function OnboardingDialog({ open, onDone }: Props): React.JSX.Element {
                   <p className="font-medium text-foreground">
                     Connect Integration
                   </p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-body-secondary">
                     Link Xert or Garmin to auto-sync your rides
                   </p>
                 </div>
@@ -462,7 +462,7 @@ export function OnboardingDialog({ open, onDone }: Props): React.JSX.Element {
                   <p className="font-medium text-foreground">
                     {uploading ? "Uploading…" : "Upload FIT File"}
                   </p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-body-secondary">
                     Import a ride from your device
                   </p>
                 </div>

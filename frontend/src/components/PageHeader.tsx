@@ -32,7 +32,7 @@ export function PageHeader({
     <div className="mb-8">
       {/* Title row */}
       <div className="flex items-center justify-between mb-2">
-        <h1 className="text-3xl font-bold text-foreground">{title}</h1>
+        <h1 className="text-page-title">{title}</h1>
         {showControls && (
           <div className="flex items-center gap-4">
             <UploadButton
@@ -51,7 +51,7 @@ export function PageHeader({
       </div>
       {/* Subtitle row */}
       {subtitle && (
-        <div className="text-sm text-muted-foreground">
+        <div className="text-body-secondary">
           {subtitle}
         </div>
       )}

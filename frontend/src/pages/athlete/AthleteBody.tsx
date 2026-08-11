@@ -178,14 +178,14 @@ interface ProfileCardProps {
 function ProfileCard({ label, value, subtext }: ProfileCardProps) {
   return (
     <div className="text-center p-4">
-      <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
+      <p className="text-metric-label mb-1">
         {label}
       </p>
-      <p className="text-2xl font-bold text-foreground">
+      <p className="text-metric">
         {value || "—"}
       </p>
       {subtext && (
-        <p className="text-sm text-muted-foreground mt-1">{subtext}</p>
+        <p className="text-body-secondary mt-1">{subtext}</p>
       )}
     </div>
   );

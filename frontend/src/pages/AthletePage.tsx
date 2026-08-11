@@ -45,7 +45,7 @@ export function AthletePage({ user, onUserUpdate }: AthletePageProps) {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6">
-      <h1 className="text-2xl font-bold text-foreground mb-6">Athlete Profile</h1>
+      <h1 className="text-metric mb-6">Athlete Profile</h1>
 
       <Tabs value={currentTab} onValueChange={handleTabChange}>
         <TabsList className="w-full justify-start overflow-x-auto">

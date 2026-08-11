@@ -468,7 +468,7 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
                 ) : (
                   <>
                     <div className="flex items-center gap-3">
-                      <h1 className="text-3xl font-bold text-foreground">
+                      <h1 className="text-page-title">
                         {activity.title || formatActivityDate(activity.started_at, activity.utc_offset_minutes, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                       </h1>
                       {activity.title_source === "pending" && (
@@ -690,7 +690,7 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
             />
             {!ftpWatts && (
               <div className="pt-3 border-t border-border">
-                <p className="text-xs text-muted-foreground">
+                <p className="text-caption">
                   Set FTP in Athlete profile to calculate training load metrics
                 </p>
               </div>
@@ -1053,7 +1053,7 @@ function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }
     <div className="mb-4 pb-2 border-b border-border">
       <h2 className="text-lg font-semibold text-foreground">{title}</h2>
       {subtitle && (
-        <p className="text-sm text-muted-foreground mt-0.5">{subtitle}</p>
+        <p className="text-body-secondary mt-0.5">{subtitle}</p>
       )}
     </div>
   );
@@ -1078,7 +1078,7 @@ function ChartCard({
         <div>
           <h2 className="text-sm font-semibold text-foreground">{title}</h2>
           {subtitle && (
-            <p className="text-xs text-muted-foreground">{subtitle}</p>
+            <p className="text-caption">{subtitle}</p>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -1166,7 +1166,7 @@ function ZoneChart({
           );
         })}
       </div>
-      <div className="mt-3 pt-3 border-t border-border flex justify-between text-xs text-muted-foreground">
+      <div className="mt-3 pt-3 border-t border-border flex justify-between text-caption">
         <span>Total</span>
         <span className="tabular-nums">{formatZoneTime(totalSeconds)}</span>
       </div>

@@ -266,7 +266,7 @@ export function ActivitySelector({
               {error}
             </div>
           ) : filteredActivities.length === 0 ? (
-            <div className="px-4 py-3 text-sm text-muted-foreground">
+            <div className="px-4 py-3 text-body-secondary">
               {debouncedSearch ? "No activities match your search" : "No activities available"}
             </div>
           ) : (
@@ -317,7 +317,7 @@ export function ActivitySelector({
                           </svg>
                         )}
                       </div>
-                      <div className="text-xs text-muted-foreground mt-0.5">
+                      <div className="text-caption mt-0.5">
                         {date} · {distance} · {duration}
                         {activity.tss && (
                           <span className="ml-1">· {activity.tss} TSS</span>

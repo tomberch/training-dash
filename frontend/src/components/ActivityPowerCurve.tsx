@@ -121,7 +121,7 @@ export function ActivityPowerCurve({ peaks, showAllTimeCurve: initialShowAllTime
           <h2 className="text-sm font-semibold text-foreground">
             Power Curve
           </h2>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption">
             {prCount > 0 ? (
               <span className="text-amber-600 dark:text-amber-400">
                 {prCount} PR{prCount > 1 ? "s" : ""} set!
@@ -132,7 +132,7 @@ export function ActivityPowerCurve({ peaks, showAllTimeCurve: initialShowAllTime
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+          <label className="flex items-center gap-2 text-caption cursor-pointer">
             <input
               type="checkbox"
               checked={showAllTime}
@@ -251,7 +251,7 @@ export function ActivityPowerCurve({ peaks, showAllTimeCurve: initialShowAllTime
         </ResponsiveContainer>
 
         {/* Legend */}
-        <div className="flex items-center justify-center gap-6 mt-3 text-xs text-muted-foreground">
+        <div className="flex items-center justify-center gap-6 mt-3 text-caption">
           <div className="flex items-center gap-2">
             <div className="w-4 h-0.5 bg-amber-500" />
             <span>This ride</span>

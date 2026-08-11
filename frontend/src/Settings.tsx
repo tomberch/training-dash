@@ -1162,7 +1162,7 @@ function ConnectedAccountsSection(): React.JSX.Element {
             <div className="flex items-center justify-between mb-2">
               <div>
                 <div className="font-medium text-foreground">Password</div>
-                <div className="text-sm text-muted-foreground">
+                <div className="text-body-secondary">
                   Set a password to enable email/password login
                 </div>
               </div>

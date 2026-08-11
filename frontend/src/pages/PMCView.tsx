@@ -172,12 +172,12 @@ export function PMCView() {
           <h1 className="text-2xl font-bold text-foreground">
             Performance Management Chart
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="text-body-secondary mt-1">
             Track your fitness, fatigue, and form over time
           </p>
         </div>
         <div className="text-right">
-          <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
+          <div className="text-caption uppercase tracking-wide mb-1">
             Current Form
           </div>
           <span
@@ -198,7 +198,7 @@ export function PMCView() {
             </svg>
             <div>
               <p className="text-sm font-medium text-warning">FTP not set — TSS cannot be calculated</p>
-              <p className="text-sm text-muted-foreground mt-1">
+              <p className="text-body-secondary mt-1">
                 Upload more rides to auto-detect FTP, or{" "}
                 <a href="/settings" className="text-primary hover:underline">set manually in Settings → Thresholds</a>.
               </p>
@@ -260,21 +260,21 @@ export function PMCView() {
         <div className="flex items-center gap-6 mb-4">
           <div className="flex items-center gap-2 group relative">
             <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-            <span className="text-sm text-muted-foreground">CTL (Fitness)</span>
+            <span className="text-body-secondary">CTL (Fitness)</span>
             <div className="absolute bottom-full left-0 mb-2 px-3 py-2 bg-popover text-popover-foreground text-xs rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none w-64 z-10 border border-border">
               <strong>Chronic Training Load</strong> — your long-term fitness level, calculated from the rolling average of daily TSS over ~42 days.
             </div>
           </div>
           <div className="flex items-center gap-2 group relative">
             <div className="w-3 h-3 rounded-full bg-pink-500"></div>
-            <span className="text-sm text-muted-foreground">ATL (Fatigue)</span>
+            <span className="text-body-secondary">ATL (Fatigue)</span>
             <div className="absolute bottom-full left-0 mb-2 px-3 py-2 bg-popover text-popover-foreground text-xs rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none w-64 z-10 border border-border">
               <strong>Acute Training Load</strong> — your short-term fatigue, calculated from the rolling average of daily TSS over ~7 days.
             </div>
           </div>
           <div className="flex items-center gap-2 group relative">
             <div className="w-3 h-3 rounded-full bg-amber-500"></div>
-            <span className="text-sm text-muted-foreground">TSB (Form)</span>
+            <span className="text-body-secondary">TSB (Form)</span>
             <div className="absolute bottom-full left-0 mb-2 px-3 py-2 bg-popover text-popover-foreground text-xs rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none w-64 z-10 border border-border">
               <strong>Training Stress Balance</strong> — CTL minus ATL. Positive = fresh and ready to perform. Negative = fatigued and building fitness.
             </div>
@@ -436,7 +436,7 @@ export function PMCView() {
               className="w-4 h-4 rounded"
               style={{ backgroundColor: zone.color }}
             ></div>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-caption">
               {zone.name} ({zone.min > -100 ? zone.min : "<-25"} to {zone.max < 100 ? zone.max : ">25"})
             </span>
           </div>

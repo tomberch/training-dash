@@ -38,7 +38,7 @@ function SortableHeader({
 }) {
   return (
     <th
-      className={`px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer hover:bg-muted/50 select-none ${className}`}
+      className={`px-4 py-3 text-left text-section-heading cursor-pointer hover:bg-muted/50 select-none ${className}`}
       onClick={() => onSort(field)}
     >
       <span className="flex items-center">
@@ -251,7 +251,7 @@ export function ActivityTable({
                   currentDirection={sortDirection}
                   onSort={handleSort}
                 />
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-section-heading">
                   Title
                 </th>
                 <SortableHeader
@@ -278,7 +278,7 @@ export function ActivityTable({
                   onSort={handleSort}
                   className="text-right"
                 />
-                <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <th className="px-4 py-3 text-right text-section-heading">
                   Avg Speed
                 </th>
                 <SortableHeader
@@ -305,10 +305,10 @@ export function ActivityTable({
                   onSort={handleSort}
                   className="text-right"
                 />
-                <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <th className="px-4 py-3 text-center text-section-heading">
                   NP
                 </th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <th className="px-4 py-3 text-center text-section-heading">
                   IF
                 </th>
               </tr>
@@ -397,10 +397,10 @@ export function ActivityTable({
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-foreground text-right tabular-nums">
                         {activity.avg_hr_bpm != null ? activity.avg_hr_bpm : "—"}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-muted-foreground text-center tabular-nums">
+                      <td className="px-4 py-3 whitespace-nowrap text-body-secondary text-center tabular-nums">
                         {activity.np_power_w != null ? activity.np_power_w : "—"}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-muted-foreground text-center tabular-nums">
+                      <td className="px-4 py-3 whitespace-nowrap text-body-secondary text-center tabular-nums">
                         {activity.intensity_factor != null
                           ? activity.intensity_factor.toFixed(2)
                           : "—"}

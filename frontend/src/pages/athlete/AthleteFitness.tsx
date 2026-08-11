@@ -53,7 +53,7 @@ function formatDate(dateStr: string): string {
 // Source badge component
 function SourceBadge({ source, detail }: { source: string; detail?: string }) {
   return (
-    <span className="text-xs text-muted-foreground">
+    <span className="text-caption">
       via {detail || source}
     </span>
   );
@@ -191,20 +191,20 @@ export function AthleteFitness() {
               tabIndex={0}
               role="button"
             >
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
+              <p className="text-metric-label mb-1">
                 VO2 Max
               </p>
               <p className="text-3xl font-bold text-foreground">
                 {currentVo2max.value} <span className="text-lg font-normal text-muted-foreground">ml/kg/min</span>
               </p>
-              <p className="text-sm text-muted-foreground mt-2">
+              <p className="text-body-secondary mt-2">
                 since {formatDate(currentVo2max.effective_date)} • <SourceBadge source={currentVo2max.source} detail={currentVo2max.source_detail} />
               </p>
             </div>
           ) : (
             <div className="py-8 text-center">
               <p className="text-muted-foreground mb-2">No VO2 Max data yet</p>
-              <p className="text-sm text-muted-foreground mb-4">
+              <p className="text-body-secondary mb-4">
                 Add manually or sync from Garmin (coming soon)
               </p>
               <Button variant="outline" onClick={openAddModal}>

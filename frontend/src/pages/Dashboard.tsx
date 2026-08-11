@@ -298,7 +298,7 @@ export function Dashboard({ user, onLogout, onSettings, onUploadComplete, onUplo
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
           </div>
-          <h2 className="text-3xl font-bold text-foreground mb-3">Welcome to TrainDash</h2>
+          <h2 className="text-page-title mb-3">Welcome to TrainDash</h2>
           <p className="text-lg text-muted-foreground max-w-md mx-auto">
             Get started by uploading your first activity or connecting to Xert/Garmin to sync automatically.
           </p>
@@ -314,7 +314,7 @@ export function Dashboard({ user, onLogout, onSettings, onUploadComplete, onUplo
               <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground text-sm font-bold">1</div>
               <h3 className="font-semibold text-foreground">Set Your FTP</h3>
             </div>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body-secondary">
               Configure your power thresholds to enable TSS, training load, and performance tracking.
             </p>
           </div>
@@ -328,7 +328,7 @@ export function Dashboard({ user, onLogout, onSettings, onUploadComplete, onUplo
               <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground text-sm font-bold">2</div>
               <h3 className="font-semibold text-foreground">Connect Accounts</h3>
             </div>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body-secondary">
               Link your Xert or Garmin account to automatically sync your rides.
             </p>
           </div>
@@ -339,7 +339,7 @@ export function Dashboard({ user, onLogout, onSettings, onUploadComplete, onUplo
               <div className="flex items-center justify-center w-8 h-8 rounded-full bg-muted text-muted-foreground text-sm font-bold">or</div>
               <h3 className="font-semibold text-foreground">Upload FIT Files</h3>
             </div>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body-secondary">
               Use the "Upload FIT" button in the header to manually upload activity files.
             </p>
           </div>
@@ -470,7 +470,7 @@ export function Dashboard({ user, onLogout, onSettings, onUploadComplete, onUplo
           onClick={() => navigate("/pmc")}
         >
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-foreground">Performance Management</h2>
+            <h2 className="text-card-title">Performance Management</h2>
             {currentZone && (
               <span
                 className="px-3 py-1 text-sm font-semibold rounded-full text-gray-800"
@@ -550,15 +550,15 @@ export function Dashboard({ user, onLogout, onSettings, onUploadComplete, onUplo
             <div className="flex gap-6 mt-4">
               <div>
                 <span className="text-muted-foreground text-sm">CTL</span>
-                <p className="text-2xl font-bold text-foreground">0 <span className="text-sm font-normal text-muted-foreground">→ 0.0%</span></p>
+                <p className="text-metric">0 <span className="text-sm font-normal text-muted-foreground">→ 0.0%</span></p>
               </div>
               <div>
                 <span className="text-muted-foreground text-sm">ATL</span>
-                <p className="text-2xl font-bold text-foreground">0</p>
+                <p className="text-metric">0</p>
               </div>
               <div>
                 <span className="text-muted-foreground text-sm">TSB</span>
-                <p className="text-2xl font-bold text-foreground">0</p>
+                <p className="text-metric">0</p>
               </div>
             </div>
           )}
@@ -566,7 +566,7 @@ export function Dashboard({ user, onLogout, onSettings, onUploadComplete, onUplo
 
         {/* Weekly Summary */}
         <div className="bg-card rounded-xl border border-border p-6 card-hover">
-          <h2 className="text-xl font-semibold text-foreground mb-4">This Week</h2>
+          <h2 className="text-card-title mb-4">This Week</h2>
           {weeklySummary.thisWeek.count === 0 ? (
             <div className="h-48 flex flex-col items-center justify-center text-center">
               <svg className="w-16 h-16 text-muted-foreground/50 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -622,8 +622,8 @@ export function Dashboard({ user, onLogout, onSettings, onUploadComplete, onUplo
       <div className="bg-card rounded-xl border border-border p-6 mb-10">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-xl font-semibold text-foreground">Recent Activities</h2>
-            <p className="text-sm text-muted-foreground mt-1">Your latest rides and workouts</p>
+            <h2 className="text-card-title">Recent Activities</h2>
+            <p className="text-body-secondary mt-1">Your latest rides and workouts</p>
           </div>
           <button 
             onClick={() => navigate("/activities")}
@@ -678,7 +678,7 @@ export function Dashboard({ user, onLogout, onSettings, onUploadComplete, onUplo
                   </h3>
                   
                   {/* Date */}
-                  <p className="text-sm text-muted-foreground mb-3">
+                  <p className="text-body-secondary mb-3">
                     {formatActivityDate(activity.started_at, activity.utc_offset_minutes, { weekday: "short", month: "short", day: "numeric" })}
                   </p>
                   
@@ -738,7 +738,7 @@ export function Dashboard({ user, onLogout, onSettings, onUploadComplete, onUplo
             {/* Breakthroughs */}
             {recentBreakthroughs.length > 0 && (
               <div>
-                <h3 className="text-xs font-semibold text-warning uppercase tracking-wider mb-3 flex items-center gap-2">
+                <h3 className="text-section-heading text-warning mb-3 flex items-center gap-2">
                   <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                     <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                   </svg>
@@ -766,7 +766,7 @@ export function Dashboard({ user, onLogout, onSettings, onUploadComplete, onUplo
             {/* Lifetime PRs */}
             {notablePRs.length > 0 && (
               <div>
-                <h3 className="text-xs font-semibold text-primary uppercase tracking-wider mb-3 flex items-center gap-2">
+                <h3 className="text-section-heading text-primary mb-3 flex items-center gap-2">
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>

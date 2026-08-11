@@ -154,7 +154,7 @@ function PowerComparisonChart({
         <h3 className="text-sm font-medium text-muted-foreground">
           Power Comparison
         </h3>
-        <p className="mt-2 text-sm text-muted-foreground">
+        <p className="mt-2 text-body-secondary">
           No power data available for these activities.
         </p>
       </div>
@@ -174,7 +174,7 @@ function PowerComparisonChart({
         <div className="flex items-center gap-4">
           {/* Legend preview when collapsed */}
           {!isExpanded && (
-            <div className="flex items-center gap-4 text-xs text-muted-foreground">
+            <div className="flex items-center gap-4 text-caption">
               <div className="flex items-center gap-1">
                 <span className="w-3 h-0.5 bg-indigo-500" />
                 <span>{baseActivity.title || "Base"}</span>
@@ -267,7 +267,7 @@ function PowerComparisonChart({
           </div>
           
           {/* Legend */}
-          <div className="flex items-center justify-center gap-6 mt-3 text-xs text-muted-foreground">
+          <div className="flex items-center justify-center gap-6 mt-3 text-caption">
             <div className="flex items-center gap-2">
               <span className="w-4 h-0.5 bg-indigo-500" />
               <span>{baseActivity.title || "Base"}</span>
@@ -913,7 +913,7 @@ export function ComparePage() {
     <div className="h-full flex flex-col bg-background">
       {/* Page Header */}
       <div className="flex-shrink-0 p-8 pb-0">
-        <h1 className="text-3xl font-bold text-foreground mb-2">Compare Activities</h1>
+        <h1 className="text-page-title mb-2">Compare Activities</h1>
         <p className="text-muted-foreground">Compare performance metrics between two activities</p>
       </div>
 
@@ -1024,7 +1024,7 @@ export function ComparePage() {
         {baseActivity && !compareActivity && sameRouteData && (
           <div className="mb-8">
             <h3 className="text-lg font-semibold mb-2">Suggested Comparisons</h3>
-            <p className="text-sm text-muted-foreground mb-4">Activities similar to your selected ride</p>
+            <p className="text-body-secondary mb-4">Activities similar to your selected ride</p>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {/* Same Route suggestions */}
@@ -1050,10 +1050,10 @@ export function ComparePage() {
                   <h4 className="font-medium mb-1 truncate">
                     {activity.title || formatActivityDate(activity.started_at, activity.utc_offset_minutes, { weekday: "short", month: "short", day: "numeric" })}
                   </h4>
-                  <p className="text-sm text-muted-foreground mb-3">
+                  <p className="text-body-secondary mb-3">
                     {formatRelativeTime(activity.started_at)}
                   </p>
-                  <div className="flex gap-3 text-xs text-muted-foreground">
+                  <div className="flex gap-3 text-caption">
                     <div>{formatDistance(activity.total_distance_m)}</div>
                     <div>{formatTime(activity.moving_time_s)}</div>
                     <div>{activity.avg_power_w ? `${Math.round(activity.avg_power_w)}W` : "—"}</div>
@@ -1105,14 +1105,14 @@ export function ComparePage() {
               <div className="bg-card rounded-lg border border-border p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="w-3 h-3 rounded-full bg-indigo-500" />
-                  <span className="text-xs font-medium text-primary uppercase tracking-wide">
+                  <span className="text-metric-label text-primary">
                     Base
                   </span>
                 </div>
                 <h3 className="text-lg font-semibold text-foreground">
                   {baseActivity.title || "Untitled"}
                 </h3>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-body-secondary">
                   {formatActivityDate(baseActivity.started_at, baseActivity.utc_offset_minutes, {
                     weekday: "short",
                     year: "numeric",
@@ -1124,14 +1124,14 @@ export function ComparePage() {
               <div className="bg-card rounded-lg border border-border p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="w-3 h-3 rounded-full bg-amber-500" />
-                  <span className="text-xs font-medium text-warning uppercase tracking-wide">
+                  <span className="text-metric-label text-warning">
                     Compare
                   </span>
                 </div>
                 <h3 className="text-lg font-semibold text-foreground">
                   {compareActivity.title || "Untitled"}
                 </h3>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-body-secondary">
                   {formatActivityDate(compareActivity.started_at, compareActivity.utc_offset_minutes, {
                     weekday: "short",
                     year: "numeric",
@@ -1225,7 +1225,7 @@ export function ComparePage() {
                       </ComposedChart>
                     </ResponsiveContainer>
                   </div>
-                  <div className="flex items-center justify-center gap-6 mt-3 text-xs text-muted-foreground">
+                  <div className="flex items-center justify-center gap-6 mt-3 text-caption">
                     <div className="flex items-center gap-1">
                       <span className="w-3 h-3 rounded-full bg-green-500" />
                       <span>Faster (ahead)</span>
@@ -1276,7 +1276,7 @@ export function ComparePage() {
                     <div className="w-2 h-2 rounded-full bg-primary" />
                     What You Can Compare
                   </h3>
-                  <ul className="space-y-2 text-sm text-muted-foreground">
+                  <ul className="space-y-2 text-body-secondary">
                     <li className="flex items-start gap-2">
                       <svg className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/></svg>
                       <span>Power profiles and zones</span>
@@ -1297,7 +1297,7 @@ export function ComparePage() {
                     <div className="w-2 h-2 rounded-full bg-accent" />
                     Comparison Tips
                   </h3>
-                  <ul className="space-y-2 text-sm text-muted-foreground">
+                  <ul className="space-y-2 text-body-secondary">
                     <li className="flex items-start gap-2">
                       <svg className="w-4 h-4 text-accent mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                       <span>Same route on different days</span>

@@ -151,7 +151,7 @@ function PRCard({ label, value, activityId, icon, colorTheme }: PRCardProps): JS
         {/* Icon and label */}
         <div className="flex items-center gap-2 mb-3">
           <span className={colors.text}>{icon}</span>
-          <span className={`text-xs font-semibold ${colors.text} uppercase tracking-wider`}>{label}</span>
+          <span className={`text-metric-label ${colors.text}`}>{label}</span>
         </div>
         
         {/* Value */}
@@ -202,8 +202,8 @@ function RoutePRCard({ routePR }: { routePR: RoutePR }): JSX.Element {
         </div>
         
         <div>
-          <p className="text-muted-foreground text-xs uppercase tracking-wider mb-1">Best Time</p>
-          <p className="text-2xl font-bold text-foreground tabular-nums">{formatTime(routePR.fastest_time_s)}</p>
+          <p className="text-metric-label mb-1">Best Time</p>
+          <p className="text-metric tabular-nums">{formatTime(routePR.fastest_time_s)}</p>
         </div>
         
         <div className="text-right">
@@ -336,7 +336,7 @@ export function RecordsView({ unitSystem = "metric" }: RecordsViewProps): JSX.El
     return (
       <div className="max-w-7xl mx-auto p-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2">Records</h1>
+          <h1 className="text-page-title mb-2">Records</h1>
           <p className="text-muted-foreground">Your personal bests and achievements</p>
         </div>
         <div className="bg-card rounded-lg border border-border">
@@ -358,7 +358,7 @@ export function RecordsView({ unitSystem = "metric" }: RecordsViewProps): JSX.El
     <div className="max-w-7xl mx-auto p-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-foreground mb-2">Records</h1>
+        <h1 className="text-page-title mb-2">Records</h1>
         <p className="text-muted-foreground">Your personal bests and achievements</p>
       </div>
 
@@ -367,7 +367,7 @@ export function RecordsView({ unitSystem = "metric" }: RecordsViewProps): JSX.El
         <section className="mb-10">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-2 h-2 bg-primary rounded-full" />
-            <h2 className="text-2xl font-bold text-foreground">Lifetime PRs</h2>
+            <h2 className="text-metric">Lifetime PRs</h2>
             <span className="text-muted-foreground text-sm ml-auto">
               {lifetimePRs.length} personal record{lifetimePRs.length !== 1 ? "s" : ""}
             </span>
@@ -393,7 +393,7 @@ export function RecordsView({ unitSystem = "metric" }: RecordsViewProps): JSX.El
         <section>
           <div className="flex items-center gap-3 mb-6">
             <div className="w-2 h-2 bg-success rounded-full" />
-            <h2 className="text-2xl font-bold text-foreground">Route PRs</h2>
+            <h2 className="text-metric">Route PRs</h2>
             <span className="text-muted-foreground text-sm ml-auto">
               {routePRs.length} route{routePRs.length !== 1 ? "s" : ""} recorded
             </span>

@@ -706,7 +706,7 @@ function QuickStatsRow({ activity }: { activity: Activity | null }): JSX.Element
       {stats.map((stat) => (
         <div key={stat.label} className="bg-card border border-border rounded-xl p-4 text-center">
           <p className="text-muted-foreground text-xs uppercase tracking-wider mb-1">{stat.label}</p>
-          <p className="text-2xl font-bold text-foreground tabular-nums">{stat.value}</p>
+          <p className="text-metric tabular-nums">{stat.value}</p>
         </div>
       ))}
     </div>
@@ -720,7 +720,7 @@ function AnalyzeEmptyState(): JSX.Element {
         <svg className="w-24 h-24 text-muted-foreground/30 mx-auto mb-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
         </svg>
-        <h2 className="text-2xl font-bold text-foreground mb-3">Select an Activity to Analyze</h2>
+        <h2 className="text-metric mb-3">Select an Activity to Analyze</h2>
         <p className="text-muted-foreground mb-8">
           Choose an activity from the dropdown above to see detailed performance metrics, power analysis, and training insights.
         </p>
@@ -733,7 +733,7 @@ function AnalyzeEmptyState(): JSX.Element {
               </svg>
               <span className="font-medium text-sm text-foreground">Power Analysis</span>
             </div>
-            <p className="text-xs text-muted-foreground">Power curve, normalized power, and intensity factor</p>
+            <p className="text-caption">Power curve, normalized power, and intensity factor</p>
           </div>
           
           <div className="bg-muted rounded-lg p-4">
@@ -743,7 +743,7 @@ function AnalyzeEmptyState(): JSX.Element {
               </svg>
               <span className="font-medium text-sm text-foreground">Heart Rate</span>
             </div>
-            <p className="text-xs text-muted-foreground">Zone distribution and time in zone analysis</p>
+            <p className="text-caption">Zone distribution and time in zone analysis</p>
           </div>
           
           <div className="bg-muted rounded-lg p-4">
@@ -753,7 +753,7 @@ function AnalyzeEmptyState(): JSX.Element {
               </svg>
               <span className="font-medium text-sm text-foreground">Elevation</span>
             </div>
-            <p className="text-xs text-muted-foreground">Grade analysis and climbing performance</p>
+            <p className="text-caption">Grade analysis and climbing performance</p>
           </div>
         </div>
       </div>

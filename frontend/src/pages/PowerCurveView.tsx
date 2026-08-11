@@ -277,7 +277,7 @@ export function PowerCurveView() {
         <h1 className="text-2xl font-bold text-foreground">
           Power Curve
         </h1>
-        <p className="text-sm text-muted-foreground mt-1">
+        <p className="text-body-secondary mt-1">
           Your best power output at each duration
         </p>
       </div>
@@ -360,14 +360,14 @@ export function PowerCurveView() {
         <div className="flex items-center gap-6 mb-4">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-indigo-500"></div>
-            <span className="text-sm text-muted-foreground">
+            <span className="text-body-secondary">
               {DATE_PRESETS[activePreset].label}
             </span>
           </div>
           {showComparison && (
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
-              <span className="text-sm text-muted-foreground">
+              <span className="text-body-secondary">
                 {DATE_PRESETS[comparisonPreset].label}
               </span>
             </div>
@@ -375,7 +375,7 @@ export function PowerCurveView() {
           {showModel && fitness?.current && (
             <div className="flex items-center gap-2">
               <div className="w-6 h-0.5 bg-purple-500" style={{ borderStyle: "dashed", borderWidth: 1 }}></div>
-              <span className="text-sm text-muted-foreground">
+              <span className="text-body-secondary">
                 Model (CP: {fitness.current.cp_watts}W)
               </span>
             </div>
@@ -510,13 +510,13 @@ export function PowerCurveView() {
           <table className="w-full text-sm">
             <thead className="bg-muted">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Duration</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">Power</th>
+                <th className="px-4 py-3 text-left text-section-heading">Duration</th>
+                <th className="px-4 py-3 text-right text-section-heading">Power</th>
                 {userWeight && (
-                  <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">W/kg</th>
+                  <th className="px-4 py-3 text-right text-section-heading">W/kg</th>
                 )}
-                <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">Date</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">Freshness</th>
+                <th className="px-4 py-3 text-right text-section-heading">Date</th>
+                <th className="px-4 py-3 text-right text-section-heading">Freshness</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">

@@ -290,7 +290,7 @@ export function PolylineMap({
   if (coords.length < 2) {
     return (
       <div className={`bg-muted rounded flex items-center justify-center ${className}`}>
-        <span className="text-xs text-muted-foreground">No GPS</span>
+        <span className="text-caption">No GPS</span>
       </div>
     );
   }

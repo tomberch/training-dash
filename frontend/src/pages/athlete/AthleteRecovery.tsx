@@ -74,7 +74,7 @@ function CurrentMetricCard({ metricType, entry, onAdd, onClick }: CurrentMetricC
   if (!entry) {
     return (
       <div className="flex-1 p-4 text-center">
-        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
+        <p className="text-metric-label mb-1">
           {metricType.display_name}
         </p>
         <p className="text-2xl font-bold text-muted-foreground mb-2"></p>
@@ -96,13 +96,13 @@ function CurrentMetricCard({ metricType, entry, onAdd, onClick }: CurrentMetricC
       tabIndex={0}
       role="button"
     >
-      <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
+      <p className="text-metric-label mb-1">
         {metricType.display_name}
       </p>
-      <p className="text-2xl font-bold text-foreground">
+      <p className="text-metric">
         {entry.value} <span className="text-sm font-normal text-muted-foreground">{metricType.unit}</span>
       </p>
-      <p className="text-sm text-muted-foreground mt-1">
+      <p className="text-body-secondary mt-1">
         since {formatDate(entry.effective_date)}
       </p>
     </div>

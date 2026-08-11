@@ -160,10 +160,10 @@ function CustomTooltip({ active, payload, unit }: TooltipProps) {
           className="w-2.5 h-2.5 rounded-full"
           style={{ backgroundColor: sourceColor.stroke }}
         />
-        <span className="text-xs text-muted-foreground">{sourceLabel}</span>
+        <span className="text-caption">{sourceLabel}</span>
       </div>
       {entry.notes && (
-        <p className="text-xs text-muted-foreground mt-2 line-clamp-2">
+        <p className="text-caption mt-2 line-clamp-2">
           {entry.notes}
         </p>
       )}
@@ -277,7 +277,7 @@ export function MetricTimelineChart({
       )}
 
       {/* Legend */}
-      <div className="flex items-center justify-center gap-6 text-xs text-muted-foreground">
+      <div className="flex items-center justify-center gap-6 text-caption">
         <div className="flex items-center gap-1.5">
           <span
             className="w-2.5 h-2.5 rounded-full"

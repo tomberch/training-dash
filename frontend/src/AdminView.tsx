@@ -226,7 +226,7 @@ export function AdminView({ onBack }: { onBack: () => void }) {
           >
             &larr; Back
           </button>
-          <h1 className="text-2xl font-bold text-foreground">
+          <h1 className="text-metric">
             Admin Panel
           </h1>
         </div>
@@ -246,7 +246,7 @@ export function AdminView({ onBack }: { onBack: () => void }) {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-foreground">Require approval for new users</p>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-body-secondary">
                 When enabled, new users must be approved by an admin before they can access the app
               </p>
             </div>
@@ -281,7 +281,7 @@ export function AdminView({ onBack }: { onBack: () => void }) {
                 >
                   <div>
                     <p className="font-medium text-foreground">{user.email}</p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-caption">
                       Registered {new Date(user.created_at).toLocaleString()}
                     </p>
                   </div>
@@ -361,19 +361,19 @@ export function AdminView({ onBack }: { onBack: () => void }) {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="py-3 px-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    <th className="py-3 px-4 text-left text-section-heading">
                       ID
                     </th>
-                    <th className="py-3 px-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    <th className="py-3 px-4 text-left text-section-heading">
                       Email
                     </th>
-                    <th className="py-3 px-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    <th className="py-3 px-4 text-left text-section-heading">
                       Status
                     </th>
-                    <th className="py-3 px-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    <th className="py-3 px-4 text-left text-section-heading">
                       Created
                     </th>
-                    <th className="py-3 px-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    <th className="py-3 px-4 text-left text-section-heading">
                       Actions
                     </th>
                   </tr>
@@ -393,7 +393,7 @@ export function AdminView({ onBack }: { onBack: () => void }) {
                           {user.display_name || user.email}
                         </div>
                         {user.display_name && (
-                          <div className="text-xs text-muted-foreground">{user.email}</div>
+                          <div className="text-caption">{user.email}</div>
                         )}
                       </td>
                       <td className="py-3 px-4">
@@ -414,7 +414,7 @@ export function AdminView({ onBack }: { onBack: () => void }) {
                           )}
                         </div>
                       </td>
-                      <td className="py-3 px-4 text-sm text-muted-foreground">
+                      <td className="py-3 px-4 text-body-secondary">
                         {new Date(user.created_at).toLocaleDateString()}
                       </td>
                       <td className="py-3 px-4">
@@ -618,7 +618,7 @@ function NukeModal({
               <h2 className="text-lg font-semibold text-foreground">
                 {preview?.is_self ? "Reset My Data" : "Nuke User Data"}
               </h2>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-body-secondary">
                 {user.email}
                 {preview?.is_self && " (your account)"}
               </p>
@@ -658,7 +658,7 @@ function NukeModal({
                     />
                     <div>
                       <p className="font-medium text-foreground">Reset Activities</p>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-body-secondary">
                         Delete activities, records, routes, fitness history. Keep account and credentials.
                       </p>
                     </div>
@@ -674,7 +674,7 @@ function NukeModal({
                     />
                     <div>
                       <p className="font-medium text-foreground">Disconnect Integrations</p>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-body-secondary">
                         Delete Garmin and Xert credentials only. Keep all activity data.
                       </p>
                     </div>
