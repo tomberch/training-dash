@@ -39,6 +39,7 @@ import {
   computeHrZones,
   type ZonePercentages,
 } from "@/lib/zones";
+import { POWER_ZONE_COLORS, HR_ZONE_COLORS } from "@/constants";
 import { useTheme } from "./hooks/useTheme";
 import type { Theme } from "./hooks/useTheme";
 import { SunIcon, MoonIcon, MonitorIcon, SparklesIcon } from "./components/icons/ThemeIcons";
@@ -661,13 +662,15 @@ function ZonesSection({ user, onUserUpdate }: { user: User; onUserUpdate: (user:
   const powerPercentages = user.power_zone_percentages ?? DEFAULT_POWER_ZONES;
   const hrPercentages = user.hr_zone_percentages ?? DEFAULT_HR_ZONES;
   
-  // Edited percentages (only used in edit mode)
+  // Edited values (only used in edit mode)
   const [editedPowerPct, setEditedPowerPct] = useState<ZonePercentages>(powerPercentages);
   const [editedHrPct, setEditedHrPct] = useState<ZonePercentages>(hrPercentages);
   
   // Compute zones from percentages and thresholds
-  const powerZones = ftp ? computePowerZones(ftp, editMode ? editedPowerPct : powerPercentages) : [];
-  const hrZones = lthr ? computeHrZones(lthr, editMode ? editedHrPct : hrPercentages) : [];
+  const displayPowerPct = editMode ? editedPowerPct : powerPercentages;
+  const displayHrPct = editMode ? editedHrPct : hrPercentages;
+  const powerZones = computePowerZones(ftp ?? 0, displayPowerPct);
+  const hrZones = computeHrZones(lthr ?? 0, displayHrPct);
   
   function startEdit() {
     setEditedPowerPct({ ...powerPercentages });
@@ -691,7 +694,7 @@ function ZonesSection({ user, onUserUpdate }: { user: User; onUserUpdate: (user:
       });
       onUserUpdate(updated);
       setEditMode(false);
-      setFeedback({ type: "success", message: "Zone percentages saved" });
+      setFeedback({ type: "success", message: "Zone settings saved" });
       setTimeout(() => setFeedback(null), 3000);
     } catch (err) {
       const message = err instanceof ApiError ? err.message : "Failed to save zones";
@@ -701,25 +704,12 @@ function ZonesSection({ user, onUserUpdate }: { user: User; onUserUpdate: (user:
     }
   }
   
-  async function handleReset() {
-    if (!confirm("Reset zone percentages to defaults?")) return;
-    setSaving(true);
-    setFeedback(null);
-    try {
-      const updated = await updatePreferences({
-        power_zone_percentages: null,
-        hr_zone_percentages: null,
-      });
-      onUserUpdate(updated);
-      setEditMode(false);
-      setFeedback({ type: "success", message: "Zones reset to defaults" });
-      setTimeout(() => setFeedback(null), 3000);
-    } catch (err) {
-      const message = err instanceof ApiError ? err.message : "Failed to reset zones";
-      setFeedback({ type: "error", message });
-    } finally {
-      setSaving(false);
-    }
+  function resetPowerZones() {
+    setEditedPowerPct({ ...DEFAULT_POWER_ZONES });
+  }
+  
+  function resetHrZones() {
+    setEditedHrPct({ ...DEFAULT_HR_ZONES });
   }
   
   function updatePowerPct(zone: string, field: "min" | "max", value: string) {
@@ -745,6 +735,7 @@ function ZonesSection({ user, onUserUpdate }: { user: User; onUserUpdate: (user:
   // Check if user has thresholds set
   const hasFtp = ftp !== null && ftp > 0;
   const hasLthr = lthr !== null && lthr > 0;
+  const showThresholdWarning = !hasFtp || !hasLthr;
 
   if (loadingThresholds) {
     return (
@@ -765,132 +756,261 @@ function ZonesSection({ user, onUserUpdate }: { user: User; onUserUpdate: (user:
   }
 
   return (
-    <Card className="card-hover">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-card-title">
-          <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-          </svg>
-          Training Zones
-        </CardTitle>
-        <CardAction>
-          <div className="flex gap-2">
-            {editMode ? (
-              <>
-                <Button variant="ghost" size="sm" onClick={cancelEdit} disabled={saving}>
-                  Cancel
-                </Button>
-                <Button size="sm" onClick={handleSave} disabled={saving}>
-                  {saving ? "Saving..." : "Save"}
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button variant="ghost" size="sm" onClick={handleReset} disabled={saving}>
-                  Reset
-                </Button>
-                <Button variant="ghost" size="sm" onClick={startEdit}>
-                  Edit
-                </Button>
-              </>
-            )}
-          </div>
-        </CardAction>
-      </CardHeader>
-      <CardContent>
-        {/* No threshold warning */}
-        {!hasFtp && !hasLthr && (
-          <div className="mb-6 p-4 rounded-lg bg-warning/10 border border-warning/20">
-            <p className="text-sm text-foreground">
-              Set your FTP and LTHR thresholds to see computed zones.{" "}
-              <Link to="/athlete?tab=thresholds" className="text-primary hover:underline">
-                Go to Athlete → Thresholds
+    <>
+      {/* Warning outside the card when thresholds not set */}
+      {showThresholdWarning && (
+        <div className="bg-warning/10 border border-warning/30 rounded-xl p-5 mb-6">
+          <div className="flex items-start gap-3">
+            <svg className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-foreground mb-1">Threshold Required</p>
+              <p className="text-sm text-muted-foreground">
+                Set your {!hasFtp && !hasLthr ? "FTP and LTHR thresholds" : !hasFtp ? "FTP threshold" : "LTHR threshold"} to see computed zones. 
+                Until then, you can customize zone names and percentages.
+              </p>
+              <Link 
+                to="/athlete?tab=thresholds" 
+                className="inline-flex items-center gap-1 text-primary hover:text-primary/80 text-sm font-medium mt-2"
+              >
+                <span>Go to Athlete → Thresholds</span>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
               </Link>
-            </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <Card className={cn("card-hover relative", editMode && "border-2 border-primary/50")}>
+        {/* Edit mode indicator badge */}
+        {editMode && (
+          <div className="absolute top-0 right-0 bg-primary text-primary-foreground px-4 py-2 rounded-bl-xl rounded-tr-lg text-sm font-medium">
+            Editing Zones
           </div>
         )}
         
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <CardHeader className={cn(editMode && "pt-12")}>
+          <CardTitle className="flex items-center gap-2 text-card-title">
+            <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+            Training Zones
+          </CardTitle>
+          <CardAction>
+            <div className="flex gap-2">
+              {editMode ? (
+                <>
+                  <Button variant="ghost" size="sm" onClick={cancelEdit} disabled={saving}>
+                    Cancel
+                  </Button>
+                  <Button size="sm" onClick={handleSave} disabled={saving}>
+                    {saving ? "Saving..." : "Save Changes"}
+                  </Button>
+                </>
+              ) : (
+                <Button variant="ghost" size="sm" onClick={startEdit}>
+                  Edit
+                </Button>
+              )}
+            </div>
+          </CardAction>
+        </CardHeader>
+        <CardContent className="space-y-8">
           {/* Power Zones */}
           <div>
-            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Power Zones</h3>
-            <div className="space-y-2">
-              {powerZones.map((z) => (
-                <div key={z.zone} className="flex justify-between text-sm p-2 bg-muted rounded">
-                  <span className="text-muted-foreground">Zone {z.zone}</span>
-                  <span className="text-muted-foreground">
-                    {editMode ? (
-                      <div className="flex items-center gap-1">
-                        <Input
-                          type="number"
-                          value={editedPowerPct[z.zone.toString()][0]}
-                          onChange={(e) => updatePowerPct(z.zone.toString(), "min", e.target.value)}
-                          className="w-14 text-right text-xs h-7"
-                        />
-                        <span>-</span>
-                        <Input
-                          type="number"
-                          value={editedPowerPct[z.zone.toString()][1] ?? ""}
-                          onChange={(e) => updatePowerPct(z.zone.toString(), "max", e.target.value)}
-                          placeholder="∞"
-                          className="w-14 text-right text-xs h-7"
-                        />
-                        <span>%</span>
+            <div className="flex items-center gap-2 mb-4">
+              <svg className="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              <h3 className="text-lg font-semibold text-foreground">Power Zones</h3>
+              <span className="text-sm text-muted-foreground ml-2">Based on FTP threshold</span>
+            </div>
+            
+            <div className="bg-muted/30 rounded-lg overflow-hidden border border-border">
+              {/* Table Header */}
+              <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-muted text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                <div className="col-span-1">Zone</div>
+                <div className="col-span-3">Name</div>
+                <div className="col-span-3">% FTP</div>
+                <div className="col-span-3">Watts</div>
+                <div className="col-span-2">Color</div>
+              </div>
+              
+              {/* Zone rows */}
+              {powerZones.map((z) => {
+                const zoneKey = z.zone.toString();
+                const color = POWER_ZONE_COLORS[zoneKey];
+                return (
+                  <div key={z.zone} className="grid grid-cols-12 gap-4 px-4 py-3 border-t border-border items-center hover:bg-muted/50 transition">
+                    <div className="col-span-1">
+                      <span 
+                        className="inline-flex items-center justify-center w-8 h-8 rounded-full text-white font-bold text-sm"
+                        style={{ backgroundColor: color }}
+                      >
+                        {z.zone}
+                      </span>
+                    </div>
+                    <div className="col-span-3">
+                      <span className="text-sm text-foreground">{z.name}</span>
+                    </div>
+                    <div className="col-span-3">
+                      {editMode ? (
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="number"
+                            value={editedPowerPct[zoneKey][0]}
+                            onChange={(e) => updatePowerPct(zoneKey, "min", e.target.value)}
+                            className="w-16 h-9 text-sm text-right"
+                          />
+                          <span className="text-muted-foreground">-</span>
+                          <Input
+                            type="number"
+                            value={editedPowerPct[zoneKey][1] ?? ""}
+                            onChange={(e) => updatePowerPct(zoneKey, "max", e.target.value)}
+                            placeholder="∞"
+                            className="w-16 h-9 text-sm text-right"
+                          />
+                          <span className="text-xs text-muted-foreground">%</span>
+                        </div>
+                      ) : (
+                        <span className="text-sm text-foreground">{z.minPct}-{z.maxPct ?? "∞"}%</span>
+                      )}
+                    </div>
+                    <div className="col-span-3">
+                      <div className="flex flex-col">
+                        <span className="text-sm text-foreground">
+                          {hasFtp ? `${z.minValue}-${z.maxValue ?? "∞"} W` : "— W"}
+                        </span>
+                        {editMode && !hasFtp && (
+                          <span className="text-xs text-muted-foreground">Set FTP to calculate</span>
+                        )}
                       </div>
-                    ) : (
-                      `${z.minPct}-${z.maxPct ?? "∞"}%`
-                    )}
-                  </span>
-                  <span className="text-muted-foreground">
-                    {hasFtp ? `${z.minValue}-${z.maxValue ?? "∞"} W` : "— W"}
-                  </span>
-                </div>
-              ))}
+                    </div>
+                    <div className="col-span-2">
+                      <div 
+                        className="w-6 h-6 rounded border border-border"
+                        style={{ backgroundColor: color }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            
+            <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+              <p>Power zones use Coggan's 7-zone model. Customize names and ranges as needed.</p>
+              {editMode && (
+                <button 
+                  onClick={resetPowerZones}
+                  className="text-primary hover:text-primary/80 font-medium"
+                >
+                  Reset to defaults
+                </button>
+              )}
             </div>
           </div>
 
           {/* HR Zones */}
           <div>
-            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Heart Rate Zones</h3>
-            <div className="space-y-2">
-              {hrZones.map((z) => (
-                <div key={z.zone} className="flex justify-between text-sm p-2 bg-muted rounded">
-                  <span className="text-muted-foreground">Zone {z.zone}</span>
-                  <span className="text-muted-foreground">
-                    {editMode ? (
-                      <div className="flex items-center gap-1">
-                        <Input
-                          type="number"
-                          value={editedHrPct[z.zone.toString()][0]}
-                          onChange={(e) => updateHrPct(z.zone.toString(), "min", e.target.value)}
-                          className="w-14 text-right text-xs h-7"
-                        />
-                        <span>-</span>
-                        <Input
-                          type="number"
-                          value={editedHrPct[z.zone.toString()][1] ?? ""}
-                          onChange={(e) => updateHrPct(z.zone.toString(), "max", e.target.value)}
-                          placeholder="∞"
-                          className="w-14 text-right text-xs h-7"
-                        />
-                        <span>%</span>
+            <div className="flex items-center gap-2 mb-4">
+              <svg className="w-5 h-5 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+              </svg>
+              <h3 className="text-lg font-semibold text-foreground">Heart Rate Zones</h3>
+              <span className="text-sm text-muted-foreground ml-2">Based on LTHR threshold</span>
+            </div>
+            
+            <div className="bg-muted/30 rounded-lg overflow-hidden border border-border">
+              {/* Table Header */}
+              <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-muted text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                <div className="col-span-1">Zone</div>
+                <div className="col-span-3">Name</div>
+                <div className="col-span-3">% LTHR</div>
+                <div className="col-span-3">BPM</div>
+                <div className="col-span-2">Color</div>
+              </div>
+              
+              {/* Zone rows */}
+              {hrZones.map((z) => {
+                const zoneKey = z.zone.toString();
+                const color = HR_ZONE_COLORS[zoneKey];
+                return (
+                  <div key={z.zone} className="grid grid-cols-12 gap-4 px-4 py-3 border-t border-border items-center hover:bg-muted/50 transition">
+                    <div className="col-span-1">
+                      <span 
+                        className="inline-flex items-center justify-center w-8 h-8 rounded-full text-white font-bold text-sm"
+                        style={{ backgroundColor: color }}
+                      >
+                        {z.zone}
+                      </span>
+                    </div>
+                    <div className="col-span-3">
+                      <span className="text-sm text-foreground">{z.name}</span>
+                    </div>
+                    <div className="col-span-3">
+                      {editMode ? (
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="number"
+                            value={editedHrPct[zoneKey][0]}
+                            onChange={(e) => updateHrPct(zoneKey, "min", e.target.value)}
+                            className="w-16 h-9 text-sm text-right"
+                          />
+                          <span className="text-muted-foreground">-</span>
+                          <Input
+                            type="number"
+                            value={editedHrPct[zoneKey][1] ?? ""}
+                            onChange={(e) => updateHrPct(zoneKey, "max", e.target.value)}
+                            placeholder="∞"
+                            className="w-16 h-9 text-sm text-right"
+                          />
+                          <span className="text-xs text-muted-foreground">%</span>
+                        </div>
+                      ) : (
+                        <span className="text-sm text-foreground">{z.minPct}-{z.maxPct ?? "∞"}%</span>
+                      )}
+                    </div>
+                    <div className="col-span-3">
+                      <div className="flex flex-col">
+                        <span className="text-sm text-foreground">
+                          {hasLthr ? `${z.minValue}-${z.maxValue ?? "∞"} bpm` : "— bpm"}
+                        </span>
+                        {editMode && !hasLthr && (
+                          <span className="text-xs text-muted-foreground">Set LTHR to calculate</span>
+                        )}
                       </div>
-                    ) : (
-                      `${z.minPct}-${z.maxPct ?? "∞"}%`
-                    )}
-                  </span>
-                  <span className="text-muted-foreground">
-                    {hasLthr ? `${z.minValue}-${z.maxValue ?? "∞"} bpm` : "— bpm"}
-                  </span>
-                </div>
-              ))}
+                    </div>
+                    <div className="col-span-2">
+                      <div 
+                        className="w-6 h-6 rounded border border-border"
+                        style={{ backgroundColor: color }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            
+            <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+              <p>Heart rate zones use the Friel method. Adjust percentages to match your training methodology.</p>
+              {editMode && (
+                <button 
+                  onClick={resetHrZones}
+                  className="text-primary hover:text-primary/80 font-medium"
+                >
+                  Reset to defaults
+                </button>
+              )}
             </div>
           </div>
-        </div>
 
-        <FeedbackAlert feedback={feedback} />
-      </CardContent>
-    </Card>
+          <FeedbackAlert feedback={feedback} />
+        </CardContent>
+      </Card>
+    </>
   );
 }
 

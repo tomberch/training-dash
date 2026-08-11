@@ -188,6 +188,52 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
   // Lazy section loading
   const { sentinelRef: analysisSentinelRef, hasEntered: analysisVisible } = useLazySection();
 
+  // Compute elevation loss and max grade from records
+  const elevationStats = useMemo(() => {
+    if (records.length < 2) {
+      return { elevationLoss: 0, maxGradePct: null as number | null };
+    }
+
+    let elevationLoss = 0;
+    let maxGradePct: number | null = null;
+
+    for (let i = 1; i < records.length; i++) {
+      const prev = records[i - 1];
+      const curr = records[i];
+      
+      // Elevation loss
+      if (prev.altitude_m != null && curr.altitude_m != null) {
+        const altDiff = curr.altitude_m - prev.altitude_m;
+        if (altDiff < 0) {
+          elevationLoss += Math.abs(altDiff);
+        }
+      }
+
+      // Max grade (only calculate if we have distance and altitude)
+      if (
+        prev.altitude_m != null && 
+        curr.altitude_m != null && 
+        prev.distance_m != null && 
+        curr.distance_m != null
+      ) {
+        const distDiff = curr.distance_m - prev.distance_m;
+        const altDiff = curr.altitude_m - prev.altitude_m;
+        // Only consider segments with meaningful distance (> 10m) to avoid noise
+        if (distDiff > 10) {
+          const grade = (altDiff / distDiff) * 100;
+          if (maxGradePct === null || grade > maxGradePct) {
+            maxGradePct = grade;
+          }
+        }
+      }
+    }
+
+    return { 
+      elevationLoss: Math.round(elevationLoss), 
+      maxGradePct: maxGradePct !== null ? Math.round(maxGradePct * 10) / 10 : null 
+    };
+  }, [records]);
+
   // Build power-colored segments for map visualization
   // Uses 7-zone power model based on FTP
   const coloredSegments = useMemo(() => {
@@ -610,8 +656,13 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
               valueClass="text-green-400"
             />
             <MetricEntry 
-              label="Avg Grade" 
-              value="—" 
+              label="Loss" 
+              value={formatElevation(elevationStats.elevationLoss, unitSystem)} 
+              valueClass="text-red-400"
+            />
+            <MetricEntry 
+              label="Max Grade" 
+              value={elevationStats.maxGradePct !== null ? `${elevationStats.maxGradePct}%` : "—"} 
             />
           </MetricGroupCard>
 
