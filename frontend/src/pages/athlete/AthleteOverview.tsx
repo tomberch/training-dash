@@ -1,10 +1,23 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { MetricEntry } from "@/components/MetricTimelineChart";
 import { fetchMetrics, type MetricEntryResponse, type User } from "@/api";
+import {
+  BarChart3,
+  Heart,
+  Zap,
+  Scale,
+  ArrowUp,
+  Users,
+  Wind,
+  Shield,
+  Info,
+  type LucideIcon,
+} from "lucide-react";
 
 // Convert API response to MetricEntry
 function toMetricEntry(resp: MetricEntryResponse): MetricEntry {
@@ -63,16 +76,29 @@ interface MetricSummaryCardProps {
   unit: string;
   decimals?: number;
   onClick: () => void;
+  icon: LucideIcon;
+  iconColor: string;
+  ctaLabel: string;
 }
 
-function MetricSummaryCard({ name, current, previous, unit, decimals = 0, onClick }: MetricSummaryCardProps) {
+function MetricSummaryCard({
+  name,
+  current,
+  previous,
+  unit,
+  decimals = 0,
+  onClick,
+  icon: Icon,
+  iconColor,
+  ctaLabel,
+}: MetricSummaryCardProps) {
   const { trend, diff } = calculateTrend(current, previous);
 
   return (
     <Card
       className={cn(
-        "cursor-pointer transition-colors",
-        "hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        "cursor-pointer transition-all group",
+        "hover:bg-muted/50 hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       )}
       onClick={onClick}
       onKeyDown={(e) => e.key === "Enter" && onClick()}
@@ -80,9 +106,12 @@ function MetricSummaryCard({ name, current, previous, unit, decimals = 0, onClic
       role="button"
     >
       <CardContent className="py-4">
-        <p className="text-metric-label mb-1">
-          {name}
-        </p>
+        <div className="flex items-center gap-2 mb-2">
+          <Icon className={cn("w-5 h-5", iconColor)} />
+          <span className={cn("text-metric-label", iconColor)}>
+            {name}
+          </span>
+        </div>
         {current ? (
           <>
             <p className="text-metric">
@@ -101,7 +130,12 @@ function MetricSummaryCard({ name, current, previous, unit, decimals = 0, onClic
             </p>
           </>
         ) : (
-          <p className="text-xl text-muted-foreground">Not set</p>
+          <>
+            <p className="text-xl text-muted-foreground mb-3">Not set</p>
+            <Button variant="ghost" className="w-full bg-primary/10 hover:bg-primary/20 text-primary">
+              {ctaLabel}
+            </Button>
+          </>
         )}
       </CardContent>
     </Card>
@@ -114,9 +148,20 @@ interface StaticValueCardProps {
   value: string | number | null;
   unit?: string;
   onClick: () => void;
+  icon: LucideIcon;
+  iconColor: string;
+  ctaLabel: string;
 }
 
-function StaticValueCard({ name, value, unit, onClick }: StaticValueCardProps) {
+function StaticValueCard({
+  name,
+  value,
+  unit,
+  onClick,
+  icon: Icon,
+  iconColor,
+  ctaLabel,
+}: StaticValueCardProps) {
   const displayValue = value !== null
     ? typeof value === "string"
       ? value.charAt(0).toUpperCase() + value.slice(1)
@@ -126,8 +171,8 @@ function StaticValueCard({ name, value, unit, onClick }: StaticValueCardProps) {
   return (
     <Card
       className={cn(
-        "cursor-pointer transition-colors",
-        "hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        "cursor-pointer transition-all group",
+        "hover:bg-muted/50 hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       )}
       onClick={onClick}
       onKeyDown={(e) => e.key === "Enter" && onClick()}
@@ -135,13 +180,21 @@ function StaticValueCard({ name, value, unit, onClick }: StaticValueCardProps) {
       role="button"
     >
       <CardContent className="py-4">
-        <p className="text-metric-label mb-1">
-          {name}
-        </p>
+        <div className="flex items-center gap-2 mb-2">
+          <Icon className={cn("w-5 h-5", iconColor)} />
+          <span className={cn("text-metric-label", iconColor)}>
+            {name}
+          </span>
+        </div>
         {displayValue ? (
           <p className="text-metric">{displayValue}</p>
         ) : (
-          <p className="text-xl text-muted-foreground">Not set</p>
+          <>
+            <p className="text-xl text-muted-foreground mb-3">Not set</p>
+            <Button variant="ghost" className="w-full bg-primary/10 hover:bg-primary/20 text-primary">
+              {ctaLabel}
+            </Button>
+          </>
         )}
       </CardContent>
     </Card>
@@ -154,6 +207,102 @@ function SectionHeader({ title }: { title: string }) {
     <h2 className="text-section-heading mb-3">
       {title}
     </h2>
+  );
+}
+
+// Profile completion progress bar
+interface ProfileCompletionProps {
+  user: User;
+  metrics: CurrentMetrics;
+}
+
+interface UnlockBadge {
+  icon: React.ReactNode;
+  label: string;
+  unlocked: boolean;
+}
+
+function ProfileCompletionBar({ user, metrics }: ProfileCompletionProps) {
+  // Count filled fields (10 total)
+  const fields = [
+    { name: "FTP", filled: metrics.ftp !== null },
+    { name: "LTHR", filled: metrics.lthr !== null },
+    { name: "HRMax", filled: metrics.hrmax !== null },
+    { name: "Weight", filled: metrics.weight !== null },
+    { name: "Height", filled: user.height_cm !== null },
+    { name: "Gender", filled: user.gender !== null },
+    { name: "VO2Max", filled: metrics.vo2max !== null },
+    { name: "RestingHR", filled: metrics.resting_hr !== null },
+    { name: "HRV", filled: metrics.hrv !== null },
+    { name: "DOB", filled: user.date_of_birth !== null },
+  ];
+
+  const filledCount = fields.filter((f) => f.filled).length;
+  const totalCount = fields.length;
+  const percentage = Math.round((filledCount / totalCount) * 100);
+
+  // Unlock badges - what features become available with profile data
+  const unlockBadges: UnlockBadge[] = [
+    {
+      icon: <BarChart3 className="w-3 h-3" />,
+      label: "TSS",
+      unlocked: metrics.ftp !== null,
+    },
+    {
+      icon: <Heart className="w-3 h-3" />,
+      label: "HR Zones",
+      unlocked: metrics.lthr !== null || metrics.hrmax !== null,
+    },
+    {
+      icon: <Zap className="w-3 h-3" />,
+      label: "Power Zones",
+      unlocked: metrics.ftp !== null,
+    },
+  ];
+
+  return (
+    <div className="bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/30 rounded-xl p-6 mb-8">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className="text-card-title mb-1">Profile Completion</h3>
+          <p className="text-body-secondary">
+            Complete your profile to unlock all analytics features
+          </p>
+        </div>
+        <div className="text-right">
+          <p className="text-metric text-primary">{percentage}%</p>
+          <p className="text-caption">
+            {filledCount} of {totalCount} fields
+          </p>
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      <div className="h-3 bg-muted rounded-full overflow-hidden">
+        <div
+          className="h-full bg-gradient-to-r from-primary to-primary/80 rounded-full transition-all duration-500"
+          style={{ width: `${percentage}%` }}
+        />
+      </div>
+
+      {/* Unlock badges */}
+      <div className="mt-4 flex gap-2 flex-wrap">
+        {unlockBadges.map((badge) => (
+          <span
+            key={badge.label}
+            className={cn(
+              "text-xs px-3 py-1 rounded-full flex items-center gap-1.5",
+              badge.unlocked
+                ? "bg-success/20 text-success"
+                : "bg-muted text-muted-foreground"
+            )}
+          >
+            {badge.icon}
+            {badge.unlocked ? "✓" : "Unlock"} {badge.label}
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -264,6 +413,9 @@ export function AthleteOverview({ user }: AthleteOverviewProps) {
 
   return (
     <div className="space-y-8">
+      {/* Profile completion progress bar */}
+      <ProfileCompletionBar user={user} metrics={metrics} />
+
       {/* Thresholds section */}
       <section>
         <SectionHeader title="Thresholds" />
@@ -274,6 +426,9 @@ export function AthleteOverview({ user }: AthleteOverviewProps) {
             previous={metrics.ftp_previous}
             unit="W"
             onClick={() => navigateToTab("thresholds")}
+            icon={Zap}
+            iconColor="text-primary"
+            ctaLabel="Set FTP →"
           />
           <MetricSummaryCard
             name="LTHR"
@@ -281,6 +436,9 @@ export function AthleteOverview({ user }: AthleteOverviewProps) {
             previous={metrics.lthr_previous}
             unit="bpm"
             onClick={() => navigateToTab("thresholds")}
+            icon={Heart}
+            iconColor="text-pink-500"
+            ctaLabel="Set LTHR →"
           />
           <MetricSummaryCard
             name="HRmax"
@@ -288,6 +446,9 @@ export function AthleteOverview({ user }: AthleteOverviewProps) {
             previous={metrics.hrmax_previous}
             unit="bpm"
             onClick={() => navigateToTab("thresholds")}
+            icon={Heart}
+            iconColor="text-red-500"
+            ctaLabel="Set HR Max →"
           />
         </div>
       </section>
@@ -303,17 +464,26 @@ export function AthleteOverview({ user }: AthleteOverviewProps) {
             unit="kg"
             decimals={1}
             onClick={() => navigateToTab("body")}
+            icon={Scale}
+            iconColor="text-blue-500"
+            ctaLabel="Add weight →"
           />
           <StaticValueCard
             name="Height"
             value={user.height_cm}
             unit="cm"
             onClick={() => navigateToTab("body")}
+            icon={ArrowUp}
+            iconColor="text-green-500"
+            ctaLabel="Add height →"
           />
           <StaticValueCard
             name="Gender"
             value={user.gender}
             onClick={() => navigateToTab("body")}
+            icon={Users}
+            iconColor="text-purple-500"
+            ctaLabel="Select →"
           />
         </div>
       </section>
@@ -329,7 +499,17 @@ export function AthleteOverview({ user }: AthleteOverviewProps) {
             unit="ml/kg/min"
             decimals={1}
             onClick={() => navigateToTab("fitness")}
+            icon={Wind}
+            iconColor="text-cyan-500"
+            ctaLabel="Set →"
           />
+        </div>
+        {/* VO2 Max info hint */}
+        <div className="mt-3 p-3 rounded-lg bg-muted/50 border border-border text-sm flex items-start gap-2">
+          <Info className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+          <span className="text-muted-foreground">
+            VO2 Max can be estimated from your best efforts once you have more activities
+          </span>
         </div>
       </section>
 
@@ -343,6 +523,9 @@ export function AthleteOverview({ user }: AthleteOverviewProps) {
             previous={metrics.resting_hr_previous}
             unit="bpm"
             onClick={() => navigateToTab("recovery")}
+            icon={Heart}
+            iconColor="text-green-500"
+            ctaLabel="Set →"
           />
           <MetricSummaryCard
             name="HRV"
@@ -350,6 +533,9 @@ export function AthleteOverview({ user }: AthleteOverviewProps) {
             previous={metrics.hrv_previous}
             unit="ms"
             onClick={() => navigateToTab("recovery")}
+            icon={Shield}
+            iconColor="text-purple-500"
+            ctaLabel="Set →"
           />
         </div>
       </section>

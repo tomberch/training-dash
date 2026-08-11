@@ -8,13 +8,15 @@ import {
   AthleteRecovery,
 } from "./athlete";
 import type { User } from "@/api";
+import { CheckCircle, Lock, Scale, Zap, Heart } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 
 const TABS = [
-  { value: "overview", label: "Overview" },
-  { value: "thresholds", label: "Thresholds" },
-  { value: "body", label: "Body" },
-  { value: "fitness", label: "Fitness" },
-  { value: "recovery", label: "Recovery" },
+  { value: "overview", label: "Overview", icon: CheckCircle },
+  { value: "thresholds", label: "Thresholds", icon: Lock },
+  { value: "body", label: "Body", icon: Scale },
+  { value: "fitness", label: "Fitness", icon: Zap },
+  { value: "recovery", label: "Recovery", icon: Heart },
 ] as const;
 
 type TabValue = (typeof TABS)[number]["value"];
@@ -44,13 +46,17 @@ export function AthletePage({ user, onUserUpdate }: AthletePageProps) {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6">
-      <h1 className="text-metric mb-6">Athlete Profile</h1>
+    <div className="p-8">
+      <PageHeader
+        title="Athlete Profile"
+        subtitle="Your physiological data and training thresholds"
+      />
 
       <Tabs value={currentTab} onValueChange={handleTabChange}>
-        <TabsList className="w-full justify-start overflow-x-auto">
+        <TabsList className="w-full justify-start overflow-x-auto mb-6">
           {TABS.map((tab) => (
-            <TabsTrigger key={tab.value} value={tab.value}>
+            <TabsTrigger key={tab.value} value={tab.value} className="gap-2">
+              <tab.icon className="w-4 h-4" />
               {tab.label}
             </TabsTrigger>
           ))}
