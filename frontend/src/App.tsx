@@ -80,7 +80,7 @@ function AppLayout({ user, onLogout, onUserUpdate }: {
   const uploadTriggerRef = useRef<(() => void) | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
-  const hideGlobalHeader = location.pathname === "/" || location.pathname === "/activities" || location.pathname === "/activities/table";
+  const hideGlobalHeader = location.pathname === "/" || location.pathname === "/activities" || location.pathname === "/activities/table" || location.pathname === "/settings";
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -163,7 +163,10 @@ function AppLayout({ user, onLogout, onUserUpdate }: {
                 element={
                   <SettingsWrapper 
                     user={user} 
-                    onUserUpdate={onUserUpdate} 
+                    onUserUpdate={onUserUpdate}
+                    onLogout={onLogout}
+                    onUploadComplete={() => setRefreshKey((k) => k + 1)}
+                    onUploadTriggerRef={(trigger) => { uploadTriggerRef.current = trigger; }}
                   />
                 } 
               />
@@ -197,14 +200,27 @@ function ActivityDetailWrapper({ unitSystem }: { unitSystem: UnitSystem }) {
   );
 }
 
-function SettingsWrapper({ user, onUserUpdate }: { user: User; onUserUpdate: (user: User) => void }) {
-  const navigate = useNavigate();
-  
+function SettingsWrapper({ 
+  user, 
+  onUserUpdate,
+  onLogout,
+  onUploadComplete,
+  onUploadTriggerRef,
+}: { 
+  user: User; 
+  onUserUpdate: (user: User) => void;
+  onLogout: () => void;
+  onUploadComplete: () => void;
+  onUploadTriggerRef: (trigger: () => void) => void;
+}) {
   return (
     <Settings
       user={user}
-      onBack={() => navigate(-1)}
       onUserUpdate={onUserUpdate}
+      onLogout={onLogout}
+      onSettings={() => {}} // Already on settings
+      onUploadComplete={onUploadComplete}
+      onUploadTriggerRef={onUploadTriggerRef}
     />
   );
 }

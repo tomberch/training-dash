@@ -42,6 +42,8 @@ import {
 import { useTheme } from "./hooks/useTheme";
 import type { Theme } from "./hooks/useTheme";
 import { SunIcon, MoonIcon, MonitorIcon, SparklesIcon } from "./components/icons/ThemeIcons";
+import { UploadButton } from "./components/UploadButton";
+import { UserMenu } from "./components/UserMenu";
 
 function EyeIcon({ className }: { className?: string }) {
   return (
@@ -120,13 +122,16 @@ function PasswordInput({
 
 interface SettingsProps {
   user: User;
-  onBack: () => void;
   onUserUpdate: (user: User) => void;
+  onLogout?: () => void;
+  onSettings?: () => void;
+  onUploadComplete?: () => void;
+  onUploadTriggerRef?: (trigger: () => void) => void;
 }
 
 
 
-export function Settings({ user, onBack, onUserUpdate }: SettingsProps) {
+export function Settings({ user, onUserUpdate, onLogout, onSettings, onUploadComplete, onUploadTriggerRef }: SettingsProps) {
   const location = useLocation();
 
   // Scroll to section when URL has hash (e.g., /settings#power-heart-rate)
@@ -146,20 +151,25 @@ export function Settings({ user, onBack, onUserUpdate }: SettingsProps) {
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-4xl mx-auto p-8">
-        {/* Header */}
-        <div className="mb-8">
-          <button
-            onClick={onBack}
-            className="flex items-center gap-2 text-muted-foreground hover:text-foreground mb-4 transition"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-            <span>Back</span>
-          </button>
+        {/* Header - matches Dashboard/Activities pattern */}
+        <div className="flex items-center justify-between mb-2">
           <h1 className="text-3xl font-bold text-foreground">Settings</h1>
-          <p className="text-muted-foreground mt-1">Manage your profile, preferences, and integrations</p>
+          <div className="flex items-center gap-3">
+            {onUploadComplete && onUploadTriggerRef && (
+              <UploadButton onUploadComplete={onUploadComplete} onUploadTriggerRef={onUploadTriggerRef} />
+            )}
+            {onLogout && onSettings && (
+              <UserMenu
+                displayName={user.display_name}
+                email={user.email}
+                avatarPath={user.avatar_path}
+                onLogout={onLogout}
+                onSettings={onSettings}
+              />
+            )}
+          </div>
         </div>
+        <p className="text-muted-foreground mb-8">Manage your profile, preferences, and integrations</p>
         
         <div className="space-y-6">
           <ProfileSection user={user} onUserUpdate={onUserUpdate} />
