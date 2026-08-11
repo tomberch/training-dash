@@ -85,16 +85,71 @@ TrainDash uses the system font stack for optimal performance and native feel:
 font-family: system-ui, -apple-system, sans-serif;
 ```
 
-### Scale
+### Semantic Typography Classes (Use These)
+
+Always use semantic typography classes instead of assembling individual Tailwind utilities. These ensure consistency and make global changes easy.
+
+| Class | Usage | Equivalent |
+|-------|-------|------------|
+| `text-page-title` | Main page headings ("Settings", "Dashboard") | `text-3xl font-bold tracking-tight` |
+| `text-page-subtitle` | Descriptions under page titles | `text-base text-muted-foreground` |
+| `text-card-title` | Section headings inside cards | `text-xl font-semibold` |
+| `text-section-heading` | Subsection headers, table headers | `text-sm font-semibold uppercase tracking-wider text-muted-foreground` |
+| `text-label` | Form labels | `text-sm font-medium text-muted-foreground` |
+| `text-body` | Default paragraph text | `text-base text-foreground` |
+| `text-body-secondary` | Secondary/helper text | `text-sm text-muted-foreground` |
+| `text-caption` | Timestamps, fine print, hints | `text-xs text-muted-foreground` |
+| `text-metric` | Large stat values | `text-2xl font-bold tabular-nums` |
+| `text-metric-label` | Labels under metrics | `text-xs font-medium uppercase tracking-wide text-muted-foreground` |
+
+### Usage Examples
+
+```tsx
+// Page header
+<h1 className="text-page-title">Settings</h1>
+<p className="text-page-subtitle">Manage your profile and preferences</p>
+
+// Card with title
+<Card>
+  <CardHeader>
+    <CardTitle className="text-card-title">Profile</CardTitle>
+  </CardHeader>
+  <CardContent>
+    <p className="text-body">Your account information</p>
+    <p className="text-caption">Last updated 2 hours ago</p>
+  </CardContent>
+</Card>
+
+// Metric display
+<div>
+  <span className="text-metric">258</span>
+  <span className="text-metric-label">FTP (watts)</span>
+</div>
+
+// Form field
+<div className="space-y-1.5">
+  <label className="text-label">Email</label>
+  <Input type="email" />
+  <p className="text-caption">We'll never share your email</p>
+</div>
+
+// Table/zone headers
+<h3 className="text-section-heading">Power Zones</h3>
+```
+
+### Raw Scale (Avoid When Possible)
+
+If semantic classes don't fit your use case, these are the raw Tailwind utilities:
 
 | Class | Size | Usage |
 |-------|------|-------|
 | `text-xs` | 0.75rem | Labels, badges, helper text |
 | `text-sm` | 0.875rem | Body text, form inputs |
 | `text-base` | 1rem | Default body |
-| `text-lg` | 1.125rem | Section headings |
+| `text-lg` | 1.125rem | Emphasized text |
 | `text-xl` | 1.25rem | Card titles |
 | `text-2xl` | 1.5rem | Page headings |
+| `text-3xl` | 1.875rem | Large page headings |
 
 ### Font Weights
 
@@ -336,7 +391,14 @@ When migrating existing components:
    - `<button>` → `<Button>`
    - Section containers → `<Card>` with `CardHeader`/`CardContent`
 
-4. **Use the `cn()` utility** for conditional classes:
+4. **Use semantic typography classes:**
+   - `text-3xl font-bold` → `text-page-title`
+   - `text-xl font-semibold` → `text-card-title`
+   - `text-sm text-muted-foreground` → `text-body-secondary`
+   - `text-xs text-muted-foreground` → `text-caption`
+   - `text-2xl font-bold tabular-nums` → `text-metric`
+
+5. **Use the `cn()` utility** for conditional classes:
    ```tsx
    import { cn } from "@/lib/utils";
    

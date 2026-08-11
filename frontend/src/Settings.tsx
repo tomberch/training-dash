@@ -101,7 +101,7 @@ function PasswordInput({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         data-testid={dataTestId}
-        className="pr-10"
+        className="h-11 px-4 pr-10 text-base md:text-base"
       />
       <button
         type="button"
@@ -275,7 +275,7 @@ function ProfileSection({ user, onUserUpdate }: { user: User; onUserUpdate: (use
   return (
     <Card className="card-hover">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-xl font-semibold">
+        <CardTitle className="flex items-center gap-2 text-card-title">
           <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
           </svg>
@@ -338,38 +338,38 @@ function ProfileSection({ user, onUserUpdate }: { user: User; onUserUpdate: (use
           {/* Form fields */}
           <div className="flex-1 space-y-4">
             {/* Email (read-only) */}
-            <div>
-              <Label className="block text-sm font-medium text-muted-foreground mb-2">Email</Label>
+            <div className="space-y-1.5">
+              <Label className="text-muted-foreground">Email</Label>
               <Input
                 type="email"
                 value={user.email}
                 disabled
-                className="h-10 px-4"
+                className="h-11 px-4 text-base md:text-base"
               />
             </div>
 
             {/* Display name */}
-            <div>
-              <Label className="block text-sm font-medium text-muted-foreground mb-2">Display Name</Label>
+            <div className="space-y-1.5">
+              <Label className="text-muted-foreground">Display Name</Label>
               <Input
                 type="text"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 placeholder="How you want to be called"
-                className="h-10 px-4"
+                className="h-11 px-4 text-base md:text-base"
               />
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-caption">
                 This name will be shown in the header and anywhere your profile appears
               </p>
             </div>
 
             {/* Sync Hour */}
-            <div>
-              <Label className="block text-sm font-medium text-muted-foreground mb-2">Daily Sync Time</Label>
+            <div className="space-y-1.5">
+              <Label className="text-muted-foreground">Daily Sync Time</Label>
               <select
                 value={syncHour}
                 onChange={(e) => setSyncHour(parseInt(e.target.value))}
-                className="w-full h-10 px-4 rounded-lg border border-input bg-transparent text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                className="w-full h-11 px-4 rounded-lg border border-input bg-transparent text-base focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
               >
                 {Array.from({ length: 24 }, (_, i) => (
                   <option key={i} value={i}>
@@ -377,7 +377,7 @@ function ProfileSection({ user, onUserUpdate }: { user: User; onUserUpdate: (use
                   </option>
                 ))}
               </select>
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-caption">
                 Your integrations (Garmin, Xert) will sync automatically at this hour
               </p>
             </div>
@@ -421,7 +421,7 @@ function PreferencesSection({ user, onUserUpdate }: { user: User; onUserUpdate: 
   return (
     <Card className="card-hover">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-xl font-semibold">
+        <CardTitle className="flex items-center gap-2 text-card-title">
           <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
           </svg>
@@ -433,12 +433,12 @@ function PreferencesSection({ user, onUserUpdate }: { user: User; onUserUpdate: 
         <div className="flex items-center justify-between">
           <div>
             <h3 className="font-medium mb-1">Theme</h3>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body-secondary">
               Choose light, dark, or follow your system preference
             </p>
           </div>
           
-          <div className="flex gap-1 bg-muted p-1 rounded-lg">
+          <div className="flex bg-muted rounded-lg p-1">
             {[
               { value: "latte" as Theme, label: "Light", icon: <SunIcon className="w-4 h-4" /> },
               { value: "mocha" as Theme, label: "Dark", icon: <MoonIcon className="w-4 h-4" /> },
@@ -449,14 +449,14 @@ function PreferencesSection({ user, onUserUpdate }: { user: User; onUserUpdate: 
                 key={value}
                 onClick={() => setTheme(value)}
                 className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+                  "flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors",
                   theme === value
-                    ? "bg-card text-foreground shadow-sm"
+                    ? "bg-primary text-primary-foreground"
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
                 {icon}
-                {label}
+                <span>{label}</span>
               </button>
             ))}
           </div>
@@ -466,40 +466,37 @@ function PreferencesSection({ user, onUserUpdate }: { user: User; onUserUpdate: 
         <div className="flex items-center justify-between pt-6 border-t border-border">
           <div>
             <h3 className="font-medium mb-1">Unit System</h3>
-            <p className="text-sm text-muted-foreground">
-              Display distances, elevations, and speeds in {user.unit_system === "metric" ? "kilometers and meters" : "miles and feet"}
+            <p className="text-body-secondary">
+              Display distances, elevations, and speeds in kilometers or miles
             </p>
           </div>
           
-          <button
-            onClick={handleToggle}
-            disabled={saving}
-            data-testid="unit-toggle"
-            className={cn(
-              "relative inline-flex h-9 w-36 items-center rounded-lg transition-colors",
-              saving && "opacity-50 cursor-not-allowed",
-              user.unit_system === "metric" ? "bg-primary/10" : "bg-success/10"
-            )}
-          >
-            <span
+          <div className="flex bg-muted rounded-lg p-1">
+            <button
+              onClick={() => user.unit_system !== "metric" && handleToggle()}
+              disabled={saving}
               className={cn(
-                "absolute inset-y-1 w-[calc(50%-4px)] rounded-md bg-card shadow transition-transform ml-1",
-                user.unit_system === "imperial" && "translate-x-[calc(100%+4px)]"
+                "px-4 py-2 rounded-md text-sm font-medium transition-colors",
+                user.unit_system === "metric"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground"
               )}
-            />
-            <span className={cn(
-              "relative z-10 flex-1 text-center text-sm font-medium transition-colors",
-              user.unit_system === "metric" ? "text-primary" : "text-muted-foreground"
-            )}>
+            >
               Metric
-            </span>
-            <span className={cn(
-              "relative z-10 flex-1 text-center text-sm font-medium transition-colors",
-              user.unit_system === "imperial" ? "text-success" : "text-muted-foreground"
-            )}>
+            </button>
+            <button
+              onClick={() => user.unit_system !== "imperial" && handleToggle()}
+              disabled={saving}
+              className={cn(
+                "px-4 py-2 rounded-md text-sm font-medium transition-colors",
+                user.unit_system === "imperial"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
               Imperial
-            </span>
-          </button>
+            </button>
+          </div>
         </div>
         
         <FeedbackAlert feedback={feedback} />
@@ -554,73 +551,90 @@ function PowerHeartRateSection({ user, onUserUpdate }: { user: User; onUserUpdat
   return (
     <Card id="power-heart-rate" className="card-hover">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-xl font-semibold">
-          <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-          </svg>
-          Power & Heart Rate
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {/* HR-Derived Power Toggle */}
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1">
-            <p className="text-sm font-medium text-foreground">HR-Derived Power</p>
-            <p className="text-sm text-muted-foreground mt-1">
-              Estimate power from heart rate on activities without a power meter.
-              Uses an Efficiency Factor model trained from your dual-sensor rides.
-            </p>
-            
-            {!modelReady && (
-              <p className="text-sm text-warning mt-2">
-                Record {minRidesRequired - rideCount} more {minRidesRequired - rideCount === 1 ? "activity" : "activities"} with 
-                both power meter and heart rate to enable this feature.
-              </p>
-            )}
-            
-            {modelReady && hrPowerModel?.model_exists && (
-              <div className="mt-3 p-3 rounded-lg bg-muted/50 text-sm">
-                <div className="flex items-center gap-4 text-muted-foreground">
-                  <span>Model trained on <span className="font-medium text-foreground">{rideCount}</span> rides</span>
-                  {confidenceLabel && (
-                    <span className={cn(
-                      "px-2 py-0.5 rounded-full text-xs font-medium",
-                      confidencePercent && confidencePercent >= 80 
-                        ? "bg-success/20 text-success" 
-                        : confidencePercent && confidencePercent >= 60
-                          ? "bg-warning/20 text-warning"
-                          : "bg-muted text-muted-foreground"
-                    )}>
-                      {confidenceLabel} confidence
-                    </span>
-                  )}
-                </div>
-                {hrPowerModel.is_stale && (
-                  <p className="text-warning mt-2 text-xs">
-                    Model may be outdated. Record new dual-sensor activities to improve accuracy.
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
-          
+        <div className="flex items-center justify-between w-full">
+          <CardTitle className="flex items-center gap-2 text-card-title">
+            <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+            </svg>
+            Power & Heart Rate
+          </CardTitle>
+          {/* Toggle in header like mockup */}
           <button
             onClick={handleToggle}
             disabled={saving || !modelReady}
             aria-pressed={isEnabled}
             className={cn(
-              "relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
+              "relative inline-flex h-6 w-12 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
               isEnabled ? "bg-primary" : "bg-muted",
               (!modelReady || saving) && "opacity-50 cursor-not-allowed"
             )}
           >
             <span
               className={cn(
-                "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-card shadow ring-0 transition duration-200 ease-in-out",
-                isEnabled ? "translate-x-5" : "translate-x-0"
+                "pointer-events-none absolute left-1 bottom-1 w-4 h-4 transform rounded-full bg-muted-foreground shadow transition duration-200 ease-in-out",
+                isEnabled ? "translate-x-6 bg-white" : "translate-x-0"
               )}
             />
           </button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div>
+          <h3 className="font-medium mb-2">HR-Derived Power</h3>
+          <p className="text-body-secondary mb-4">
+            Estimate power from heart rate on activities without a power meter.
+            Uses an Efficiency Factor model trained from your dual-sensor rides.
+          </p>
+          
+          {!modelReady && (
+            <div className="bg-primary/10 border border-primary/30 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <svg className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div className="flex-1">
+                  <p className="text-sm text-foreground mb-1">Requirement not met</p>
+                  <p className="text-caption">
+                    Record {minRidesRequired - rideCount} more {minRidesRequired - rideCount === 1 ? "activity" : "activities"} with both power meter and heart rate to enable this feature.
+                  </p>
+                  <div className="mt-3 flex items-center gap-2">
+                    <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-primary rounded-full transition-all" 
+                        style={{ width: `${(rideCount / minRidesRequired) * 100}%` }}
+                      />
+                    </div>
+                    <span className="text-caption">{rideCount}/{minRidesRequired}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {modelReady && hrPowerModel?.model_exists && (
+            <div className="p-3 rounded-lg bg-muted/50 text-sm">
+              <div className="flex items-center gap-4 text-muted-foreground">
+                <span>Model trained on <span className="font-medium text-foreground">{rideCount}</span> rides</span>
+                {confidenceLabel && (
+                  <span className={cn(
+                    "px-2 py-0.5 rounded-full text-xs font-medium",
+                    confidencePercent && confidencePercent >= 80 
+                      ? "bg-success/20 text-success" 
+                      : confidencePercent && confidencePercent >= 60
+                        ? "bg-warning/20 text-warning"
+                        : "bg-muted text-muted-foreground"
+                  )}>
+                    {confidenceLabel} confidence
+                  </span>
+                )}
+              </div>
+              {hrPowerModel.is_stale && (
+                <p className="text-warning mt-2 text-xs">
+                  Model may be outdated. Record new dual-sensor activities to improve accuracy.
+                </p>
+              )}
+            </div>
+          )}
         </div>
         
         <FeedbackAlert feedback={feedback} />
@@ -749,7 +763,7 @@ function ZonesSection({ user, onUserUpdate }: { user: User; onUserUpdate: (user:
     return (
       <Card className="card-hover">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-xl font-semibold">
+          <CardTitle className="flex items-center gap-2 text-card-title">
             <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
@@ -766,7 +780,7 @@ function ZonesSection({ user, onUserUpdate }: { user: User; onUserUpdate: (user:
   return (
     <Card className="card-hover">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-xl font-semibold">
+        <CardTitle className="flex items-center gap-2 text-card-title">
           <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
           </svg>
@@ -799,10 +813,10 @@ function ZonesSection({ user, onUserUpdate }: { user: User; onUserUpdate: (user:
       <CardContent>
         {/* No threshold warning */}
         {!hasFtp && !hasLthr && (
-          <div className="mb-4 p-3 rounded-lg bg-warning/10 border border-warning/20">
-            <p className="text-sm text-warning">
+          <div className="mb-6 p-4 rounded-lg bg-warning/10 border border-warning/20">
+            <p className="text-sm text-foreground">
               Set your FTP and LTHR thresholds to see computed zones.{" "}
-              <Link to="/athlete?tab=thresholds" className="underline hover:no-underline">
+              <Link to="/athlete?tab=thresholds" className="text-primary hover:underline">
                 Go to Athlete → Thresholds
               </Link>
             </p>
@@ -812,120 +826,78 @@ function ZonesSection({ user, onUserUpdate }: { user: User; onUserUpdate: (user:
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Power Zones */}
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-medium text-foreground">Power Zones</h3>
-              {hasFtp && (
-                <span className="text-xs text-muted-foreground">Based on FTP: {ftp} W</span>
-              )}
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Power Zones</h3>
+            <div className="space-y-2">
+              {powerZones.map((z) => (
+                <div key={z.zone} className="flex justify-between text-sm p-2 bg-muted rounded">
+                  <span className="text-muted-foreground">Zone {z.zone}</span>
+                  <span className="text-muted-foreground">
+                    {editMode ? (
+                      <div className="flex items-center gap-1">
+                        <Input
+                          type="number"
+                          value={editedPowerPct[z.zone.toString()][0]}
+                          onChange={(e) => updatePowerPct(z.zone.toString(), "min", e.target.value)}
+                          className="w-14 text-right text-xs h-7"
+                        />
+                        <span>-</span>
+                        <Input
+                          type="number"
+                          value={editedPowerPct[z.zone.toString()][1] ?? ""}
+                          onChange={(e) => updatePowerPct(z.zone.toString(), "max", e.target.value)}
+                          placeholder="∞"
+                          className="w-14 text-right text-xs h-7"
+                        />
+                        <span>%</span>
+                      </div>
+                    ) : (
+                      `${z.minPct}-${z.maxPct ?? "∞"}%`
+                    )}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {hasFtp ? `${z.minValue}-${z.maxValue ?? "∞"} W` : "— W"}
+                  </span>
+                </div>
+              ))}
             </div>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs text-muted-foreground uppercase tracking-wide border-b border-border">
-                  <th className="pb-2 w-8">Zone</th>
-                  <th className="pb-2">Name</th>
-                  <th className="pb-2 text-right">%FTP</th>
-                  <th className="pb-2 text-right">Watts</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {powerZones.map((z) => (
-                  <tr key={z.zone}>
-                    <td className="py-2 font-medium text-foreground">Z{z.zone}</td>
-                    <td className="py-2 text-muted-foreground">{z.name}</td>
-                    <td className="py-2 text-right">
-                      {editMode ? (
-                        <div className="flex items-center justify-end gap-1">
-                          <Input
-                            type="number"
-                            value={editedPowerPct[z.zone.toString()][0]}
-                            onChange={(e) => updatePowerPct(z.zone.toString(), "min", e.target.value)}
-                            className="w-14 text-right text-xs h-7"
-                          />
-                          <span className="text-muted-foreground">-</span>
-                          <Input
-                            type="number"
-                            value={editedPowerPct[z.zone.toString()][1] ?? ""}
-                            onChange={(e) => updatePowerPct(z.zone.toString(), "max", e.target.value)}
-                            placeholder="∞"
-                            className="w-14 text-right text-xs h-7"
-                          />
-                        </div>
-                      ) : (
-                        <span className="text-foreground">
-                          {z.minPct}-{z.maxPct ?? "∞"}%
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-2 text-right text-muted-foreground">
-                      {hasFtp ? (
-                        <span>{z.minValue}-{z.maxValue ?? "∞"}</span>
-                      ) : (
-                        <span>—</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </div>
 
           {/* HR Zones */}
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-medium text-foreground">Heart Rate Zones</h3>
-              {hasLthr && (
-                <span className="text-xs text-muted-foreground">Based on LTHR: {lthr} bpm</span>
-              )}
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Heart Rate Zones</h3>
+            <div className="space-y-2">
+              {hrZones.map((z) => (
+                <div key={z.zone} className="flex justify-between text-sm p-2 bg-muted rounded">
+                  <span className="text-muted-foreground">Zone {z.zone}</span>
+                  <span className="text-muted-foreground">
+                    {editMode ? (
+                      <div className="flex items-center gap-1">
+                        <Input
+                          type="number"
+                          value={editedHrPct[z.zone.toString()][0]}
+                          onChange={(e) => updateHrPct(z.zone.toString(), "min", e.target.value)}
+                          className="w-14 text-right text-xs h-7"
+                        />
+                        <span>-</span>
+                        <Input
+                          type="number"
+                          value={editedHrPct[z.zone.toString()][1] ?? ""}
+                          onChange={(e) => updateHrPct(z.zone.toString(), "max", e.target.value)}
+                          placeholder="∞"
+                          className="w-14 text-right text-xs h-7"
+                        />
+                        <span>%</span>
+                      </div>
+                    ) : (
+                      `${z.minPct}-${z.maxPct ?? "∞"}%`
+                    )}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {hasLthr ? `${z.minValue}-${z.maxValue ?? "∞"} bpm` : "— bpm"}
+                  </span>
+                </div>
+              ))}
             </div>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs text-muted-foreground uppercase tracking-wide border-b border-border">
-                  <th className="pb-2 w-8">Zone</th>
-                  <th className="pb-2">Name</th>
-                  <th className="pb-2 text-right">%LTHR</th>
-                  <th className="pb-2 text-right">BPM</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {hrZones.map((z) => (
-                  <tr key={z.zone}>
-                    <td className="py-2 font-medium text-foreground">Z{z.zone}</td>
-                    <td className="py-2 text-muted-foreground">{z.name}</td>
-                    <td className="py-2 text-right">
-                      {editMode ? (
-                        <div className="flex items-center justify-end gap-1">
-                          <Input
-                            type="number"
-                            value={editedHrPct[z.zone.toString()][0]}
-                            onChange={(e) => updateHrPct(z.zone.toString(), "min", e.target.value)}
-                            className="w-14 text-right text-xs h-7"
-                          />
-                          <span className="text-muted-foreground">-</span>
-                          <Input
-                            type="number"
-                            value={editedHrPct[z.zone.toString()][1] ?? ""}
-                            onChange={(e) => updateHrPct(z.zone.toString(), "max", e.target.value)}
-                            placeholder="∞"
-                            className="w-14 text-right text-xs h-7"
-                          />
-                        </div>
-                      ) : (
-                        <span className="text-foreground">
-                          {z.minPct}-{z.maxPct ?? "∞"}%
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-2 text-right text-muted-foreground">
-                      {hasLthr ? (
-                        <span>{z.minValue}-{z.maxValue ?? "∞"}</span>
-                      ) : (
-                        <span>—</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </div>
         </div>
 
@@ -1057,7 +1029,7 @@ function ConnectedAccountsSection(): React.JSX.Element {
     return (
       <Card className="card-hover">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-xl font-semibold">
+          <CardTitle className="flex items-center gap-2 text-card-title">
             <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
             </svg>
@@ -1097,7 +1069,7 @@ function ConnectedAccountsSection(): React.JSX.Element {
   return (
     <Card className="card-hover">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-xl font-semibold">
+        <CardTitle className="flex items-center gap-2 text-card-title">
           <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
           </svg>
@@ -1108,71 +1080,77 @@ function ConnectedAccountsSection(): React.JSX.Element {
         <FeedbackAlert feedback={feedback} />
 
         {/* Google */}
-        <div className="flex items-center justify-between p-4 border border-border rounded-lg">
-          <div className="flex items-center gap-3">
-            <svg className="w-6 h-6" viewBox="0 0 24 24">
-              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-            </svg>
+        <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center">
+              <svg className="w-6 h-6" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+              </svg>
+            </div>
             <div>
-              <div className="font-medium text-foreground">Google</div>
+              <h3 className="font-medium">Google</h3>
               {googleLink ? (
-                <div className="text-sm text-muted-foreground">{googleLink.provider_email}</div>
+                <p className="text-body-secondary">{googleLink.provider_email}</p>
               ) : (
-                <div className="text-sm text-muted-foreground">Not connected</div>
+                <p className="text-body-secondary">Not connected</p>
               )}
             </div>
           </div>
           {googleLink ? (
-            <Button
-              variant="destructive"
-              size="sm"
+            <button
               onClick={() => handleDisconnect("google")}
               disabled={disconnecting === "google" || !canDisconnect}
               title={!canDisconnect ? "Set a password before disconnecting your last OAuth provider" : undefined}
+              className="bg-destructive/10 text-destructive hover:bg-destructive/20 px-4 py-2 rounded-lg transition text-sm font-medium disabled:opacity-50"
             >
-              {disconnecting === "google" ? "Disconnecting..." : "Disconnect"}
-            </Button>
+              {disconnecting === "google" ? "..." : "Disconnect"}
+            </button>
           ) : (
-            <Button variant="outline" size="sm" asChild>
-              <a href="/auth/google/connect">Connect</a>
-            </Button>
+            <a
+              href="/auth/google/connect"
+              className="bg-muted hover:bg-muted/80 border border-border px-4 py-2 rounded-lg transition text-sm font-medium"
+            >
+              Connect
+            </a>
           )}
         </div>
 
-
-
         {/* GitHub */}
-        <div className="flex items-center justify-between p-4 border border-border rounded-lg">
-          <div className="flex items-center gap-3">
-            <svg className="w-6 h-6 text-foreground" fill="currentColor" viewBox="0 0 24 24">
-              <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33.85 0 1.71.11 2.5.33 1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0012 2z"/>
-            </svg>
+        <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 bg-background rounded-lg flex items-center justify-center">
+              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+              </svg>
+            </div>
             <div>
-              <div className="font-medium text-foreground">GitHub</div>
+              <h3 className="font-medium">GitHub</h3>
               {githubLink ? (
-                <div className="text-sm text-muted-foreground">{githubLink.provider_email || githubLink.display_name}</div>
+                <p className="text-body-secondary">{githubLink.provider_email || githubLink.display_name}</p>
               ) : (
-                <div className="text-sm text-muted-foreground">Not connected</div>
+                <p className="text-body-secondary">Not connected</p>
               )}
             </div>
           </div>
           {githubLink ? (
-            <Button
-              variant="destructive"
-              size="sm"
+            <button
               onClick={() => handleDisconnect("github")}
               disabled={disconnecting === "github" || !canDisconnect}
               title={!canDisconnect ? "Set a password before disconnecting your last OAuth provider" : undefined}
+              className="bg-destructive/10 text-destructive hover:bg-destructive/20 px-4 py-2 rounded-lg transition text-sm font-medium disabled:opacity-50"
             >
-              {disconnecting === "github" ? "Disconnecting..." : "Disconnect"}
-            </Button>
+              {disconnecting === "github" ? "..." : "Disconnect"}
+            </button>
           ) : (
-            <Button variant="outline" size="sm" asChild>
-              <a href="/auth/github/connect">Connect</a>
-            </Button>
+            <a
+              href="/auth/github/connect"
+              className="bg-muted hover:bg-muted/80 border border-border px-4 py-2 rounded-lg transition text-sm font-medium"
+            >
+              Connect
+            </a>
           )}
         </div>
 
@@ -1239,7 +1217,7 @@ function IntegrationsSection() {
   return (
     <Card className="card-hover">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-xl font-semibold">
+        <CardTitle className="flex items-center gap-2 text-card-title">
           <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" />
           </svg>
@@ -1336,11 +1314,11 @@ function XertIntegration() {
   }
 
   return (
-    <div className="border border-border rounded-lg p-4">
+    <div className="border border-border rounded-lg p-5">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="text-sm font-medium text-foreground">Xert</h3>
-          <p className="text-sm text-muted-foreground">
+          <h3 className="font-semibold">Xert</h3>
+          <p className="text-body-secondary">
             {xertStatus?.configured
               ? `Connected as ${xertStatus.xert_email}`
               : "Not connected"}
@@ -1349,7 +1327,7 @@ function XertIntegration() {
         <span
           data-testid="xert-status"
           className={cn(
-            "px-2 py-1 text-xs font-medium rounded-full",
+            "px-3 py-1 text-xs rounded-full",
             xertStatus?.configured
               ? "bg-success/20 text-success"
               : "bg-muted text-muted-foreground"
@@ -1361,20 +1339,21 @@ function XertIntegration() {
 
 
       
-      <div className="space-y-3">
+      <div className="space-y-4">
         <div className="space-y-1.5">
-          <Label>Xert Email</Label>
+          <Label className="text-muted-foreground">Xert Email</Label>
           <Input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="your@email.com"
             data-testid="xert-email"
+            className="h-11 px-4 text-base md:text-base"
           />
         </div>
         
         <div className="space-y-1.5">
-          <Label>Xert Password</Label>
+          <Label className="text-muted-foreground">Xert Password</Label>
           <PasswordInput
             value={password}
             onChange={setPassword}
@@ -1384,41 +1363,48 @@ function XertIntegration() {
         </div>
         
         <div className="space-y-1.5">
-          <Label>Sync activities since</Label>
+          <Label className="text-muted-foreground">Sync activities since</Label>
           <Input
             type="date"
             value={syncSince}
             onChange={(e) => setSyncSince(e.target.value)}
             data-testid="xert-sync-since"
+            className="h-11 px-4 text-base md:text-base"
           />
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption">
             Activities from this date onwards will be imported
           </p>
         </div>
         
-        <div className="flex gap-3 pt-2">
+        {xertStatus?.configured ? (
+          <div className="flex gap-3 pt-2">
+            <Button
+              onClick={handleConnect}
+              disabled={saving || !email || !password}
+              data-testid="xert-connect"
+            >
+              {saving ? "Updating..." : "Update"}
+            </Button>
+            <SyncButton onSync={triggerXertSync} label="Sync Now" />
+            <Button
+              variant="destructive"
+              onClick={handleDisconnect}
+              disabled={saving}
+              data-testid="xert-disconnect"
+            >
+              Disconnect
+            </Button>
+          </div>
+        ) : (
           <Button
             onClick={handleConnect}
             disabled={saving || !email || !password}
             data-testid="xert-connect"
+            className="w-full"
           >
-            {saving ? "Connecting..." : xertStatus?.configured ? "Update" : "Connect"}
+            {saving ? "Connecting..." : "Connect"}
           </Button>
-          
-          {xertStatus?.configured && (
-            <>
-              <SyncButton onSync={triggerXertSync} label="Sync Now" />
-              <Button
-                variant="destructive"
-                onClick={handleDisconnect}
-                disabled={saving}
-                data-testid="xert-disconnect"
-              >
-                Disconnect
-              </Button>
-            </>
-          )}
-        </div>
+        )}
       </div>
       
       <FeedbackAlert feedback={feedback} />
@@ -1553,11 +1539,11 @@ function GarminIntegration() {
 
 
   return (
-    <div className="border border-border rounded-lg p-4">
+    <div className="border border-border rounded-lg p-5">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="text-sm font-medium text-foreground">Garmin</h3>
-          <p className="text-sm text-muted-foreground">
+          <h3 className="font-semibold">Garmin</h3>
+          <p className="text-body-secondary">
             {garminStatus?.configured
               ? `Connected as ${garminStatus.garmin_email}`
               : "Not connected"}
@@ -1566,7 +1552,7 @@ function GarminIntegration() {
         <span
           data-testid="garmin-status"
           className={cn(
-            "px-2 py-1 text-xs font-medium rounded-full",
+            "px-3 py-1 text-xs rounded-full",
             garminStatus?.configured
               ? "bg-success/20 text-success"
               : "bg-muted text-muted-foreground"
@@ -1620,9 +1606,9 @@ function MfaForm({
   onCancel: () => void;
 }) {
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div className="space-y-1.5">
-        <Label>MFA Code</Label>
+        <Label className="text-muted-foreground">MFA Code</Label>
         <Input
           type="text"
           value={mfaCode}
@@ -1630,13 +1616,14 @@ function MfaForm({
           placeholder="Enter 6-digit code"
           data-testid="garmin-mfa-code"
           autoComplete="one-time-code"
+          className="h-11 px-4 text-base md:text-base"
         />
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption">
           Enter the code from your Garmin authenticator app or email
         </p>
       </div>
       
-      <div className="flex gap-3 pt-2">
+      <div className="flex gap-3">
         <Button onClick={onSubmit} disabled={saving || !mfaCode} data-testid="garmin-mfa-submit">
           {saving ? "Verifying..." : "Verify"}
         </Button>
@@ -1674,20 +1661,21 @@ function GarminCredentialsForm({
   onDisconnect: () => void;
 }) {
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div className="space-y-1.5">
-        <Label>Garmin Email</Label>
+        <Label className="text-muted-foreground">Garmin Email</Label>
         <Input
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="your@email.com"
           data-testid="garmin-email"
+          className="h-11 px-4 text-base md:text-base"
         />
       </div>
       
       <div className="space-y-1.5">
-        <Label>Garmin Password</Label>
+        <Label className="text-muted-foreground">Garmin Password</Label>
         <PasswordInput
           value={password}
           onChange={setPassword}
@@ -1697,37 +1685,44 @@ function GarminCredentialsForm({
       </div>
       
       <div className="space-y-1.5">
-        <Label>Sync activities since</Label>
+        <Label className="text-muted-foreground">Sync activities since</Label>
         <Input
           type="date"
           value={syncSince}
           onChange={(e) => setSyncSince(e.target.value)}
           data-testid="garmin-sync-since"
+          className="h-11 px-4 text-base md:text-base"
         />
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption">
           Activities from this date onwards will be imported
         </p>
       </div>
       
-      <div className="flex gap-3 pt-2">
-        <Button onClick={onConnect} disabled={saving || !email || !password} data-testid="garmin-connect">
-          {saving ? "Connecting..." : configured ? "Update" : "Connect"}
+      {configured ? (
+        <div className="flex gap-3 pt-2">
+          <Button onClick={onConnect} disabled={saving || !email || !password} data-testid="garmin-connect">
+            {saving ? "Updating..." : "Update"}
+          </Button>
+          <SyncButton onSync={triggerGarminSync} label="Sync Now" />
+          <Button
+            variant="destructive"
+            onClick={onDisconnect}
+            disabled={saving}
+            data-testid="garmin-disconnect"
+          >
+            Disconnect
+          </Button>
+        </div>
+      ) : (
+        <Button
+          onClick={onConnect}
+          disabled={saving || !email || !password}
+          data-testid="garmin-connect"
+          className="w-full"
+        >
+          {saving ? "Connecting..." : "Connect"}
         </Button>
-        
-        {configured && (
-          <>
-            <SyncButton onSync={triggerGarminSync} label="Sync Now" />
-            <Button
-              variant="destructive"
-              onClick={onDisconnect}
-              disabled={saving}
-              data-testid="garmin-disconnect"
-            >
-              Disconnect
-            </Button>
-          </>
-        )}
-      </div>
+      )}
     </div>
   );
 }

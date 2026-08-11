@@ -245,6 +245,65 @@ body {
 }
 
 /* =============================================================================
+   Typography Utilities
+   
+   Semantic typography classes for consistent text styling across the app.
+   Use these instead of assembling individual Tailwind classes.
+   ============================================================================= */
+
+@layer utilities {
+  /* Page title - main heading at top of pages */
+  .text-page-title {
+    @apply text-3xl font-bold text-foreground tracking-tight;
+  }
+  
+  /* Page subtitle - description under page titles */
+  .text-page-subtitle {
+    @apply text-base text-muted-foreground;
+  }
+  
+  /* Card/section title - headings inside cards */
+  .text-card-title {
+    @apply text-xl font-semibold text-foreground;
+  }
+  
+  /* Section heading - smaller than card title, used for subsections */
+  .text-section-heading {
+    @apply text-sm font-semibold text-muted-foreground uppercase tracking-wider;
+  }
+  
+  /* Form label */
+  .text-label {
+    @apply text-sm font-medium text-muted-foreground;
+  }
+  
+  /* Default body text */
+  .text-body {
+    @apply text-base text-foreground;
+  }
+  
+  /* Secondary body text */
+  .text-body-secondary {
+    @apply text-sm text-muted-foreground;
+  }
+  
+  /* Helper/caption text */
+  .text-caption {
+    @apply text-xs text-muted-foreground;
+  }
+  
+  /* Metric value - large numbers/stats */
+  .text-metric {
+    @apply text-2xl font-bold text-foreground tabular-nums;
+  }
+  
+  /* Metric label - label under metric values */
+  .text-metric-label {
+    @apply text-xs font-medium text-muted-foreground uppercase tracking-wide;
+  }
+}
+
+/* =============================================================================
    Animation Utilities
    
    Standardized timing and easing for consistent motion throughout the app.
