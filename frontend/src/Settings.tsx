@@ -161,8 +161,8 @@ export function Settings({ user, onUserUpdate, onLogout, onSettings, onUploadCom
           onUploadTriggerRef={onUploadTriggerRef}
         />
         
-        {/* Narrower content area */}
-        <div className="max-w-4xl">
+        {/* Centered content area */}
+        <div className="max-w-4xl mx-auto">
           <div className="space-y-6">
             <ProfileSection user={user} onUserUpdate={onUserUpdate} />
             <PreferencesSection user={user} onUserUpdate={onUserUpdate} />
@@ -338,36 +338,38 @@ function ProfileSection({ user, onUserUpdate }: { user: User; onUserUpdate: (use
           {/* Form fields */}
           <div className="flex-1 space-y-4">
             {/* Email (read-only) */}
-            <div className="space-y-1.5">
-              <Label>Email</Label>
+            <div>
+              <Label className="block text-sm font-medium text-muted-foreground mb-2">Email</Label>
               <Input
                 type="email"
                 value={user.email}
                 disabled
+                className="h-10 px-4"
               />
             </div>
 
             {/* Display name */}
-            <div className="space-y-1.5">
-              <Label>Display Name</Label>
+            <div>
+              <Label className="block text-sm font-medium text-muted-foreground mb-2">Display Name</Label>
               <Input
                 type="text"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 placeholder="How you want to be called"
+                className="h-10 px-4"
               />
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground mt-1">
                 This name will be shown in the header and anywhere your profile appears
               </p>
             </div>
 
             {/* Sync Hour */}
-            <div className="space-y-1.5">
-              <Label>Daily Sync Time</Label>
+            <div>
+              <Label className="block text-sm font-medium text-muted-foreground mb-2">Daily Sync Time</Label>
               <select
                 value={syncHour}
                 onChange={(e) => setSyncHour(parseInt(e.target.value))}
-                className="w-full h-10 px-3 rounded-lg border border-input bg-transparent text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                className="w-full h-10 px-4 rounded-lg border border-input bg-transparent text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
               >
                 {Array.from({ length: 24 }, (_, i) => (
                   <option key={i} value={i}>
@@ -375,7 +377,7 @@ function ProfileSection({ user, onUserUpdate }: { user: User; onUserUpdate: (use
                   </option>
                 ))}
               </select>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground mt-1">
                 Your integrations (Garmin, Xert) will sync automatically at this hour
               </p>
             </div>
@@ -430,7 +432,7 @@ function PreferencesSection({ user, onUserUpdate }: { user: User; onUserUpdate: 
         {/* Theme selector */}
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-medium text-foreground">Theme</p>
+            <h3 className="font-medium mb-1">Theme</h3>
             <p className="text-sm text-muted-foreground">
               Choose light, dark, or follow your system preference
             </p>
@@ -461,9 +463,9 @@ function PreferencesSection({ user, onUserUpdate }: { user: User; onUserUpdate: 
         </div>
 
         {/* Unit system */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between pt-6 border-t border-border">
           <div>
-            <p className="text-sm font-medium text-foreground">Unit System</p>
+            <h3 className="font-medium mb-1">Unit System</h3>
             <p className="text-sm text-muted-foreground">
               Display distances, elevations, and speeds in {user.unit_system === "metric" ? "kilometers and meters" : "miles and feet"}
             </p>
