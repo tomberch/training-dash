@@ -419,159 +419,152 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-6xl mx-auto px-4 py-6">
-        {/* Header */}
-        <div className="flex items-center gap-4 mb-6">
-          <div className="flex-1">
-            {isEditingTitle ? (
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={editedTitle}
-                  onChange={(e) => setEditedTitle(e.target.value)}
-                  className="flex-1 px-3 py-2 text-lg font-bold text-foreground bg-input border border-input-border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
-                  autoFocus
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      saveTitle(editedTitle).catch((err) => setError(err));
-                    } else if (e.key === "Escape") {
-                      setIsEditingTitle(false);
-                    }
-                  }}
-                />
-                <button
-                  onClick={() => {
-                    saveTitle(editedTitle).catch((err) => setError(err));
-                  }}
-                  className="px-3 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-lg hover:bg-primary/80"
-                >
-                  Save
-                </button>
-                <button
-                  onClick={() => setIsEditingTitle(false)}
-                  className="px-3 py-2 text-sm font-medium text-foreground bg-card border border-border rounded-lg hover:bg-muted"
-                >
-                  Cancel
-                </button>
-              </div>
-            ) : (
-              <>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-2xl font-bold text-foreground">
-                    {activity.title || formatActivityDate(activity.started_at, activity.utc_offset_minutes, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                  </h1>
-                  {activity.title_source === "pending" && (
+      <div className="max-w-7xl mx-auto p-8">
+        {/* Header - matches mockup-activity-detail-v2 */}
+        <div className="mb-8">
+          <div className="flex items-start justify-between mb-4">
+            {/* Left side: Back button + Title */}
+            <div className="flex items-center gap-4">
+              <button 
+                onClick={onBack}
+                className="text-muted-foreground hover:text-foreground transition p-2 hover:bg-muted rounded-lg"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <div>
+                {isEditingTitle ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={editedTitle}
+                      onChange={(e) => setEditedTitle(e.target.value)}
+                      className="px-3 py-2 text-2xl font-bold text-foreground bg-input border border-input-border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          saveTitle(editedTitle).catch((err) => setError(err));
+                        } else if (e.key === "Escape") {
+                          setIsEditingTitle(false);
+                        }
+                      }}
+                    />
                     <button
                       onClick={() => {
-                        generateTitle().catch((err) => setError(err));
+                        saveTitle(editedTitle).catch((err) => setError(err));
                       }}
-                      disabled={isGeneratingTitle}
-                      className="p-1 text-primary hover:text-primary/80 disabled:opacity-50"
-                      title="Generate location-based title from GPS"
+                      className="px-3 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-lg hover:bg-primary/80"
                     >
-                      {isGeneratingTitle ? (
-                        <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                      ) : (
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                      )}
+                      Save
                     </button>
-                  )}
-                  <button
-                    onClick={() => {
-                      setEditedTitle(activity.title || "");
-                      setIsEditingTitle(true);
-                    }}
-                    className="p-1 text-muted-foreground hover:text-foreground"
-                    title="Edit title"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                    </svg>
-                  </button>
-                </div>
-                {/* Date/time subtitle */}
-                <div className="flex items-center gap-4 text-base text-muted-foreground mt-1">
-                  <span className="flex items-center gap-1.5">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    {formatActivityDate(activity.started_at, activity.utc_offset_minutes, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    {formatActivityTime(activity.started_at, activity.utc_offset_minutes)}
-                    {" - "}
-                    {formatActivityTime(
-                      activityEndTimeIso(activity.started_at, activity.elapsed_time_s),
-                      activity.utc_offset_minutes,
-                    )}
-                    {" "}
-                    <span className="text-muted-foreground/70">({formatTime(activity.elapsed_time_s)})</span>
-                  </span>
-                </div>
-              </>
-            )}
-          </div>
-          
-          {/* Action buttons - right aligned with equal width */}
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <button
-              onClick={onBack}
-              className="w-28 px-4 py-2 text-sm font-medium text-foreground bg-card border border-border rounded-lg hover:bg-muted transition-fast flex items-center justify-center gap-2"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-              </svg>
-              Back
-            </button>
-            <Link
-              to={`/analyze?activity=${activityId}`}
-              className="w-28 px-4 py-2 text-sm font-medium text-primary bg-primary/10 border border-primary/30 rounded-lg hover:bg-primary/20 transition-fast flex items-center justify-center gap-2"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
-              Analyze
-            </Link>
-            {sameRoute && sameRoute.route_id !== null && sameRoute.activities.length > 0 && (
+                    <button
+                      onClick={() => setIsEditingTitle(false)}
+                      className="px-3 py-2 text-sm font-medium text-foreground bg-card border border-border rounded-lg hover:bg-muted"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-3">
+                      <h1 className="text-3xl font-bold text-foreground">
+                        {activity.title || formatActivityDate(activity.started_at, activity.utc_offset_minutes, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                      </h1>
+                      {activity.title_source === "pending" && (
+                        <button
+                          onClick={() => {
+                            generateTitle().catch((err) => setError(err));
+                          }}
+                          disabled={isGeneratingTitle}
+                          className="p-1 text-primary hover:text-primary/80 disabled:opacity-50"
+                          title="Generate location-based title from GPS"
+                        >
+                          {isGeneratingTitle ? (
+                            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                          ) : (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                          )}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => {
+                          setEditedTitle(activity.title || "");
+                          setIsEditingTitle(true);
+                        }}
+                        className="p-1 text-muted-foreground hover:text-primary transition"
+                        title="Edit title"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                        </svg>
+                      </button>
+                    </div>
+                    {/* Date/time subtitle */}
+                    <p className="text-muted-foreground mt-1">
+                      {formatActivityDate(activity.started_at, activity.utc_offset_minutes, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+                      {" · "}
+                      {formatActivityTime(activity.started_at, activity.utc_offset_minutes)}
+                      {" - "}
+                      {formatActivityTime(
+                        activityEndTimeIso(activity.started_at, activity.elapsed_time_s),
+                        activity.utc_offset_minutes,
+                      )}
+                      {" "}
+                      ({formatTime(activity.elapsed_time_s)})
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+            
+            {/* Right side: Action buttons */}
+            <div className="flex items-center gap-3">
               <Link
-                to={`/compare?base=${activityId}`}
-                className="w-28 px-4 py-2 text-sm font-medium text-warning bg-warning/10 border border-warning/30 rounded-lg hover:bg-warning/20 transition-fast flex items-center justify-center gap-2"
+                to={`/analyze?activity=${activityId}`}
+                className="flex items-center gap-2 bg-muted hover:bg-muted/80 px-4 py-2 rounded-lg transition"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                 </svg>
-                Compare
+                <span>Analyze</span>
               </Link>
-            )}
-            <button
-              onClick={() => setShowDeleteDialog(true)}
-              className="w-28 px-4 py-2 text-sm font-medium text-destructive bg-destructive/10 border border-destructive/30 rounded-lg hover:bg-destructive/20 transition-fast flex items-center justify-center gap-2"
-              title="Delete this activity"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-              Delete
-            </button>
+              {sameRoute && sameRoute.route_id !== null && sameRoute.activities.length > 0 && (
+                <Link
+                  to={`/compare?base=${activityId}`}
+                  className="flex items-center gap-2 bg-muted hover:bg-muted/80 px-4 py-2 rounded-lg transition"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                  </svg>
+                  <span>Compare</span>
+                </Link>
+              )}
+              <button
+                onClick={() => setShowDeleteDialog(true)}
+                className="flex items-center gap-2 bg-destructive/20 hover:bg-destructive/30 text-destructive px-4 py-2 rounded-lg transition"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                <span>Delete</span>
+              </button>
+              {activity.is_breakthrough && (
+                <span className="bg-warning/20 text-warning px-3 py-1.5 rounded-full text-sm font-medium flex items-center gap-1">
+                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                  </svg>
+                  Breakthrough
+                </span>
+              )}
+            </div>
           </div>
-          
-          {activity.is_breakthrough && (
-            <span className="inline-flex items-center gap-1 px-3 py-1 text-sm font-semibold text-warning-foreground bg-warning/90 rounded-full">
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-              </svg>
-              Breakthrough
-            </span>
-          )}
         </div>
 
         {/* Grouped Metric Cards */}
