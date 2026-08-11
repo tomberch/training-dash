@@ -79,7 +79,7 @@ export function ResizableMap({
   return (
     <div className="relative">
       <div 
-        className="bg-card rounded-lg border border-border overflow-hidden"
+        className="bg-card rounded-t-lg border border-b-0 border-border overflow-hidden"
         style={{ height: `${height}px` }}
       >
         <MapContainer
