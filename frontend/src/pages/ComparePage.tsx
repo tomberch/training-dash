@@ -911,9 +911,15 @@ export function ComparePage() {
 
   return (
     <div className="h-full flex flex-col bg-background">
+      {/* Page Header */}
+      <div className="flex-shrink-0 p-8 pb-0">
+        <h1 className="text-3xl font-bold text-foreground mb-2">Compare Activities</h1>
+        <p className="text-muted-foreground">Compare performance metrics between two activities</p>
+      </div>
+
       {/* Sticky map */}
       {basePositions.length > 0 && (
-        <div className="flex-shrink-0 p-4 pb-0">
+        <div className="flex-shrink-0 px-8 pt-6 pb-0">
           <ResizableMap
             positions={basePositions}
             coloredSegments={coloredSegments.length > 0 ? coloredSegments : undefined}
@@ -927,23 +933,28 @@ export function ComparePage() {
       )}
 
       {/* Control bar with activity selectors */}
-      <div className="flex-shrink-0 p-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="flex-shrink-0 px-8 py-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Base activity selector */}
           <div>
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-3 h-3 rounded-full bg-primary" />
+              <label className="text-sm font-medium text-muted-foreground">Base Activity</label>
+            </div>
             <ActivitySelector
               selectedId={baseActivity?.id ?? null}
               onSelect={handleBaseSelect}
               excludeIds={compareActivity ? [compareActivity.id] : []}
-              label="Base Activity"
+              label=""
               placeholder="Select the base ride..."
+              className="border-2 border-primary/30 focus-within:ring-2 focus-within:ring-primary/50"
             />
             {baseActivity && (
               <Link
                 to={`/activities/${baseActivity.id}`}
                 className="inline-flex items-center mt-2 text-sm text-primary hover:underline"
               >
-                <span className="w-2 h-2 rounded-full bg-indigo-500 mr-2" />
+                <span className="w-2 h-2 rounded-full bg-primary mr-2" />
                 {baseActivity.title || "Untitled"} →
               </Link>
             )}
@@ -951,6 +962,10 @@ export function ComparePage() {
           
           {/* Compare activity selector */}
           <div>
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-3 h-3 rounded-full bg-blue-500" />
+              <label className="text-sm font-medium text-muted-foreground">Compare With</label>
+            </div>
             {baseActivity ? (
               hasSameRouteActivities ? (
                 <>
@@ -959,37 +974,28 @@ export function ComparePage() {
                     onSelect={handleCompareSelect}
                     filterIds={sameRouteActivityIds}
                     excludeIds={[baseActivity.id]}
-                    label="Compare With (same route)"
+                    label=""
                     placeholder="Select ride to compare..."
+                    className="border-2 border-border focus-within:ring-2 focus-within:ring-blue-500/50"
                   />
                   {compareActivity && (
                     <Link
                       to={`/activities/${compareActivity.id}`}
-                      className="inline-flex items-center mt-2 text-sm text-warning hover:underline"
+                      className="inline-flex items-center mt-2 text-sm text-blue-500 hover:underline"
                     >
-                      <span className="w-2 h-2 rounded-full bg-amber-500 mr-2" />
+                      <span className="w-2 h-2 rounded-full bg-blue-500 mr-2" />
                       {compareActivity.title || "Untitled"} →
                     </Link>
                   )}
                 </>
               ) : (
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">
-                    Compare With (same route)
-                  </label>
-                  <div className="px-3 py-2 bg-muted rounded-lg border border-border text-muted-foreground text-sm">
-                    No other rides on this route yet. Select a different base activity.
-                  </div>
+                <div className="px-4 py-3 bg-muted rounded-xl border-2 border-border text-muted-foreground text-sm">
+                  No other rides on this route yet. Select a different base activity.
                 </div>
               )
             ) : (
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-1">
-                  Compare With
-                </label>
-                <div className="px-3 py-2 bg-muted rounded-lg border border-border text-muted-foreground text-sm">
-                  Select a base activity first
-                </div>
+              <div className="px-4 py-3 bg-muted rounded-xl border-2 border-border text-muted-foreground text-sm">
+                Select a base activity first
               </div>
             )}
           </div>
@@ -997,7 +1003,7 @@ export function ComparePage() {
 
         {/* Swap button */}
         {baseActivity && compareActivity && (
-          <div className="flex justify-center mt-4">
+          <div className="flex justify-center mt-6">
             <button
               onClick={handleSwap}
               disabled={loading}
@@ -1013,7 +1019,7 @@ export function ComparePage() {
       </div>
 
       {/* Comparison content area */}
-      <div className="flex-1 min-h-0 p-4 pt-0 overflow-y-auto">
+      <div className="flex-1 min-h-0 px-8 pb-8 overflow-y-auto">
         {/* Suggested Comparisons - shown when base activity is selected but no comparison yet */}
         {baseActivity && !compareActivity && sameRouteData && (
           <div className="mb-8">
@@ -1254,13 +1260,65 @@ export function ComparePage() {
               comparison={comparison}
             />
           </div>
+        ) : !baseActivity ? (
+          /* Improved empty state with info panels */
+          <div className="bg-card border border-border rounded-xl p-12">
+            <div className="max-w-3xl mx-auto text-center">
+              <svg className="w-24 h-24 text-muted-foreground/50 mx-auto mb-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+              </svg>
+              <h2 className="text-2xl font-bold mb-3 text-foreground">Select Two Activities to Compare</h2>
+              <p className="text-muted-foreground mb-8">Choose a base activity above, then select another to compare performance, routes, and training load.</p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left max-w-2xl mx-auto">
+                <div className="bg-muted/30 rounded-lg p-5 border-l-4 border-primary">
+                  <h3 className="font-semibold mb-2 flex items-center gap-2 text-foreground">
+                    <div className="w-2 h-2 rounded-full bg-primary" />
+                    What You Can Compare
+                  </h3>
+                  <ul className="space-y-2 text-sm text-muted-foreground">
+                    <li className="flex items-start gap-2">
+                      <svg className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/></svg>
+                      <span>Power profiles and zones</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <svg className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/></svg>
+                      <span>Heart rate distribution</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <svg className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/></svg>
+                      <span>Speed and elevation profiles</span>
+                    </li>
+                  </ul>
+                </div>
+                
+                <div className="bg-muted/30 rounded-lg p-5 border-l-4 border-blue-500">
+                  <h3 className="font-semibold mb-2 flex items-center gap-2 text-foreground">
+                    <div className="w-2 h-2 rounded-full bg-blue-500" />
+                    Comparison Tips
+                  </h3>
+                  <ul className="space-y-2 text-sm text-muted-foreground">
+                    <li className="flex items-start gap-2">
+                      <svg className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                      <span>Same route on different days</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <svg className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                      <span>Track fitness improvements</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <svg className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                      <span>Different pacing strategies</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
         ) : (
-          <div className="flex items-center justify-center h-64 bg-card rounded-lg border border-border">
-            <p className="text-muted-foreground">
-              {!baseActivity
-                ? "Select a base activity to begin comparison."
-                : "Select an activity to compare with."}
-            </p>
+          /* Base selected but no compare activity yet - show simple message */
+          <div className="flex items-center justify-center h-64 bg-card rounded-xl border border-border">
+            <p className="text-muted-foreground">Select an activity to compare with from the suggestions above.</p>
           </div>
         )}
       </div>
