@@ -151,7 +151,7 @@ export function ResizableMap({
             isResizing ? "bg-primary/20" : "bg-muted/80 hover:bg-muted"
           }`}
         >
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 pointer-events-none">
             <div className={`w-8 h-1 rounded-full transition-colors ${
               isResizing 
                 ? "bg-primary" 

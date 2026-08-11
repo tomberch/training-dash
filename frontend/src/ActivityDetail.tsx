@@ -189,41 +189,79 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
   const { sentinelRef: analysisSentinelRef, hasEntered: analysisVisible } = useLazySection();
 
   // Compute elevation loss and max grade from records
+  // Max grade uses smoothed altitude data over 200m segments to reduce GPS noise
   const elevationStats = useMemo(() => {
     if (records.length < 2) {
       return { elevationLoss: 0, maxGradePct: null as number | null };
     }
 
+    // First, smooth the altitude data with a moving average (11-point window ~= 40m at typical recording intervals)
+    const smoothedAltitudes: (number | null)[] = [];
+    const smoothWindow = 11;
+    
+    for (let i = 0; i < records.length; i++) {
+      if (records[i].altitude_m == null) {
+        smoothedAltitudes.push(null);
+        continue;
+      }
+      
+      let sum = 0;
+      let count = 0;
+      const halfWindow = Math.floor(smoothWindow / 2);
+      for (let j = Math.max(0, i - halfWindow); j <= Math.min(records.length - 1, i + halfWindow); j++) {
+        if (records[j].altitude_m != null) {
+          sum += records[j].altitude_m!;
+          count++;
+        }
+      }
+      smoothedAltitudes.push(count > 0 ? sum / count : null);
+    }
+
     let elevationLoss = 0;
     let maxGradePct: number | null = null;
 
+    // Calculate elevation loss using smoothed data
     for (let i = 1; i < records.length; i++) {
-      const prev = records[i - 1];
-      const curr = records[i];
-      
-      // Elevation loss
-      if (prev.altitude_m != null && curr.altitude_m != null) {
-        const altDiff = curr.altitude_m - prev.altitude_m;
+      const prevAlt = smoothedAltitudes[i - 1];
+      const currAlt = smoothedAltitudes[i];
+      if (prevAlt != null && currAlt != null) {
+        const altDiff = currAlt - prevAlt;
         if (altDiff < 0) {
           elevationLoss += Math.abs(altDiff);
         }
       }
+    }
 
-      // Max grade (only calculate if we have distance and altitude)
-      if (
-        prev.altitude_m != null && 
-        curr.altitude_m != null && 
-        prev.distance_m != null && 
-        curr.distance_m != null
-      ) {
-        const distDiff = curr.distance_m - prev.distance_m;
-        const altDiff = curr.altitude_m - prev.altitude_m;
-        // Only consider segments with meaningful distance (> 10m) to avoid noise
-        if (distDiff > 10) {
-          const grade = (altDiff / distDiff) * 100;
-          if (maxGradePct === null || grade > maxGradePct) {
-            maxGradePct = grade;
-          }
+    // Calculate max grade over 200m segments using smoothed altitudes
+    // This gives a more meaningful "steepest climb" value
+    const segmentLength = 200; // meters - longer segment for more stable reading
+    const minSegment = 150; // minimum segment to consider
+    
+    for (let i = 0; i < records.length; i++) {
+      const start = records[i];
+      const startAlt = smoothedAltitudes[i];
+      if (startAlt == null || start.distance_m == null) continue;
+      
+      // Find end point approximately segmentLength meters ahead
+      for (let j = i + 1; j < records.length; j++) {
+        const end = records[j];
+        const endAlt = smoothedAltitudes[j];
+        if (endAlt == null || end.distance_m == null) continue;
+        
+        const distDiff = end.distance_m - start.distance_m;
+        
+        // Skip if we haven't reached minimum segment length
+        if (distDiff < minSegment) continue;
+        
+        // Stop if we've exceeded target segment size
+        if (distDiff > segmentLength) break;
+        
+        const altDiff = endAlt - startAlt;
+        const grade = (altDiff / distDiff) * 100;
+        
+        // Only consider positive grades (uphill)
+        if (grade > 0 && (maxGradePct === null || grade > maxGradePct)) {
+          maxGradePct = grade;
         }
       }
     }
@@ -513,6 +551,14 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
               <h1 className="text-page-title">
                 {activity.title || formatActivityDate(activity.started_at, activity.utc_offset_minutes, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
               </h1>
+              {activity.is_breakthrough && (
+                <span className="bg-warning/20 text-warning border border-warning/30 px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1 mt-1.5">
+                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                  </svg>
+                  Breakthrough
+                </span>
+              )}
               {activity.title_source === "pending" && (
                 <button
                   onClick={() => {
@@ -594,14 +640,6 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
                 </svg>
                 Delete
               </button>
-              {activity.is_breakthrough && (
-                <span className="bg-warning/20 text-warning px-2.5 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1">
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                  </svg>
-                  Breakthrough
-                </span>
-              )}
             </div>
           </div>
         </div>
