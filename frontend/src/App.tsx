@@ -1,5 +1,5 @@
 import { useState, useEffect, lazy, Suspense, useRef } from "react";
-import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams } from "react-router-dom";
 import { ActivityList, Login, PendingApproval } from "./ActivityList";
 import { Header } from "./Header";
 import { Sidebar } from "./Sidebar";
@@ -79,39 +79,33 @@ function AppLayout({ user, onLogout, onUserUpdate }: {
   const [refreshKey, setRefreshKey] = useState(0);
   const uploadTriggerRef = useRef<(() => void) | null>(null);
   const navigate = useNavigate();
-  const location = useLocation();
-  const hideGlobalHeader = location.pathname === "/" || location.pathname === "/activities" || location.pathname === "/activities/table" || location.pathname === "/settings";
 
   return (
-    <div className="flex min-h-screen bg-background">
-      <Sidebar isAdmin={user.is_admin} />
-      <div className="flex-1 flex flex-col min-w-0">
-        {!hideGlobalHeader && (
-          <Header
-            displayName={user.display_name}
-            email={user.email}
-            avatarPath={user.avatar_path}
-            onLogout={onLogout}
-            onSettings={() => navigate("/settings")}
-            onUploadComplete={() => setRefreshKey((k) => k + 1)}
-            onUploadTriggerRef={(trigger) => { uploadTriggerRef.current = trigger; }}
-          />
-        )}
+    <div className="h-screen bg-background flex flex-col overflow-hidden">
+      {/* Full-width header at top - fixed */}
+      <Header
+        displayName={user.display_name}
+        email={user.email}
+        avatarPath={user.avatar_path}
+        onLogout={onLogout}
+        onSettings={() => navigate("/settings")}
+        onUploadComplete={() => setRefreshKey((k) => k + 1)}
+        onUploadTriggerRef={(trigger) => { uploadTriggerRef.current = trigger; }}
+      />
+      
+      {/* Sidebar + Content below header */}
+      <div className="flex flex-1 overflow-hidden">
+        <Sidebar isAdmin={user.is_admin} />
         <CommandMenu 
           onUpload={() => uploadTriggerRef.current?.()} 
           isAdmin={user.is_admin}
         />
         <main className="flex-1 overflow-auto">
-          <Suspense fallback={<PageLoadingSkeleton />}>
+          <div className="max-w-7xl mx-auto">
+            <Suspense fallback={<PageLoadingSkeleton />}>
             <Routes>
               <Route path="/" element={
-                <Dashboard 
-                  user={user}
-                  onLogout={onLogout}
-                  onSettings={() => navigate("/settings")}
-                  onUploadComplete={() => setRefreshKey((k) => k + 1)}
-                  onUploadTriggerRef={(trigger) => { uploadTriggerRef.current = trigger; }}
-                />
+                <Dashboard />
               } />
               <Route 
                 path="/activities" 
@@ -120,11 +114,6 @@ function AppLayout({ user, onLogout, onUserUpdate }: {
                     key={refreshKey}
                     onSelect={(id) => navigate(`/activities/${id}`)}
                     unitSystem={user.unit_system}
-                    user={user}
-                    onLogout={onLogout}
-                    onSettings={() => navigate("/settings")}
-                    onUploadComplete={() => setRefreshKey((k) => k + 1)}
-                    onUploadTriggerRef={(trigger) => { uploadTriggerRef.current = trigger; }}
                   />
                 } 
               />
@@ -133,11 +122,6 @@ function AppLayout({ user, onLogout, onUserUpdate }: {
                 element={
                   <ActivityTable
                     unitSystem={user.unit_system}
-                    user={user}
-                    onLogout={onLogout}
-                    onSettings={() => navigate("/settings")}
-                    onUploadComplete={() => setRefreshKey((k) => k + 1)}
-                    onUploadTriggerRef={(trigger) => { uploadTriggerRef.current = trigger; }}
                   />
                 } 
               />
@@ -152,11 +136,7 @@ function AppLayout({ user, onLogout, onUserUpdate }: {
               <Route path="/athlete" element={<AthletePage user={user} onUserUpdate={onUserUpdate} />} />
               <Route 
                 path="/records" 
-                element={
-                  <div className="max-w-6xl mx-auto px-4 py-6">
-                    <RecordsView unitSystem={user.unit_system} />
-                  </div>
-                } 
+                element={<RecordsView unitSystem={user.unit_system} />} 
               />
               <Route 
                 path="/settings" 
@@ -164,9 +144,6 @@ function AppLayout({ user, onLogout, onUserUpdate }: {
                   <SettingsWrapper 
                     user={user} 
                     onUserUpdate={onUserUpdate}
-                    onLogout={onLogout}
-                    onUploadComplete={() => setRefreshKey((k) => k + 1)}
-                    onUploadTriggerRef={(trigger) => { uploadTriggerRef.current = trigger; }}
                   />
                 } 
               />
@@ -175,7 +152,8 @@ function AppLayout({ user, onLogout, onUserUpdate }: {
               )}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
-          </Suspense>
+            </Suspense>
+          </div>
         </main>
       </div>
     </div>
@@ -203,24 +181,14 @@ function ActivityDetailWrapper({ unitSystem }: { unitSystem: UnitSystem }) {
 function SettingsWrapper({ 
   user, 
   onUserUpdate,
-  onLogout,
-  onUploadComplete,
-  onUploadTriggerRef,
 }: { 
   user: User; 
   onUserUpdate: (user: User) => void;
-  onLogout: () => void;
-  onUploadComplete: () => void;
-  onUploadTriggerRef: (trigger: () => void) => void;
 }) {
   return (
     <Settings
       user={user}
       onUserUpdate={onUserUpdate}
-      onLogout={onLogout}
-      onSettings={() => {}} // Already on settings
-      onUploadComplete={onUploadComplete}
-      onUploadTriggerRef={onUploadTriggerRef}
     />
   );
 }

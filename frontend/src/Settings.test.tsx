@@ -64,7 +64,7 @@ const mockUser: User = {
 };
 
 // Helper to wrap Settings with Router context
-function renderSettings(props: { user: User; onBack: () => void; onUserUpdate: (user: User) => void }) {
+function renderSettings(props: { user: User; onUserUpdate: (user: User) => void }) {
   return render(
     <MemoryRouter>
       <Settings {...props} />
@@ -73,7 +73,6 @@ function renderSettings(props: { user: User; onBack: () => void; onUserUpdate: (
 }
 
 describe("Settings", () => {
-  const mockOnBack = vi.fn();
   const mockOnUserUpdate = vi.fn();
 
   beforeEach(() => {
@@ -83,7 +82,6 @@ describe("Settings", () => {
   it("renders settings page with all sections", async () => {
     renderSettings({
       user: mockUser,
-      onBack: mockOnBack,
       onUserUpdate: mockOnUserUpdate,
     });
 
@@ -98,25 +96,9 @@ describe("Settings", () => {
     expect(screen.getByText("Integrations")).toBeInTheDocument();
   });
 
-  it("calls onBack when back button is clicked", async () => {
-    renderSettings({
-      user: mockUser,
-      onBack: mockOnBack,
-      onUserUpdate: mockOnUserUpdate,
-    });
-
-    await waitFor(() => {
-      expect(screen.getByText("← Back")).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByText("← Back"));
-    expect(mockOnBack).toHaveBeenCalledTimes(1);
-  });
-
   it("displays user email as read-only", async () => {
     renderSettings({
       user: mockUser,
-      onBack: mockOnBack,
       onUserUpdate: mockOnUserUpdate,
     });
 
@@ -129,7 +111,6 @@ describe("Settings", () => {
   it("displays user display name in input", async () => {
     renderSettings({
       user: mockUser,
-      onBack: mockOnBack,
       onUserUpdate: mockOnUserUpdate,
     });
 
@@ -140,7 +121,6 @@ describe("Settings", () => {
 });
 
 describe("Settings - Preferences Section", () => {
-  const mockOnBack = vi.fn();
   const mockOnUserUpdate = vi.fn();
 
   beforeEach(() => {
@@ -155,7 +135,6 @@ describe("Settings - Preferences Section", () => {
 
     renderSettings({
       user: mockUser,
-      onBack: mockOnBack,
       onUserUpdate: mockOnUserUpdate,
     });
 
@@ -185,7 +164,6 @@ describe("Settings - Preferences Section", () => {
 
     renderSettings({
       user: mockUser,
-      onBack: mockOnBack,
       onUserUpdate: mockOnUserUpdate,
     });
 
@@ -206,7 +184,6 @@ describe("Settings - Preferences Section", () => {
 
     renderSettings({
       user: mockUser,
-      onBack: mockOnBack,
       onUserUpdate: mockOnUserUpdate,
     });
 
@@ -224,7 +201,6 @@ describe("Settings - Preferences Section", () => {
 });
 
 describe("Settings - Profile Section", () => {
-  const mockOnBack = vi.fn();
   const mockOnUserUpdate = vi.fn();
 
   beforeEach(() => {
@@ -239,7 +215,6 @@ describe("Settings - Profile Section", () => {
 
     renderSettings({
       user: mockUser,
-      onBack: mockOnBack,
       onUserUpdate: mockOnUserUpdate,
     });
 
@@ -266,7 +241,6 @@ describe("Settings - Profile Section", () => {
 
     renderSettings({
       user: mockUser,
-      onBack: mockOnBack,
       onUserUpdate: mockOnUserUpdate,
     });
 
@@ -284,7 +258,6 @@ describe("Settings - Profile Section", () => {
   it("shows initials when no avatar is set", async () => {
     renderSettings({
       user: mockUser,
-      onBack: mockOnBack,
       onUserUpdate: mockOnUserUpdate,
     });
 
@@ -302,7 +275,6 @@ describe("Settings - Profile Section", () => {
 
     renderSettings({
       user: userWithAvatar,
-      onBack: mockOnBack,
       onUserUpdate: mockOnUserUpdate,
     });
 

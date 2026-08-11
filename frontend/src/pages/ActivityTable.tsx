@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import type { Activity, PaginationMeta, User } from "../api";
+import type { Activity, PaginationMeta } from "../api";
 import { ApiError, fetchActivities } from "../api";
 import { formatDistance, formatTime, formatDate, formatElevation, formatSpeed } from "../format";
 import type { UnitSystem } from "../format";
@@ -124,18 +124,8 @@ function Pagination({
 
 export function ActivityTable({
   unitSystem = "metric",
-  user,
-  onLogout,
-  onSettings,
-  onUploadComplete,
-  onUploadTriggerRef,
 }: {
   unitSystem?: UnitSystem;
-  user?: User;
-  onLogout?: () => void;
-  onSettings?: () => void;
-  onUploadComplete?: () => void;
-  onUploadTriggerRef?: (trigger: () => void) => void;
 }) {
   const navigate = useNavigate();
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -231,11 +221,6 @@ export function ActivityTable({
             </button>
           </div>
         }
-        user={user ?? undefined}
-        onLogout={onLogout}
-        onSettings={onSettings}
-        onUploadComplete={onUploadComplete}
-        onUploadTriggerRef={onUploadTriggerRef}
       />
 
       {/* Table */}

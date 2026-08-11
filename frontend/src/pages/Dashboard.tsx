@@ -11,7 +11,7 @@ import {
   ReferenceLine,
 } from "recharts";
 import { toast } from "sonner";
-import type { Activity, PMCPoint, PowerCurvePoint, Notification, RecordsResponse, ThresholdEntry, User } from "../api";
+import type { Activity, PMCPoint, PowerCurvePoint, Notification, RecordsResponse, ThresholdEntry } from "../api";
 import { 
   fetchActivities, 
   fetchPMC, 
@@ -30,11 +30,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 
 interface DashboardProps {
-  user: User;
-  onLogout: () => void;
-  onSettings: () => void;
-  onUploadComplete?: () => void;
-  onUploadTriggerRef?: (trigger: () => void) => void;
+  // No props needed - header is now global
 }
 
 function DashboardLoadingSkeleton(): JSX.Element {
@@ -125,7 +121,7 @@ function DashboardLoadingSkeleton(): JSX.Element {
   );
 }
 
-export function Dashboard({ user, onLogout, onSettings, onUploadComplete, onUploadTriggerRef }: DashboardProps): JSX.Element {
+export function Dashboard({}: DashboardProps): JSX.Element {
   const navigate = useNavigate();
   const [activities, setActivities] = useState<Activity[]>([]);
   const [pmcData, setPmcData] = useState<PMCPoint[]>([]);
@@ -285,11 +281,6 @@ export function Dashboard({ user, onLogout, onSettings, onUploadComplete, onUplo
         {/* Header Row */}
         <PageHeader
           title="Dashboard"
-          user={user}
-          onLogout={onLogout}
-          onSettings={onSettings}
-          onUploadComplete={onUploadComplete}
-          onUploadTriggerRef={onUploadTriggerRef}
         />
 
         <div className="text-center mb-12">
@@ -384,11 +375,6 @@ export function Dashboard({ user, onLogout, onSettings, onUploadComplete, onUplo
       {/* Header Row */}
       <PageHeader
         title="Dashboard"
-        user={user}
-        onLogout={onLogout}
-        onSettings={onSettings}
-        onUploadComplete={onUploadComplete}
-        onUploadTriggerRef={onUploadTriggerRef}
       />
 
       {/* Onboarding: Prompt to set thresholds */}

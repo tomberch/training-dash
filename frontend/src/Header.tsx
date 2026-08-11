@@ -1,4 +1,5 @@
 import type { JSX } from "react";
+import { Logo } from "./components/Logo";
 import { UploadButton } from "./components/UploadButton";
 import { UserMenu } from "./components/UserMenu";
 
@@ -24,8 +25,10 @@ export function Header({
   showUpload = true,
 }: HeaderProps): JSX.Element {
   return (
-    <header className="bg-card border-b border-border">
-      <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-end">
+    <header className="bg-card border-b border-border flex-shrink-0">
+      <div className="px-6 py-3 flex items-center justify-between">
+        <Logo size="md" showText={true} />
+        
         <div className="flex items-center gap-4">
           {showUpload && (
             <UploadButton

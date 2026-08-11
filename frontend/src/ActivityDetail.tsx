@@ -47,8 +47,8 @@ import { deleteActivity } from "./api";
 
 function ActivityDetailLoadingSkeleton(): React.JSX.Element {
   return (
-    <div className="min-h-screen bg-background p-6">
-      <div className="max-w-6xl mx-auto space-y-6">
+    <div className="p-6">
+      <div className="space-y-6">
         {/* Back button and header */}
         <Skeleton className="h-8 w-20" />
         <div className="space-y-2">
@@ -300,10 +300,8 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
 
   if (error) {
     return (
-      <div className="min-h-screen bg-background p-6">
-        <div className="max-w-6xl mx-auto">
-          <ErrorDisplay error={error} context="loading activity" />
-        </div>
+      <div className="p-6">
+        <ErrorDisplay error={error} context="loading activity" />
       </div>
     );
   }
@@ -418,8 +416,7 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-7xl mx-auto p-8">
+    <div className="p-8">
         {/* Header - matches mockup-activity-detail-v2 */}
         <div className="mb-8">
           <div className="flex items-start justify-between mb-4">
@@ -894,7 +891,6 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
             )}
           </section>
         )}
-      </div>
 
       {/* Delete confirmation dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>

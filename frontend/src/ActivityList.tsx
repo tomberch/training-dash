@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import type { Activity, PaginationMeta, User } from "./api";
+import type { Activity, PaginationMeta } from "./api";
 import { ApiError, fetchActivities, login, register } from "./api";
 import { formatDistance, formatTime, formatElevation, formatActivityDate } from "./format";
 import type { UnitSystem } from "./format";
@@ -198,19 +198,9 @@ function Pagination({
 export function ActivityList({
   onSelect,
   unitSystem = "metric",
-  user,
-  onLogout,
-  onSettings,
-  onUploadComplete,
-  onUploadTriggerRef,
 }: {
   onSelect: (id: string) => void;
   unitSystem?: UnitSystem;
-  user?: User;
-  onLogout?: () => void;
-  onSettings?: () => void;
-  onUploadComplete?: () => void;
-  onUploadTriggerRef?: (trigger: () => void) => void;
 }) {
   const navigate = useNavigate();
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -263,11 +253,6 @@ export function ActivityList({
             </button>
           </div>
         }
-        user={user ?? undefined}
-        onLogout={onLogout}
-        onSettings={onSettings}
-        onUploadComplete={onUploadComplete}
-        onUploadTriggerRef={onUploadTriggerRef}
       />
 
       {loading ? (

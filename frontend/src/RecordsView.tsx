@@ -226,7 +226,7 @@ function RoutePRCard({ routePR }: { routePR: RoutePR }): JSX.Element {
 
 function RecordsLoadingSkeleton(): JSX.Element {
   return (
-    <div className="max-w-7xl mx-auto p-8">
+    <div className="p-8">
       {/* Header */}
       <div className="mb-8">
         <Skeleton className="h-9 w-32 mb-2" />
@@ -307,7 +307,7 @@ export function RecordsView({ unitSystem = "metric" }: RecordsViewProps): JSX.El
 
   if (error) {
     return (
-      <div className="max-w-7xl mx-auto p-8">
+      <div className="p-8">
         <ErrorDisplay error={error} context="loading records" />
       </div>
     );
@@ -334,7 +334,7 @@ export function RecordsView({ unitSystem = "metric" }: RecordsViewProps): JSX.El
 
   if (lifetimePRs.length === 0 && routePRs.length === 0) {
     return (
-      <div className="max-w-7xl mx-auto p-8">
+      <div className="p-8">
         <div className="mb-8">
           <h1 className="text-page-title mb-2">Records</h1>
           <p className="text-muted-foreground">Your personal bests and achievements</p>
@@ -355,7 +355,7 @@ export function RecordsView({ unitSystem = "metric" }: RecordsViewProps): JSX.El
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-8">
+    <div className="p-8">
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-page-title mb-2">Records</h1>

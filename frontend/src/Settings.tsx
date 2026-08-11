@@ -122,15 +122,11 @@ function PasswordInput({
 interface SettingsProps {
   user: User;
   onUserUpdate: (user: User) => void;
-  onLogout?: () => void;
-  onSettings?: () => void;
-  onUploadComplete?: () => void;
-  onUploadTriggerRef?: (trigger: () => void) => void;
 }
 
 
 
-export function Settings({ user, onUserUpdate, onLogout, onSettings, onUploadComplete, onUploadTriggerRef }: SettingsProps) {
+export function Settings({ user, onUserUpdate }: SettingsProps) {
   const location = useLocation();
 
   // Scroll to section when URL has hash (e.g., /settings#power-heart-rate)
@@ -148,30 +144,21 @@ export function Settings({ user, onUserUpdate, onLogout, onSettings, onUploadCom
   }, [location.hash]);
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="p-8">
-        {/* Full-width header */}
-        <PageHeader
-          title="Settings"
-          subtitle="Manage your profile, preferences, and integrations"
-          user={user}
-          onLogout={onLogout}
-          onSettings={onSettings}
-          onUploadComplete={onUploadComplete}
-          onUploadTriggerRef={onUploadTriggerRef}
-        />
-        
-        {/* Centered content area */}
-        <div className="max-w-4xl mx-auto">
-          <div className="space-y-6">
-            <ProfileSection user={user} onUserUpdate={onUserUpdate} />
-            <PreferencesSection user={user} onUserUpdate={onUserUpdate} />
-            <PowerHeartRateSection user={user} onUserUpdate={onUserUpdate} />
-            <ConnectedAccountsSection />
-            <ZonesSection user={user} onUserUpdate={onUserUpdate} />
-            <IntegrationsSection />
-          </div>
-        </div>
+    <div className="p-8">
+      {/* Full-width header */}
+      <PageHeader
+        title="Settings"
+        subtitle="Manage your profile, preferences, and integrations"
+      />
+      
+      {/* Content area */}
+      <div className="space-y-6">
+        <ProfileSection user={user} onUserUpdate={onUserUpdate} />
+        <PreferencesSection user={user} onUserUpdate={onUserUpdate} />
+        <PowerHeartRateSection user={user} onUserUpdate={onUserUpdate} />
+        <ConnectedAccountsSection />
+        <ZonesSection user={user} onUserUpdate={onUserUpdate} />
+        <IntegrationsSection />
       </div>
     </div>
   );
