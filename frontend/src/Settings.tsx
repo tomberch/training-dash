@@ -41,7 +41,7 @@ import {
 } from "@/lib/zones";
 import { useTheme } from "./hooks/useTheme";
 import type { Theme } from "./hooks/useTheme";
-import { SunIcon, MoonIcon, MonitorIcon } from "./components/icons/ThemeIcons";
+import { SunIcon, MoonIcon, MonitorIcon, SparklesIcon } from "./components/icons/ThemeIcons";
 
 function EyeIcon({ className }: { className?: string }) {
   return (
@@ -145,12 +145,21 @@ export function Settings({ user, onBack, onUserUpdate }: SettingsProps) {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-2xl mx-auto px-4 py-6">
-        <Button variant="outline" onClick={onBack} className="mb-6">
-          &larr; Back
-        </Button>
-        
-        <h1 className="text-2xl font-bold text-foreground mb-6">Settings</h1>
+      <div className="max-w-4xl mx-auto p-8">
+        {/* Header */}
+        <div className="mb-8">
+          <button
+            onClick={onBack}
+            className="flex items-center gap-2 text-muted-foreground hover:text-foreground mb-4 transition"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            <span>Back</span>
+          </button>
+          <h1 className="text-3xl font-bold text-foreground">Settings</h1>
+          <p className="text-muted-foreground mt-1">Manage your profile, preferences, and integrations</p>
+        </div>
         
         <div className="space-y-6">
           <ProfileSection user={user} onUserUpdate={onUserUpdate} />
@@ -261,9 +270,14 @@ function ProfileSection({ user, onUserUpdate }: { user: User; onUserUpdate: (use
 
 
   return (
-    <Card>
+    <Card className="card-hover">
       <CardHeader>
-        <CardTitle>Profile</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+          </svg>
+          Profile
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Avatar */}
@@ -398,9 +412,14 @@ function PreferencesSection({ user, onUserUpdate }: { user: User; onUserUpdate: 
   }
 
   return (
-    <Card>
+    <Card className="card-hover">
       <CardHeader>
-        <CardTitle>Preferences</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+          </svg>
+          Preferences
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Theme selector */}
@@ -416,6 +435,7 @@ function PreferencesSection({ user, onUserUpdate }: { user: User; onUserUpdate: 
             {[
               { value: "latte" as Theme, label: "Light", icon: <SunIcon className="w-4 h-4" /> },
               { value: "mocha" as Theme, label: "Dark", icon: <MoonIcon className="w-4 h-4" /> },
+              { value: "midnight" as Theme, label: "Midnight", icon: <SparklesIcon className="w-4 h-4" /> },
               { value: "system" as Theme, label: "System", icon: <MonitorIcon className="w-4 h-4" /> },
             ].map(({ value, label, icon }) => (
               <button
@@ -525,9 +545,14 @@ function PowerHeartRateSection({ user, onUserUpdate }: { user: User; onUserUpdat
     : null;
 
   return (
-    <Card id="power-heart-rate">
+    <Card id="power-heart-rate" className="card-hover">
       <CardHeader>
-        <CardTitle>Power & Heart Rate</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+          </svg>
+          Power & Heart Rate
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* HR-Derived Power Toggle */}
@@ -715,9 +740,14 @@ function ZonesSection({ user, onUserUpdate }: { user: User; onUserUpdate: (user:
 
   if (loadingThresholds) {
     return (
-      <Card>
+      <Card className="card-hover">
         <CardHeader>
-          <CardTitle>Training Zones</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+            Training Zones
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <Skeleton className="h-[200px] w-full" />
@@ -727,9 +757,14 @@ function ZonesSection({ user, onUserUpdate }: { user: User; onUserUpdate: (user:
   }
 
   return (
-    <Card>
+    <Card className="card-hover">
       <CardHeader>
-        <CardTitle>Training Zones</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+          </svg>
+          Training Zones
+        </CardTitle>
         <CardAction>
           <div className="flex gap-2">
             {editMode ? (
@@ -1013,9 +1048,14 @@ function ConnectedAccountsSection(): React.JSX.Element {
 
   if (loading) {
     return (
-      <Card>
+      <Card className="card-hover">
         <CardHeader>
-          <CardTitle>Connected Accounts</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+            </svg>
+            Connected Accounts
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Google skeleton */}
@@ -1048,9 +1088,14 @@ function ConnectedAccountsSection(): React.JSX.Element {
 
 
   return (
-    <Card>
+    <Card className="card-hover">
       <CardHeader>
-        <CardTitle>Connected Accounts</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+          </svg>
+          Connected Accounts
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <FeedbackAlert feedback={feedback} />
@@ -1185,9 +1230,14 @@ function ConnectedAccountsSection(): React.JSX.Element {
 
 function IntegrationsSection() {
   return (
-    <Card>
+    <Card className="card-hover">
       <CardHeader>
-        <CardTitle>Integrations</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" />
+          </svg>
+          Integrations
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <XertIntegration />
