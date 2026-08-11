@@ -751,16 +751,21 @@ export function ComparePage() {
   };
 
   const handleCompareSelect = (activity: Activity | null) => {
-    setCompareActivity(activity);
     setCompareGeojson(null);
     setComparison(null);
     
     if (activity && baseActivity) {
+      // Set compareActivity to null initially to show loading state
+      // This prevents rendering with partial activity data
+      setCompareActivity(null);
+      
       Promise.all([
+        fetchActivity(activity.id),  // Fetch full activity details
         fetchActivityRecords(activity.id),
         fetchComparison(baseActivity.id, activity.id),
       ])
-        .then(([geojson, comp]) => {
+        .then(([fullActivity, geojson, comp]) => {
+          setCompareActivity(fullActivity);  // Use full activity with all fields
           setCompareGeojson(geojson);
           setComparison(comp);
         })
@@ -769,6 +774,7 @@ export function ComparePage() {
         });
       updateSearchParams(baseActivity, activity);
     } else {
+      setCompareActivity(null);
       updateSearchParams(baseActivity, null);
     }
   };
