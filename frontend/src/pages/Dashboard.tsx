@@ -23,8 +23,7 @@ import {
   fetchThresholds,
 } from "../api";
 import { PolylineMap } from "../components/PolylineMap";
-import { UploadButton } from "../components/UploadButton";
-import { UserMenu } from "../components/UserMenu";
+import { PageHeader } from "../components/PageHeader";
 import { formatDuration, formatDistance, formatRelativeTime, formatElevation, formatActivityDate } from "../format";
 import { TSB_ZONES, getTSBZone } from "../constants";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -284,25 +283,14 @@ export function Dashboard({ user, onLogout, onSettings, onUploadComplete, onUplo
     return (
       <div className="p-8">
         {/* Header Row */}
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
-          <div className="flex items-center gap-4">
-            <UploadButton
-              onUploadComplete={onUploadComplete}
-              onUploadTriggerRef={onUploadTriggerRef}
-              className="gap-2"
-            />
-            <UserMenu
-              displayName={user.display_name}
-              email={user.email}
-              avatarPath={user.avatar_path}
-              onLogout={onLogout}
-              onSettings={onSettings}
-              showChevron={false}
-              size="lg"
-            />
-          </div>
-        </div>
+        <PageHeader
+          title="Dashboard"
+          user={user}
+          onLogout={onLogout}
+          onSettings={onSettings}
+          onUploadComplete={onUploadComplete}
+          onUploadTriggerRef={onUploadTriggerRef}
+        />
 
         <div className="text-center mb-12">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-primary/10 mb-6">
@@ -394,25 +382,14 @@ export function Dashboard({ user, onLogout, onSettings, onUploadComplete, onUplo
   return (
     <div className="p-8">
       {/* Header Row */}
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
-        <div className="flex items-center gap-4">
-          <UploadButton
-            onUploadComplete={onUploadComplete}
-            onUploadTriggerRef={onUploadTriggerRef}
-            className="gap-2"
-          />
-          <UserMenu
-            displayName={user.display_name}
-            email={user.email}
-            avatarPath={user.avatar_path}
-            onLogout={onLogout}
-            onSettings={onSettings}
-            showChevron={false}
-            size="lg"
-          />
-        </div>
-      </div>
+      <PageHeader
+        title="Dashboard"
+        user={user}
+        onLogout={onLogout}
+        onSettings={onSettings}
+        onUploadComplete={onUploadComplete}
+        onUploadTriggerRef={onUploadTriggerRef}
+      />
 
       {/* Onboarding: Prompt to set thresholds */}
       {thresholds.length === 0 && (

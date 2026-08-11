@@ -1,28 +1,30 @@
 import { useState, useEffect, useCallback } from "react";
 
-export type Theme = "latte" | "mocha" | "system";
+export type Theme = "latte" | "mocha" | "midnight" | "system";
+export type ResolvedTheme = "latte" | "mocha" | "midnight";
 
 const THEME_STORAGE_KEY = "traindash-theme";
 
 /**
  * Get the system's preferred color scheme
+ * When system preference is dark, defaults to midnight (the new dark theme)
  */
-function getSystemTheme(): "latte" | "mocha" {
+function getSystemTheme(): ResolvedTheme {
   if (typeof window === "undefined") return "latte";
   return window.matchMedia("(prefers-color-scheme: dark)").matches
-    ? "mocha"
+    ? "midnight"
     : "latte";
 }
 
 /**
  * Apply a theme to the document
  */
-function applyTheme(theme: "latte" | "mocha") {
+function applyTheme(theme: ResolvedTheme) {
   const root = document.documentElement;
   root.setAttribute("data-theme", theme);
   
-  // Also set .dark class for Tailwind's dark: variant
-  if (theme === "mocha") {
+  // Also set .dark class for Tailwind's dark: variant (both mocha and midnight are dark)
+  if (theme === "mocha" || theme === "midnight") {
     root.classList.add("dark");
   } else {
     root.classList.remove("dark");
@@ -40,9 +42,9 @@ function applyTheme(theme: "latte" | "mocha") {
  * ```tsx
  * const { theme, setTheme, resolvedTheme } = useTheme();
  * 
- * // Toggle between light and dark
- * <button onClick={() => setTheme(resolvedTheme === "latte" ? "mocha" : "latte")}>
- *   Toggle theme
+ * // Toggle between themes
+ * <button onClick={() => setTheme("midnight")}>
+ *   Use Midnight theme
  * </button>
  * 
  * // Follow system preference
@@ -55,14 +57,14 @@ export function useTheme() {
   const [theme, setThemeState] = useState<Theme>(() => {
     if (typeof window === "undefined") return "system";
     const stored = localStorage.getItem(THEME_STORAGE_KEY);
-    if (stored === "latte" || stored === "mocha" || stored === "system") {
+    if (stored === "latte" || stored === "mocha" || stored === "midnight" || stored === "system") {
       return stored;
     }
     return "system";
   });
 
-  // The actual theme being displayed (resolves "system" to latte/mocha)
-  const [resolvedTheme, setResolvedTheme] = useState<"latte" | "mocha">(() => {
+  // The actual theme being displayed (resolves "system" to latte/mocha/midnight)
+  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() => {
     if (theme === "system") return getSystemTheme();
     return theme;
   });
@@ -80,7 +82,7 @@ export function useTheme() {
 
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     const handler = (e: MediaQueryListEvent) => {
-      const newTheme = e.matches ? "mocha" : "latte";
+      const newTheme: ResolvedTheme = e.matches ? "midnight" : "latte";
       setResolvedTheme(newTheme);
       applyTheme(newTheme);
     };

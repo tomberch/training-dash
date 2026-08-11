@@ -42,8 +42,7 @@ import {
 import { useTheme } from "./hooks/useTheme";
 import type { Theme } from "./hooks/useTheme";
 import { SunIcon, MoonIcon, MonitorIcon, SparklesIcon } from "./components/icons/ThemeIcons";
-import { UploadButton } from "./components/UploadButton";
-import { UserMenu } from "./components/UserMenu";
+import { PageHeader } from "./components/PageHeader";
 
 function EyeIcon({ className }: { className?: string }) {
   return (
@@ -150,34 +149,28 @@ export function Settings({ user, onUserUpdate, onLogout, onSettings, onUploadCom
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-4xl mx-auto p-8">
-        {/* Header - matches Dashboard/Activities pattern */}
-        <div className="flex items-center justify-between mb-2">
-          <h1 className="text-3xl font-bold text-foreground">Settings</h1>
-          <div className="flex items-center gap-3">
-            {onUploadComplete && onUploadTriggerRef && (
-              <UploadButton onUploadComplete={onUploadComplete} onUploadTriggerRef={onUploadTriggerRef} />
-            )}
-            {onLogout && onSettings && (
-              <UserMenu
-                displayName={user.display_name}
-                email={user.email}
-                avatarPath={user.avatar_path}
-                onLogout={onLogout}
-                onSettings={onSettings}
-              />
-            )}
-          </div>
-        </div>
-        <p className="text-muted-foreground mb-8">Manage your profile, preferences, and integrations</p>
+      <div className="p-8">
+        {/* Full-width header */}
+        <PageHeader
+          title="Settings"
+          subtitle="Manage your profile, preferences, and integrations"
+          user={user}
+          onLogout={onLogout}
+          onSettings={onSettings}
+          onUploadComplete={onUploadComplete}
+          onUploadTriggerRef={onUploadTriggerRef}
+        />
         
-        <div className="space-y-6">
-          <ProfileSection user={user} onUserUpdate={onUserUpdate} />
-          <PreferencesSection user={user} onUserUpdate={onUserUpdate} />
-          <PowerHeartRateSection user={user} onUserUpdate={onUserUpdate} />
-          <ConnectedAccountsSection />
-          <ZonesSection user={user} onUserUpdate={onUserUpdate} />
-          <IntegrationsSection />
+        {/* Narrower content area */}
+        <div className="max-w-4xl">
+          <div className="space-y-6">
+            <ProfileSection user={user} onUserUpdate={onUserUpdate} />
+            <PreferencesSection user={user} onUserUpdate={onUserUpdate} />
+            <PowerHeartRateSection user={user} onUserUpdate={onUserUpdate} />
+            <ConnectedAccountsSection />
+            <ZonesSection user={user} onUserUpdate={onUserUpdate} />
+            <IntegrationsSection />
+          </div>
         </div>
       </div>
     </div>
@@ -282,25 +275,26 @@ function ProfileSection({ user, onUserUpdate }: { user: User; onUserUpdate: (use
   return (
     <Card className="card-hover">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+        <CardTitle className="flex items-center gap-2 text-xl font-semibold">
           <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
           </svg>
           Profile
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Avatar */}
-        <div className="flex items-center gap-4">
-          <div className="relative">
+      <CardContent>
+        {/* Avatar + Form side by side */}
+        <div className="flex items-start gap-6 mb-6">
+          {/* Avatar */}
+          <div className="relative flex-shrink-0">
             {user.avatar_path ? (
               <img
                 src={user.avatar_path}
                 alt="Avatar"
-                className="w-16 h-16 rounded-full object-cover border-2 border-border"
+                className="w-24 h-24 rounded-full object-cover"
               />
             ) : (
-              <div className="w-16 h-16 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xl font-medium">
+              <div className="w-24 h-24 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-3xl font-bold">
                 {getInitials()}
               </div>
             )}
@@ -312,8 +306,6 @@ function ProfileSection({ user, onUserUpdate }: { user: User; onUserUpdate: (use
                 </svg>
               </div>
             )}
-          </div>
-          <div className="flex flex-col gap-2">
             <input
               ref={fileInputRef}
               type="file"
@@ -326,65 +318,68 @@ function ProfileSection({ user, onUserUpdate }: { user: User; onUserUpdate: (use
               size="sm"
               onClick={() => fileInputRef.current?.click()}
               disabled={uploadingAvatar}
+              className="mt-2"
             >
               {user.avatar_path ? "Change photo" : "Upload photo"}
             </Button>
             {user.avatar_path && (
               <Button
-                variant="destructive"
+                variant="ghost"
                 size="sm"
                 onClick={handleDeleteAvatar}
                 disabled={uploadingAvatar}
+                className="mt-1 text-destructive hover:text-destructive"
               >
                 Remove
               </Button>
             )}
           </div>
-        </div>
 
+          {/* Form fields */}
+          <div className="flex-1 space-y-4">
+            {/* Email (read-only) */}
+            <div className="space-y-1.5">
+              <Label>Email</Label>
+              <Input
+                type="email"
+                value={user.email}
+                disabled
+              />
+            </div>
 
+            {/* Display name */}
+            <div className="space-y-1.5">
+              <Label>Display Name</Label>
+              <Input
+                type="text"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="How you want to be called"
+              />
+              <p className="text-xs text-muted-foreground">
+                This name will be shown in the header and anywhere your profile appears
+              </p>
+            </div>
 
-        {/* Email (read-only) */}
-        <div className="space-y-1.5">
-          <Label>Email</Label>
-          <Input
-            type="email"
-            value={user.email}
-            disabled
-          />
-        </div>
-
-        {/* Display name */}
-        <div className="space-y-1.5">
-          <Label>Display Name</Label>
-          <Input
-            type="text"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="How you want to be called"
-          />
-          <p className="text-xs text-muted-foreground">
-            This name will be shown in the header and anywhere your profile appears
-          </p>
-        </div>
-
-        {/* Sync Hour */}
-        <div className="space-y-1.5">
-          <Label>Daily Sync Time</Label>
-          <select
-            value={syncHour}
-            onChange={(e) => setSyncHour(parseInt(e.target.value))}
-            className="w-full h-8 px-2.5 rounded-lg border border-input bg-transparent text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-          >
-            {Array.from({ length: 24 }, (_, i) => (
-              <option key={i} value={i}>
-                {i.toString().padStart(2, "0")}:00 UTC
-              </option>
-            ))}
-          </select>
-          <p className="text-xs text-muted-foreground">
-            Your integrations (Garmin, Xert) will sync automatically at this hour
-          </p>
+            {/* Sync Hour */}
+            <div className="space-y-1.5">
+              <Label>Daily Sync Time</Label>
+              <select
+                value={syncHour}
+                onChange={(e) => setSyncHour(parseInt(e.target.value))}
+                className="w-full h-10 px-3 rounded-lg border border-input bg-transparent text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                {Array.from({ length: 24 }, (_, i) => (
+                  <option key={i} value={i}>
+                    {i.toString().padStart(2, "0")}:00 UTC
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Your integrations (Garmin, Xert) will sync automatically at this hour
+              </p>
+            </div>
+          </div>
         </div>
 
         <Button onClick={handleSaveProfile} disabled={saving}>
@@ -424,7 +419,7 @@ function PreferencesSection({ user, onUserUpdate }: { user: User; onUserUpdate: 
   return (
     <Card className="card-hover">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+        <CardTitle className="flex items-center gap-2 text-xl font-semibold">
           <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
           </svg>
@@ -557,7 +552,7 @@ function PowerHeartRateSection({ user, onUserUpdate }: { user: User; onUserUpdat
   return (
     <Card id="power-heart-rate" className="card-hover">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+        <CardTitle className="flex items-center gap-2 text-xl font-semibold">
           <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
           </svg>
@@ -752,7 +747,7 @@ function ZonesSection({ user, onUserUpdate }: { user: User; onUserUpdate: (user:
     return (
       <Card className="card-hover">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 text-xl font-semibold">
             <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
@@ -769,7 +764,7 @@ function ZonesSection({ user, onUserUpdate }: { user: User; onUserUpdate: (user:
   return (
     <Card className="card-hover">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+        <CardTitle className="flex items-center gap-2 text-xl font-semibold">
           <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
           </svg>
@@ -1060,7 +1055,7 @@ function ConnectedAccountsSection(): React.JSX.Element {
     return (
       <Card className="card-hover">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 text-xl font-semibold">
             <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
             </svg>
@@ -1100,7 +1095,7 @@ function ConnectedAccountsSection(): React.JSX.Element {
   return (
     <Card className="card-hover">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+        <CardTitle className="flex items-center gap-2 text-xl font-semibold">
           <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
           </svg>
@@ -1242,7 +1237,7 @@ function IntegrationsSection() {
   return (
     <Card className="card-hover">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+        <CardTitle className="flex items-center gap-2 text-xl font-semibold">
           <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" />
           </svg>

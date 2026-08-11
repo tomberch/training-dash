@@ -91,14 +91,13 @@ test.describe.serial('Activity Detail', () => {
     await page.goto(`/activities/${sharedActivityId}`);
     await expect(page.getByRole('button', { name: 'Back' })).toBeVisible({ timeout: 15000 });
 
-    // Check for Ride Basics section
-    await expect(page.getByText('Ride Basics')).toBeVisible();
+    // Check for Time & Distance section
+    await expect(page.getByText('Time & Distance')).toBeVisible();
 
     // Check for basic metric labels
     await expect(page.getByText('Distance').first()).toBeVisible();
-    await expect(page.getByText('Moving Time').first()).toBeVisible();
-    await expect(page.getByText('Elevation').first()).toBeVisible();
-    await expect(page.getByText('Avg Speed').first()).toBeVisible();
+    await expect(page.getByText('Moving').first()).toBeVisible();
+    await expect(page.getByText('Elapsed').first()).toBeVisible();
   });
 
   test('metrics summary shows training metrics', async ({ page }) => {

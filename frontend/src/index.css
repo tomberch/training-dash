@@ -4,9 +4,10 @@
 /* Leaflet CSS must be imported for map to work */
 @import "leaflet/dist/leaflet.css";
 
-/* Theme definitions - Catppuccin */
+/* Theme definitions - Catppuccin + Midnight */
 @import "./themes/latte.css";
 @import "./themes/mocha.css";
+@import "./themes/midnight.css";
 
 /* Dark mode variant for Tailwind */
 @custom-variant dark (&:is(.dark *));
@@ -293,6 +294,11 @@ body {
   .card-hover:hover {
     transform: translateY(-2px);
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  }
+  
+  /* Gradient background for callouts/highlights */
+  .gradient-bg {
+    background: linear-gradient(135deg, oklch(from var(--primary) l c h / 0.1) 0%, oklch(from var(--primary) l c h / 0.05) 100%);
   }
   
   /* Button press effect */

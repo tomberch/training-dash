@@ -1,0 +1,105 @@
+/* =============================================================================
+   Midnight Theme - Dark Mode (Design Mockup Style)
+   
+   A deep purple-accented dark theme based on the v2 design mockups.
+   This file is loaded when [data-theme="midnight"] is set on <html>.
+   
+   Color palette from mockups:
+   - Primary: #a855f7 (purple)
+   - Backgrounds: #0f0f1a, #1a1a2e, #252542, #2d2d4a, #3a3a5c
+   ============================================================================= */
+
+[data-theme="midnight"] {
+  /* Surfaces - deep dark backgrounds */
+  --background: #0f0f1a;           /* darkest - page background */
+  --surface: #1a1a2e;              /* sidebar, cards */
+  --surface-hover: #252542;        /* hover states */
+  --surface-elevated: #2d2d4a;     /* modals, dropdowns */
+
+  /* Text */
+  --text: #f1f5f9;                 /* primary text - slightly warm white */
+  --text-secondary: #cbd5e1;       /* secondary text */
+  --text-muted: #94a3b8;           /* muted/placeholder text */
+  --text-inverted: #0f0f1a;        /* text on colored backgrounds */
+
+  /* Brand - Purple primary from mockups */
+  --primary: #a855f7;              /* main purple */
+  --primary-hover: #9333ea;        /* darker purple on hover */
+  --primary-muted: #3b2d5a;        /* dark purple tint for backgrounds */
+  --primary-foreground: #ffffff;   /* white text on primary */
+
+  /* Accent - Blue for secondary actions */
+  --accent: #3b82f6;               /* blue */
+  --accent-hover: #2563eb;         /* darker blue */
+  --accent-muted: #1e3a5f;         /* dark blue tint */
+
+  /* Semantic - Success (green) */
+  --success: #10b981;              /* emerald green */
+  --success-muted: #1a3d2e;        /* dark green tint */
+  --success-foreground: #ffffff;
+
+  /* Semantic - Warning (yellow/amber) */
+  --warning: #f59e0b;              /* amber */
+  --warning-muted: #3d3520;        /* dark amber tint */
+  --warning-foreground: #0f0f1a;   /* dark text on warning */
+
+  /* Semantic - Danger (red) */
+  --danger: #ef4444;               /* red */
+  --danger-muted: #3d1f1f;         /* dark red tint */
+  --danger-foreground: #ffffff;
+
+  /* Borders - subtle dark borders */
+  --border: #2d2d4a;               /* primary border color */
+  --border-muted: #252542;         /* subtle border */
+
+  /* Focus ring */
+  --ring: #a855f7;                 /* matches primary */
+
+  /* Input backgrounds */
+  --input: #252542;                /* input field background */
+  --input-border: #3a3a5c;         /* input border */
+
+  /* Muted backgrounds (for secondary buttons, etc) */
+  --muted: #252542;                /* muted background */
+  --muted-foreground: #94a3b8;     /* muted text */
+
+  /* Card */
+  --card: #1a1a2e;                 /* card background */
+  --card-foreground: #f1f5f9;      /* card text */
+
+  /* Popover */
+  --popover: #1a1a2e;
+  --popover-foreground: #f1f5f9;
+
+  /* Secondary */
+  --secondary: #2d2d4a;            /* secondary button background */
+  --secondary-foreground: #f1f5f9;
+
+  /* Destructive (alias for danger) */
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+
+  /* Border radius */
+  --radius: 0.5rem;
+}
+
+/* =============================================================================
+   Midnight Theme Specific Utilities
+   
+   Additional classes for mockup-specific styling that only applies to midnight.
+   ============================================================================= */
+
+[data-theme="midnight"] {
+  /* Gradient background for callouts */
+  --gradient-primary: linear-gradient(135deg, rgba(168, 85, 247, 0.1) 0%, rgba(168, 85, 247, 0.05) 100%);
+  
+  /* Card hover shadow - more dramatic in midnight */
+  --card-hover-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  
+  /* Accent colors for PR cards (from records mockup) */
+  --accent-purple: #8b5cf6;
+  --accent-blue: #3b82f6;
+  --accent-green: #10b981;
+  --accent-orange: #f59e0b;
+  --accent-pink: #ec4899;
+}

@@ -6,8 +6,7 @@ import { formatDistance, formatTime, formatDate, formatElevation, formatSpeed } 
 import type { UnitSystem } from "../format";
 import { ErrorDisplay } from "../ErrorDisplay";
 import { EmptyState } from "@/components/ui/empty-state";
-import { UploadButton } from "../components/UploadButton";
-import { UserMenu } from "../components/UserMenu";
+import { PageHeader } from "../components/PageHeader";
 
 type SortField = "date" | "distance" | "time" | "elevation" | "tss" | "power" | "hr";
 type SortDirection = "asc" | "desc";
@@ -212,40 +211,32 @@ export function ActivityTable({
   return (
     <div className="p-8">
       {/* Header */}
-      <div className="flex items-center justify-between mb-2">
-        <h1 className="text-3xl font-bold text-foreground">Activities</h1>
-        <div className="flex items-center gap-4">
-          {user && onUploadComplete && (
-            <UploadButton onUploadComplete={onUploadComplete} onUploadTriggerRef={onUploadTriggerRef} />
-          )}
-          {user && onLogout && onSettings && (
-            <UserMenu
-              displayName={user.display_name}
-              email={user.email}
-              avatarPath={user.avatar_path}
-              onLogout={onLogout}
-              onSettings={onSettings}
-            />
-          )}
-        </div>
-      </div>
-      {/* Subtitle row */}
-      <div className="flex items-center gap-3 mb-8 text-sm text-muted-foreground">
-        {pagination && (
-          <span>{pagination.total} {pagination.total === 1 ? "activity" : "activities"}</span>
-        )}
-        <span>•</span>
-        <button
-          onClick={() => navigate("/activities")}
-          className="text-primary hover:text-primary/80 flex items-center gap-1 transition"
-          title="View as list"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-          </svg>
-          List view
-        </button>
-      </div>
+      <PageHeader
+        title="Activities"
+        subtitle={
+          <div className="flex items-center gap-3">
+            {pagination && (
+              <span>{pagination.total} {pagination.total === 1 ? "activity" : "activities"}</span>
+            )}
+            <span>•</span>
+            <button
+              onClick={() => navigate("/activities")}
+              className="text-primary hover:text-primary/80 flex items-center gap-1 transition"
+              title="View as list"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+              </svg>
+              List view
+            </button>
+          </div>
+        }
+        user={user ?? undefined}
+        onLogout={onLogout}
+        onSettings={onSettings}
+        onUploadComplete={onUploadComplete}
+        onUploadTriggerRef={onUploadTriggerRef}
+      />
 
       {/* Table */}
       <div className="bg-card rounded-lg border border-border overflow-hidden">
