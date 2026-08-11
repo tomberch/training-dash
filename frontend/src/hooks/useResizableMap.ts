@@ -61,6 +61,8 @@ export function useResizableMap({
   });
 
   const [isResizing, setIsResizing] = useState(false);
+  
+  // Use refs for values that need to be accessed in event handlers without recreating them
   const resizeMode = useRef<"height" | "width" | null>(null);
   const startY = useRef(0);
   const startX = useRef(0);
@@ -76,10 +78,11 @@ export function useResizableMap({
     localStorage.setItem(`${STORAGE_KEY_PREFIX}${storageKey}-width`, String(widthPercent));
   }, [storageKey, widthPercent]);
 
-  const handleMouseMove = useCallback(
-    (e: MouseEvent) => {
-      if (!isResizing) return;
+  // Handle resize drag - using useEffect to attach/detach listeners
+  useEffect(() => {
+    if (!isResizing) return;
 
+    const handleMouseMove = (e: MouseEvent) => {
       if (resizeMode.current === "height") {
         const deltaY = e.clientY - startY.current;
         const newHeight = Math.min(maxHeight, Math.max(minHeight, startValue.current + deltaY));
@@ -93,27 +96,23 @@ export function useResizableMap({
         );
         setWidthPercent(Math.round(newPercent));
       }
-    },
-    [isResizing, minHeight, maxHeight, minWidthPercent, maxWidthPercent]
-  );
+    };
 
-  const handleMouseUp = useCallback(() => {
-    setIsResizing(false);
-    resizeMode.current = null;
-    document.body.style.cursor = "";
-    document.body.style.userSelect = "";
-  }, []);
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      resizeMode.current = null;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
 
-  useEffect(() => {
-    if (isResizing) {
-      window.addEventListener("mousemove", handleMouseMove);
-      window.addEventListener("mouseup", handleMouseUp);
-      return () => {
-        window.removeEventListener("mousemove", handleMouseMove);
-        window.removeEventListener("mouseup", handleMouseUp);
-      };
-    }
-  }, [isResizing, handleMouseMove, handleMouseUp]);
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isResizing, minHeight, maxHeight, minWidthPercent, maxWidthPercent]);
 
   const startResizeHeight = useCallback(
     (e: React.MouseEvent) => {

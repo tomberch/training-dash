@@ -49,11 +49,35 @@ function ActivityDetailLoadingSkeleton(): React.JSX.Element {
   return (
     <div className="p-6">
       <div className="space-y-6">
-        {/* Back button and header */}
-        <Skeleton className="h-8 w-20" />
-        <div className="space-y-2">
-          <Skeleton className="h-8 w-64" />
-          <Skeleton className="h-4 w-48" />
+        {/* Back link */}
+        <Skeleton className="h-5 w-32" />
+        
+        {/* Title row with badge and edit icon */}
+        <div className="flex items-start gap-2">
+          <Skeleton className="h-8 w-96" />
+          <Skeleton className="h-5 w-5 mt-1.5 rounded" />
+        </div>
+        
+        {/* Subtitle row with date and action buttons */}
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-4 w-64" />
+          <div className="flex gap-2">
+            <Skeleton className="h-9 w-24 rounded-lg" />
+            <Skeleton className="h-9 w-20 rounded-lg" />
+          </div>
+        </div>
+        
+        {/* Map */}
+        <div className="bg-card rounded-lg border border-border overflow-hidden">
+          <div className="h-64 bg-muted flex items-center justify-center">
+            <svg className="w-12 h-12 text-muted-foreground/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+            </svg>
+          </div>
+          {/* Resize handle placeholder */}
+          <div className="h-3 bg-muted/80 flex items-center justify-center">
+            <Skeleton className="w-20 h-1 rounded-full" />
+          </div>
         </div>
         
         {/* Grouped metric cards skeleton */}
@@ -65,7 +89,7 @@ function ActivityDetailLoadingSkeleton(): React.JSX.Element {
                 <Skeleton className="h-3 w-24" />
               </div>
               <div className="space-y-3">
-                {[1, 2, 3].map((j) => (
+                {[1, 2].map((j) => (
                   <div key={j} className="flex justify-between items-baseline">
                     <Skeleton className="h-3 w-16" />
                     <Skeleton className="h-5 w-20" />
@@ -76,27 +100,19 @@ function ActivityDetailLoadingSkeleton(): React.JSX.Element {
           ))}
         </div>
         
-        {/* Map */}
-        <div className="bg-card rounded-lg border border-border p-4">
-          <Skeleton className="h-5 w-16 mb-3" />
-          <div className="h-80 bg-muted rounded-lg flex items-center justify-center">
-            <svg className="w-12 h-12 text-muted-foreground/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-            </svg>
-          </div>
+        {/* Performance section */}
+        <div>
+          <Skeleton className="h-6 w-32 mb-2" />
+          <Skeleton className="h-4 w-64 mb-4" />
         </div>
         
         {/* Chart */}
         <div className="bg-card rounded-lg border border-border p-4">
           <div className="flex items-center justify-between mb-3">
-            <Skeleton className="h-5 w-32" />
-            <div className="flex gap-2">
-              {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-8 w-16 rounded" />
-              ))}
-            </div>
+            <Skeleton className="h-5 w-20" />
+            <Skeleton className="h-8 w-16 rounded" />
           </div>
-          <div className="h-64 bg-muted rounded flex items-end justify-around p-4 gap-1">
+          <div className="h-48 bg-muted rounded flex items-end justify-around p-4 gap-1">
             {[40, 55, 35, 60, 45, 70, 50, 65, 45, 75, 55, 80, 60, 50, 70].map((h, i) => (
               <Skeleton key={i} className="flex-1 rounded-t" style={{ height: `${h}%` }} />
             ))}
@@ -551,14 +567,18 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
               <h1 className="text-page-title">
                 {activity.title || formatActivityDate(activity.started_at, activity.utc_offset_minutes, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
               </h1>
-              {activity.is_breakthrough && (
-                <span className="bg-warning/20 text-warning border border-warning/30 px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1 mt-1.5">
-                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                  </svg>
-                  Breakthrough
-                </span>
-              )}
+              <button
+                onClick={() => {
+                  setEditedTitle(activity.title || "");
+                  setIsEditingTitle(true);
+                }}
+                className="p-1.5 text-muted-foreground hover:text-primary transition mt-1"
+                title="Edit title"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                </svg>
+              </button>
               {activity.title_source === "pending" && (
                 <button
                   onClick={() => {
@@ -581,18 +601,14 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
                   )}
                 </button>
               )}
-              <button
-                onClick={() => {
-                  setEditedTitle(activity.title || "");
-                  setIsEditingTitle(true);
-                }}
-                className="p-1.5 text-muted-foreground hover:text-primary transition mt-1"
-                title="Edit title"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                </svg>
-              </button>
+              {activity.is_breakthrough && (
+                <span className="bg-warning/20 text-warning border border-warning/30 px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1 mt-1.5">
+                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                  </svg>
+                  Breakthrough
+                </span>
+              )}
             </div>
           )}
           
