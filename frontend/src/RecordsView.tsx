@@ -1,65 +1,292 @@
+import type { JSX } from "react";
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import type { RecordsResponse } from "./api";
+import type { RecordsResponse, Records, RoutePR } from "./api";
 import { ApiError, fetchRecords } from "./api";
-import { prsFromRecords, routePRsFromRecords } from "./prs";
-import type { PR } from "./prs";
 import type { UnitSystem } from "./format";
+import { formatDistance, formatSpeed, formatElevation, formatTime } from "./format";
 import { ErrorDisplay } from "./ErrorDisplay";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 
-function PRTile({ pr, variant }: { pr: PR; variant: "lifetime" | "route" }) {
-  const bgClass =
-    variant === "lifetime"
-      ? "bg-primary/10 border-primary/30"
-      : "bg-success/10 border-success/30";
+// Color themes for each PR type
+const PR_COLORS = {
+  distance: { border: "border-violet-500/30", bg: "bg-violet-500/10", text: "text-violet-500", circle: "bg-violet-500/10" },
+  time: { border: "border-blue-500/30", bg: "bg-blue-500/10", text: "text-blue-500", circle: "bg-blue-500/10" },
+  speed: { border: "border-emerald-500/30", bg: "bg-emerald-500/10", text: "text-emerald-500", circle: "bg-emerald-500/10" },
+  hr: { border: "border-pink-500/30", bg: "bg-pink-500/10", text: "text-pink-500", circle: "bg-pink-500/10" },
+  power: { border: "border-amber-500/30", bg: "bg-amber-500/10", text: "text-amber-500", circle: "bg-amber-500/10" },
+  elevation: { border: "border-gray-500/30", bg: "bg-gray-500/10", text: "text-gray-400", circle: "bg-gray-500/10" },
+} as const;
 
+type ColorTheme = keyof typeof PR_COLORS;
+
+interface PRDef {
+  key: keyof Records;
+  label: string;
+  format: (value: number, unitSystem: UnitSystem) => string;
+  icon: JSX.Element;
+  colorTheme: ColorTheme;
+}
+
+const PR_DEFS: PRDef[] = [
+  { 
+    key: "longest_distance_m", 
+    label: "Longest Ride", 
+    format: formatDistance,
+    colorTheme: "distance",
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+      </svg>
+    ),
+  },
+  { 
+    key: "longest_moving_time_s", 
+    label: "Longest Time", 
+    format: formatTime,
+    colorTheme: "time",
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    ),
+  },
+  { 
+    key: "fastest_5000_m", 
+    label: "Fastest 5km", 
+    format: formatTime,
+    colorTheme: "speed",
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+      </svg>
+    ),
+  },
+  { 
+    key: "fastest_10000_m", 
+    label: "Fastest 10km", 
+    format: formatTime,
+    colorTheme: "speed",
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+      </svg>
+    ),
+  },
+  { 
+    key: "fastest_40000_m", 
+    label: "Fastest 40km", 
+    format: formatTime,
+    colorTheme: "speed",
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+      </svg>
+    ),
+  },
+  { 
+    key: "max_speed_mps", 
+    label: "Max Speed", 
+    format: formatSpeed,
+    colorTheme: "speed",
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+      </svg>
+    ),
+  },
+  { 
+    key: "max_hr_bpm", 
+    label: "Max Heart Rate", 
+    format: (v) => `${v} bpm`,
+    colorTheme: "hr",
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+      </svg>
+    ),
+  },
+  { 
+    key: "biggest_elevation_gain_m", 
+    label: "Biggest Climb", 
+    format: formatElevation,
+    colorTheme: "elevation",
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+      </svg>
+    ),
+  },
+  { 
+    key: "highest_sustained_power_w", 
+    label: "Highest NP", 
+    format: (v) => `${v} W`,
+    colorTheme: "power",
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+      </svg>
+    ),
+  },
+];
+
+interface PRCardProps {
+  label: string;
+  value: string;
+  activityId?: string;
+  icon: JSX.Element;
+  colorTheme: ColorTheme;
+}
+
+function PRCard({ label, value, activityId, icon, colorTheme }: PRCardProps): JSX.Element {
+  const colors = PR_COLORS[colorTheme];
+  
   const content = (
-    <>
-      <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
-        {pr.label}
-      </div>
-      <div className="text-3xl font-bold text-foreground tabular-nums mb-2">
-        {pr.value}
-      </div>
-      {pr.activityId ? (
-        <div className="group flex items-center justify-center gap-1.5 text-primary hover:text-primary-hover text-xs font-medium transition mt-auto pt-3 border-t border-current border-opacity-20 cursor-pointer">
-          <span>View activity</span>
-          <svg className="w-3.5 h-3.5 transform group-hover:translate-x-0.5 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
+    <div className={`relative overflow-hidden rounded-2xl border ${colors.border} p-6 card-hover transition-all duration-300 hover:-translate-y-1 hover:shadow-xl`}>
+      {/* Decorative circle */}
+      <div className={`absolute top-0 right-0 w-32 h-32 ${colors.circle} rounded-full -mr-16 -mt-16`} />
+      
+      <div className="relative z-10">
+        {/* Icon and label */}
+        <div className="flex items-center gap-2 mb-3">
+          <span className={colors.text}>{icon}</span>
+          <span className={`text-xs font-semibold ${colors.text} uppercase tracking-wider`}>{label}</span>
         </div>
-      ) : (
-        <div className="h-4 mt-auto" />
-      )}
-    </>
+        
+        {/* Value */}
+        <p className="text-4xl font-bold text-foreground mb-4 tabular-nums">{value}</p>
+        
+        {/* View activity link */}
+        {activityId && (
+          <div className={`pt-4 border-t ${colors.border}`}>
+            <span className="flex items-center gap-2 text-primary hover:text-primary/80 text-sm font-medium transition group">
+              <span>View activity</span>
+              <svg className="w-4 h-4 transform group-hover:translate-x-1 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
   );
 
-  if (pr.activityId) {
+  if (activityId) {
     return (
-      <Link
-        to={`/activities/${pr.activityId}`}
-        className={`p-5 rounded-lg border ${bgClass} text-center min-w-40 flex flex-col hover:shadow-lg transition-shadow`}
-      >
+      <Link to={`/activities/${activityId}`}>
         {content}
       </Link>
     );
   }
 
+  return content;
+}
+
+function RoutePRCard({ routePR }: { routePR: RoutePR }): JSX.Element {
   return (
-    <div className={`p-5 rounded-lg border ${bgClass} text-center min-w-40 flex flex-col`}>
-      {content}
+    <div className="bg-card border border-border rounded-2xl p-6">
+      <div className="grid grid-cols-4 gap-6 items-center">
+        <div className="col-span-2">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-success/20 rounded-lg flex items-center justify-center">
+              <svg className="w-5 h-5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="font-semibold text-foreground">{routePR.route_label}</h3>
+              <p className="text-muted-foreground text-sm">Route PR</p>
+            </div>
+          </div>
+        </div>
+        
+        <div>
+          <p className="text-muted-foreground text-xs uppercase tracking-wider mb-1">Best Time</p>
+          <p className="text-2xl font-bold text-foreground tabular-nums">{formatTime(routePR.fastest_time_s)}</p>
+        </div>
+        
+        <div className="text-right">
+          {routePR.activity_id && (
+            <Link
+              to={`/activities/${routePR.activity_id}`}
+              className="inline-flex items-center gap-2 text-primary hover:text-primary/80 text-sm font-medium transition group"
+            >
+              <span>View activity</span>
+              <svg className="w-4 h-4 transform group-hover:translate-x-1 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </Link>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
-function PRGrid({ prs, variant }: { prs: PR[]; variant: "lifetime" | "route" }) {
+function RecordsLoadingSkeleton(): JSX.Element {
   return (
-    <div className="flex flex-wrap gap-3">
-      {prs.map((pr) => (
-        <PRTile key={pr.label} pr={pr} variant={variant} />
-      ))}
+    <div className="max-w-7xl mx-auto p-8">
+      {/* Header */}
+      <div className="mb-8">
+        <Skeleton className="h-9 w-32 mb-2" />
+        <Skeleton className="h-5 w-64" />
+      </div>
+      
+      {/* Lifetime PRs */}
+      <div className="mb-10">
+        <div className="flex items-center gap-3 mb-6">
+          <Skeleton className="w-2 h-2 rounded-full" />
+          <Skeleton className="h-7 w-32" />
+          <Skeleton className="h-4 w-24 ml-auto" />
+        </div>
+        
+        <div className="grid grid-cols-3 gap-6">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} className="rounded-2xl border border-border p-6">
+              <div className="flex items-center gap-2 mb-3">
+                <Skeleton className="w-5 h-5 rounded" />
+                <Skeleton className="h-3 w-20" />
+              </div>
+              <Skeleton className="h-10 w-24 mb-4" />
+              <div className="pt-4 border-t border-border">
+                <Skeleton className="h-4 w-24" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      
+      {/* Route PRs */}
+      <div>
+        <div className="flex items-center gap-3 mb-6">
+          <Skeleton className="w-2 h-2 rounded-full" />
+          <Skeleton className="h-7 w-28" />
+        </div>
+        
+        <div className="space-y-4">
+          {[1, 2].map((i) => (
+            <div key={i} className="bg-card rounded-2xl border border-border p-6">
+              <div className="grid grid-cols-4 gap-6 items-center">
+                <div className="col-span-2 flex items-center gap-3">
+                  <Skeleton className="w-10 h-10 rounded-lg" />
+                  <div>
+                    <Skeleton className="h-5 w-32 mb-1" />
+                    <Skeleton className="h-4 w-20" />
+                  </div>
+                </div>
+                <div>
+                  <Skeleton className="h-3 w-16 mb-1" />
+                  <Skeleton className="h-7 w-20" />
+                </div>
+                <div className="text-right">
+                  <Skeleton className="h-4 w-24 ml-auto" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -68,7 +295,7 @@ interface RecordsViewProps {
   unitSystem?: UnitSystem;
 }
 
-export function RecordsView({ unitSystem = "metric" }: RecordsViewProps) {
+export function RecordsView({ unitSystem = "metric" }: RecordsViewProps): JSX.Element {
   const [data, setData] = useState<RecordsResponse | null>(null);
   const [error, setError] = useState<Error | ApiError | null>(null);
 
@@ -79,57 +306,39 @@ export function RecordsView({ unitSystem = "metric" }: RecordsViewProps) {
   }, []);
 
   if (error) {
-    return <ErrorDisplay error={error} context="loading records" />;
-  }
-
-  if (!data) {
     return (
-      <div className="space-y-8">
-        {/* Lifetime PRs skeleton */}
-        <div>
-          <Skeleton className="h-6 w-32 mb-4" />
-          <div className="flex flex-wrap gap-4">
-            {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="p-5 rounded-lg border border-border bg-card text-center min-w-40 flex flex-col">
-                <Skeleton className="h-3 w-20 mx-auto mb-2" />
-                <Skeleton className="h-9 w-16 mx-auto mb-2" />
-                <Skeleton className="h-3 w-24 mx-auto mt-auto" />
-              </div>
-            ))}
-          </div>
-        </div>
-        
-        {/* Route PRs skeleton */}
-        <div>
-          <Skeleton className="h-6 w-28 mb-4" />
-          <div className="space-y-4">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="bg-card rounded-lg border border-border p-4">
-                <Skeleton className="h-5 w-48 mb-3" />
-                <div className="flex flex-wrap gap-3">
-                  {[1, 2, 3, 4].map((j) => (
-                    <div key={j} className="p-4 rounded border border-border text-center min-w-32 flex flex-col">
-                      <Skeleton className="h-3 w-16 mx-auto mb-1" />
-                      <Skeleton className="h-6 w-12 mx-auto mb-2" />
-                      <Skeleton className="h-3 w-20 mx-auto mt-auto" />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+      <div className="max-w-7xl mx-auto p-8">
+        <ErrorDisplay error={error} context="loading records" />
       </div>
     );
   }
 
-  const lifetimePRs = prsFromRecords(data.lifetime_prs, unitSystem);
-  const routePRs = routePRsFromRecords(data.route_prs);
+  if (!data) {
+    return <RecordsLoadingSkeleton />;
+  }
+
+  // Build PRs from data
+  const lifetimePRs: Array<PRDef & { value: string; activityId?: string }> = [];
+  for (const def of PR_DEFS) {
+    const pr = data.lifetime_prs[def.key];
+    if (pr) {
+      lifetimePRs.push({
+        ...def,
+        value: def.format(pr.value, unitSystem),
+        activityId: pr.activity_id,
+      });
+    }
+  }
+
+  const routePRs = data.route_prs;
 
   if (lifetimePRs.length === 0 && routePRs.length === 0) {
     return (
-      <div>
-        <h1 className="text-2xl font-bold text-foreground mb-4">Records</h1>
+      <div className="max-w-7xl mx-auto p-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-foreground mb-2">Records</h1>
+          <p className="text-muted-foreground">Your personal bests and achievements</p>
+        </div>
         <div className="bg-card rounded-lg border border-border">
           <EmptyState
             icon={
@@ -146,26 +355,55 @@ export function RecordsView({ unitSystem = "metric" }: RecordsViewProps) {
   }
 
   return (
-    <div className="space-y-8">
-      <h1 className="text-2xl font-bold text-foreground">Records</h1>
+    <div className="max-w-7xl mx-auto p-8">
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-foreground mb-2">Records</h1>
+        <p className="text-muted-foreground">Your personal bests and achievements</p>
+      </div>
 
+      {/* Lifetime PRs */}
       {lifetimePRs.length > 0 && (
-        <section>
-          <h2 className="text-lg font-semibold text-foreground mb-3 flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-primary"></span>
-            Lifetime PRs
-          </h2>
-          <PRGrid prs={lifetimePRs} variant="lifetime" />
+        <section className="mb-10">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-2 h-2 bg-primary rounded-full" />
+            <h2 className="text-2xl font-bold text-foreground">Lifetime PRs</h2>
+            <span className="text-muted-foreground text-sm ml-auto">
+              {lifetimePRs.length} personal record{lifetimePRs.length !== 1 ? "s" : ""}
+            </span>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {lifetimePRs.map((pr) => (
+              <PRCard
+                key={pr.key}
+                label={pr.label}
+                value={pr.value}
+                activityId={pr.activityId}
+                icon={pr.icon}
+                colorTheme={pr.colorTheme}
+              />
+            ))}
+          </div>
         </section>
       )}
 
+      {/* Route PRs */}
       {routePRs.length > 0 && (
         <section>
-          <h2 className="text-lg font-semibold text-foreground mb-3 flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-success"></span>
-            Route PRs
-          </h2>
-          <PRGrid prs={routePRs} variant="route" />
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-2 h-2 bg-success rounded-full" />
+            <h2 className="text-2xl font-bold text-foreground">Route PRs</h2>
+            <span className="text-muted-foreground text-sm ml-auto">
+              {routePRs.length} route{routePRs.length !== 1 ? "s" : ""} recorded
+            </span>
+          </div>
+          
+          <div className="space-y-4">
+            {routePRs.map((routePR) => (
+              <RoutePRCard key={routePR.route_id} routePR={routePR} />
+            ))}
+          </div>
         </section>
       )}
     </div>
