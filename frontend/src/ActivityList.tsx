@@ -244,26 +244,9 @@ export function ActivityList({
   return (
     <div className="p-8">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-2">
+        <h1 className="text-3xl font-bold text-foreground">Activities</h1>
         <div className="flex items-center gap-4">
-          <h1 className="text-3xl font-bold text-foreground">Activities</h1>
-          <button
-            onClick={() => navigate("/activities/table")}
-            className="text-sm text-primary hover:text-primary/80 flex items-center gap-1 transition"
-            title="View as table"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-            </svg>
-            Table view
-          </button>
-        </div>
-        <div className="flex items-center gap-4">
-          {pagination && (
-            <span className="text-sm text-muted-foreground">
-              {pagination.total} {pagination.total === 1 ? "activity" : "activities"}
-            </span>
-          )}
           {user && onUploadComplete && (
             <UploadButton onUploadComplete={onUploadComplete} onUploadTriggerRef={onUploadTriggerRef} />
           )}
@@ -277,6 +260,23 @@ export function ActivityList({
             />
           )}
         </div>
+      </div>
+      {/* Subtitle row */}
+      <div className="flex items-center gap-3 mb-8 text-sm text-muted-foreground">
+        {pagination && (
+          <span>{pagination.total} {pagination.total === 1 ? "activity" : "activities"}</span>
+        )}
+        <span>•</span>
+        <button
+          onClick={() => navigate("/activities/table")}
+          className="text-primary hover:text-primary/80 flex items-center gap-1 transition"
+          title="View as table"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </svg>
+          Table view
+        </button>
       </div>
 
       {loading ? (

@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import type { Activity, PaginationMeta } from "../api";
+import type { Activity, PaginationMeta, User } from "../api";
 import { ApiError, fetchActivities } from "../api";
 import { formatDistance, formatTime, formatDate, formatElevation, formatSpeed } from "../format";
 import type { UnitSystem } from "../format";
 import { ErrorDisplay } from "../ErrorDisplay";
 import { EmptyState } from "@/components/ui/empty-state";
+import { UploadButton } from "../components/UploadButton";
+import { UserMenu } from "../components/UserMenu";
 
 type SortField = "date" | "distance" | "time" | "elevation" | "tss" | "power" | "hr";
 type SortDirection = "asc" | "desc";
@@ -121,7 +123,21 @@ function Pagination({
   );
 }
 
-export function ActivityTable({ unitSystem = "metric" }: { unitSystem?: UnitSystem }) {
+export function ActivityTable({
+  unitSystem = "metric",
+  user,
+  onLogout,
+  onSettings,
+  onUploadComplete,
+  onUploadTriggerRef,
+}: {
+  unitSystem?: UnitSystem;
+  user?: User;
+  onLogout?: () => void;
+  onSettings?: () => void;
+  onUploadComplete?: () => void;
+  onUploadTriggerRef?: (trigger: () => void) => void;
+}) {
   const navigate = useNavigate();
   const [activities, setActivities] = useState<Activity[]>([]);
   const [pagination, setPagination] = useState<PaginationMeta | null>(null);
@@ -187,34 +203,48 @@ export function ActivityTable({ unitSystem = "metric" }: { unitSystem?: UnitSyst
 
   if (error) {
     return (
-      <div className="max-w-7xl mx-auto px-4 py-6">
+      <div className="p-8">
         <ErrorDisplay error={error} context="loading activities" />
       </div>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6">
+    <div className="p-8">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-2">
+        <h1 className="text-3xl font-bold text-foreground">Activities</h1>
         <div className="flex items-center gap-4">
-          <h1 className="text-xl font-bold text-foreground">Activity Table</h1>
-          <button
-            onClick={() => navigate("/activities")}
-            className="text-sm text-primary hover:underline flex items-center gap-1"
-            title="View as list"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-            </svg>
-            List view
-          </button>
+          {user && onUploadComplete && (
+            <UploadButton onUploadComplete={onUploadComplete} onUploadTriggerRef={onUploadTriggerRef} />
+          )}
+          {user && onLogout && onSettings && (
+            <UserMenu
+              displayName={user.display_name}
+              email={user.email}
+              avatarPath={user.avatar_path}
+              onLogout={onLogout}
+              onSettings={onSettings}
+            />
+          )}
         </div>
+      </div>
+      {/* Subtitle row */}
+      <div className="flex items-center gap-3 mb-8 text-sm text-muted-foreground">
         {pagination && (
-          <span className="text-sm text-muted-foreground">
-            {pagination.total} {pagination.total === 1 ? "activity" : "activities"}
-          </span>
+          <span>{pagination.total} {pagination.total === 1 ? "activity" : "activities"}</span>
         )}
+        <span>•</span>
+        <button
+          onClick={() => navigate("/activities")}
+          className="text-primary hover:text-primary/80 flex items-center gap-1 transition"
+          title="View as list"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+          </svg>
+          List view
+        </button>
       </div>
 
       {/* Table */}

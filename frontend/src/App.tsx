@@ -80,7 +80,7 @@ function AppLayout({ user, onLogout, onUserUpdate }: {
   const uploadTriggerRef = useRef<(() => void) | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
-  const hideGlobalHeader = location.pathname === "/" || location.pathname === "/activities";
+  const hideGlobalHeader = location.pathname === "/" || location.pathname === "/activities" || location.pathname === "/activities/table";
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -130,7 +130,16 @@ function AppLayout({ user, onLogout, onUserUpdate }: {
               />
               <Route 
                 path="/activities/table" 
-                element={<ActivityTable unitSystem={user.unit_system} />} 
+                element={
+                  <ActivityTable
+                    unitSystem={user.unit_system}
+                    user={user}
+                    onLogout={onLogout}
+                    onSettings={() => navigate("/settings")}
+                    onUploadComplete={() => setRefreshKey((k) => k + 1)}
+                    onUploadTriggerRef={(trigger) => { uploadTriggerRef.current = trigger; }}
+                  />
+                } 
               />
               <Route 
                 path="/activities/:id" 
