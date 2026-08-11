@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import type { Activity, PaginationMeta } from "./api";
+import type { Activity, PaginationMeta, User } from "./api";
 import { ApiError, fetchActivities, login, register } from "./api";
 import { formatDistance, formatTime, formatElevation, formatActivityDate } from "./format";
 import type { UnitSystem } from "./format";
@@ -8,6 +8,8 @@ import { ErrorDisplay } from "./ErrorDisplay";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Logo } from "./components/Logo";
 import { PolylineMap } from "./components/PolylineMap";
+import { UploadButton } from "./components/UploadButton";
+import { UserMenu } from "./components/UserMenu";
 
 // Activity row component (Xert-inspired)
 function ActivityRow({ 
@@ -197,9 +199,19 @@ function Pagination({
 export function ActivityList({
   onSelect,
   unitSystem = "metric",
+  user,
+  onLogout,
+  onSettings,
+  onUploadComplete,
+  onUploadTriggerRef,
 }: {
   onSelect: (id: string) => void;
   unitSystem?: UnitSystem;
+  user?: User;
+  onLogout?: () => void;
+  onSettings?: () => void;
+  onUploadComplete?: () => void;
+  onUploadTriggerRef?: (trigger: () => void) => void;
 }) {
   const navigate = useNavigate();
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -230,7 +242,7 @@ export function ActivityList({
   }
 
   return (
-    <div>
+    <div className="p-8">
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-4">
@@ -246,11 +258,25 @@ export function ActivityList({
             Table view
           </button>
         </div>
-        {pagination && (
-          <span className="text-sm text-muted-foreground">
-            {pagination.total} {pagination.total === 1 ? "activity" : "activities"}
-          </span>
-        )}
+        <div className="flex items-center gap-4">
+          {pagination && (
+            <span className="text-sm text-muted-foreground">
+              {pagination.total} {pagination.total === 1 ? "activity" : "activities"}
+            </span>
+          )}
+          {user && onUploadComplete && (
+            <UploadButton onUploadComplete={onUploadComplete} onUploadTriggerRef={onUploadTriggerRef} />
+          )}
+          {user && onLogout && onSettings && (
+            <UserMenu
+              displayName={user.display_name}
+              email={user.email}
+              avatarPath={user.avatar_path}
+              onLogout={onLogout}
+              onSettings={onSettings}
+            />
+          )}
+        </div>
       </div>
 
       {loading ? (

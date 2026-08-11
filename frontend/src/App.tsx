@@ -1,5 +1,5 @@
 import { useState, useEffect, lazy, Suspense, useRef } from "react";
-import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams, useLocation } from "react-router-dom";
 import { ActivityList, Login, PendingApproval } from "./ActivityList";
 import { Header } from "./Header";
 import { Sidebar } from "./Sidebar";
@@ -47,20 +47,20 @@ function initializeTheme() {
   // Check for stored preference
   const stored = localStorage.getItem("traindash-theme");
   
-  let theme: "latte" | "mocha";
+  let theme: "latte" | "mocha" | "midnight";
   
-  if (stored === "latte" || stored === "mocha") {
+  if (stored === "latte" || stored === "mocha" || stored === "midnight") {
     theme = stored;
   } else if (stored === "system" || !stored) {
-    // Follow system preference
-    theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "mocha" : "latte";
+    // Follow system preference - use midnight for dark mode
+    theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "midnight" : "latte";
   } else {
     theme = "latte"; // Default fallback
   }
   
   // Apply theme
   document.documentElement.setAttribute("data-theme", theme);
-  if (theme === "mocha") {
+  if (theme === "mocha" || theme === "midnight") {
     document.documentElement.classList.add("dark");
   } else {
     document.documentElement.classList.remove("dark");
@@ -79,20 +79,24 @@ function AppLayout({ user, onLogout, onUserUpdate }: {
   const [refreshKey, setRefreshKey] = useState(0);
   const uploadTriggerRef = useRef<(() => void) | null>(null);
   const navigate = useNavigate();
+  const location = useLocation();
+  const hideGlobalHeader = location.pathname === "/" || location.pathname === "/activities";
 
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar isAdmin={user.is_admin} />
       <div className="flex-1 flex flex-col min-w-0">
-        <Header
-          displayName={user.display_name}
-          email={user.email}
-          avatarPath={user.avatar_path}
-          onLogout={onLogout}
-          onSettings={() => navigate("/settings")}
-          onUploadComplete={() => setRefreshKey((k) => k + 1)}
-          onUploadTriggerRef={(trigger) => { uploadTriggerRef.current = trigger; }}
-        />
+        {!hideGlobalHeader && (
+          <Header
+            displayName={user.display_name}
+            email={user.email}
+            avatarPath={user.avatar_path}
+            onLogout={onLogout}
+            onSettings={() => navigate("/settings")}
+            onUploadComplete={() => setRefreshKey((k) => k + 1)}
+            onUploadTriggerRef={(trigger) => { uploadTriggerRef.current = trigger; }}
+          />
+        )}
         <CommandMenu 
           onUpload={() => uploadTriggerRef.current?.()} 
           isAdmin={user.is_admin}
@@ -100,17 +104,28 @@ function AppLayout({ user, onLogout, onUserUpdate }: {
         <main className="flex-1 overflow-auto">
           <Suspense fallback={<PageLoadingSkeleton />}>
             <Routes>
-              <Route path="/" element={<Dashboard />} />
+              <Route path="/" element={
+                <Dashboard 
+                  user={user}
+                  onLogout={onLogout}
+                  onSettings={() => navigate("/settings")}
+                  onUploadComplete={() => setRefreshKey((k) => k + 1)}
+                  onUploadTriggerRef={(trigger) => { uploadTriggerRef.current = trigger; }}
+                />
+              } />
               <Route 
                 path="/activities" 
                 element={
-                  <div className="max-w-6xl mx-auto px-4 py-6">
-                    <ActivityList
-                      key={refreshKey}
-                      onSelect={(id) => navigate(`/activities/${id}`)}
-                      unitSystem={user.unit_system}
-                    />
-                  </div>
+                  <ActivityList
+                    key={refreshKey}
+                    onSelect={(id) => navigate(`/activities/${id}`)}
+                    unitSystem={user.unit_system}
+                    user={user}
+                    onLogout={onLogout}
+                    onSettings={() => navigate("/settings")}
+                    onUploadComplete={() => setRefreshKey((k) => k + 1)}
+                    onUploadTriggerRef={(trigger) => { uploadTriggerRef.current = trigger; }}
+                  />
                 } 
               />
               <Route 
