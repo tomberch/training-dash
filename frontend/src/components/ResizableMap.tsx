@@ -78,11 +78,14 @@ export function ResizableMap({
 
   return (
     <div className="relative">
-      <div className="bg-card rounded-lg border border-border overflow-hidden">
+      <div 
+        className="bg-card rounded-lg border border-border overflow-hidden"
+        style={{ height: `${height}px` }}
+      >
         <MapContainer
           center={center}
           zoom={13}
-          style={{ height: `${height}px`, width: "100%" }}
+          style={{ height: "100%", width: "100%" }}
         >
           <TileLayer
             url={tileUrl}
