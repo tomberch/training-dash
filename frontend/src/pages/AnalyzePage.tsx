@@ -1,3 +1,4 @@
+import type { JSX } from "react";
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
@@ -14,6 +15,7 @@ import {
 } from "recharts";
 import type { Activity, GeoJSONFeatureCollection, ThresholdEntry } from "../api";
 import { fetchActivity, fetchActivityRecords, fetchThresholds } from "../api";
+import { formatDistance, formatTime } from "../format";
 import { ActivitySelector } from "../components/ActivitySelector";
 import { ResizableMap } from "../components/ResizableMap";
 import { useResizableMap } from "../hooks/useResizableMap";
@@ -506,8 +508,13 @@ export function AnalyzePage() {
         </div>
       </div>
 
+      {/* Quick stats row - shown as placeholders when no activity */}
+      <div className="flex-shrink-0 px-4">
+        <QuickStatsRow activity={selectedActivity} />
+      </div>
+
       {/* Chart area - fills remaining viewport */}
-      <div className="flex-1 min-h-0 p-4 pt-0">
+      <div className="flex-1 min-h-0 p-4 pt-4">
         {loading ? (
           <div className="h-full flex items-center justify-center bg-card rounded-lg border border-border">
             <div className="flex items-center gap-3 text-muted-foreground">
@@ -660,13 +667,97 @@ export function AnalyzePage() {
             </div>
           </ChartErrorBoundary>
         ) : (
-          <div className="h-full flex items-center justify-center bg-card rounded-lg border border-border">
-            <p className="text-muted-foreground">
-              Select an activity above to begin analysis.
-            </p>
-          </div>
+          /* Empty state with feature preview */
+          <AnalyzeEmptyState />
         )}
       </div>
     </div>
   );
 }
+
+function QuickStatsRow({ activity }: { activity: Activity | null }): JSX.Element {
+  const hasActivity = activity !== null;
+  
+  const stats = [
+    { 
+      label: "Distance", 
+      value: hasActivity && activity.total_distance_m ? formatDistance(activity.total_distance_m, "metric") : "—" 
+    },
+    { 
+      label: "Time", 
+      value: hasActivity && activity.moving_time_s ? formatTime(activity.moving_time_s) : "—" 
+    },
+    { 
+      label: "Power", 
+      value: hasActivity && activity.avg_power_w ? `${activity.avg_power_w} W` : "—" 
+    },
+    { 
+      label: "HR", 
+      value: hasActivity && activity.avg_hr_bpm ? `${activity.avg_hr_bpm} bpm` : "—" 
+    },
+    { 
+      label: "TSS", 
+      value: hasActivity && activity.tss ? Math.round(activity.tss).toString() : "—" 
+    },
+  ];
+
+  return (
+    <div className={`grid grid-cols-5 gap-4 ${!hasActivity ? "opacity-50" : ""}`}>
+      {stats.map((stat) => (
+        <div key={stat.label} className="bg-card border border-border rounded-xl p-4 text-center">
+          <p className="text-muted-foreground text-xs uppercase tracking-wider mb-1">{stat.label}</p>
+          <p className="text-2xl font-bold text-foreground tabular-nums">{stat.value}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AnalyzeEmptyState(): JSX.Element {
+  return (
+    <div className="bg-card border border-border rounded-xl p-12">
+      <div className="max-w-2xl mx-auto text-center">
+        <svg className="w-24 h-24 text-muted-foreground/30 mx-auto mb-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        </svg>
+        <h2 className="text-2xl font-bold text-foreground mb-3">Select an Activity to Analyze</h2>
+        <p className="text-muted-foreground mb-8">
+          Choose an activity from the dropdown above to see detailed performance metrics, power analysis, and training insights.
+        </p>
+        
+        <div className="grid grid-cols-3 gap-4 text-left">
+          <div className="bg-muted rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              <span className="font-medium text-sm text-foreground">Power Analysis</span>
+            </div>
+            <p className="text-xs text-muted-foreground">Power curve, normalized power, and intensity factor</p>
+          </div>
+          
+          <div className="bg-muted rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+              </svg>
+              <span className="font-medium text-sm text-foreground">Heart Rate</span>
+            </div>
+            <p className="text-xs text-muted-foreground">Zone distribution and time in zone analysis</p>
+          </div>
+          
+          <div className="bg-muted rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+              </svg>
+              <span className="font-medium text-sm text-foreground">Elevation</span>
+            </div>
+            <p className="text-xs text-muted-foreground">Grade analysis and climbing performance</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
