@@ -461,7 +461,7 @@ export function AthleteOverview({ user }: AthleteOverviewProps) {
             name="Weight"
             current={metrics.weight ?? (user.weight_kg != null ? {
               id: "profile",
-              effective_date: new Date().toISOString().split("T")[0],
+              effective_date: metrics.ftp?.effective_date ?? "1970-01-01",
               value: user.weight_kg,
               source: "manual" as const
             } : null)}
