@@ -13,6 +13,8 @@ from typing import Protocol
 
 import httpx
 
+from trainingdash import cache_stats
+
 logger = logging.getLogger(__name__)
 
 # Photon API endpoint (OSM-based, maintained by Komoot)
@@ -160,6 +162,7 @@ class GeocodingService:
         try:
             cached = await self._cache.get(cache_key)
             if cached is not None:
+                cache_stats.record_hit("geocoding")
                 data = json.loads(cached)
                 if data.get("_null"):
                     return None  # Negative cache hit
@@ -169,6 +172,9 @@ class GeocodingService:
 
         # Rate limit before API call
         await self._rate_limit()
+
+        # Record cache miss (we're about to call the API)
+        cache_stats.record_miss("geocoding")
 
         # Call Photon API
         try:

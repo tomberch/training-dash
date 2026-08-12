@@ -195,6 +195,69 @@ async def recalculate_metrics_job(ctx: dict, *, user_id: int) -> dict:
         }
 
 
+async def flush_cache_stats(ctx: dict) -> dict:
+    """
+    Hourly cron: flush in-memory cache stats to the database.
+
+    Reads current counters via get_and_reset() and upserts them
+    into hourly buckets in cache_stats table.
+
+    Runs at :05 past each hour to capture the previous hour's stats.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import text
+
+    from trainingdash import cache_stats
+
+    # Get and reset counters
+    counters = cache_stats.get_and_reset()
+
+    # Determine the bucket start (previous hour, since we run at :05)
+    # This ensures stats are attributed to the hour they were collected in
+    now = datetime.now(UTC).replace(tzinfo=None)
+    bucket_start = (now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=1))
+
+    # Collect all cache types with data
+    all_cache_types = set(counters.hits.keys()) | set(counters.misses.keys())
+
+    if not all_cache_types:
+        logger.info("flush_cache_stats: no data to flush")
+        return {"flushed": 0}
+
+    async with worker_db_session(ctx) as db:
+        flushed = 0
+        for cache_type in all_cache_types:
+            hits = counters.hits.get(cache_type, 0)
+            misses = counters.misses.get(cache_type, 0)
+
+            if hits == 0 and misses == 0:
+                continue
+
+            # Upsert: add to existing bucket or insert new one
+            await db.execute(
+                text("""
+                    INSERT INTO cache_stats (bucket_start, cache_type, hits, misses)
+                    VALUES (:bucket_start, :cache_type, :hits, :misses)
+                    ON CONFLICT (bucket_start, cache_type)
+                    DO UPDATE SET
+                        hits = cache_stats.hits + EXCLUDED.hits,
+                        misses = cache_stats.misses + EXCLUDED.misses
+                """),
+                {
+                    "bucket_start": bucket_start,
+                    "cache_type": cache_type,
+                    "hits": hits,
+                    "misses": misses,
+                },
+            )
+            flushed += 1
+
+        await db.commit()
+        logger.info(f"flush_cache_stats: flushed {flushed} cache types to bucket {bucket_start}")
+        return {"flushed": flushed, "bucket_start": bucket_start.isoformat()}
+
+
 # SAQ worker settings - this is what `saq worker.settings` loads
 # Note: SAQ supports settings as a callable, which delays queue creation
 # until the worker actually starts. This is crucial for Docker Compose
@@ -227,12 +290,15 @@ def settings():
             sync_xert_job,
             sync_garmin_job,
             hourly_sync_scheduler,
+            flush_cache_stats,
         ],
         "concurrency": 10,
         "startup": startup,
         "shutdown": shutdown,
         # Cron schedule: run the sync scheduler at the top of every hour
+        # and flush cache stats at :05 past each hour
         "cron_jobs": [
             CronJob(hourly_sync_scheduler, cron="0 * * * *", unique=True),
+            CronJob(flush_cache_stats, cron="5 * * * *", unique=True),
         ],
     }

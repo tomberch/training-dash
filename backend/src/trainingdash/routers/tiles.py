@@ -9,6 +9,8 @@ import httpx
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 
+from trainingdash import cache_stats
+
 router = APIRouter(tags=["tiles"])
 
 TILE_CACHE_DIR = Path(os.environ.get("TILE_CACHE_DIR", "/app/tile-cache"))
@@ -95,6 +97,7 @@ async def get_osm_tile(z: int, x: int, y: int) -> FileResponse:
         raise HTTPException(status_code=400, detail="Invalid tile path")
 
     if _cache_hit(cache_path):
+        cache_stats.record_hit("tiles_osm")
         return FileResponse(
             cache_path,
             media_type="image/png",
@@ -119,6 +122,7 @@ async def get_osm_tile(z: int, x: int, y: int) -> FileResponse:
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     cache_path.write_bytes(response.content)
 
+    cache_stats.record_miss("tiles_osm")
     return FileResponse(
         cache_path,
         media_type="image/png",
@@ -159,6 +163,7 @@ async def get_carto_tile(style: CartoStyle, z: int, x: int, y: int) -> FileRespo
         raise HTTPException(status_code=400, detail="Invalid tile path")
 
     if _cache_hit(cache_path):
+        cache_stats.record_hit("tiles_carto")
         return FileResponse(
             cache_path,
             media_type="image/png",
@@ -188,6 +193,7 @@ async def get_carto_tile(style: CartoStyle, z: int, x: int, y: int) -> FileRespo
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     cache_path.write_bytes(response.content)
 
+    cache_stats.record_miss("tiles_carto")
     return FileResponse(
         cache_path,
         media_type="image/png",

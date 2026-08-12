@@ -334,8 +334,6 @@ class RecalculationJob(Base):
     activities_updated: Mapped[int | None] = mapped_column(Integer, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-
-
 class Event(Base):
     """System event log entry for the Admin System Dashboard.
 
@@ -353,3 +351,21 @@ class Event(Base):
         ForeignKey("users.id", ondelete="CASCADE"), nullable=True
     )
     payload: Mapped[dict] = mapped_column(JSONB, server_default=text("'{}'::jsonb"), nullable=False)
+
+class CacheStats(Base):
+    """Hourly cache hit/miss statistics for the Admin System Dashboard.
+
+    Aggregates cache performance metrics in hourly buckets per cache type
+    (tiles_osm, tiles_carto, geocoding).
+    """
+
+    __tablename__ = "cache_stats"
+    __table_args__ = (
+        UniqueConstraint("bucket_start", "cache_type", name="uq_cache_stats_bucket_type"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    bucket_start: Mapped[datetime] = mapped_column(nullable=False)
+    cache_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    hits: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    misses: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
