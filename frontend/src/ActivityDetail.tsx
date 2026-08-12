@@ -388,7 +388,7 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
     storageKey: "activity-detail",
     defaultHeight: 250,
     minHeight: 150,
-    maxHeight: 400,
+    maxHeight: 600,
     defaultWidthPercent: 40,
     minWidthPercent: 25,
     maxWidthPercent: 60,

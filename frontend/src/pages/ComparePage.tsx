@@ -674,7 +674,7 @@ export function ComparePage() {
     storageKey: "compare-page",
     defaultHeight: 250,
     minHeight: 150,
-    maxHeight: 400,
+    maxHeight: 600,
     defaultWidthPercent: 40,
     minWidthPercent: 25,
     maxWidthPercent: 60,
