@@ -258,6 +258,80 @@ async def flush_cache_stats(ctx: dict) -> dict:
         return {"flushed": flushed, "bucket_start": bucket_start.isoformat()}
 
 
+async def prune_old_data(ctx: dict) -> dict:
+    """
+    Daily cron: delete events and cache_stats records older than 90 days.
+
+    Events are deleted in batches of 1000 to avoid holding locks for too long.
+    Cache stats are deleted in a single query (smaller table).
+
+    Emits a cache.pruned event with deletion counts after completion.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import delete, select
+
+    from trainingdash.domain.events import EventOutcome, EventType
+    from trainingdash.repositories.postgres.event_repo import PostgresEventRepo
+    from trainingdash.repositories.postgres.models import CacheStats, Event
+
+    cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=90)
+    batch_size = 1000
+
+    async with worker_db_session(ctx) as db:
+        # Delete events in batches to avoid long locks
+        events_deleted = 0
+        while True:
+            # Find IDs to delete (batched)
+            id_query = (
+                select(Event.id)
+                .where(Event.created_at < cutoff)
+                .limit(batch_size)
+            )
+            id_result = await db.execute(id_query)
+            ids_to_delete = [row[0] for row in id_result.fetchall()]
+
+            if not ids_to_delete:
+                break
+
+            # Delete the batch
+            delete_query = delete(Event).where(Event.id.in_(ids_to_delete))
+            result = await db.execute(delete_query)
+            await db.commit()
+            events_deleted += result.rowcount
+
+        # Cache stats: smaller table, single delete is fine
+        cache_result = await db.execute(
+            delete(CacheStats).where(CacheStats.bucket_start < cutoff)
+        )
+        cache_deleted = cache_result.rowcount
+        await db.commit()
+
+        # Log the pruning event
+        event_repo = PostgresEventRepo(db)
+        await event_repo.log(
+            event_type=EventType.CACHE_PRUNED.value,
+            outcome=EventOutcome.INFO.value,
+            user_id=None,
+            payload={
+                "events_deleted": events_deleted,
+                "cache_stats_deleted": cache_deleted,
+                "cutoff": cutoff.isoformat(),
+            },
+        )
+        await db.commit()
+
+    logger.info(
+        f"prune_old_data: deleted {events_deleted} events, "
+        f"{cache_deleted} cache_stats records older than {cutoff}"
+    )
+
+    return {
+        "events_deleted": events_deleted,
+        "cache_stats_deleted": cache_deleted,
+    }
+
+
 # SAQ worker settings - this is what `saq worker.settings` loads
 # Note: SAQ supports settings as a callable, which delays queue creation
 # until the worker actually starts. This is crucial for Docker Compose
@@ -291,14 +365,16 @@ def settings():
             sync_garmin_job,
             hourly_sync_scheduler,
             flush_cache_stats,
+            prune_old_data,
         ],
         "concurrency": 10,
         "startup": startup,
         "shutdown": shutdown,
-        # Cron schedule: run the sync scheduler at the top of every hour
-        # and flush cache stats at :05 past each hour
+        # Cron schedule: run the sync scheduler at the top of every hour,
+        # flush cache stats at :05 past each hour, and prune old data daily at 4 AM
         "cron_jobs": [
             CronJob(hourly_sync_scheduler, cron="0 * * * *", unique=True),
             CronJob(flush_cache_stats, cron="5 * * * *", unique=True),
+            CronJob(prune_old_data, cron="0 4 * * *", unique=True),
         ],
     }
