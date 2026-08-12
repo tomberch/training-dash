@@ -77,6 +77,8 @@ export function OnboardingDialog({ open, onDone }: Props): React.JSX.Element {
   // Step 1: Profile form state
   const [dob, setDob] = useState("");
   const [weight, setWeight] = useState("");
+  const [height, setHeight] = useState("");
+  const [gender, setGender] = useState<"male" | "female" | "">("");
   const [savingProfile, setSavingProfile] = useState(false);
 
   // Step 2: Threshold form state (initialized from computed defaults)
@@ -111,9 +113,15 @@ export function OnboardingDialog({ open, onDone }: Props): React.JSX.Element {
     // Validate age is between 10-100
     const age = calculateAge(dob);
     if (age === null || age < 10 || age > 100) return false;
+
+    // Height is optional, but if provided must be valid (100-250 cm)
+    if (height) {
+      const heightNum = parseInt(height, 10);
+      if (isNaN(heightNum) || heightNum < 100 || heightNum > 250) return false;
+    }
     
     return true;
-  }, [dob, weight]);
+  }, [dob, weight, height]);
 
   function handleGoToSettings() {
     onDone();
@@ -128,6 +136,8 @@ export function OnboardingDialog({ open, onDone }: Props): React.JSX.Element {
       await updatePreferences({
         date_of_birth: dob,
         weight_kg: parseFloat(weight),
+        height_cm: height ? parseInt(height, 10) : undefined,
+        gender: gender || undefined,
       });
 
       // Initialize threshold fields with computed defaults
@@ -143,7 +153,7 @@ export function OnboardingDialog({ open, onDone }: Props): React.JSX.Element {
         err instanceof Error ? err.message : "Failed to save profile";
       setError(errorMessage);
       toast.error("Failed to save profile", {
-        description: "Please check your values and try again.",
+        description: errorMessage,
       });
     } finally {
       setSavingProfile(false);
@@ -210,6 +220,8 @@ export function OnboardingDialog({ open, onDone }: Props): React.JSX.Element {
       setStep("profile");
       setDob("");
       setWeight("");
+      setHeight("");
+      setGender("");
       setFtp("");
       setLthr("");
       setHrmax("");
@@ -267,6 +279,38 @@ export function OnboardingDialog({ open, onDone }: Props): React.JSX.Element {
                   />
                   <span className="text-body-secondary w-8">kg</span>
                 </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="ob-height">Height <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="ob-height"
+                    type="number"
+                    min={100}
+                    max={250}
+                    step={1}
+                    placeholder="e.g. 175"
+                    value={height}
+                    onChange={(e) => setHeight(e.target.value)}
+                    className="flex-1"
+                  />
+                  <span className="text-body-secondary w-8">cm</span>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="ob-gender">Gender <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <select
+                  id="ob-gender"
+                  value={gender}
+                  onChange={(e) => setGender(e.target.value as "male" | "female" | "")}
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  <option value="">Prefer not to say</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                </select>
               </div>
 
               {error && <p className="text-sm text-destructive">{error}</p>}
