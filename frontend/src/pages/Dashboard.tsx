@@ -86,7 +86,7 @@ function DashboardLoadingSkeleton(): JSX.Element {
           <Skeleton className="h-4 w-16" />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[1, 2, 3].map((i) => (
+          {[1, 2, 3, 4, 5, 6].map((i) => (
             <div key={i} className="bg-muted/30 rounded-xl border border-border overflow-hidden">
               <Skeleton className="h-40 rounded-none" />
               <div className="p-4 space-y-3">
@@ -185,8 +185,8 @@ export function Dashboard({}: DashboardProps): JSX.Element {
     ? ((currentPMC.ctl - previousPMC.ctl) / (previousPMC.ctl || 1) * 100)
     : null;
 
-  // Recent activities (top 4 for card grid)
-  const recentActivities = activities.slice(0, 4);
+  // Recent activities (top 6 for 3x2 card grid)
+  const recentActivities = activities.slice(0, 6);
 
   // Recent breakthrough activities (last 30 days)
   const recentBreakthroughs = useMemo(() => {
