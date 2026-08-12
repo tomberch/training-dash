@@ -31,6 +31,7 @@ Benefits over testcontainers:
 from tests.fakes.activity_repo import FakeActivityRepo
 from tests.fakes.audit_log_repo import FakeAuditLogRepo
 from tests.fakes.credentials_repo import FakeGarminCredentialsRepo, FakeXertCredentialsRepo
+from tests.fakes.event_repo import FakeEventRepo
 from tests.fakes.notification_repo import FakeNotificationRepo
 from tests.fakes.oauth_link_repo import FakeOAuthLinkRepo
 from tests.fakes.recalculation_job_repo import FakeRecalculationJobRepo
@@ -41,6 +42,7 @@ __all__ = [
     "FakeActivityRepo",
     "FakeAppSettingsRepo",
     "FakeAuditLogRepo",
+    "FakeEventRepo",
     "FakeGarminCredentialsRepo",
     "FakeNotificationRepo",
     "FakeOAuthLinkRepo",

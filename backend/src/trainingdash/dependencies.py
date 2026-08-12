@@ -22,6 +22,7 @@ from trainingdash.integrations.geocoding import GeocodingService
 from trainingdash.repositories.postgres.activity_repo import PostgresActivityRepo
 from trainingdash.repositories.postgres.analytics_repo import PostgresAnalyticsRepo
 from trainingdash.repositories.postgres.audit_log_repo import PostgresAuditLogRepo
+from trainingdash.repositories.postgres.event_repo import PostgresEventRepo
 from trainingdash.repositories.postgres.credentials_repo import (
     PostgresGarminCredentialsRepo,
     PostgresXertCredentialsRepo,
@@ -40,6 +41,7 @@ from trainingdash.repositories.protocols import (
     AnalyticsRepo,
     AppSettingsRepo,
     AuditLogRepo,
+    EventRepo,
     GarminCredentialsRepo,
     NotificationRepo,
     OAuthLinkRepo,
@@ -90,6 +92,11 @@ async def get_audit_log_repo(db: DbSession) -> AuditLogRepo:
     return PostgresAuditLogRepo(db)
 
 
+async def get_event_repo(db: DbSession) -> EventRepo:
+    """Create an EventRepo bound to the current session."""
+    return PostgresEventRepo(db)
+
+
 async def get_recalculation_job_repo(db: DbSession) -> RecalculationJobRepo:
     """Create a RecalculationJobRepo bound to the current session."""
     return PostgresRecalculationJobRepo(db)
@@ -125,6 +132,7 @@ GarminCredentialsRepoD = Annotated[GarminCredentialsRepo, Depends(get_garmin_cre
 NotificationRepoD = Annotated[NotificationRepo, Depends(get_notification_repo)]
 AppSettingsRepoD = Annotated[AppSettingsRepo, Depends(get_app_settings_repo)]
 AuditLogRepoD = Annotated[AuditLogRepo, Depends(get_audit_log_repo)]
+EventRepoD = Annotated[EventRepo, Depends(get_event_repo)]
 RecalculationJobRepoD = Annotated[RecalculationJobRepo, Depends(get_recalculation_job_repo)]
 OAuthLinkRepoD = Annotated[OAuthLinkRepo, Depends(get_oauth_link_repo)]
 ThresholdRepoD = Annotated[ThresholdRepo, Depends(get_threshold_repo)]

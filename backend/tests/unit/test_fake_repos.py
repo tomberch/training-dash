@@ -14,6 +14,7 @@ from tests.fakes import (
     FakeActivityRepo,
     FakeAppSettingsRepo,
     FakeAuditLogRepo,
+    FakeEventRepo,
     FakeOAuthLinkRepo,
     FakeUserRepo,
     FakeXertCredentialsRepo,
@@ -269,3 +270,159 @@ class TestFakeOAuthLinkRepo:
         # Not found
         link = await oauth_repo.get_by_provider_id("github", "wrong_id")
         assert link is None
+
+
+
+class TestFakeEventRepo:
+    """Demonstrates FakeEventRepo usage."""
+
+    @pytest.fixture
+    def event_repo(self):
+        return FakeEventRepo()
+
+    async def test_log_event_returns_id(self, event_repo: FakeEventRepo):
+        event_id = await event_repo.log(
+            event_type="sync.completed",
+            outcome="success",
+            user_id=1,
+            payload={"activities": 5},
+        )
+        assert event_id == 1
+
+        # Second event gets next ID
+        event_id2 = await event_repo.log(
+            event_type="activity.created",
+            outcome="success",
+        )
+        assert event_id2 == 2
+
+    async def test_list_returns_newest_first(self, event_repo: FakeEventRepo):
+        now = datetime.now(UTC).replace(tzinfo=None)
+        earlier = now.replace(hour=max(0, now.hour - 1))
+
+        event_repo.add_with_timestamp("sync.completed", "success", earlier)
+        event_repo.add_with_timestamp("activity.created", "success", now)
+
+        events = await event_repo.list()
+        assert len(events) == 2
+        assert events[0].event_type == "activity.created"  # newer
+        assert events[1].event_type == "sync.completed"  # older
+
+    async def test_list_filters_by_type(self, event_repo: FakeEventRepo):
+        await event_repo.log(event_type="sync.completed", outcome="success")
+        await event_repo.log(event_type="activity.created", outcome="success")
+        await event_repo.log(event_type="sync.completed", outcome="failure")
+
+        events = await event_repo.list(event_type="sync.completed")
+        assert len(events) == 2
+        assert all(e.event_type == "sync.completed" for e in events)
+
+    async def test_list_filters_by_outcome(self, event_repo: FakeEventRepo):
+        await event_repo.log(event_type="sync.completed", outcome="success")
+        await event_repo.log(event_type="sync.completed", outcome="failure")
+
+        events = await event_repo.list(outcome="success")
+        assert len(events) == 1
+        assert events[0].outcome == "success"
+
+    async def test_list_filters_by_user(self, event_repo: FakeEventRepo):
+        await event_repo.log(event_type="sync.completed", outcome="success", user_id=1)
+        await event_repo.log(event_type="sync.completed", outcome="success", user_id=2)
+        await event_repo.log(event_type="activity.created", outcome="success")  # no user
+
+        events = await event_repo.list(user_id=1)
+        assert len(events) == 1
+        assert events[0].user_id == 1
+
+    async def test_list_filters_by_time_range(self, event_repo: FakeEventRepo):
+        now = datetime.now(UTC).replace(tzinfo=None)
+        hour_ago = now.replace(hour=max(0, now.hour - 1))
+        two_hours_ago = now.replace(hour=max(0, now.hour - 2))
+
+        event_repo.add_with_timestamp("old.event", "success", two_hours_ago)
+        event_repo.add_with_timestamp("mid.event", "success", hour_ago)
+        event_repo.add_with_timestamp("new.event", "success", now)
+
+        # Since filter (inclusive)
+        events = await event_repo.list(since=hour_ago)
+        assert len(events) == 2
+
+        # Until filter (exclusive)
+        events = await event_repo.list(until=hour_ago)
+        assert len(events) == 1
+        assert events[0].event_type == "old.event"
+
+    async def test_list_pagination(self, event_repo: FakeEventRepo):
+        for i in range(5):
+            await event_repo.log(event_type=f"event.{i}", outcome="success")
+
+        # First page
+        page1 = await event_repo.list(limit=2, offset=0)
+        assert len(page1) == 2
+
+        # Second page
+        page2 = await event_repo.list(limit=2, offset=2)
+        assert len(page2) == 2
+
+        # Pages should be different
+        assert page1[0].event_type != page2[0].event_type
+
+    async def test_list_caps_limit_at_100(self, event_repo: FakeEventRepo):
+        # Log 5 events
+        for i in range(5):
+            await event_repo.log(event_type=f"event.{i}", outcome="success")
+
+        # Request 200 but should only get 5 (cap doesn't affect actual count)
+        events = await event_repo.list(limit=200)
+        assert len(events) == 5
+
+    async def test_count_with_filters(self, event_repo: FakeEventRepo):
+        await event_repo.log(event_type="sync.completed", outcome="success", user_id=1)
+        await event_repo.log(event_type="sync.completed", outcome="failure", user_id=1)
+        await event_repo.log(event_type="activity.created", outcome="success", user_id=2)
+
+        assert await event_repo.count() == 3
+        assert await event_repo.count(event_type="sync.completed") == 2
+        assert await event_repo.count(outcome="success") == 2
+        assert await event_repo.count(user_id=1) == 2
+        assert await event_repo.count(event_type="sync.completed", outcome="success") == 1
+
+    async def test_delete_before(self, event_repo: FakeEventRepo):
+        now = datetime.now(UTC).replace(tzinfo=None)
+        hour_ago = now.replace(hour=max(0, now.hour - 1))
+        two_hours_ago = now.replace(hour=max(0, now.hour - 2))
+
+        event_repo.add_with_timestamp("old.event", "success", two_hours_ago)
+        event_repo.add_with_timestamp("mid.event", "success", hour_ago)
+        event_repo.add_with_timestamp("new.event", "success", now)
+
+        deleted = await event_repo.delete_before(hour_ago)
+        assert deleted == 1  # Only the old event
+
+        remaining = event_repo.all()
+        assert len(remaining) == 2
+
+    async def test_helper_find_by_type(self, event_repo: FakeEventRepo):
+        await event_repo.log(event_type="sync.completed", outcome="success")
+        await event_repo.log(event_type="activity.created", outcome="success")
+
+        sync_events = event_repo.find_by_type("sync.completed")
+        assert len(sync_events) == 1
+
+    async def test_helper_find_by_outcome(self, event_repo: FakeEventRepo):
+        await event_repo.log(event_type="sync.completed", outcome="success")
+        await event_repo.log(event_type="sync.completed", outcome="failure")
+
+        failures = event_repo.find_by_outcome("failure")
+        assert len(failures) == 1
+
+    async def test_clear_resets_state(self, event_repo: FakeEventRepo):
+        await event_repo.log(event_type="sync.completed", outcome="success")
+        await event_repo.log(event_type="activity.created", outcome="success")
+
+        event_repo.clear()
+
+        assert len(event_repo.all()) == 0
+        # ID counter resets
+        new_id = await event_repo.log(event_type="new.event", outcome="success")
+        assert new_id == 1

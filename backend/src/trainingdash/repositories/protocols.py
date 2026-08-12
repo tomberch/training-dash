@@ -427,6 +427,93 @@ class ThresholdRepo(Protocol):
         ...
 
 
+class EventRepo(Protocol):
+    """
+    Repository protocol for system events.
+
+    Events are logged for observability on the Admin System Dashboard.
+    They capture activity lifecycle, sync operations, job outcomes, etc.
+    """
+
+    async def log(
+        self,
+        event_type: str,
+        outcome: str,
+        user_id: int | None = None,
+        payload: dict | None = None,
+    ) -> int:
+        """
+        Log an event to the system event log.
+
+        Args:
+            event_type: Event type (e.g., 'sync.completed', 'activity.ingested')
+            outcome: Event outcome ('success', 'failure', 'info')
+            user_id: Optional user ID (None for system-wide events)
+            payload: Optional JSON-serializable payload with event-specific data
+
+        Returns:
+            The ID of the created event.
+        """
+        ...
+
+    async def list(
+        self,
+        event_type: str | None = None,
+        outcome: str | None = None,
+        user_id: int | None = None,
+        since: "datetime | None" = None,
+        until: "datetime | None" = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list["Event"]:
+        """
+        List events with optional filters.
+
+        Args:
+            event_type: Filter by exact event type
+            outcome: Filter by outcome
+            user_id: Filter by user ID
+            since: Filter events created after this time
+            until: Filter events created before this time
+            limit: Maximum number of events to return (max 100)
+            offset: Number of events to skip (for pagination)
+
+        Returns:
+            List of Event objects, ordered by created_at descending.
+        """
+        ...
+
+    async def count(
+        self,
+        event_type: str | None = None,
+        outcome: str | None = None,
+        user_id: int | None = None,
+        since: "datetime | None" = None,
+        until: "datetime | None" = None,
+    ) -> int:
+        """
+        Count events matching the given filters.
+
+        Same filter parameters as list().
+        """
+        ...
+
+    async def delete_before(self, cutoff: "datetime", batch_size: int = 1000) -> int:
+        """
+        Delete events older than the cutoff time.
+
+        Deletes in batches to avoid long locks.
+
+        Args:
+            cutoff: Delete events with created_at < cutoff
+            batch_size: Number of events to delete per batch
+
+        Returns:
+            Total number of events deleted.
+        """
+        ...
+
+
 class AnalyticsRepo(Protocol):
     """
     Read-only repository protocol for analytics / dashboard queries.
@@ -472,6 +559,7 @@ if TYPE_CHECKING:
     from trainingdash.repositories.postgres.models import (
         Activity,
         AppSettings,
+        Event,
         FitnessHistory,
         GarminCredentials,
         Notification,
