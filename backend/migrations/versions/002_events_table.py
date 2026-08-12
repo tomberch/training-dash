@@ -62,10 +62,11 @@ def upgrade() -> None:
         "CREATE INDEX idx_events_user_id ON events (user_id) WHERE user_id IS NOT NULL"
     )
 
-    # Pruning: efficient deletion of old events (partial index)
-    op.execute(
-        "CREATE INDEX idx_events_pruning ON events (created_at) "
-        "WHERE created_at < NOW() - INTERVAL '90 days'"
+    # Index for pruning queries: finding old events to delete
+    op.create_index(
+        "idx_events_pruning",
+        "events",
+        ["created_at"],
     )
 
 

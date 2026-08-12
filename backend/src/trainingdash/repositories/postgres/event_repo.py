@@ -2,10 +2,32 @@
 
 from datetime import datetime
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import Select, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from trainingdash.repositories.postgres.models import Event
+
+
+def _apply_event_filters[T](
+    query: Select[T],
+    event_type: str | None = None,
+    outcome: str | None = None,
+    user_id: int | None = None,
+    since: datetime | None = None,
+    until: datetime | None = None,
+) -> Select[T]:
+    """Apply common event filters to a query."""
+    if event_type is not None:
+        query = query.where(Event.event_type == event_type)
+    if outcome is not None:
+        query = query.where(Event.outcome == outcome)
+    if user_id is not None:
+        query = query.where(Event.user_id == user_id)
+    if since is not None:
+        query = query.where(Event.created_at >= since)
+    if until is not None:
+        query = query.where(Event.created_at < until)
+    return query
 
 
 class PostgresEventRepo:
@@ -49,23 +71,16 @@ class PostgresEventRepo:
         """
         List events with optional filters, ordered by created_at descending.
         """
-        # Cap limit at 100
-        limit = min(limit, 100)
+        limit = min(limit, 100)  # Cap limit at 100
 
-        query = select(Event)
-
-        # Apply filters
-        if event_type is not None:
-            query = query.where(Event.event_type == event_type)
-        if outcome is not None:
-            query = query.where(Event.outcome == outcome)
-        if user_id is not None:
-            query = query.where(Event.user_id == user_id)
-        if since is not None:
-            query = query.where(Event.created_at >= since)
-        if until is not None:
-            query = query.where(Event.created_at < until)
-
+        query = _apply_event_filters(
+            select(Event),
+            event_type=event_type,
+            outcome=outcome,
+            user_id=user_id,
+            since=since,
+            until=until,
+        )
         query = query.order_by(Event.created_at.desc()).limit(limit).offset(offset)
 
         result = await self._db.execute(query)
@@ -82,19 +97,14 @@ class PostgresEventRepo:
         """
         Count events matching the given filters.
         """
-        query = select(func.count()).select_from(Event)
-
-        # Apply filters
-        if event_type is not None:
-            query = query.where(Event.event_type == event_type)
-        if outcome is not None:
-            query = query.where(Event.outcome == outcome)
-        if user_id is not None:
-            query = query.where(Event.user_id == user_id)
-        if since is not None:
-            query = query.where(Event.created_at >= since)
-        if until is not None:
-            query = query.where(Event.created_at < until)
+        query = _apply_event_filters(
+            select(func.count()).select_from(Event),
+            event_type=event_type,
+            outcome=outcome,
+            user_id=user_id,
+            since=since,
+            until=until,
+        )
 
         result = await self._db.execute(query)
         return result.scalar_one()

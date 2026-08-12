@@ -17,7 +17,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from trainingdash.integrations.xert.mock_client import setup_mock_xert_client
-from trainingdash.routers import activities, admin, analytics, auth, health, metrics, oauth, tiles, user
+from trainingdash.routers import activities, admin, admin_system, analytics, auth, health, metrics, oauth, tiles, user
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +75,7 @@ def create_app() -> FastAPI:
     app.include_router(oauth.router)
     app.include_router(user.router)
     app.include_router(admin.router)
+    app.include_router(admin_system.router)
     app.include_router(activities.router)
     app.include_router(analytics.router)
     app.include_router(metrics.router)
