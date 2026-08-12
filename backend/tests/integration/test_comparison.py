@@ -120,8 +120,9 @@ class TestCompare:
     async def test_same_route_picker_excludes_opposite_direction(self, auth_client):
         """Opposite direction rides on same route should not be suggested."""
         # Create two rides: one normal, one reversed
-        fit_normal = make_test_fit(num_records=100, start_lat=47.3769, start_lon=8.5417)
-        fit_reverse = make_test_fit(num_records=100, start_lat=47.3769, start_lon=8.5417, reverse=True)
+        # Use 150 records to get >1km distance (needed for direction bearing computation)
+        fit_normal = make_test_fit(num_records=150, start_lat=47.3769, start_lon=8.5417)
+        fit_reverse = make_test_fit(num_records=150, start_lat=47.3769, start_lon=8.5417, reverse=True)
         
         id_normal = await upload_fit(auth_client, "normal.fit", fit_normal)
         id_reverse = await upload_fit(auth_client, "reverse.fit", fit_reverse)
@@ -157,8 +158,9 @@ class TestCompare:
     @pytest.mark.asyncio
     async def test_compare_rejects_opposite_direction(self, auth_client):
         """Comparing opposite direction rides should return opposite_direction reason."""
-        fit_normal = make_test_fit(num_records=100, start_lat=47.3769, start_lon=8.5417)
-        fit_reverse = make_test_fit(num_records=100, start_lat=47.3769, start_lon=8.5417, reverse=True)
+        # Use 150 records to get >1km distance (needed for direction bearing computation)
+        fit_normal = make_test_fit(num_records=150, start_lat=47.3769, start_lon=8.5417)
+        fit_reverse = make_test_fit(num_records=150, start_lat=47.3769, start_lon=8.5417, reverse=True)
         
         id_normal = await upload_fit(auth_client, "normal.fit", fit_normal)
         id_reverse = await upload_fit(auth_client, "reverse.fit", fit_reverse)

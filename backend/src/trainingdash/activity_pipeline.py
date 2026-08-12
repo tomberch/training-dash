@@ -82,7 +82,6 @@ class RouteMatchResult:
     """Result of route matching step."""
 
     route_id: int | None = None
-    direction_hash: str | None = None
     direction_bearing: int | None = None
 
 
@@ -631,7 +630,7 @@ class ActivityPipeline:
         Returns:
             RouteMatchResult with route_id and direction_bearing if matched
         """
-        from trainingdash.domain.direction import compute_direction_bearing, compute_direction_hash
+        from trainingdash.domain.direction import compute_direction_bearing
         from trainingdash.route_matching import find_or_create_route_id
 
         result = RouteMatchResult()
@@ -643,17 +642,11 @@ class ActivityPipeline:
             if r.get("lat") is not None and r.get("lon") is not None
         ]
 
-        # Compute direction bearing (recommended approach)
+        # Compute direction bearing for same-route direction comparison
         direction_bearing = compute_direction_bearing(gps_points)
         if direction_bearing is not None:
             result.direction_bearing = direction_bearing
             self.activity.direction_bearing = direction_bearing
-
-        # Compute direction hash (legacy, kept for backwards compatibility)
-        direction_hash = compute_direction_hash(gps_points)
-        if direction_hash:
-            result.direction_hash = direction_hash
-            self.activity.direction_hash = direction_hash
 
         # Match route
         route_id = await find_or_create_route_id(self.db, self.activity, self.records)

@@ -5,8 +5,6 @@ import pytest
 from trainingdash.domain.direction import (
     bearings_match,
     compute_direction_bearing,
-    compute_direction_hash,
-    directions_match,
 )
 
 
@@ -191,100 +189,3 @@ class TestBearingsMatch:
         assert bearings_match(0, 50, threshold=45) is False
         # But 40° apart should match
         assert bearings_match(0, 40, threshold=45) is True
-
-
-class TestComputeDirectionHash:
-    """Tests for compute_direction_hash function (legacy)."""
-
-    def test_returns_none_for_insufficient_points(self):
-        """Should return None with fewer than 10 GPS points."""
-        points = [(46.79, 7.50, 0.0)] * 5
-        assert compute_direction_hash(points) is None
-
-    def test_returns_none_for_short_distance(self):
-        """Should return None for routes shorter than min required distance."""
-        # Points clustered in small area
-        points = [(46.79 + i * 0.0001, 7.50 + i * 0.0001, i * 10.0) for i in range(20)]
-        # Total distance ~200m, less than 500m * 3 = 1500m minimum
-        result = compute_direction_hash(points)
-        assert result is None
-
-    def test_returns_hash_for_valid_route(self):
-        """Should return a 32-character hex hash for valid GPS data."""
-        # Create a ~3km route heading roughly North
-        # Each 0.01 degree lat is about 1.1km
-        points = [
-            (46.79 + i * 0.005, 7.50, i * 500.0)
-            for i in range(20)
-        ]
-        result = compute_direction_hash(points)
-        assert result is not None
-        assert len(result) == 32
-        assert all(c in '0123456789abcdef' for c in result)
-
-    def test_same_direction_produces_same_hash(self):
-        """Two routes going the same direction should produce the same hash."""
-        # Route A: heading North
-        points_a = [
-            (46.79 + i * 0.005, 7.50, i * 500.0)
-            for i in range(20)
-        ]
-        
-        # Route B: also heading North, slightly different starting point
-        points_b = [
-            (46.791 + i * 0.005, 7.501, i * 500.0)
-            for i in range(20)
-        ]
-        
-        hash_a = compute_direction_hash(points_a)
-        hash_b = compute_direction_hash(points_b)
-        
-        assert hash_a == hash_b
-
-    def test_opposite_direction_produces_different_hash(self):
-        """Routes going opposite directions should produce different hashes."""
-        # Route A: heading North
-        points_a = [
-            (46.79 + i * 0.005, 7.50, i * 500.0)
-            for i in range(20)
-        ]
-        
-        # Route B: heading South (reverse of A)
-        points_b = [
-            (46.79 + (19 - i) * 0.005, 7.50, i * 500.0)
-            for i in range(20)
-        ]
-        
-        hash_a = compute_direction_hash(points_a)
-        hash_b = compute_direction_hash(points_b)
-        
-        assert hash_a != hash_b
-
-    def test_handles_none_distances(self):
-        """Should compute distance from coordinates when distance_m is None."""
-        # Create route without distance data
-        points = [
-            (46.79 + i * 0.005, 7.50, None)
-            for i in range(20)
-        ]
-        result = compute_direction_hash(points)
-        assert result is not None
-        assert len(result) == 32
-
-
-class TestDirectionsMatch:
-    """Tests for directions_match function."""
-
-    def test_matching_hashes_return_true(self):
-        """Two identical hashes should match."""
-        assert directions_match("abc123", "abc123") is True
-
-    def test_different_hashes_return_false(self):
-        """Two different hashes should not match."""
-        assert directions_match("abc123", "def456") is False
-
-    def test_none_hash_returns_true(self):
-        """If either hash is None, should return True (fail open)."""
-        assert directions_match(None, "abc123") is True
-        assert directions_match("abc123", None) is True
-        assert directions_match(None, None) is True
