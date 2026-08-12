@@ -92,7 +92,7 @@ function buildEventFilters(filters: Filters, offset: number, limit: number): Sys
 // MAIN COMPONENT
 // =============================================================================
 
-export function SystemDashboard({ onBack }: { onBack: () => void }): JSX.Element {
+export function SystemDashboard({ onBack }: { onBack: () => void }) {
   // Data state
   const [cacheStats, setCacheStats] = useState<CacheStatsResponse | null>(null);
   const [activeJobs, setActiveJobs] = useState<ActiveJob[]>([]);
@@ -458,7 +458,7 @@ export function SystemDashboard({ onBack }: { onBack: () => void }): JSX.Element
 // EVENT ROW COMPONENT
 // =============================================================================
 
-function EventRow({ event }: { event: SystemEvent }): JSX.Element {
+function EventRow({ event }: { event: SystemEvent }) {
   const [expanded, setExpanded] = useState(false);
 
   const outcomeColors = {
@@ -531,7 +531,7 @@ function EventRow({ event }: { event: SystemEvent }): JSX.Element {
 // SKELETON COMPONENTS
 // =============================================================================
 
-function StatsCardSkeleton(): JSX.Element {
+function StatsCardSkeleton() {
   return (
     <div className="space-y-2">
       <Skeleton className="h-4 w-20" />
@@ -541,7 +541,7 @@ function StatsCardSkeleton(): JSX.Element {
   );
 }
 
-function EventListSkeleton(): JSX.Element {
+function EventListSkeleton() {
   return (
     <div className="space-y-2">
       {[1, 2, 3, 4, 5].map((i) => (

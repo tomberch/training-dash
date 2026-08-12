@@ -459,7 +459,12 @@ export function AthleteOverview({ user }: AthleteOverviewProps) {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <MetricSummaryCard
             name="Weight"
-            current={metrics.weight}
+            current={metrics.weight ?? (user.weight_kg != null ? {
+              id: "profile",
+              effective_date: new Date().toISOString().split("T")[0],
+              value: user.weight_kg,
+              source: "manual" as const
+            } : null)}
             previous={metrics.weight_previous}
             unit="kg"
             decimals={1}

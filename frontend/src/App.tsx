@@ -208,7 +208,7 @@ function AdminViewWrapper() {
   );
 }
 
-function SystemDashboardWrapper(): JSX.Element {
+function SystemDashboardWrapper() {
   const navigate = useNavigate();
   
   return (
