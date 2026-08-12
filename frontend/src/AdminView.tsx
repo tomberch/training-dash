@@ -26,7 +26,7 @@ interface SyncStatus {
   message?: string;
 }
 
-export function AdminView({ onBack }: { onBack: () => void }) {
+export function AdminView({ onBack, onSystemDashboard }: { onBack: () => void; onSystemDashboard?: () => void }) {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [pendingUsers, setPendingUsers] = useState<AdminUser[]>([]);
   const [settings, setSettings] = useState<AdminSettings | null>(null);
@@ -218,16 +218,26 @@ export function AdminView({ onBack }: { onBack: () => void }) {
   return (
     <div className="px-4 py-6">
         {/* Header */}
-        <div className="flex items-center gap-4 mb-6">
-          <button
-            onClick={onBack}
-            className="px-4 py-2 text-sm font-medium text-foreground bg-card border border-border rounded-lg hover:bg-muted transition-fast"
-          >
-            &larr; Back
-          </button>
-          <h1 className="text-metric">
-            Admin Panel
-          </h1>
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={onBack}
+              className="px-4 py-2 text-sm font-medium text-foreground bg-card border border-border rounded-lg hover:bg-muted transition-fast"
+            >
+              &larr; Back
+            </button>
+            <h1 className="text-metric">
+              Admin Panel
+            </h1>
+          </div>
+          {onSystemDashboard && (
+            <button
+              onClick={onSystemDashboard}
+              className="px-4 py-2 text-sm font-medium text-foreground bg-card border border-border rounded-lg hover:bg-muted transition-fast"
+            >
+              System Dashboard &rarr;
+            </button>
+          )}
         </div>
 
         {/* Error alert */}

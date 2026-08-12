@@ -919,3 +919,93 @@ export async function setPassword(password: string): Promise<{ success: boolean 
 export async function hasPassword(): Promise<{ has_password: boolean }> {
   return apiGet<{ has_password: boolean }>("/me/has-password");
 }
+
+
+
+// ============================================================================
+// Admin System Dashboard API
+// ============================================================================
+
+export interface SystemEvent {
+  id: number;
+  created_at: string;
+  event_type: string;
+  outcome: "success" | "failure" | "info";
+  user_id: number | null;
+  payload: Record<string, unknown>;
+}
+
+export interface SystemEventsResponse {
+  events: SystemEvent[];
+  total: number;
+}
+
+export interface SystemEventsFilters {
+  event_type?: string;
+  outcome?: string;
+  user_id?: number;
+  since?: string;
+  until?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface ActiveJob {
+  key: string;
+  function: string;
+  status: string;
+  scheduled: string | null;
+  started: string | null;
+  kwargs: Record<string, unknown> | null;
+}
+
+export interface ActiveJobsResponse {
+  jobs: ActiveJob[];
+}
+
+export interface CacheTypeStats {
+  hits: number;
+  misses: number;
+}
+
+export interface CacheHistoryEntry {
+  bucket_start: string;
+  cache_type: string;
+  hits: number;
+  misses: number;
+}
+
+export interface CacheSizes {
+  tiles_mb: number;
+  geocoding_count: number;
+}
+
+export interface CacheStatsResponse {
+  current: Record<string, CacheTypeStats>;
+  history: CacheHistoryEntry[];
+  sizes: CacheSizes;
+}
+
+export async function fetchSystemEvents(filters?: SystemEventsFilters): Promise<SystemEventsResponse> {
+  const params = new URLSearchParams();
+  if (filters?.event_type) params.set("event_type", filters.event_type);
+  if (filters?.outcome) params.set("outcome", filters.outcome);
+  if (filters?.user_id) params.set("user_id", filters.user_id.toString());
+  if (filters?.since) params.set("since", filters.since);
+  if (filters?.until) params.set("until", filters.until);
+  if (filters?.limit) params.set("limit", filters.limit.toString());
+  if (filters?.offset) params.set("offset", filters.offset.toString());
+  const query = params.toString();
+  return apiGet<SystemEventsResponse>(`/admin/system/events${query ? `?${query}` : ""}`);
+}
+
+export async function fetchActiveJobs(): Promise<ActiveJobsResponse> {
+  return apiGet<ActiveJobsResponse>("/admin/system/jobs");
+}
+
+export async function fetchCacheStats(days?: number): Promise<CacheStatsResponse> {
+  const params = new URLSearchParams();
+  if (days) params.set("days", days.toString());
+  const query = params.toString();
+  return apiGet<CacheStatsResponse>(`/admin/system/cache-stats${query ? `?${query}` : ""}`);
+}

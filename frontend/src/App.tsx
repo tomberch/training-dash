@@ -15,6 +15,7 @@ import { Toaster } from "./components/ui/sonner";
 const ActivityDetail = lazy(() => import("./ActivityDetail").then(m => ({ default: m.ActivityDetail })));
 const RecordsView = lazy(() => import("./RecordsView").then(m => ({ default: m.RecordsView })));
 const AdminView = lazy(() => import("./AdminView").then(m => ({ default: m.AdminView })));
+const SystemDashboard = lazy(() => import("./SystemDashboard").then(m => ({ default: m.SystemDashboard })));
 const Settings = lazy(() => import("./Settings").then(m => ({ default: m.Settings })));
 const Dashboard = lazy(() => import("./pages/Dashboard").then(m => ({ default: m.Dashboard })));
 const PMCView = lazy(() => import("./pages/PMCView").then(m => ({ default: m.PMCView })));
@@ -150,6 +151,9 @@ function AppLayout({ user, onLogout, onUserUpdate }: {
               {user.is_admin && (
                 <Route path="/admin" element={<AdminViewWrapper />} />
               )}
+              {user.is_admin && (
+                <Route path="/admin/system" element={<SystemDashboardWrapper />} />
+              )}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
             </Suspense>
@@ -197,7 +201,18 @@ function AdminViewWrapper() {
   const navigate = useNavigate();
   
   return (
-    <AdminView onBack={() => navigate("/")} />
+    <AdminView 
+      onBack={() => navigate("/")} 
+      onSystemDashboard={() => navigate("/admin/system")}
+    />
+  );
+}
+
+function SystemDashboardWrapper(): JSX.Element {
+  const navigate = useNavigate();
+  
+  return (
+    <SystemDashboard onBack={() => navigate("/admin")} />
   );
 }
 
