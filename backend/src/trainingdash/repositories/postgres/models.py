@@ -11,6 +11,7 @@ from sqlalchemy import (
     Integer,
     LargeBinary,
     Numeric,
+    SmallInteger,
     String,
     Text,
     UniqueConstraint,
@@ -141,6 +142,10 @@ class Activity(Base):
     map_polyline: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Routing
     route_id: Mapped[int | None] = mapped_column(ForeignKey("routes.id"), nullable=True)
+    # Direction hash for same-route comparison (legacy - hash of cardinal direction sequence)
+    direction_hash: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # Direction bearing for same-route comparison (0-359 degrees, from start to 25% point)
+    direction_bearing: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
     raw_fit: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     utc_offset_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
