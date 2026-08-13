@@ -6,6 +6,7 @@ from geoalchemy2 import Geography
 from sqlalchemy import (
     BigInteger,
     Date,
+    DateTime,
     Float,
     ForeignKey,
     Integer,
@@ -344,7 +345,9 @@ class Event(Base):
     __tablename__ = "events"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()")
+    )
     event_type: Mapped[str] = mapped_column(String(50), nullable=False)
     outcome: Mapped[str] = mapped_column(String(10), nullable=False)
     user_id: Mapped[int | None] = mapped_column(
