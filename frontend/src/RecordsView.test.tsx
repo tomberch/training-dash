@@ -62,8 +62,8 @@ describe("RecordsView", () => {
     await waitFor(() => {
       expect(screen.getByText("Route PRs")).toBeInTheDocument();
       expect(screen.getByText("Morning Ride")).toBeInTheDocument();
-      // 3600s = 1h 0m (formatTime omits 0s)
-      expect(screen.getByText("1h 0m")).toBeInTheDocument();
+      // 3600s = 1h 00m (formatTime uses leading zeros, omits 0s)
+      expect(screen.getByText("1h 00m")).toBeInTheDocument();
       expect(screen.getByText("Afternoon Ride")).toBeInTheDocument();
     });
   });

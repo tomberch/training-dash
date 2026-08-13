@@ -34,11 +34,12 @@ export function formatTime(s: number): string {
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
   const sec = Math.round(s % 60);
+  const pad = (n: number) => n.toString().padStart(2, "0");
   if (h > 0) {
-    if (sec > 0) return `${h}h ${m}m ${sec}s`;
-    return `${h}h ${m}m`;
+    if (sec > 0) return `${h}h ${pad(m)}m ${pad(sec)}s`;
+    return `${h}h ${pad(m)}m`;
   }
-  if (sec > 0) return `${m}m ${sec}s`;
+  if (sec > 0) return `${m}m ${pad(sec)}s`;
   return `${m}m`;
 }
 
@@ -132,7 +133,7 @@ export function activityEndTimeIso(startedAt: string, elapsedTimeS: number): str
 export function formatDuration(seconds: number): string {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
-  if (h > 0) return `${h}h ${m}m`;
+  if (h > 0) return `${h}h ${m.toString().padStart(2, "0")}m`;
   return `${m}m`;
 }
 

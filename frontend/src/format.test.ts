@@ -72,10 +72,10 @@ describe("formatDuration", () => {
     expect(formatDuration(60)).toBe("1m");
   });
 
-  it("formats hours and minutes for longer durations", () => {
-    expect(formatDuration(3600)).toBe("1h 0m");
-    expect(formatDuration(3660)).toBe("1h 1m");
-    expect(formatDuration(7200)).toBe("2h 0m");
+  it("formats hours and minutes with leading zeros for longer durations", () => {
+    expect(formatDuration(3600)).toBe("1h 00m");
+    expect(formatDuration(3660)).toBe("1h 01m");
+    expect(formatDuration(7200)).toBe("2h 00m");
     expect(formatDuration(5400)).toBe("1h 30m");
   });
 
