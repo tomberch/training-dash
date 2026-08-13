@@ -71,6 +71,8 @@ class UpdateMeRequest(BaseModel):
 @router.patch("/me")
 async def update_me(db: DbSession, user: CurrentUser, request: UpdateMeRequest):
     """Update the current user's preferences."""
+    from trainingdash.hr_power import get_ef_model_status
+
     if request.display_name is not None:
         user.display_name = request.display_name.strip() if request.display_name else None
 
@@ -125,7 +127,9 @@ async def update_me(db: DbSession, user: CurrentUser, request: UpdateMeRequest):
     await db.commit()
     await db.refresh(user)
 
-    return user_response(user)
+    response = user_response(user)
+    response["hr_power_model"] = await get_ef_model_status(db, user.id)
+    return response
 
 
 # --- Xert credentials ---
