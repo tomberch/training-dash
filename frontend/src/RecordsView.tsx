@@ -8,6 +8,7 @@ import { formatDistance, formatSpeed, formatElevation, formatTime } from "./form
 import { ErrorDisplay } from "./ErrorDisplay";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
+import { PolylineMap } from "./components/PolylineMap";
 
 // Color themes for each PR type
 const PR_COLORS = {
@@ -184,44 +185,62 @@ function PRCard({ label, value, activityId, icon, colorTheme }: PRCardProps): JS
 }
 
 function RoutePRCard({ routePR }: { routePR: RoutePR }): JSX.Element {
-  return (
-    <div className="bg-card border border-border rounded-2xl p-6">
-      <div className="grid grid-cols-4 gap-6 items-center">
-        <div className="col-span-2">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-success/20 rounded-lg flex items-center justify-center">
-              <svg className="w-5 h-5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+  const content = (
+    <div className="bg-card border border-border rounded-2xl overflow-hidden card-hover transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
+      <div className="flex">
+        {/* Map thumbnail */}
+        <div className="w-32 h-24 flex-shrink-0 bg-muted">
+          {routePR.polyline ? (
+            <PolylineMap 
+              polyline={routePR.polyline} 
+              className="w-full h-full"
+              showMarkers={true}
+              showMapBackground={true}
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <svg className="w-8 h-8 text-muted-foreground/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
               </svg>
             </div>
-            <div>
-              <h3 className="font-semibold text-foreground">{routePR.route_label}</h3>
-              <p className="text-muted-foreground text-sm">Route PR</p>
-            </div>
+          )}
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 p-4 flex items-center justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-foreground truncate">
+              {routePR.activity_title || routePR.route_label}
+            </h3>
+            <p className="text-muted-foreground text-sm">Route PR</p>
           </div>
-        </div>
-        
-        <div>
-          <p className="text-metric-label mb-1">Best Time</p>
-          <p className="text-metric tabular-nums">{formatTime(routePR.fastest_time_s)}</p>
-        </div>
-        
-        <div className="text-right">
+          
+          <div className="text-right">
+            <p className="text-metric-label mb-1">Best Time</p>
+            <p className="text-2xl font-bold text-foreground tabular-nums">{formatTime(routePR.fastest_time_s)}</p>
+          </div>
+          
           {routePR.activity_id && (
-            <Link
-              to={`/activities/${routePR.activity_id}`}
-              className="inline-flex items-center gap-2 text-primary hover:text-primary/80 text-sm font-medium transition group"
-            >
-              <span>View activity</span>
-              <svg className="w-4 h-4 transform group-hover:translate-x-1 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="flex items-center text-primary">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
-            </Link>
+            </div>
           )}
         </div>
       </div>
     </div>
   );
+
+  if (routePR.activity_id) {
+    return (
+      <Link to={`/activities/${routePR.activity_id}`}>
+        {content}
+      </Link>
+    );
+  }
+
+  return content;
 }
 
 function RecordsLoadingSkeleton(): JSX.Element {

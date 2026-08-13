@@ -101,6 +101,8 @@ async def get_records(repo: AnalyticsRepoD, user: CurrentUser):
                 "route_label": r.route_label,
                 "fastest_time_s": r.fastest_time_s,
                 "activity_id": r.activity_id,
+                "activity_title": r.activity_title,
+                "polyline": r.polyline,
             }
             for r in view.route_prs
         ],

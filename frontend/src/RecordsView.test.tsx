@@ -28,8 +28,8 @@ const fullResponse = {
     highest_sustained_power_w: null,
   },
   route_prs: [
-    { route_id: 1, route_label: "2024-03-15", fastest_time_s: 3600, activity_id: "uuid-1" },
-    { route_id: 2, route_label: "2024-03-10", fastest_time_s: 5400, activity_id: "uuid-3" },
+    { route_id: 1, route_label: "Morning Ride", fastest_time_s: 3600, activity_id: "uuid-1", activity_title: "Morning Ride", polyline: "abc123" },
+    { route_id: 2, route_label: "Afternoon Ride", fastest_time_s: 5400, activity_id: "uuid-3", activity_title: "Afternoon Ride", polyline: "def456" },
   ],
 };
 
@@ -58,9 +58,9 @@ describe("RecordsView", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Route PRs")).toBeInTheDocument();
-      expect(screen.getByText("Route 2024-03-15")).toBeInTheDocument();
-      expect(screen.getByText("1h 0m")).toBeInTheDocument();
-      expect(screen.getByText("Route 2024-03-10")).toBeInTheDocument();
+      expect(screen.getByText("Morning Ride")).toBeInTheDocument();
+      expect(screen.getByText("1h 0m 0s")).toBeInTheDocument();
+      expect(screen.getByText("Afternoon Ride")).toBeInTheDocument();
     });
   });
 

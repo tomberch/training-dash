@@ -99,6 +99,8 @@ export interface RoutePR {
   route_label: string;
   fastest_time_s: number;
   activity_id: string | null;
+  activity_title: string | null;
+  polyline: string | null;
 }
 
 export interface RecordsResponse {

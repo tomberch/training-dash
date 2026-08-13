@@ -26,6 +26,8 @@ class RoutePrView:
     route_label: str
     fastest_time_s: int
     activity_id: str | None
+    activity_title: str | None
+    polyline: str | None
 
 
 @dataclass
@@ -110,31 +112,36 @@ class PostgresAnalyticsRepo:
         return RecordsView(lifetime_prs=lifetime_prs, route_prs=route_prs)
 
     async def _get_lifetime_prs(self, user_id: int) -> dict[str, Any]:
-        """6 max aggregates + 3 fastest-time-at-distance queries."""
-        result = await self._session.execute(
-            select(
-                func.max(Activity.total_distance_m).label("longest_distance_m"),
-                func.max(Activity.moving_time_s).label("longest_moving_time_s"),
-                func.max(Activity.max_speed_mps).label("max_speed_mps"),
-                func.max(Activity.max_hr_bpm).label("max_hr_bpm"),
-                func.max(Activity.elevation_gain_m).label("biggest_elevation_gain_m"),
-                func.max(Activity.np_power_w).label("highest_sustained_power_w"),
-            ).where(Activity.user_id == user_id)
-        )
-        row = result.one()
+        """Get lifetime PRs with activity IDs for all PR types."""
+        prs: dict[str, Any] = {}
 
-        def _pr(val: Any) -> dict[str, Any] | None:
-            return {"value": val} if val is not None else None
+        # Define max-based PRs: (key, column, filter)
+        max_prs = [
+            ("longest_distance_m", Activity.total_distance_m, None),
+            ("longest_moving_time_s", Activity.moving_time_s, None),
+            ("max_speed_mps", Activity.max_speed_mps, Activity.max_speed_mps > 0),
+            ("max_hr_bpm", Activity.max_hr_bpm, Activity.max_hr_bpm > 0),
+            ("biggest_elevation_gain_m", Activity.elevation_gain_m, Activity.elevation_gain_m > 0),
+            ("highest_sustained_power_w", Activity.np_power_w, Activity.np_power_w > 0),
+        ]
 
-        prs: dict[str, Any] = {
-            "longest_distance_m": _pr(row.longest_distance_m),
-            "longest_moving_time_s": _pr(row.longest_moving_time_s),
-            "max_speed_mps": _pr(row.max_speed_mps),
-            "max_hr_bpm": _pr(row.max_hr_bpm),
-            "biggest_elevation_gain_m": _pr(row.biggest_elevation_gain_m),
-            "highest_sustained_power_w": _pr(row.highest_sustained_power_w),
-        }
+        for key, column, extra_filter in max_prs:
+            query = (
+                select(Activity.id, column)
+                .where(Activity.user_id == user_id, column.isnot(None))
+            )
+            if extra_filter is not None:
+                query = query.where(extra_filter)
+            query = query.order_by(column.desc()).limit(1)
 
+            result = await self._session.execute(query)
+            row = result.first()
+            if row is not None:
+                prs[key] = {"value": row[1], "activity_id": str(row[0])}
+            else:
+                prs[key] = None
+
+        # Fastest time at distance PRs
         for target_m in [5000, 10000, 40000]:
             result = await self._session.execute(
                 select(Activity.id, Activity.avg_speed_mps)
@@ -160,17 +167,11 @@ class PostgresAnalyticsRepo:
         return prs
 
     async def _get_route_prs(self, user_id: int) -> list[RoutePrView]:
-        """Per-route fastest times + labels in a single window-function query.
+        """Per-route fastest times with activity title and polyline.
 
-        Replaces the old N+1 implementation (2 queries per route).
-        Uses ``FIRST_VALUE`` partitioned by route to get both:
-        - the activity holding the fastest time (by elapsed_time_s)
-        - the first activity's started_at (for the route label)
+        For each route, finds the activity with the fastest elapsed_time_s
+        and includes its title and polyline for display.
         """
-        # Window functions: fastest activity per route + earliest activity per route
-        # We compute MIN(elapsed_time_s) per route, then find the activity matching it.
-        # FIRST_VALUE gives us the first activity's started_at for the label.
-        fastest_time = func.min(Activity.elapsed_time_s).over(partition_by=Activity.route_id).label("fastest_time")
         # Rank activities within each route by elapsed_time_s ASC to find the record holder
         fastest_rank = (
             func.row_number()
@@ -180,25 +181,15 @@ class PostgresAnalyticsRepo:
             )
             .label("rn")
         )
-        # Earliest activity per route (for the route label)
-        first_started_rank = (
-            func.row_number()
-            .over(
-                partition_by=Activity.route_id,
-                order_by=Activity.started_at.asc(),
-            )
-            .label("first_rn")
-        )
 
         subq = (
             select(
                 Activity.route_id,
                 Activity.id,
-                Activity.started_at,
+                Activity.title,
+                Activity.map_polyline,
                 Activity.elapsed_time_s,
-                fastest_time,
                 fastest_rank,
-                first_started_rank,
             )
             .where(
                 Activity.user_id == user_id,
@@ -207,49 +198,31 @@ class PostgresAnalyticsRepo:
             .subquery()
         )
 
-        # The record holder = row with rn=1; the first activity = row with first_rn=1.
-        # Join these per route to assemble the label + record holder in one query.
-        record_holders = (
+        # Select only the fastest activity per route (rn=1)
+        result = await self._session.execute(
             select(
                 subq.c.route_id,
                 subq.c.id.label("activity_id"),
+                subq.c.title,
+                subq.c.map_polyline,
                 subq.c.elapsed_time_s.label("fastest_time_s"),
             )
             .where(literal_column("rn") == 1)
-            .subquery()
-        )
-        first_activities = (
-            select(
-                subq.c.route_id,
-                subq.c.started_at.label("first_started_at"),
-            )
-            .where(literal_column("first_rn") == 1)
-            .subquery()
-        )
-
-        result = await self._session.execute(
-            select(
-                record_holders.c.route_id,
-                record_holders.c.activity_id,
-                record_holders.c.fastest_time_s,
-                first_activities.c.first_started_at,
-            )
-            .join(
-                first_activities,
-                first_activities.c.route_id == record_holders.c.route_id,
-            )
-            .order_by(record_holders.c.route_id)
+            .order_by(subq.c.elapsed_time_s.asc())  # Sort by fastest time
         )
 
         route_prs: list[RoutePrView] = []
         for row in result.all():
-            route_label = row.first_started_at.strftime("%Y-%m-%d") if row.first_started_at else f"Route {row.route_id}"
+            # Use activity title as route label, fallback to "Route {id}"
+            route_label = row.title if row.title else f"Route {row.route_id}"
             route_prs.append(
                 RoutePrView(
                     route_id=row.route_id,
                     route_label=route_label,
                     fastest_time_s=row.fastest_time_s,
                     activity_id=str(row.activity_id) if row.activity_id else None,
+                    activity_title=row.title,
+                    polyline=row.map_polyline,
                 )
             )
         return route_prs
