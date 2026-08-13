@@ -186,37 +186,35 @@ function PRCard({ label, value, activityId, icon, colorTheme }: PRCardProps): JS
 
 function RoutePRCard({ routePR }: { routePR: RoutePR }): JSX.Element {
   const content = (
-    <div className="bg-card border border-border rounded-2xl overflow-hidden card-hover transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
-      <div className="flex">
-        {/* Map thumbnail */}
-        <div className="w-32 h-24 flex-shrink-0 bg-muted">
-          {routePR.polyline ? (
-            <PolylineMap 
-              polyline={routePR.polyline} 
-              className="w-full h-full"
-              showMarkers={true}
-              showMapBackground={true}
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <svg className="w-8 h-8 text-muted-foreground/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-              </svg>
-            </div>
-          )}
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 p-4 flex items-center justify-between gap-4">
-          <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-foreground truncate">
-              {routePR.activity_title || routePR.route_label}
-            </h3>
-            <p className="text-muted-foreground text-sm">Route PR</p>
+    <div className="bg-card border border-border rounded-2xl overflow-hidden card-hover transition-all duration-300 hover:-translate-y-1 hover:shadow-xl h-full">
+      {/* Map thumbnail - larger, on top */}
+      <div className="h-36 bg-muted">
+        {routePR.polyline ? (
+          <PolylineMap 
+            polyline={routePR.polyline} 
+            className="w-full h-full"
+            showMarkers={true}
+            showMapBackground={true}
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <svg className="w-12 h-12 text-muted-foreground/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+            </svg>
           </div>
-          
-          <div className="text-right">
-            <p className="text-metric-label mb-1">Best Time</p>
+        )}
+      </div>
+
+      {/* Content */}
+      <div className="p-4">
+        <h3 className="font-semibold text-foreground truncate mb-1">
+          {routePR.activity_title || routePR.route_label}
+        </h3>
+        <p className="text-muted-foreground text-sm mb-3">Route PR</p>
+        
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">Best Time</p>
             <p className="text-2xl font-bold text-foreground tabular-nums">{formatTime(routePR.fastest_time_s)}</p>
           </div>
           
@@ -234,7 +232,7 @@ function RoutePRCard({ routePR }: { routePR: RoutePR }): JSX.Element {
 
   if (routePR.activity_id) {
     return (
-      <Link to={`/activities/${routePR.activity_id}`}>
+      <Link to={`/activities/${routePR.activity_id}`} className="block h-full">
         {content}
       </Link>
     );
@@ -418,7 +416,7 @@ export function RecordsView({ unitSystem = "metric" }: RecordsViewProps): JSX.El
             </span>
           </div>
           
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {routePRs.map((routePR) => (
               <RoutePRCard key={routePR.route_id} routePR={routePR} />
             ))}
