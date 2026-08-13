@@ -190,6 +190,8 @@ async def get_ef_model_status(db: AsyncSession, user_id: int) -> dict:
     """
     Get the status of the user's EF model for display in /me endpoint.
     """
+    from sqlalchemy import func
+
     # Check if enabled
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
@@ -201,12 +203,27 @@ async def get_ef_model_status(db: AsyncSession, user_id: int) -> dict:
     model = result.scalar_one_or_none()
 
     if model is None:
+        # Count eligible dual-sensor activities even when model doesn't exist yet
+        # This lets the UI show progress toward the 5-ride minimum
+        result = await db.execute(
+            select(func.count())
+            .select_from(Activity)
+            .where(
+                Activity.user_id == user_id,
+                Activity.np_power_w.isnot(None),
+                Activity.avg_hr_bpm.isnot(None),
+                Activity.avg_hr_bpm > 0,
+                Activity.power_source != "hr_derived",
+            )
+        )
+        eligible_count = result.scalar() or 0
+
         return {
             "enabled": enabled,
             "model_exists": False,
             "ef_value": None,
             "confidence": None,
-            "ride_count": 0,
+            "ride_count": eligible_count,
             "computed_at": None,
             "is_stale": None,
         }
