@@ -185,6 +185,21 @@ function PRCard({ label, value, activityId, icon, colorTheme }: PRCardProps): JS
 }
 
 function RoutePRCard({ routePR }: { routePR: RoutePR }): JSX.Element {
+  // Format the date/time
+  const dateStr = routePR.started_at 
+    ? new Date(routePR.started_at).toLocaleDateString(undefined, { 
+        day: 'numeric', 
+        month: 'short', 
+        year: 'numeric' 
+      })
+    : null;
+  const timeStr = routePR.started_at
+    ? new Date(routePR.started_at).toLocaleTimeString(undefined, {
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    : null;
+
   const content = (
     <div className="bg-card border border-border rounded-2xl overflow-hidden card-hover transition-all duration-300 hover:-translate-y-1 hover:shadow-xl h-full">
       {/* Map thumbnail - larger, on top */}
@@ -210,7 +225,9 @@ function RoutePRCard({ routePR }: { routePR: RoutePR }): JSX.Element {
         <h3 className="font-semibold text-foreground truncate mb-1">
           {routePR.activity_title || routePR.route_label}
         </h3>
-        <p className="text-muted-foreground text-sm mb-3">Route PR</p>
+        {dateStr && (
+          <p className="text-muted-foreground text-sm mb-3">{dateStr} · {timeStr}</p>
+        )}
         
         <div className="flex items-center justify-between">
           <div>

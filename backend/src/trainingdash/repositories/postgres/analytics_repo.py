@@ -28,6 +28,7 @@ class RoutePrView:
     activity_id: str | None
     activity_title: str | None
     polyline: str | None
+    started_at: datetime | None
 
 
 @dataclass
@@ -189,6 +190,7 @@ class PostgresAnalyticsRepo:
                 Activity.title,
                 Activity.map_polyline,
                 Activity.elapsed_time_s,
+                Activity.started_at,
                 fastest_rank,
             )
             .where(
@@ -206,6 +208,7 @@ class PostgresAnalyticsRepo:
                 subq.c.title,
                 subq.c.map_polyline,
                 subq.c.elapsed_time_s.label("fastest_time_s"),
+                subq.c.started_at,
             )
             .where(literal_column("rn") == 1)
             .order_by(subq.c.elapsed_time_s.asc())  # Sort by fastest time
@@ -223,6 +226,7 @@ class PostgresAnalyticsRepo:
                     activity_id=str(row.activity_id) if row.activity_id else None,
                     activity_title=row.title,
                     polyline=row.map_polyline,
+                    started_at=row.started_at,
                 )
             )
         return route_prs

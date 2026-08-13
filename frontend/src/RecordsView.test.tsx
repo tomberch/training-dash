@@ -28,8 +28,8 @@ const fullResponse = {
     highest_sustained_power_w: null,
   },
   route_prs: [
-    { route_id: 1, route_label: "Morning Ride", fastest_time_s: 3600, activity_id: "uuid-1", activity_title: "Morning Ride", polyline: "abc123" },
-    { route_id: 2, route_label: "Afternoon Ride", fastest_time_s: 5400, activity_id: "uuid-3", activity_title: "Afternoon Ride", polyline: "def456" },
+    { route_id: 1, route_label: "Morning Ride", fastest_time_s: 3600, activity_id: "uuid-1", activity_title: "Morning Ride", polyline: "abc123", started_at: "2024-03-15T08:30:00Z" },
+    { route_id: 2, route_label: "Afternoon Ride", fastest_time_s: 5400, activity_id: "uuid-3", activity_title: "Afternoon Ride", polyline: "def456", started_at: "2024-03-10T14:00:00Z" },
   ],
 };
 

@@ -101,6 +101,7 @@ export interface RoutePR {
   activity_id: string | null;
   activity_title: string | null;
   polyline: string | null;
+  started_at: string | null;
 }
 
 export interface RecordsResponse {

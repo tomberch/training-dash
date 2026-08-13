@@ -103,6 +103,7 @@ async def get_records(repo: AnalyticsRepoD, user: CurrentUser):
                 "activity_id": r.activity_id,
                 "activity_title": r.activity_title,
                 "polyline": r.polyline,
+                "started_at": r.started_at.isoformat() if r.started_at else None,
             }
             for r in view.route_prs
         ],
