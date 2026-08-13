@@ -17,7 +17,7 @@ from sqlalchemy import select, text
 from trainingdash import cache_stats
 from trainingdash.auth import AdminUser, DbSession
 from trainingdash.dependencies import EventRepoD
-from trainingdash.repositories.postgres.models import CacheStats
+from trainingdash.repositories.postgres.models import CacheStats, Event, User
 
 router = APIRouter(prefix="/api/admin/system", tags=["admin-system"])
 
@@ -33,9 +33,8 @@ class EventResponse(BaseModel):
     event_type: str
     outcome: str
     user_id: int | None
+    user_email: str | None
     payload: dict
-
-    model_config = {"from_attributes": True}
 
 
 class EventsListResponse(BaseModel):
@@ -48,6 +47,7 @@ class EventsListResponse(BaseModel):
 @router.get("/events", response_model=EventsListResponse)
 async def get_system_events(
     admin: AdminUser,
+    db: DbSession,
     event_repo: EventRepoD,
     event_type: str | None = Query(None, description="Filter by exact event type"),
     outcome: str | None = Query(None, description="Filter by outcome (success, failure, info)"),
@@ -61,16 +61,40 @@ async def get_system_events(
     Get paginated, filterable system events.
 
     Returns events ordered by created_at descending (newest first).
+    Includes user email for events with a user_id.
     """
-    events = await event_repo.list(
-        event_type=event_type,
-        outcome=outcome,
-        user_id=user_id,
-        since=since,
-        until=until,
-        limit=limit,
-        offset=offset,
-    )
+    # Build query with left join to get user email
+    query = select(Event, User.email).outerjoin(User, Event.user_id == User.id)
+
+    # Apply filters
+    if event_type is not None:
+        query = query.where(Event.event_type == event_type)
+    if outcome is not None:
+        query = query.where(Event.outcome == outcome)
+    if user_id is not None:
+        query = query.where(Event.user_id == user_id)
+    if since is not None:
+        query = query.where(Event.created_at >= since)
+    if until is not None:
+        query = query.where(Event.created_at < until)
+
+    query = query.order_by(Event.created_at.desc()).limit(min(limit, 100)).offset(offset)
+
+    result = await db.execute(query)
+    rows = result.all()
+
+    events = [
+        EventResponse(
+            id=event.id,
+            created_at=event.created_at,
+            event_type=event.event_type,
+            outcome=event.outcome,
+            user_id=event.user_id,
+            user_email=email,
+            payload=event.payload,
+        )
+        for event, email in rows
+    ]
 
     total = await event_repo.count(
         event_type=event_type,
@@ -80,10 +104,7 @@ async def get_system_events(
         until=until,
     )
 
-    return EventsListResponse(
-        events=[EventResponse.model_validate(e) for e in events],
-        total=total,
-    )
+    return EventsListResponse(events=events, total=total)
 
 
 # --- Jobs endpoint ---

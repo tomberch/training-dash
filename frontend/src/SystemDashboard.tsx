@@ -505,8 +505,9 @@ function EventRow({ event }: { event: SystemEvent }) {
             {domain}.<span className="text-muted-foreground">{action}</span>
           </span>
 
-          {/* User ID */}
-          {event.user_id && <span className="text-caption">user {event.user_id}</span>}
+          {/* User */}
+          {event.user_email && <span className="text-caption">{event.user_email}</span>}
+          {event.user_id && !event.user_email && <span className="text-caption">user {event.user_id}</span>}
         </div>
 
         {/* Timestamp */}

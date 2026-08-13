@@ -932,6 +932,7 @@ export interface SystemEvent {
   event_type: string;
   outcome: "success" | "failure" | "info";
   user_id: number | null;
+  user_email: string | null;
   payload: Record<string, unknown>;
 }
 
