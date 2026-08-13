@@ -90,21 +90,30 @@ async def get_power_curve(
 
 
 @router.get("/records")
-async def get_records(repo: AnalyticsRepoD, user: CurrentUser):
-    """Lifetime PRs and per-route PRs."""
-    view = await repo.get_records(user.id)
+async def get_records(
+    repo: AnalyticsRepoD,
+    user: CurrentUser,
+    route_limit: int = 20,
+    route_offset: int = 0,
+):
+    """Lifetime PRs and per-route PRs (paginated)."""
+    view = await repo.get_records(user.id, route_limit, route_offset)
     return {
         "lifetime_prs": view.lifetime_prs,
-        "route_prs": [
-            {
-                "route_id": r.route_id,
-                "route_label": r.route_label,
-                "fastest_time_s": r.fastest_time_s,
-                "activity_id": r.activity_id,
-                "activity_title": r.activity_title,
-                "polyline": r.polyline,
-                "started_at": r.started_at.isoformat() if r.started_at else None,
-            }
-            for r in view.route_prs
-        ],
+        "route_prs": {
+            "items": [
+                {
+                    "route_id": r.route_id,
+                    "route_label": r.route_label,
+                    "fastest_time_s": r.fastest_time_s,
+                    "activity_id": r.activity_id,
+                    "activity_title": r.activity_title,
+                    "polyline": r.polyline,
+                    "started_at": r.started_at.isoformat() if r.started_at else None,
+                    "distance_m": r.distance_m,
+                }
+                for r in view.route_prs.items
+            ],
+            "total": view.route_prs.total,
+        },
     }

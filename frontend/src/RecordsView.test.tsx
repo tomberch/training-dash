@@ -27,10 +27,13 @@ const fullResponse = {
     biggest_elevation_gain_m: { value: 1200, activity_id: "uuid-3" },
     highest_sustained_power_w: null,
   },
-  route_prs: [
-    { route_id: 1, route_label: "Morning Ride", fastest_time_s: 3600, activity_id: "uuid-1", activity_title: "Morning Ride", polyline: "abc123", started_at: "2024-03-15T08:30:00Z" },
-    { route_id: 2, route_label: "Afternoon Ride", fastest_time_s: 5400, activity_id: "uuid-3", activity_title: "Afternoon Ride", polyline: "def456", started_at: "2024-03-10T14:00:00Z" },
-  ],
+  route_prs: {
+    items: [
+      { route_id: 1, route_label: "Morning Ride", fastest_time_s: 3600, activity_id: "uuid-1", activity_title: "Morning Ride", polyline: "abc123", started_at: "2024-03-15T08:30:00Z", distance_m: 50000 },
+      { route_id: 2, route_label: "Afternoon Ride", fastest_time_s: 5400, activity_id: "uuid-3", activity_title: "Afternoon Ride", polyline: "def456", started_at: "2024-03-10T14:00:00Z", distance_m: 30000 },
+    ],
+    total: 2,
+  },
 };
 
 describe("RecordsView", () => {
@@ -59,7 +62,8 @@ describe("RecordsView", () => {
     await waitFor(() => {
       expect(screen.getByText("Route PRs")).toBeInTheDocument();
       expect(screen.getByText("Morning Ride")).toBeInTheDocument();
-      expect(screen.getByText("1h 0m 0s")).toBeInTheDocument();
+      // 3600s = 1h 0m (formatTime omits 0s)
+      expect(screen.getByText("1h 0m")).toBeInTheDocument();
       expect(screen.getByText("Afternoon Ride")).toBeInTheDocument();
     });
   });
@@ -77,7 +81,7 @@ describe("RecordsView", () => {
         biggest_elevation_gain_m: null,
         highest_sustained_power_w: null,
       },
-      route_prs: [],
+      route_prs: { items: [], total: 0 },
     });
 
     renderWithRouter(<RecordsView />);
@@ -101,7 +105,7 @@ describe("RecordsView", () => {
         biggest_elevation_gain_m: null,
         highest_sustained_power_w: null,
       },
-      route_prs: [],
+      route_prs: { items: [], total: 0 },
     });
 
     renderWithRouter(<RecordsView />);

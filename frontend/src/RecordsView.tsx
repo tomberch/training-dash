@@ -1,5 +1,5 @@
 import type { JSX } from "react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import type { RecordsResponse, Records, RoutePR } from "./api";
 import { ApiError, fetchRecords } from "./api";
@@ -8,6 +8,7 @@ import { formatDistance, formatSpeed, formatElevation, formatTime } from "./form
 import { ErrorDisplay } from "./ErrorDisplay";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Button } from "@/components/ui/button";
 import { PolylineMap } from "./components/PolylineMap";
 
 // Color themes for each PR type
@@ -329,15 +330,39 @@ interface RecordsViewProps {
   unitSystem?: UnitSystem;
 }
 
+const ROUTE_PAGE_SIZE = 20;
+
 export function RecordsView({ unitSystem = "metric" }: RecordsViewProps): JSX.Element {
   const [data, setData] = useState<RecordsResponse | null>(null);
+  const [routePRs, setRoutePRs] = useState<RoutePR[]>([]);
+  const [routeTotal, setRouteTotal] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<Error | ApiError | null>(null);
 
   useEffect(() => {
-    fetchRecords()
-      .then(setData)
+    fetchRecords(ROUTE_PAGE_SIZE, 0)
+      .then((response) => {
+        setData(response);
+        setRoutePRs(response.route_prs.items);
+        setRouteTotal(response.route_prs.total);
+      })
       .catch((e) => setError(e));
   }, []);
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const response = await fetchRecords(ROUTE_PAGE_SIZE, routePRs.length);
+      setRoutePRs((prev) => [...prev, ...response.route_prs.items]);
+    } catch (e) {
+      setError(e as Error);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [routePRs.length, loadingMore]);
+
+  const hasMoreRoutes = routePRs.length < routeTotal;
 
   if (error) {
     return (
@@ -363,8 +388,6 @@ export function RecordsView({ unitSystem = "metric" }: RecordsViewProps): JSX.El
       });
     }
   }
-
-  const routePRs = data.route_prs;
 
   if (lifetimePRs.length === 0 && routePRs.length === 0) {
     return (
@@ -429,7 +452,7 @@ export function RecordsView({ unitSystem = "metric" }: RecordsViewProps): JSX.El
             <div className="w-2 h-2 bg-success rounded-full" />
             <h2 className="text-metric">Route PRs</h2>
             <span className="text-muted-foreground text-sm ml-auto">
-              {routePRs.length} route{routePRs.length !== 1 ? "s" : ""} recorded
+              {routePRs.length} of {routeTotal} route{routeTotal !== 1 ? "s" : ""}
             </span>
           </div>
           
@@ -438,6 +461,18 @@ export function RecordsView({ unitSystem = "metric" }: RecordsViewProps): JSX.El
               <RoutePRCard key={routePR.route_id} routePR={routePR} />
             ))}
           </div>
+
+          {hasMoreRoutes && (
+            <div className="mt-6 text-center">
+              <Button
+                variant="outline"
+                onClick={loadMore}
+                disabled={loadingMore}
+              >
+                {loadingMore ? "Loading..." : `Load more (${routeTotal - routePRs.length} remaining)`}
+              </Button>
+            </div>
+          )}
         </section>
       )}
     </div>

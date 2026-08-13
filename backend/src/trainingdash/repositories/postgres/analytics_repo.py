@@ -29,6 +29,15 @@ class RoutePrView:
     activity_title: str | None
     polyline: str | None
     started_at: datetime | None
+    distance_m: float | None
+
+
+@dataclass
+class RoutePrsPage:
+    """Paginated route PRs result."""
+
+    items: list[RoutePrView]
+    total: int
 
 
 @dataclass
@@ -36,7 +45,7 @@ class RecordsView:
     """Composite lifetime + per-route records returned by ``get_records``."""
 
     lifetime_prs: dict[str, Any]
-    route_prs: list[RoutePrView]
+    route_prs: RoutePrsPage
 
 
 class PostgresAnalyticsRepo:
@@ -100,7 +109,9 @@ class PostgresAnalyticsRepo:
         result = await self._session.execute(query)
         return list(result.all())
 
-    async def get_records(self, user_id: int) -> RecordsView:
+    async def get_records(
+        self, user_id: int, route_limit: int = 20, route_offset: int = 0
+    ) -> RecordsView:
         """Lifetime PRs + per-route PRs in a single composite query.
 
         Replaces the old 5+N query implementation:
@@ -109,7 +120,7 @@ class PostgresAnalyticsRepo:
         - 1 window-function query for per-route PRs (was N+1)
         """
         lifetime_prs = await self._get_lifetime_prs(user_id)
-        route_prs = await self._get_route_prs(user_id)
+        route_prs = await self._get_route_prs(user_id, route_limit, route_offset)
         return RecordsView(lifetime_prs=lifetime_prs, route_prs=route_prs)
 
     async def _get_lifetime_prs(self, user_id: int) -> dict[str, Any]:
@@ -167,11 +178,14 @@ class PostgresAnalyticsRepo:
 
         return prs
 
-    async def _get_route_prs(self, user_id: int) -> list[RoutePrView]:
+    async def _get_route_prs(
+        self, user_id: int, limit: int = 20, offset: int = 0
+    ) -> RoutePrsPage:
         """Per-route fastest times with activity title and polyline.
 
         For each route, finds the activity with the fastest elapsed_time_s
         and includes its title and polyline for display.
+        Results are sorted by time DESC (longest duration routes first).
         """
         # Rank activities within each route by elapsed_time_s ASC to find the record holder
         fastest_rank = (
@@ -191,6 +205,7 @@ class PostgresAnalyticsRepo:
                 Activity.map_polyline,
                 Activity.elapsed_time_s,
                 Activity.started_at,
+                Activity.total_distance_m,
                 fastest_rank,
             )
             .where(
@@ -200,7 +215,17 @@ class PostgresAnalyticsRepo:
             .subquery()
         )
 
-        # Select only the fastest activity per route (rn=1)
+        # Count total unique routes
+        count_result = await self._session.execute(
+            select(func.count()).select_from(
+                select(subq.c.route_id)
+                .where(literal_column("rn") == 1)
+                .subquery()
+            )
+        )
+        total = count_result.scalar() or 0
+
+        # Select only the fastest activity per route (rn=1), sorted by time DESC (longest first)
         result = await self._session.execute(
             select(
                 subq.c.route_id,
@@ -209,9 +234,12 @@ class PostgresAnalyticsRepo:
                 subq.c.map_polyline,
                 subq.c.elapsed_time_s.label("fastest_time_s"),
                 subq.c.started_at,
+                subq.c.total_distance_m,
             )
             .where(literal_column("rn") == 1)
-            .order_by(subq.c.elapsed_time_s.asc())  # Sort by fastest time
+            .order_by(subq.c.elapsed_time_s.desc())  # Sort by time, longest first
+            .limit(limit)
+            .offset(offset)
         )
 
         route_prs: list[RoutePrView] = []
@@ -227,6 +255,7 @@ class PostgresAnalyticsRepo:
                     activity_title=row.title,
                     polyline=row.map_polyline,
                     started_at=row.started_at,
+                    distance_m=row.total_distance_m,
                 )
             )
-        return route_prs
+        return RoutePrsPage(items=route_prs, total=total)

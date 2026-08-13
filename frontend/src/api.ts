@@ -102,11 +102,17 @@ export interface RoutePR {
   activity_title: string | null;
   polyline: string | null;
   started_at: string | null;
+  distance_m: number | null;
+}
+
+export interface RoutePRsPage {
+  items: RoutePR[];
+  total: number;
 }
 
 export interface RecordsResponse {
   lifetime_prs: Records;
-  route_prs: RoutePR[];
+  route_prs: RoutePRsPage;
 }
 
 export interface GapPoint {
@@ -870,8 +876,15 @@ export async function nukeAccount(userId: number, confirmEmail: string): Promise
 // Analytics API
 // ============================================================================
 
-export async function fetchRecords(): Promise<RecordsResponse> {
-  return apiGet<RecordsResponse>("/records");
+export async function fetchRecords(
+  routeLimit: number = 20,
+  routeOffset: number = 0
+): Promise<RecordsResponse> {
+  const params = new URLSearchParams({
+    route_limit: routeLimit.toString(),
+    route_offset: routeOffset.toString(),
+  });
+  return apiGet<RecordsResponse>(`/records?${params}`);
 }
 
 export async function fetchPMC(start?: string, end?: string): Promise<PMCPoint[]> {

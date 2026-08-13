@@ -105,6 +105,7 @@ def sample_route(records: list[dict], interval_m: float = SAMPLE_INTERVAL_M) -> 
     Sample route at regular distance intervals.
 
     Returns a list of RoutePoint objects spaced approximately `interval_m` apart.
+    Handles merged GPS tracks where distance_m may reset by also checking geographic distance.
     """
     points = []
     last_sample_distance = 0
@@ -117,8 +118,20 @@ def sample_route(records: list[dict], interval_m: float = SAMPLE_INTERVAL_M) -> 
 
         distance_m = r.get("distance_m", 0)
 
-        # Sample at regular intervals
-        if not points or (distance_m - last_sample_distance) >= interval_m:
+        # Sample at regular intervals based on distance_m field
+        should_sample = False
+        if not points:
+            should_sample = True
+        elif (distance_m - last_sample_distance) >= interval_m:
+            # Normal case: distance increased by at least interval_m
+            should_sample = True
+        elif distance_m < last_sample_distance:
+            # Distance reset (merged tracks) - check geographic distance instead
+            geo_dist = haversine_distance(points[-1].lat, points[-1].lon, lat, lon)
+            if geo_dist >= interval_m:
+                should_sample = True
+
+        if should_sample:
             points.append(
                 RoutePoint(
                     lat=lat,
@@ -130,7 +143,7 @@ def sample_route(records: list[dict], interval_m: float = SAMPLE_INTERVAL_M) -> 
             )
             last_sample_distance = distance_m
 
-    # Always include last point
+    # Always include last point if it's geographically different from the last sampled point
     for r in reversed(records):
         if r.get("lat") is not None and r.get("lon") is not None:
             last_point = RoutePoint(
@@ -140,7 +153,15 @@ def sample_route(records: list[dict], interval_m: float = SAMPLE_INTERVAL_M) -> 
                 distance_m=r.get("distance_m", 0),
                 timestamp=r.get("timestamp"),
             )
-            if not points or points[-1].distance_m < last_point.distance_m - 10:
+            # Check if last point is geographically different from last sampled point
+            if points:
+                dist_from_last_sample = haversine_distance(
+                    points[-1].lat, points[-1].lon, last_point.lat, last_point.lon
+                )
+                # Add if more than 100m away from last sampled point
+                if dist_from_last_sample > 100:
+                    points.append(last_point)
+            else:
                 points.append(last_point)
             break
 

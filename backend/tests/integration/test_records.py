@@ -125,7 +125,8 @@ class TestRecords:
         assert data["lifetime_prs"]["max_speed_mps"] is None
         assert data["lifetime_prs"]["fastest_5000_m"] is None
         assert data["lifetime_prs"]["highest_sustained_power_w"] is None
-        assert data["route_prs"] == []
+        assert data["route_prs"]["items"] == []
+        assert data["route_prs"]["total"] == 0
 
     @pytest.mark.asyncio
     async def test_per_route_prs_faster_ride_holds_record(self, auth_client, db_session, seed_user):
@@ -150,7 +151,7 @@ class TestRecords:
 
         response = await auth_client.get("/api/records")
         data = response.json()
-        route_prs = data["route_prs"]
+        route_prs = data["route_prs"]["items"]
         assert len(route_prs) == 1
         assert route_prs[0]["fastest_time_s"] == 60
         assert route_prs[0]["activity_id"] == id2
@@ -177,7 +178,7 @@ class TestRecords:
 
         response = await auth_client.get("/api/records")
         data = response.json()
-        route_prs = data["route_prs"]
+        route_prs = data["route_prs"]["items"]
         # User A should only see their own route, not user B's
         assert len(route_prs) == 1
         assert route_prs[0]["route_id"] is not None
