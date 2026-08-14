@@ -7,6 +7,7 @@ import type { UnitSystem } from "../format";
 import { ErrorDisplay } from "../ErrorDisplay";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "../components/PageHeader";
+import { SavedFiltersDropdown } from "../components/SavedFiltersDropdown";
 
 type SortField = "date" | "distance" | "time" | "elevation" | "tss" | "power" | "hr";
 type SortDirection = "asc" | "desc";
@@ -221,6 +222,7 @@ export function ActivityTable({
             </button>
           </div>
         }
+        actions={<SavedFiltersDropdown />}
       />
 
       {/* Table */}
