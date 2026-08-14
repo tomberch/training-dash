@@ -1,12 +1,7 @@
 import type { JSX } from "react";
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { cn } from "@/lib/utils";
-import {
-  FIELD_DEFINITIONS,
-  FIELD_ALIASES,
-  ALL_FIELD_NAMES,
-  type FieldDef,
-} from "@/lib/query/fields";
+import { FIELD_DEFINITIONS } from "@/lib/query/fields";
 
 // === Types ===
 
@@ -27,10 +22,6 @@ export interface QueryAutocompleteProps {
 }
 
 // === Constants ===
-
-const OPERATORS = ["=", "!=", ">", ">=", "<", "<=", "AND", "OR", "NOT", "BETWEEN", "IN", "IS NULL", "IS NOT NULL", "CONTAINS", "STARTS WITH", "ENDS WITH"];
-
-const KEYWORDS = ["WHERE", "ORDER BY", "ASC", "DESC", "LIMIT", "GROUP BY", "COUNT", "SUM", "AVG", "MIN", "MAX"];
 
 const DATE_VALUES = ["TODAY", "NOW", "START_OF_DAY", "START_OF_WEEK", "START_OF_MONTH", "START_OF_YEAR"];
 
