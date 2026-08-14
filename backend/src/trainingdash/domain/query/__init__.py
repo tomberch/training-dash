@@ -39,6 +39,14 @@ from .fields import (
     suggest_field_name,
 )
 from .parser import ParseError, parse
+from .translator import (
+    GroupedAggResult,
+    ListQueryResult,
+    ScalarAggResult,
+    TranslatedQuery,
+    translate,
+    translate_expr,
+)
 from .validator import ValidatedQuery, ValidationError, validate
 
 __all__ = [
@@ -60,7 +68,10 @@ __all__ = [
     "FieldDef",
     "FieldType",
     "GroupKey",
+    # Translator
+    "GroupedAggResult",
     "InList",
+    "ListQueryResult",
     "NotOp",
     "NullCheck",
     "NumberValue",
@@ -70,8 +81,10 @@ __all__ = [
     "Projection",
     "Query",
     "RelativeDate",
+    "ScalarAggResult",
     "StringValue",
     "TextMatch",
+    "TranslatedQuery",
     # Validator
     "ValidatedQuery",
     "ValidationError",
@@ -84,5 +97,7 @@ __all__ = [
     "parse",
     "resolve_field_name",
     "suggest_field_name",
+    "translate",
+    "translate_expr",
     "validate",
 ]
