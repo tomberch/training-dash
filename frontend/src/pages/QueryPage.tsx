@@ -3,6 +3,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { PageHeader } from "../components/PageHeader";
 import { QueryBuilder } from "../components/QueryBuilder";
+import { SavedFiltersPanel } from "../components/SavedFiltersPanel";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -582,6 +583,14 @@ export function QueryPage(): JSX.Element {
     setError(null);
   };
 
+  const handleLoadFilter = (queryText: string) => {
+    setQuery(queryText);
+    setMode("text"); // Switch to text mode to see the loaded query
+    setError(null);
+    // Run the query immediately
+    runQuery(queryText, 1);
+  };
+
   return (
     <div className="p-6">
       <PageHeader
@@ -591,9 +600,13 @@ export function QueryPage(): JSX.Element {
 
       {/* Mode toggle and input section */}
       <div className="mb-6 space-y-4">
-        {/* Mode toggle */}
+        {/* Mode toggle and saved filters */}
         <div className="flex items-center justify-between">
           <ModeToggle mode={mode} onModeChange={handleModeChange} />
+          <SavedFiltersPanel
+            currentQuery={query}
+            onLoadFilter={handleLoadFilter}
+          />
         </div>
 
         {/* Query input - text mode */}

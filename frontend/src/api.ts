@@ -1099,3 +1099,106 @@ export async function executeQuery(
 
   return res.json();
 }
+
+// ============================================================================
+// Saved Filters API
+// ============================================================================
+
+export interface SavedFilter {
+  id: number;
+  name: string;
+  query_text: string;
+  description: string | null;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SavedFilterListResponse {
+  filters: SavedFilter[];
+}
+
+export interface CreateSavedFilterRequest {
+  name: string;
+  query_text: string;
+  description?: string | null;
+  is_default?: boolean;
+}
+
+export interface UpdateSavedFilterRequest {
+  name?: string;
+  query_text?: string;
+  description?: string | null;
+  is_default?: boolean;
+}
+
+export async function fetchSavedFilters(): Promise<SavedFilter[]> {
+  const response = await apiGet<SavedFilterListResponse>("/saved-filters");
+  return response.filters;
+}
+
+export async function fetchDefaultFilter(): Promise<SavedFilter | null> {
+  return apiGet<SavedFilter | null>("/saved-filters/default");
+}
+
+export async function fetchSavedFilter(id: number): Promise<SavedFilter> {
+  return apiGet<SavedFilter>(`/saved-filters/${id}`);
+}
+
+export async function createSavedFilter(request: CreateSavedFilterRequest): Promise<SavedFilter> {
+  const res = await fetch(`${API_BASE}/saved-filters`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(request),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    if (body.error) {
+      throw new QueryError(body.error);
+    }
+    if (res.status === 409) {
+      throw new ApiError(body.detail || "Filter with this name already exists", 409);
+    }
+    const { detail, errorId } = await extractError(res, "Failed to create filter");
+    throw new ApiError(detail, res.status, errorId);
+  }
+
+  return res.json();
+}
+
+export async function updateSavedFilter(id: number, request: UpdateSavedFilterRequest): Promise<SavedFilter> {
+  const res = await fetch(`${API_BASE}/saved-filters/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(request),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    if (body.error) {
+      throw new QueryError(body.error);
+    }
+    if (res.status === 409) {
+      throw new ApiError(body.detail || "Filter with this name already exists", 409);
+    }
+    const { detail, errorId } = await extractError(res, "Failed to update filter");
+    throw new ApiError(detail, res.status, errorId);
+  }
+
+  return res.json();
+}
+
+export async function deleteSavedFilter(id: number): Promise<void> {
+  return apiDelete(`/saved-filters/${id}`, "Failed to delete filter");
+}
+
+export async function setDefaultFilter(id: number): Promise<SavedFilter> {
+  return apiPost<SavedFilter>(`/saved-filters/${id}/set-default`, undefined, "Failed to set default filter");
+}
+
+export async function clearDefaultFilter(): Promise<void> {
+  return apiPost("/saved-filters/clear-default", undefined, "Failed to clear default filter");
+}
