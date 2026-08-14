@@ -230,9 +230,10 @@ function ListResults({ response, page, onPageChange }: ListResultsProps) {
       {/* Activity list */}
       <div className="space-y-2">
         {results.map((activity) => (
-          <div
+          <button
+            type="button"
             key={activity.id as string}
-            className="p-4 rounded-lg bg-card border border-border hover:bg-muted/50 cursor-pointer transition-colors"
+            className="w-full text-left p-4 rounded-lg bg-card border border-border hover:bg-muted/50 cursor-pointer transition-colors"
             onClick={() => navigate(`/activities/${activity.id}`)}
           >
             <div className="flex items-start justify-between gap-4">
@@ -271,7 +272,7 @@ function ListResults({ response, page, onPageChange }: ListResultsProps) {
                 )}
               </div>
             </div>
-          </div>
+          </button>
         ))}
       </div>
 
@@ -453,13 +454,13 @@ export function QueryPage(): JSX.Element {
   const [response, setResponse] = useState<QueryResponse | null>(null);
   const [page, setPage] = useState(1);
 
-  // Sync query to URL
+  // Sync query from URL when it changes externally (e.g., browser navigation)
   useEffect(() => {
     const q = searchParams.get("q");
-    if (q && q !== query) {
+    if (q !== null && q !== query) {
       setQuery(q);
     }
-  }, [searchParams]);
+  }, [searchParams, query]);
 
   const runQuery = useCallback(async (queryText: string, pageNum: number = 1) => {
     if (!queryText.trim()) return;
