@@ -1026,3 +1026,76 @@ export async function fetchCacheStats(days?: number): Promise<CacheStatsResponse
   const query = params.toString();
   return apiGet<CacheStatsResponse>(`/admin/system/cache-stats${query ? `?${query}` : ""}`);
 }
+
+// ============================================================================
+// Query DSL API
+// ============================================================================
+
+export interface QueryErrorDetail {
+  stage: "parse" | "validation" | "translation" | "execution";
+  message: string;
+  line?: number;
+  column?: number;
+  field?: string;
+  suggestions?: string[];
+  context?: string;
+}
+
+export interface ListQueryResponse {
+  type: "list";
+  results: Record<string, unknown>[];
+  total: number;
+  page: number;
+  per_page: number;
+}
+
+export interface ScalarQueryResponse {
+  type: "scalar";
+  results: Record<string, unknown>;
+}
+
+export interface GroupedQueryResponse {
+  type: "grouped";
+  group_by: string[];
+  results: Record<string, unknown>[];
+}
+
+export type QueryResponse = ListQueryResponse | ScalarQueryResponse | GroupedQueryResponse;
+
+export class QueryError extends Error {
+  detail: QueryErrorDetail;
+
+  constructor(detail: QueryErrorDetail) {
+    super(detail.message);
+    this.name = "QueryError";
+    this.detail = detail;
+  }
+}
+
+export async function executeQuery(
+  query: string,
+  page: number = 1,
+  perPage: number = 20
+): Promise<QueryResponse> {
+  const params = new URLSearchParams();
+  params.set("page", page.toString());
+  params.set("per_page", perPage.toString());
+
+  const res = await fetch(`${API_BASE}/query?${params}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ query }),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    if (body.error) {
+      throw new QueryError(body.error);
+    }
+    const { detail, errorId } = await extractError(res, "Query failed");
+    throw new ApiError(detail, res.status, errorId);
+  }
+
+  return res.json();
+}

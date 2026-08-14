@@ -24,6 +24,9 @@ const ActivityTable = lazy(() => import("./pages/ActivityTable").then(m => ({ de
 const AnalyzePage = lazy(() => import("./pages/AnalyzePage").then(m => ({ default: m.AnalyzePage })));
 const ComparePage = lazy(() => import("./pages/ComparePage").then(m => ({ default: m.ComparePage })));
 const AthletePage = lazy(() => import("./pages/AthletePage").then(m => ({ default: m.AthletePage })));
+const PrototypeEventDetail = lazy(() => import("./pages/prototype-event-detail").then(m => ({ default: m.PrototypeEventDetail })));
+const PrototypeEventList = lazy(() => import("./pages/prototype-event-list").then(m => ({ default: m.PrototypeEventList })));
+const QueryPage = lazy(() => import("./pages/QueryPage").then(m => ({ default: m.QueryPage })));
 
 // Page loading skeleton for Suspense fallback
 function PageLoadingSkeleton() {
@@ -134,7 +137,10 @@ function AppLayout({ user, onLogout, onUserUpdate }: {
               <Route path="/power-curve" element={<PowerCurveView />} />
               <Route path="/analyze" element={<AnalyzePage />} />
               <Route path="/compare" element={<ComparePage />} />
+              <Route path="/query" element={<QueryPage />} />
               <Route path="/athlete" element={<AthletePage user={user} onUserUpdate={onUserUpdate} />} />
+              <Route path="/prototype/event-detail" element={<PrototypeEventDetail />} />
+              <Route path="/prototype/event-list" element={<PrototypeEventList />} />
               <Route 
                 path="/records" 
                 element={<RecordsView unitSystem={user.unit_system} />} 
