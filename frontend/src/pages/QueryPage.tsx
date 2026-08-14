@@ -2,6 +2,7 @@ import type { JSX } from "react";
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { PageHeader } from "../components/PageHeader";
+import { QueryBuilder } from "../components/QueryBuilder";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -15,6 +16,10 @@ import {
   type QueryErrorDetail,
 } from "../api";
 import { formatDistance, formatDuration, formatActivityDate } from "../format";
+
+// === Types ===
+
+type QueryMode = "text" | "builder";
 
 // === Icons ===
 
@@ -57,6 +62,62 @@ function ChevronRightIcon() {
     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
     </svg>
+  );
+}
+
+function CodeIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+    </svg>
+  );
+}
+
+function BuilderIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h8m-8 6h16" />
+    </svg>
+  );
+}
+
+// === Mode Toggle ===
+
+interface ModeToggleProps {
+  mode: QueryMode;
+  onModeChange: (mode: QueryMode) => void;
+}
+
+function ModeToggle({ mode, onModeChange }: ModeToggleProps) {
+  return (
+    <div className="inline-flex rounded-lg border border-border p-1 bg-muted/30">
+      <button
+        type="button"
+        onClick={() => onModeChange("builder")}
+        className={cn(
+          "flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md transition-colors",
+          mode === "builder"
+            ? "bg-background text-foreground shadow-sm"
+            : "text-muted-foreground hover:text-foreground"
+        )}
+      >
+        <BuilderIcon />
+        Builder
+      </button>
+      <button
+        type="button"
+        onClick={() => onModeChange("text")}
+        className={cn(
+          "flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md transition-colors",
+          mode === "text"
+            ? "bg-background text-foreground shadow-sm"
+            : "text-muted-foreground hover:text-foreground"
+        )}
+      >
+        <CodeIcon />
+        Text
+      </button>
+    </div>
   );
 }
 
@@ -448,6 +509,10 @@ function ResultsSkeleton() {
 
 export function QueryPage(): JSX.Element {
   const [searchParams, setSearchParams] = useSearchParams();
+  const [mode, setMode] = useState<QueryMode>(() => {
+    // Default to builder mode unless there's a query in URL
+    return searchParams.get("q") ? "text" : "builder";
+  });
   const [query, setQuery] = useState(() => searchParams.get("q") || "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<QueryErrorDetail | null>(null);
@@ -459,6 +524,8 @@ export function QueryPage(): JSX.Element {
     const q = searchParams.get("q");
     if (q !== null && q !== query) {
       setQuery(q);
+      // Switch to text mode when URL has a query
+      if (q) setMode("text");
     }
   }, [searchParams, query]);
 
@@ -505,6 +572,16 @@ export function QueryPage(): JSX.Element {
     runQuery(query, newPage);
   };
 
+  const handleBuilderQueryChange = (newQuery: string) => {
+    setQuery(newQuery);
+  };
+
+  const handleModeChange = (newMode: QueryMode) => {
+    setMode(newMode);
+    // Clear error when switching modes
+    setError(null);
+  };
+
   return (
     <div className="p-6">
       <PageHeader
@@ -512,15 +589,40 @@ export function QueryPage(): JSX.Element {
         subtitle="Search and analyze activities with a powerful query language"
       />
 
-      {/* Query input section */}
-      <div className="mb-6">
-        <QueryInput
-          value={query}
-          onChange={setQuery}
-          onExecute={handleExecute}
-          loading={loading}
-          error={error}
-        />
+      {/* Mode toggle and input section */}
+      <div className="mb-6 space-y-4">
+        {/* Mode toggle */}
+        <div className="flex items-center justify-between">
+          <ModeToggle mode={mode} onModeChange={handleModeChange} />
+        </div>
+
+        {/* Query input - text mode */}
+        {mode === "text" && (
+          <QueryInput
+            value={query}
+            onChange={setQuery}
+            onExecute={handleExecute}
+            loading={loading}
+            error={error}
+          />
+        )}
+
+        {/* Query builder - builder mode */}
+        {mode === "builder" && (
+          <div className="space-y-4">
+            <QueryBuilder onQueryChange={handleBuilderQueryChange} />
+            <div className="flex justify-end">
+              <Button
+                onClick={handleExecute}
+                disabled={loading || !query.trim()}
+                className="gap-2"
+              >
+                {loading ? <LoadingIcon /> : <PlayIcon />}
+                {loading ? "Running..." : "Run Query"}
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Error display */}
@@ -552,7 +654,11 @@ export function QueryPage(): JSX.Element {
           </>
         ) : (
           <div className="text-center py-12 text-muted-foreground">
-            <p className="text-lg mb-2">Enter a query to get started</p>
+            <p className="text-lg mb-2">
+              {mode === "builder" 
+                ? "Build a query using the form above" 
+                : "Enter a query to get started"}
+            </p>
             <div className="text-sm space-y-1">
               <p><code className="px-1.5 py-0.5 rounded bg-muted font-mono text-xs">tss &gt; 100</code> — High-stress activities</p>
               <p><code className="px-1.5 py-0.5 rounded bg-muted font-mono text-xs">distance &gt; 50km AND date &gt;= START_OF_MONTH</code> — Long rides this month</p>

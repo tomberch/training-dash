@@ -39,30 +39,47 @@ describe("QueryPage", () => {
       expect(screen.getByRole("heading", { name: /query/i })).toBeInTheDocument();
     });
 
-    it("renders query input textarea", () => {
+    it("renders mode toggle", () => {
       renderQueryPage();
-      expect(screen.getByPlaceholderText(/enter query/i)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /builder/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /text/i })).toBeInTheDocument();
     });
 
-    it("renders run query button", () => {
+    it("defaults to builder mode when no URL query", () => {
       renderQueryPage();
-      expect(screen.getByRole("button", { name: /run query/i })).toBeInTheDocument();
+      // Builder mode shows field selector
+      expect(screen.getByText("Select field...")).toBeInTheDocument();
+    });
+
+    it("defaults to text mode when URL has query", () => {
+      renderQueryPage("/query?q=tss%20%3E%20100");
+      // Text mode shows textarea
+      expect(screen.getByPlaceholderText(/enter query/i)).toBeInTheDocument();
     });
 
     it("shows empty state with example queries", () => {
       renderQueryPage();
-      expect(screen.getByText(/enter a query to get started/i)).toBeInTheDocument();
-      expect(screen.getByText(/tss > 100/)).toBeInTheDocument();
-    });
-
-    it("disables run button when query is empty", () => {
-      renderQueryPage();
-      const button = screen.getByRole("button", { name: /run query/i });
-      expect(button).toBeDisabled();
+      expect(screen.getByText(/build a query using the form above/i)).toBeInTheDocument();
     });
   });
 
-  describe("query execution", () => {
+  describe("mode switching", () => {
+    it("switches to text mode when clicking text button", async () => {
+      renderQueryPage();
+      const textButton = screen.getByRole("button", { name: /text/i });
+      await userEvent.click(textButton);
+      expect(screen.getByPlaceholderText(/enter query/i)).toBeInTheDocument();
+    });
+
+    it("switches to builder mode when clicking builder button", async () => {
+      renderQueryPage("/query?q=tss%20%3E%20100"); // Start in text mode
+      const builderButton = screen.getByRole("button", { name: /builder/i });
+      await userEvent.click(builderButton);
+      expect(screen.getByText("Select field...")).toBeInTheDocument();
+    });
+  });
+
+  describe("text mode query execution", () => {
     it("executes query on button click", async () => {
       mockExecuteQuery.mockResolvedValueOnce({
         type: "list",
@@ -73,6 +90,9 @@ describe("QueryPage", () => {
       });
 
       renderQueryPage();
+      // Switch to text mode
+      await userEvent.click(screen.getByRole("button", { name: /text/i }));
+      
       const textarea = screen.getByPlaceholderText(/enter query/i);
       const button = screen.getByRole("button", { name: /run query/i });
 
@@ -94,6 +114,7 @@ describe("QueryPage", () => {
       });
 
       renderQueryPage();
+      await userEvent.click(screen.getByRole("button", { name: /text/i }));
       const textarea = screen.getByPlaceholderText(/enter query/i);
 
       await userEvent.type(textarea, "tss > 100");
@@ -111,11 +132,11 @@ describe("QueryPage", () => {
       );
 
       renderQueryPage();
+      await userEvent.click(screen.getByRole("button", { name: /text/i }));
       const textarea = screen.getByPlaceholderText(/enter query/i);
-      const button = screen.getByRole("button", { name: /run query/i });
 
       await userEvent.type(textarea, "tss > 100");
-      await userEvent.click(button);
+      await userEvent.click(screen.getByRole("button", { name: /run query/i }));
 
       expect(screen.getByRole("button", { name: /running/i })).toBeDisabled();
 
@@ -162,6 +183,7 @@ describe("QueryPage", () => {
       });
 
       renderQueryPage();
+      await userEvent.click(screen.getByRole("button", { name: /text/i }));
       const textarea = screen.getByPlaceholderText(/enter query/i);
 
       await userEvent.type(textarea, "tss > 50");
@@ -185,6 +207,7 @@ describe("QueryPage", () => {
       });
 
       renderQueryPage();
+      await userEvent.click(screen.getByRole("button", { name: /text/i }));
       const textarea = screen.getByPlaceholderText(/enter query/i);
 
       await userEvent.type(textarea, "tss > 9999");
@@ -212,6 +235,7 @@ describe("QueryPage", () => {
       });
 
       renderQueryPage();
+      await userEvent.click(screen.getByRole("button", { name: /text/i }));
       const textarea = screen.getByPlaceholderText(/enter query/i);
 
       await userEvent.type(textarea, "tss > 50");
@@ -238,6 +262,7 @@ describe("QueryPage", () => {
       });
 
       renderQueryPage();
+      await userEvent.click(screen.getByRole("button", { name: /text/i }));
       const textarea = screen.getByPlaceholderText(/enter query/i);
 
       await userEvent.type(textarea, "COUNT(*), AVG(tss), SUM(distance)");
@@ -263,6 +288,7 @@ describe("QueryPage", () => {
       });
 
       renderQueryPage();
+      await userEvent.click(screen.getByRole("button", { name: /text/i }));
       const textarea = screen.getByPlaceholderText(/enter query/i);
 
       await userEvent.type(textarea, "COUNT(*), AVG(tss) GROUP BY month");
@@ -291,6 +317,7 @@ describe("QueryPage", () => {
       );
 
       renderQueryPage();
+      await userEvent.click(screen.getByRole("button", { name: /text/i }));
       const textarea = screen.getByPlaceholderText(/enter query/i);
 
       await userEvent.type(textarea, "tss >> 100");
@@ -314,6 +341,7 @@ describe("QueryPage", () => {
       );
 
       renderQueryPage();
+      await userEvent.click(screen.getByRole("button", { name: /text/i }));
       const textarea = screen.getByPlaceholderText(/enter query/i);
 
       await userEvent.type(textarea, "tts > 100");
@@ -336,6 +364,7 @@ describe("QueryPage", () => {
       );
 
       renderQueryPage();
+      await userEvent.click(screen.getByRole("button", { name: /text/i }));
       const textarea = screen.getByPlaceholderText(/enter query/i);
 
       await userEvent.type(textarea, "tss > 100");
@@ -351,6 +380,7 @@ describe("QueryPage", () => {
       mockExecuteQuery.mockRejectedValueOnce(new Error("Network error"));
 
       renderQueryPage();
+      await userEvent.click(screen.getByRole("button", { name: /text/i }));
       const textarea = screen.getByPlaceholderText(/enter query/i);
 
       await userEvent.type(textarea, "tss > 100");
