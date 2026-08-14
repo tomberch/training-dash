@@ -23,9 +23,31 @@ from .ast import (
     TextMatch,
     Value,
 )
+from .fields import (
+    AGGREGATABLE_FIELDS,
+    ALL_FIELD_NAMES,
+    FIELD_ALIASES,
+    FIELD_DEFINITIONS,
+    FieldDef,
+    FieldType,
+    get_conversion_factor,
+    get_field_def,
+    is_aggregatable,
+    is_text_match_valid,
+    is_valid_operator,
+    resolve_field_name,
+    suggest_field_name,
+)
 from .parser import ParseError, parse
+from .validator import ValidatedQuery, ValidationError, validate
 
 __all__ = [
+    # Fields
+    "AGGREGATABLE_FIELDS",
+    "ALL_FIELD_NAMES",
+    "FIELD_ALIASES",
+    "FIELD_DEFINITIONS",
+    # AST nodes
     "AggExpr",
     "Between",
     "BinaryOp",
@@ -35,20 +57,32 @@ __all__ = [
     "DateValue",
     "DurationValue",
     "Expr",
+    "FieldDef",
+    "FieldType",
     "GroupKey",
     "InList",
     "NotOp",
     "NullCheck",
     "NumberValue",
     "OrderItem",
+    # Parser
     "ParseError",
     "Projection",
-    # AST nodes
     "Query",
     "RelativeDate",
     "StringValue",
     "TextMatch",
+    # Validator
+    "ValidatedQuery",
+    "ValidationError",
     "Value",
-    # Parser
+    "get_conversion_factor",
+    "get_field_def",
+    "is_aggregatable",
+    "is_text_match_valid",
+    "is_valid_operator",
     "parse",
+    "resolve_field_name",
+    "suggest_field_name",
+    "validate",
 ]
