@@ -5,7 +5,6 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import {
   FIELD_DEFINITIONS,
-  VALID_OPERATORS,
   type FieldType,
   type FieldDef,
 } from "@/lib/query/fields";
@@ -44,23 +43,6 @@ function TrashIcon() {
 }
 
 // === Field Metadata ===
-
-interface FieldOption {
-  value: string;
-  label: string;
-  type: FieldType;
-  description: string;
-}
-
-// Create sorted field options for dropdown
-const FIELD_OPTIONS: FieldOption[] = Object.entries(FIELD_DEFINITIONS)
-  .map(([key, def]) => ({
-    value: key,
-    label: formatFieldLabel(key),
-    type: def.fieldType,
-    description: def.description,
-  }))
-  .sort((a, b) => a.label.localeCompare(b.label));
 
 // Group fields by category for better UX
 const FIELD_GROUPS: Record<string, string[]> = {
