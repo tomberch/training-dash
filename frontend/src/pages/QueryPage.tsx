@@ -1,9 +1,10 @@
 import type { JSX } from "react";
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { PageHeader } from "../components/PageHeader";
 import { QueryBuilder } from "../components/QueryBuilder";
 import { SavedFiltersPanel } from "../components/SavedFiltersPanel";
+import { QueryAutocomplete, QueryHelpPanel } from "../components/QueryAutocomplete";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -133,45 +134,16 @@ interface QueryInputProps {
 }
 
 function QueryInput({ value, onChange, onExecute, loading, error }: QueryInputProps) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  // Auto-resize textarea
-  useEffect(() => {
-    const textarea = textareaRef.current;
-    if (textarea) {
-      textarea.style.height = "auto";
-      textarea.style.height = `${Math.max(80, textarea.scrollHeight)}px`;
-    }
-  }, [value]);
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    // Ctrl/Cmd + Enter to execute
-    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-      e.preventDefault();
-      if (!loading && value.trim()) {
-        onExecute();
-      }
-    }
-  };
-
   return (
-    <div className="space-y-2">
-      <div className="relative">
-        <textarea
-          ref={textareaRef}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Enter query... e.g. tss > 100 AND date >= START_OF_MONTH"
-          className={cn(
-            "w-full px-4 py-3 font-mono text-sm rounded-lg border resize-none",
-            "bg-background text-foreground placeholder:text-muted-foreground",
-            "focus:outline-none focus:ring-2 focus:ring-primary/50",
-            error ? "border-destructive" : "border-border"
-          )}
-          rows={2}
-        />
-      </div>
+    <div className="space-y-3">
+      <QueryAutocomplete
+        value={value}
+        onChange={onChange}
+        onExecute={onExecute}
+        placeholder="Enter query... e.g. tss > 100 AND date >= START_OF_MONTH"
+        disabled={loading}
+        hasError={!!error}
+      />
 
       <div className="flex items-center justify-between">
         <span className="text-caption">
@@ -186,6 +158,8 @@ function QueryInput({ value, onChange, onExecute, loading, error }: QueryInputPr
           {loading ? "Running..." : "Run Query"}
         </Button>
       </div>
+
+      <QueryHelpPanel />
     </div>
   );
 }
