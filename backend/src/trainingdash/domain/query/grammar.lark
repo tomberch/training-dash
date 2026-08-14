@@ -1,0 +1,223 @@
+// TrainingDash Query DSL Grammar
+// A JQL-inspired language for filtering and aggregating activity data
+
+// === Top Level ===
+
+?start: query
+
+// Aggregate query must come first to match COUNT(*), AVG(x) etc before treating COUNT as a field
+?query: agg_query
+      | list_query
+
+// List query: returns activities
+// Can start with SELECT, WHERE, ORDER BY, or just a condition
+list_query: select_clause where_clause? order_clause? limit_clause? -> list_query
+          | where_clause order_clause? limit_clause?                 -> list_query_no_select
+          | order_clause limit_clause?                               -> list_query_order_only
+          | limit_clause                                             -> list_query_limit_only
+          | expr order_clause? limit_clause?                         -> list_query_expr
+          | STAR                                                     -> list_query_all
+
+// Aggregate query: returns computed values
+// Must start with an aggregation function
+agg_query: agg_expr_list where_clause? group_clause?
+
+// === Clauses ===
+
+select_clause: SELECT_KW projection
+
+?projection: STAR           -> proj_all
+           | view_name      -> proj_view
+           | field_list     -> proj_fields
+
+view_name: SUMMARY_KW | POWER_KW | HR_KW | FULL_KW
+
+field_list: field ("," field)*
+
+where_clause: WHERE_KW expr
+
+order_clause: ORDER_KW BY_KW order_item ("," order_item)*
+
+order_item: field direction?
+
+direction: ASC_KW -> asc
+         | DESC_KW -> desc
+
+limit_clause: LIMIT_KW INTEGER
+
+group_clause: GROUP_KW BY_KW group_item ("," group_item)*
+
+group_item: time_bucket -> group_time
+          | field       -> group_field
+
+time_bucket: DAY_KW | WEEK_KW | MONTH_KW | YEAR_KW
+
+// === Aggregations ===
+
+agg_expr_list: agg_expr ("," agg_expr)*
+
+agg_expr: AGG_FUNC "(" (field | STAR) ")"
+
+// === Expressions ===
+
+?expr: or_expr
+
+?or_expr: and_expr (OR_KW and_expr)*
+
+?and_expr: not_expr (AND_KW not_expr)*
+
+?not_expr: NOT_KW atom -> not_op
+         | atom
+
+?atom: comparison
+     | in_expr
+     | between_expr
+     | null_check
+     | text_match
+     | "(" expr ")"
+     | boolean_field
+
+comparison: field comp_op value
+
+comp_op: "="   -> eq
+       | "!="  -> ne
+       | ">"   -> gt
+       | ">="  -> ge
+       | "<"   -> lt
+       | "<="  -> le
+
+in_expr: field NOT_KW? IN_KW "(" value_list ")"
+
+value_list: value ("," value)*
+
+between_expr: field BETWEEN_KW value AND_KW value
+
+null_check: field IS_KW NOT_KW? NULL_KW
+
+text_match: field text_op string
+
+text_op: CONTAINS_KW            -> contains
+       | STARTS_KW WITH_KW      -> starts_with
+       | ENDS_KW WITH_KW        -> ends_with
+
+boolean_field: field
+
+// === Values ===
+
+?value: duration_value
+      | number_value
+      | string
+      | date_value
+      | relative_date
+      | boolean
+
+// Duration must come before number to capture colon format
+duration_value: DURATION_COLON
+
+number_value: NUMBER unit?
+
+unit: DISTANCE_UNIT | SPEED_UNIT | DURATION_UNIT
+
+string: DOUBLE_QUOTED_STRING | SINGLE_QUOTED_STRING
+
+date_value: DATE TIME?
+
+relative_date: date_keyword date_arith?
+
+date_keyword: NOW_KW 
+            | TODAY_KW 
+            | START_OF_DAY_KW 
+            | START_OF_WEEK_KW 
+            | START_OF_MONTH_KW 
+            | START_OF_YEAR_KW
+
+date_arith: PLUS_MINUS INTEGER DATE_UNIT
+
+// Arithmetic sign for date arithmetic
+PLUS_MINUS: "+" | "-"
+
+boolean: TRUE_KW -> true
+       | FALSE_KW -> false
+
+// === Identifiers ===
+
+field: IDENTIFIER
+
+// === Terminals ===
+
+// Priority matters! More specific patterns first.
+
+// Aggregation functions - HIGH PRIORITY to avoid being captured as IDENTIFIER
+AGG_FUNC.2: /COUNT/i | /SUM/i | /AVG/i | /MIN/i | /MAX/i
+
+// Keywords (case-insensitive) - HIGH PRIORITY
+SELECT_KW.2: /SELECT/i
+WHERE_KW.2: /WHERE/i
+ORDER_KW.2: /ORDER/i
+BY_KW.2: /BY/i
+GROUP_KW.2: /GROUP/i
+LIMIT_KW.2: /LIMIT/i
+AND_KW.2: /AND/i
+OR_KW.2: /OR/i
+NOT_KW.2: /NOT/i
+IN_KW.2: /IN/i
+BETWEEN_KW.2: /BETWEEN/i
+IS_KW.2: /IS/i
+NULL_KW.2: /NULL/i
+ASC_KW.2: /ASC/i
+DESC_KW.2: /DESC/i
+TRUE_KW.2: /TRUE/i
+FALSE_KW.2: /FALSE/i
+
+// Text operators
+CONTAINS_KW.2: /CONTAINS/i
+STARTS_KW.2: /STARTS/i
+ENDS_KW.2: /ENDS/i
+WITH_KW.2: /WITH/i
+
+// Date keywords - HIGH PRIORITY (longer matches first)
+START_OF_YEAR_KW.2: /START_OF_YEAR/i
+START_OF_MONTH_KW.2: /START_OF_MONTH/i
+START_OF_WEEK_KW.2: /START_OF_WEEK/i
+START_OF_DAY_KW.2: /START_OF_DAY/i
+NOW_KW.2: /NOW/i
+TODAY_KW.2: /TODAY/i
+
+// View names
+SUMMARY_KW.2: /summary/i
+POWER_KW.2: /power/i
+HR_KW.2: /hr/i
+FULL_KW.2: /full/i
+
+// Time buckets
+DAY_KW.2: /day/i
+WEEK_KW.2: /week/i
+MONTH_KW.2: /month/i
+YEAR_KW.2: /year/i
+
+// Units - specific patterns
+DISTANCE_UNIT: /km/i | /mi/i | /m(?![a-z])/i | /ft/i
+SPEED_UNIT: /kph/i | /mph/i | /mps/i
+DURATION_UNIT: /min/i | /sec/i | /h(?![a-z])/i | /s(?![a-z])/i
+DATE_UNIT: /mo/i | /d(?![a-z])/i | /w(?![a-z])/i | /y(?![a-z])/i
+
+// Literals - specific patterns first
+DATE.2: /\d{4}-\d{2}-\d{2}/
+TIME.2: /T\d{2}:\d{2}:\d{2}/
+DURATION_COLON.2: /\d{1,3}:\d{2}(:\d{2})?/
+NUMBER: /\d+(\.\d+)?/
+INTEGER: /\d+/
+
+// Strings - handle escaped quotes
+DOUBLE_QUOTED_STRING: /"([^"\\]|\\.)*"/
+SINGLE_QUOTED_STRING: /'([^'\\]|\\.)*'/
+
+// Identifiers - field names (lowest priority)
+IDENTIFIER: /[a-zA-Z_][a-zA-Z0-9_]*/
+
+// Special
+STAR: "*"
+
+// Whitespace and comments
+%import common.WS
+%ignore WS
