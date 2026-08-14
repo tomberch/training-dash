@@ -22,17 +22,18 @@ from trainingdash.integrations.geocoding import GeocodingService
 from trainingdash.repositories.postgres.activity_repo import PostgresActivityRepo
 from trainingdash.repositories.postgres.analytics_repo import PostgresAnalyticsRepo
 from trainingdash.repositories.postgres.audit_log_repo import PostgresAuditLogRepo
-from trainingdash.repositories.postgres.event_repo import PostgresEventRepo
 from trainingdash.repositories.postgres.credentials_repo import (
     PostgresGarminCredentialsRepo,
     PostgresXertCredentialsRepo,
 )
+from trainingdash.repositories.postgres.event_repo import PostgresEventRepo
 from trainingdash.repositories.postgres.geocoding_cache_repo import PostgresGeocodingCacheRepo
 from trainingdash.repositories.postgres.notification_repo import PostgresNotificationRepo
 from trainingdash.repositories.postgres.oauth_link_repo import PostgresOAuthLinkRepo
 from trainingdash.repositories.postgres.recalculation_job_repo import (
     PostgresRecalculationJobRepo,
 )
+from trainingdash.repositories.postgres.saved_filter_repo import PostgresSavedFilterRepo
 from trainingdash.repositories.postgres.settings_repo import PostgresAppSettingsRepo
 from trainingdash.repositories.postgres.threshold_repo import PostgresThresholdRepo
 from trainingdash.repositories.postgres.user_repo import PostgresUserRepo
@@ -46,6 +47,7 @@ from trainingdash.repositories.protocols import (
     NotificationRepo,
     OAuthLinkRepo,
     RecalculationJobRepo,
+    SavedFilterRepo,
     ThresholdRepo,
     UserRepo,
     XertCredentialsRepo,
@@ -112,6 +114,11 @@ async def get_threshold_repo(db: DbSession) -> ThresholdRepo:
     return PostgresThresholdRepo(db)
 
 
+async def get_saved_filter_repo(db: DbSession) -> SavedFilterRepo:
+    """Create a SavedFilterRepo bound to the current session."""
+    return PostgresSavedFilterRepo(db)
+
+
 def get_geocoding_service(db: DbSession) -> GeocodingService:
     """Wire a GeocodingService with a Postgres cache repo.
 
@@ -136,6 +143,7 @@ EventRepoD = Annotated[EventRepo, Depends(get_event_repo)]
 RecalculationJobRepoD = Annotated[RecalculationJobRepo, Depends(get_recalculation_job_repo)]
 OAuthLinkRepoD = Annotated[OAuthLinkRepo, Depends(get_oauth_link_repo)]
 ThresholdRepoD = Annotated[ThresholdRepo, Depends(get_threshold_repo)]
+SavedFilterRepoD = Annotated[SavedFilterRepo, Depends(get_saved_filter_repo)]
 
 
 # --- Use Cases ---
@@ -152,9 +160,10 @@ async def get_ingest_activity_use_case(db: DbSession) -> IngestActivity:
 
 async def get_delete_activity_use_case(
     activity_repo: ActivityRepoD,
+    db: DbSession,
 ) -> DeleteActivity:
     """Create a DeleteActivity use case with its dependencies."""
-    return DeleteActivity(activity_repo)
+    return DeleteActivity(activity_repo, db)
 
 
 async def get_ensure_default_thresholds_use_case(db: DbSession) -> EnsureDefaultThresholds:

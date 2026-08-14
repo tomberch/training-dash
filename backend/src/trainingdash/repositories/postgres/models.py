@@ -372,3 +372,27 @@ class CacheStats(Base):
     cache_type: Mapped[str] = mapped_column(String(20), nullable=False)
     hits: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     misses: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+
+
+class SavedFilter(Base):
+    """User-saved query filters for reuse across sessions.
+
+    Stores the raw DSL query text. Query is validated on save and on load
+    (since field availability may change). Return type is inferred from
+    query structure (list vs aggregation).
+    """
+
+    __tablename__ = "saved_filters"
+    __table_args__ = (
+        # Each user can have unique filter names
+        UniqueConstraint("user_id", "name", name="uq_saved_filter_user_name"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    query_text: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    is_default: Mapped[bool] = mapped_column(default=False)
+    created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
+    updated_at: Mapped[datetime] = mapped_column(server_default=text("now()"), onupdate=text("now()"))

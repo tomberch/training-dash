@@ -549,6 +549,78 @@ class AnalyticsRepo(Protocol):
         ...
 
 
+class SavedFilterRepo(Protocol):
+    """
+    Repository protocol for saved query filters.
+
+    Users can save queries for reuse across sessions. Each filter has a unique
+    name per user. One filter can be marked as default.
+    """
+
+    async def get_by_id(self, filter_id: int, user_id: int) -> "SavedFilter | None":
+        """Fetch a saved filter by ID, scoped to user. Returns None if not found."""
+        ...
+
+    async def get_by_name(self, name: str, user_id: int) -> "SavedFilter | None":
+        """Fetch a saved filter by name, scoped to user. Returns None if not found."""
+        ...
+
+    async def list_for_user(self, user_id: int) -> list["SavedFilter"]:
+        """List all saved filters for a user, ordered by name."""
+        ...
+
+    async def get_default(self, user_id: int) -> "SavedFilter | None":
+        """Get the user's default filter, if any."""
+        ...
+
+    async def create(
+        self,
+        user_id: int,
+        name: str,
+        query_text: str,
+        description: str | None = None,
+        is_default: bool = False,
+    ) -> "SavedFilter":
+        """
+        Create a new saved filter. Validates the query before saving.
+
+        If is_default=True, clears any existing default for the user.
+
+        Returns the created filter.
+        """
+        ...
+
+    async def update(
+        self,
+        filter_id: int,
+        user_id: int,
+        name: str | None = None,
+        query_text: str | None = None,
+        description: str | None = None,
+        is_default: bool | None = None,
+    ) -> "SavedFilter | None":
+        """
+        Update an existing saved filter. Validates query if changed.
+
+        If is_default=True, clears any existing default for the user.
+
+        Returns the updated filter, or None if not found.
+        """
+        ...
+
+    async def delete(self, filter_id: int, user_id: int) -> bool:
+        """Delete a saved filter. Returns True if deleted, False if not found."""
+        ...
+
+    async def set_default(self, filter_id: int, user_id: int) -> bool:
+        """Set a filter as the user's default (clears existing default). Returns True if set."""
+        ...
+
+    async def clear_default(self, user_id: int) -> None:
+        """Clear the user's default filter (no filter is default)."""
+        ...
+
+
 # Import types for type hints (avoid circular import at runtime)
 from datetime import date, datetime
 from typing import TYPE_CHECKING, Any
@@ -565,6 +637,7 @@ if TYPE_CHECKING:
         Notification,
         RecalculationJob,
         Route,
+        SavedFilter,
         User,
         UserOAuthLink,
         XertCredentials,

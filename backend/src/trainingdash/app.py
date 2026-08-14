@@ -27,6 +27,7 @@ from trainingdash.routers import (
     metrics,
     oauth,
     query,
+    saved_filters,
     tiles,
     user,
 )
@@ -92,6 +93,7 @@ def create_app() -> FastAPI:
     app.include_router(analytics.router)
     app.include_router(metrics.router)
     app.include_router(query.router)
+    app.include_router(saved_filters.router)
     app.include_router(tiles.router)
 
     # Serve frontend static files if the dist directory exists
