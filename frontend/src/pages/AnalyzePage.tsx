@@ -391,9 +391,23 @@ export function AnalyzePage() {
 
   return (
     <div ref={containerRef} className="h-full flex flex-col bg-background">
-      {/* Sticky map */}
+      {/* Activity selector - always at top */}
+      <div className="flex-shrink-0 p-4 pb-2">
+        <div className="flex flex-col sm:flex-row sm:items-end gap-4">
+          <div className="flex-1 max-w-md">
+            <ActivitySelector
+              selectedId={selectedActivity?.id ?? null}
+              onSelect={handleActivitySelect}
+              label="Select Activity"
+              placeholder="Search for an activity..."
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Map - below selector */}
       {selectedActivity && positions.length > 0 && (
-        <div className="flex-shrink-0 p-4 pb-0">
+        <div className="flex-shrink-0 px-4 pb-4">
           <ResizableMap
             positions={positions}
             hoveredPosition={hoveredPosition}
@@ -404,23 +418,9 @@ export function AnalyzePage() {
         </div>
       )}
 
-      {/* Control bar */}
-      <div className="flex-shrink-0 p-4">
-        <div className="flex flex-col gap-3">
-          {/* Row 1: Activity selector */}
-          <div className="flex flex-col sm:flex-row sm:items-end gap-4">
-            <div className="flex-1 max-w-md">
-              <ActivitySelector
-                selectedId={selectedActivity?.id ?? null}
-                onSelect={handleActivitySelect}
-                label="Select Activity"
-                placeholder="Search for an activity..."
-              />
-            </div>
-          </div>
-          
-          {/* Row 2: Chart controls (only shown when activity is loaded) */}
-          {selectedActivity && geojson && (
+      {/* Chart controls (only shown when activity is loaded) */}
+      {selectedActivity && geojson && (
+        <div className="flex-shrink-0 px-4 pb-2">
             <div className="flex flex-wrap items-center gap-4 p-3 bg-card rounded-lg border border-border">
               {/* Series toggles - only show available series */}
               <div className="flex items-center gap-2">
@@ -504,17 +504,16 @@ export function AnalyzePage() {
                 </button>
               )}
             </div>
-          )}
         </div>
-      </div>
+      )}
 
       {/* Quick stats row - shown as placeholders when no activity */}
       <div className="flex-shrink-0 px-4">
         <QuickStatsRow activity={selectedActivity} />
       </div>
 
-      {/* Chart area - fills remaining viewport */}
-      <div className="flex-1 min-h-0 p-4 pt-4">
+      {/* Chart area - fills remaining viewport with generous minimum height */}
+      <div className="flex-1 min-h-[500px] p-4 pt-4">
         {loading ? (
           <div className="h-full flex items-center justify-center bg-card rounded-lg border border-border">
             <div className="flex items-center gap-3 text-muted-foreground">
