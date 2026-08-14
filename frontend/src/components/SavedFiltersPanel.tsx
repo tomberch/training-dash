@@ -30,7 +30,7 @@ import { toast } from "sonner";
 function StarIcon({ filled = false }: { filled?: boolean }) {
   return (
     <svg
-      className={cn("w-4 h-4", filled ? "fill-current text-yellow-500" : "")}
+      className={cn("w-4 h-4", filled ? "fill-current text-warning" : "")}
       fill={filled ? "currentColor" : "none"}
       stroke="currentColor"
       viewBox="0 0 24 24"
