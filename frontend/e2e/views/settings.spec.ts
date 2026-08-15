@@ -54,10 +54,10 @@ test.describe('Settings', () => {
     // Wait for preferences section
     await expect(page.getByText('Theme')).toBeVisible();
 
-    // Find theme buttons
-    const lightButton = page.getByRole('button', { name: 'Light' });
-    const darkButton = page.getByRole('button', { name: 'Dark' });
-    const systemButton = page.getByRole('button', { name: 'System' });
+    // Find theme buttons (exact: true to avoid matching map style buttons like "Dark Matter")
+    const lightButton = page.getByRole('button', { name: 'Light', exact: true });
+    const darkButton = page.getByRole('button', { name: 'Dark', exact: true });
+    const systemButton = page.getByRole('button', { name: 'System', exact: true });
 
     await expect(lightButton).toBeVisible();
     await expect(darkButton).toBeVisible();
