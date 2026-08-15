@@ -33,10 +33,16 @@ Self-hosted fitness analytics for cyclists and endurance athletes. Analyze your 
 - Lifetime PRs (longest ride, fastest segments, max power, biggest climb)
 - Per-route PRs with automatic route matching via GPS similarity
 
+**Settings & Preferences**
+- Selectable map tile styles (OpenStreetMap, Positron, Dark Matter, Voyager)
+- Light/Dark/Midnight themes
+- Metric/Imperial unit preferences
+- HR-derived power estimation for activities without power meters
+
 **Multi-User**
 - Isolated data per user
 - Admin panel for user management
-- Metric/Imperial unit preferences
+- OAuth login (Google, GitHub)
 
 ## Screenshots
 
@@ -72,6 +78,13 @@ Self-hosted fitness analytics for cyclists and endurance athletes. Analyze your 
 <summary>Records</summary>
 
 ![Records](docs/images/records.png)
+
+</details>
+
+<details>
+<summary>Settings</summary>
+
+![Settings](docs/images/settings.png)
 
 </details>
 

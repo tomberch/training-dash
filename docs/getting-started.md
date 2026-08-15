@@ -120,7 +120,15 @@ For automatic syncing, go to **Settings > Integrations**:
 - **Power Curve** — See your best power outputs at each duration
 - **Records** — View lifetime PRs and per-route PRs
 
-### 5. Create Additional Users (Admin)
+### 5. Customize Preferences
+
+Go to **Settings** to personalize your experience:
+
+- **Theme** — Light, Dark, or Midnight (or follow system)
+- **Unit System** — Metric (km, m) or Imperial (mi, ft)
+- **Map Style** — OpenStreetMap, Positron, Dark Matter, or Voyager
+
+### 6. Create Additional Users (Admin)
 
 Go to **Admin > Users** to create accounts for other users. Each user has isolated data.
 

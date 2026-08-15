@@ -27,6 +27,8 @@ A User with `is_admin = true`. Admins can create accounts, reset passwords, and 
 Per-user display settings stored on the User record. Currently includes:
 
 - **Unit System** — either *Metric* (km, m, km/h) or *Imperial* (mi, ft, mph). Affects all distance, elevation, and speed displays throughout the app. Default: Metric.
+- **Theme** — Light (Latte), Dark (Mocha), or Midnight. Can also follow system preference.
+- **Map Tile Style** — OpenStreetMap (colorful), Positron (light minimal), Dark Matter (dark), or Voyager (light with colors). Affects all maps in the app. Default: OpenStreetMap.
 
 ## Integration
 
