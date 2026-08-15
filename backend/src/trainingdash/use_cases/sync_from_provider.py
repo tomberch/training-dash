@@ -19,11 +19,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from trainingdash.crypto import EncryptionError, decrypt
+from trainingdash.domain.events import EventOutcome, EventType
 from trainingdash.ingest import finalize_batch_import, is_duplicate_activity
 from trainingdash.integrations.protocols import (
     CredentialInfo,
     SyncProvider,
 )
+from trainingdash.repositories.postgres.event_repo import PostgresEventRepo
 from trainingdash.repositories.postgres.models import Activity
 
 logger = logging.getLogger(__name__)
@@ -64,6 +66,7 @@ class SyncFromProvider:
             db: Database session for persistence
         """
         self._db = db
+        self._event_repo = PostgresEventRepo(db)
 
     async def execute(
         self,
@@ -90,9 +93,28 @@ class SyncFromProvider:
         Returns:
             SyncResult with success status and counts
         """
+        provider_name = provider.source_name
+
+        # Emit sync.started event
+        await self._event_repo.log(
+            event_type=EventType.SYNC_STARTED.value,
+            outcome=EventOutcome.INFO.value,
+            user_id=user_id,
+            payload={"provider": provider_name},
+        )
+
         # Get credentials
         creds = await self._get_credentials(user_id, provider)
         if creds is None:
+            await self._event_repo.log(
+                event_type=EventType.SYNC_COMPLETED.value,
+                outcome=EventOutcome.FAILURE.value,
+                user_id=user_id,
+                payload={
+                    "provider": provider_name,
+                    "error": f"No {provider_name.title()} credentials configured",
+                },
+            )
             return SyncResult(
                 success=False,
                 user_id=user_id,
@@ -109,6 +131,12 @@ class SyncFromProvider:
                 "sync_%s: Failed to decrypt credentials for user %s",
                 provider.source_name,
                 user_id,
+            )
+            await self._event_repo.log(
+                event_type=EventType.SYNC_COMPLETED.value,
+                outcome=EventOutcome.FAILURE.value,
+                user_id=user_id,
+                payload={"provider": provider_name, "error": "Failed to decrypt credentials"},
             )
             return SyncResult(
                 success=False,
@@ -130,6 +158,12 @@ class SyncFromProvider:
             await provider.connect(cred_info.email, password)
         except Exception as e:
             logger.error("%s: Failed to connect for user %s: %s", log_prefix, user_id, e)
+            await self._event_repo.log(
+                event_type=EventType.SYNC_COMPLETED.value,
+                outcome=EventOutcome.FAILURE.value,
+                user_id=user_id,
+                payload={"provider": provider_name, "error": str(e)},
+            )
             return SyncResult(
                 success=False,
                 user_id=user_id,
@@ -147,6 +181,12 @@ class SyncFromProvider:
                     user_id,
                     e,
                 )
+                await self._event_repo.log(
+                    event_type=EventType.SYNC_COMPLETED.value,
+                    outcome=EventOutcome.FAILURE.value,
+                    user_id=user_id,
+                    payload={"provider": provider_name, "error": str(e)},
+                )
                 return SyncResult(success=False, user_id=user_id, error=str(e))
 
             # Filter to new activities (not already imported from this source)
@@ -156,6 +196,16 @@ class SyncFromProvider:
                 logger.info("%s: No new activities for user %s", log_prefix, user_id)
                 # Still update last_synced_at so the next sync uses a tight window
                 await self._write_last_synced_at(creds)
+                await self._event_repo.log(
+                    event_type=EventType.SYNC_COMPLETED.value,
+                    outcome=EventOutcome.SUCCESS.value,
+                    user_id=user_id,
+                    payload={
+                        "provider": provider_name,
+                        "synced_activities": 0,
+                        "skipped_duplicates": 0,
+                    },
+                )
                 return SyncResult(success=True, user_id=user_id)
 
             # Use batch mode if >10 activities to avoid notification spam
@@ -233,6 +283,18 @@ class SyncFromProvider:
 
             # Record the successful sync time
             await self._write_last_synced_at(creds)
+
+            # Emit sync.completed success event
+            await self._event_repo.log(
+                event_type=EventType.SYNC_COMPLETED.value,
+                outcome=EventOutcome.SUCCESS.value,
+                user_id=user_id,
+                payload={
+                    "provider": provider_name,
+                    "synced_activities": synced,
+                    "skipped_duplicates": skipped_duplicates,
+                },
+            )
 
             return SyncResult(
                 success=True,

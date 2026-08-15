@@ -12,7 +12,9 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from trainingdash.domain.events import EventOutcome, EventType
 from trainingdash.jobs import enqueue_sync_garmin_job, enqueue_sync_xert_job
+from trainingdash.repositories.postgres.event_repo import PostgresEventRepo
 from trainingdash.repositories.postgres.models import GarminCredentials, User, XertCredentials
 
 logger = logging.getLogger(__name__)
@@ -23,6 +25,7 @@ class HourlySyncScheduler:
 
     def __init__(self, db: AsyncSession) -> None:
         self._db = db
+        self._event_repo = PostgresEventRepo(db)
 
     async def execute(self) -> dict:
         current_hour = datetime.now(UTC).hour
@@ -60,4 +63,18 @@ class HourlySyncScheduler:
             logger.info(f"HourlySyncScheduler: enqueued Xert sync for user {user_id} (deferred 15min)")
 
         logger.info(f"HourlySyncScheduler: queued {len(garmin_user_ids)} Garmin, {len(xert_user_ids)} Xert syncs")
+
+        # Emit scheduler.triggered event
+        await self._event_repo.log(
+            event_type=EventType.SCHEDULER_TRIGGERED.value,
+            outcome=EventOutcome.INFO.value,
+            user_id=None,
+            payload={
+                "hour": current_hour,
+                "garmin_queued": len(garmin_user_ids),
+                "xert_queued": len(xert_user_ids),
+            },
+        )
+        await self._db.commit()
+
         return {"success": True, "garmin_queued": len(garmin_user_ids), "xert_queued": len(xert_user_ids)}

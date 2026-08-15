@@ -166,6 +166,11 @@ class TestBearingsMatch:
         assert bearings_match(90, 270) is False
         assert bearings_match(45, 225) is False
 
+    def test_bearings_at_threshold_match(self):
+        """Bearings exactly at 90° threshold should match."""
+        assert bearings_match(0, 90) is True
+        assert bearings_match(0, 270) is True  # 90° the other way
+
     def test_bearings_just_over_threshold_do_not_match(self):
         """Bearings just over 90° apart should not match."""
         assert bearings_match(0, 91) is False

@@ -13,6 +13,14 @@ from trainingdash.use_cases import SyncFromProvider
 class MockAsyncSession:
     """Minimal mock for AsyncSession."""
 
+    def add(self, obj):
+        """Mock add method for event logging."""
+        pass
+
+    async def flush(self):
+        """Mock flush method for event logging."""
+        pass
+
     async def execute(self, query):
         return mock.MagicMock(scalar_one_or_none=mock.MagicMock(return_value=None))
 

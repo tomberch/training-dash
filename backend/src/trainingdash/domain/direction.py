@@ -16,7 +16,6 @@ This approach is:
 
 import math
 
-
 # =============================================================================
 # Direction Bearing (recommended approach)
 # =============================================================================
@@ -92,7 +91,7 @@ def bearings_match(bearing1: int | None, bearing2: int | None, threshold: int = 
         threshold: Maximum angular difference to consider same direction (default 90°)
 
     Returns:
-        True if bearings are within threshold degrees of each other.
+        True if bearings are within threshold degrees of each other (inclusive).
         Returns True if either bearing is None (can't determine, assume same).
     """
     if bearing1 is None or bearing2 is None:
@@ -103,7 +102,7 @@ def bearings_match(bearing1: int | None, bearing2: int | None, threshold: int = 
     if diff > 180:
         diff = 360 - diff
 
-    return diff < threshold
+    return diff <= threshold
 
 
 # =============================================================================

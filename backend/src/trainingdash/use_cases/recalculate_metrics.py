@@ -11,6 +11,8 @@ from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from trainingdash.domain.events import EventOutcome, EventType
+from trainingdash.repositories.postgres.event_repo import PostgresEventRepo
 from trainingdash.repositories.protocols import RecalculationJobRepo
 
 logger = logging.getLogger(__name__)
@@ -55,6 +57,7 @@ class RecalculateMetrics:
         """
         self._db = db
         self._job_repo = recalculation_job_repo
+        self._event_repo = PostgresEventRepo(db)
 
     async def execute(self, user_id: int) -> RecalculationResult:
         """
@@ -80,6 +83,14 @@ class RecalculateMetrics:
             await self._job_repo.mark_running(user_id)
             await self._db.commit()
 
+        # Emit recalculation.started event
+        await self._event_repo.log(
+            event_type=EventType.RECALCULATION_STARTED.value,
+            outcome=EventOutcome.INFO.value,
+            user_id=user_id,
+            payload={},
+        )
+
         try:
             # Import here to avoid circular imports
             from trainingdash.ingest import backfill_activity_metrics
@@ -96,6 +107,14 @@ class RecalculateMetrics:
                 "RecalculateMetrics: completed for user %s — %d activities updated",
                 user_id,
                 count,
+            )
+
+            # Emit recalculation.completed success event
+            await self._event_repo.log(
+                event_type=EventType.RECALCULATION_COMPLETED.value,
+                outcome=EventOutcome.SUCCESS.value,
+                user_id=user_id,
+                payload={"activities_updated": count},
             )
 
             return RecalculationResult(
@@ -119,6 +138,14 @@ class RecalculateMetrics:
                     )
 
             logger.exception("RecalculateMetrics: failed for user %s", user_id)
+
+            # Emit recalculation.completed failure event
+            await self._event_repo.log(
+                event_type=EventType.RECALCULATION_COMPLETED.value,
+                outcome=EventOutcome.FAILURE.value,
+                user_id=user_id,
+                payload={"error": error_msg},
+            )
 
             return RecalculationResult(
                 success=False,

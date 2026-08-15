@@ -7,10 +7,12 @@ from sqlalchemy import delete, func, select, update
 from trainingdash.auth import AdminUser, DbSession, hash_password
 from trainingdash.crypto import EncryptionError, encrypt
 from trainingdash.dependencies import (
+    EventRepoD,
     GarminCredentialsRepoD,
     UserRepoD,
     XertCredentialsRepoD,
 )
+from trainingdash.domain.events import EventOutcome, EventType
 from trainingdash.repositories.postgres.models import (
     Activity,
     ActivityPeakPower,
@@ -417,7 +419,12 @@ async def _log_nuke_action(db: DbSession, admin: AdminUser, action: str, target_
 
 @router.post("/users/{user_id}/nuke/activities")
 async def admin_nuke_activities(
-    db: DbSession, user_repo: UserRepoD, admin: AdminUser, user_id: int, request: NukeRequest
+    db: DbSession,
+    user_repo: UserRepoD,
+    event_repo: EventRepoD,
+    admin: AdminUser,
+    user_id: int,
+    request: NukeRequest,
 ):
     """Delete all activities and related data for a user (keeps account, credentials, and fitness settings)."""
     user = await _get_user_or_404(user_repo, user_id)
@@ -441,13 +448,31 @@ async def admin_nuke_activities(
     summary = f"{counts['activities']} activities, {counts['records']} records, {counts['routes']} routes"
     await _log_nuke_action(db, admin, "nuke_activities", user, summary)
 
+    # Emit admin.nuke_activities event
+    await event_repo.log(
+        event_type=EventType.ADMIN_NUKE_ACTIVITIES.value,
+        outcome=EventOutcome.INFO.value,
+        user_id=user_id,
+        payload={
+            "admin_id": admin.id,
+            "activities_deleted": counts["activities"],
+            "records_deleted": counts["records"],
+            "routes_deleted": counts["routes"],
+        },
+    )
+
     await db.commit()
     return {"success": True, "deleted": summary}
 
 
 @router.post("/users/{user_id}/nuke/integrations")
 async def admin_nuke_integrations(
-    db: DbSession, user_repo: UserRepoD, admin: AdminUser, user_id: int, request: NukeRequest
+    db: DbSession,
+    user_repo: UserRepoD,
+    event_repo: EventRepoD,
+    admin: AdminUser,
+    user_id: int,
+    request: NukeRequest,
 ):
     """Delete all integration credentials for a user."""
     user = await _get_user_or_404(user_repo, user_id)
@@ -469,12 +494,31 @@ async def admin_nuke_integrations(
     summary = ", ".join(parts) if parts else "no credentials"
     await _log_nuke_action(db, admin, "nuke_integrations", user, summary)
 
+    # Emit admin.nuke_integrations event
+    await event_repo.log(
+        event_type=EventType.ADMIN_NUKE_INTEGRATIONS.value,
+        outcome=EventOutcome.INFO.value,
+        user_id=user_id,
+        payload={
+            "admin_id": admin.id,
+            "garmin_deleted": counts["garmin"],
+            "xert_deleted": counts["xert"],
+        },
+    )
+
     await db.commit()
     return {"success": True, "deleted": summary}
 
 
 @router.post("/users/{user_id}/nuke/account")
-async def admin_nuke_account(db: DbSession, user_repo: UserRepoD, admin: AdminUser, user_id: int, request: NukeRequest):
+async def admin_nuke_account(
+    db: DbSession,
+    user_repo: UserRepoD,
+    event_repo: EventRepoD,
+    admin: AdminUser,
+    user_id: int,
+    request: NukeRequest,
+):
     """Delete a user account and all associated data."""
     user = await _get_user_or_404(user_repo, user_id)
     _validate_nuke_request(user, admin, request.confirm_email)
@@ -485,6 +529,18 @@ async def admin_nuke_account(db: DbSession, user_repo: UserRepoD, admin: AdminUs
     # Log BEFORE deleting user (so we have the email)
     summary = f"user account, {counts['activities']} activities, all associated data"
     await _log_nuke_action(db, admin, "nuke_account", user, summary)
+
+    # Emit admin.nuke_account event BEFORE deleting user
+    await event_repo.log(
+        event_type=EventType.ADMIN_NUKE_ACCOUNT.value,
+        outcome=EventOutcome.INFO.value,
+        user_id=user_id,
+        payload={
+            "admin_id": admin.id,
+            "user_email": user.email,
+            "activities_deleted": counts["activities"],
+        },
+    )
 
     # Delete user (CASCADE will handle most related data)
     await db.execute(delete(User).where(User.id == user_id))

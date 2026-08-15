@@ -2,7 +2,6 @@ import type { JSX } from "react";
 import { useState, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
 import {
   FIELD_DEFINITIONS,
   type FieldType,
@@ -198,13 +197,12 @@ function conditionsToQuery(conditions: Condition[]): string {
 
 interface ConditionRowProps {
   condition: Condition;
-  index: number;
   isFirst: boolean;
   onChange: (id: string, updates: Partial<Condition>) => void;
   onRemove: (id: string) => void;
 }
 
-function ConditionRow({ condition, index, isFirst, onChange, onRemove }: ConditionRowProps) {
+function ConditionRow({ condition, isFirst, onChange, onRemove }: ConditionRowProps) {
   const fieldDef = FIELD_DEFINITIONS[condition.field];
   const fieldType = fieldDef?.fieldType || "string";
   const operators = OPERATOR_OPTIONS[fieldType] || OPERATOR_OPTIONS.string;
@@ -341,7 +339,7 @@ function getPlaceholder(fieldType: FieldType, fieldDef: FieldDef | undefined): s
 
 // === Main Component ===
 
-export function QueryBuilder({ onQueryChange, initialQuery }: QueryBuilderProps): JSX.Element {
+export function QueryBuilder({ onQueryChange, initialQuery: _initialQuery }: QueryBuilderProps): JSX.Element {
   const [conditions, setConditions] = useState<Condition[]>(() => {
     // Start with one empty condition
     return [
@@ -428,7 +426,6 @@ export function QueryBuilder({ onQueryChange, initialQuery }: QueryBuilderProps)
           <ConditionRow
             key={condition.id}
             condition={condition}
-            index={index}
             isFirst={index === 0}
             onChange={handleUpdateCondition}
             onRemove={handleRemoveCondition}

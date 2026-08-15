@@ -9,6 +9,10 @@ This use case handles the complete flow of deleting an activity:
 import logging
 from uuid import UUID
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from trainingdash.domain.events import EventOutcome, EventType
+from trainingdash.repositories.postgres.event_repo import PostgresEventRepo
 from trainingdash.repositories.protocols import ActivityRepo
 
 logger = logging.getLogger(__name__)
@@ -24,20 +28,22 @@ class DeleteActivity:
     - Triggering background recalculation of fitness metrics
 
     Example usage:
-        use_case = DeleteActivity(activity_repo)
+        use_case = DeleteActivity(activity_repo, db)
         deleted = await use_case.execute(user_id=1, activity_id=uuid)
         if not deleted:
             raise NotFoundError()
     """
 
-    def __init__(self, activity_repo: ActivityRepo) -> None:
+    def __init__(self, activity_repo: ActivityRepo, db: AsyncSession) -> None:
         """
         Initialize the use case with dependencies.
 
         Args:
             activity_repo: Repository for activity persistence
+            db: Database session for event logging
         """
         self._activity_repo = activity_repo
+        self._event_repo = PostgresEventRepo(db)
 
     async def execute(self, user_id: int, activity_id: UUID) -> bool:
         """
@@ -59,6 +65,14 @@ class DeleteActivity:
 
         if not deleted:
             return False
+
+        # Emit delete event
+        await self._event_repo.log(
+            event_type=EventType.ACTIVITY_DELETED.value,
+            outcome=EventOutcome.INFO.value,
+            user_id=user_id,
+            payload={"activity_id": str(activity_id)},
+        )
 
         # Step 2: Enqueue fitness recalculation
         from trainingdash.jobs import enqueue_recalculate_after_delete_job

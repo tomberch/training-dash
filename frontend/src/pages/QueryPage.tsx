@@ -278,7 +278,7 @@ function ListResults({ response, page, onPageChange }: ListResultsProps) {
                   {(activity.title as string) || "Untitled Activity"}
                 </h3>
                 <p className="text-caption mt-1">
-                  {formatActivityDate(activity.started_at as string)}
+                  {formatActivityDate(activity.started_at as string, null)}
                 </p>
               </div>
               <div className="flex gap-6 text-sm shrink-0">

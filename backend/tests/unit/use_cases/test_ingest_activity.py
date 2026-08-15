@@ -13,7 +13,13 @@ from trainingdash.use_cases import IngestActivity
 class MockAsyncSession:
     """Minimal mock for AsyncSession."""
 
-    pass
+    def add(self, obj):
+        """Mock add method for event logging."""
+        pass
+
+    async def flush(self):
+        """Mock flush method for event logging."""
+        pass
 
 
 @pytest.fixture

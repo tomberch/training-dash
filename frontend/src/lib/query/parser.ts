@@ -3,7 +3,8 @@
  * Converts tokens into an AST.
  */
 
-import { Lexer, Token, TokenType, LexerError } from "./lexer";
+import { Lexer } from "./lexer";
+import type { Token, TokenType } from "./lexer";
 import type {
   Query,
   Projection,
@@ -12,32 +13,33 @@ import type {
   OrderItem,
   Expr,
   Value,
-  BinaryOp,
-  NotOp,
   Comparison,
   Between,
   InList,
-  NullCheck,
-  TextMatch,
-  BooleanField,
-  NumberValue,
-  StringValue,
-  DateValue,
   RelativeDate,
-  BoolValue,
-  DurationValue,
 } from "./types";
 
 export class ParseError extends Error {
+  override message: string;
+  position: number;
+  line: number;
+  column: number;
+  expected?: string[];
+
   constructor(
-    public message: string,
-    public position: number,
-    public line: number,
-    public column: number,
-    public expected?: string[]
+    message: string,
+    position: number,
+    line: number,
+    column: number,
+    expected?: string[]
   ) {
     super(message);
     this.name = "ParseError";
+    this.message = message;
+    this.position = position;
+    this.line = line;
+    this.column = column;
+    this.expected = expected;
   }
 
   getContext(input: string): string {
@@ -366,7 +368,7 @@ export class Parser {
 
     // NOT IN
     if (this.check("NOT")) {
-      const notToken = this.advance();
+      this.advance();
       if (this.check("IN")) {
         this.advance();
         return this.parseInList(field, true);

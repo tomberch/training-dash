@@ -14,6 +14,8 @@ import logging
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from trainingdash.domain.events import EventOutcome, EventType
+from trainingdash.repositories.postgres.event_repo import PostgresEventRepo
 from trainingdash.repositories.postgres.models import Activity
 
 logger = logging.getLogger(__name__)
@@ -47,6 +49,7 @@ class IngestActivity:
             db: Database session for persistence
         """
         self._db = db
+        self._event_repo = PostgresEventRepo(db)
 
     async def execute(
         self,
@@ -88,6 +91,12 @@ class IngestActivity:
             parsed = parse_records(fit_data)
         except Exception as e:
             logger.warning(f"Failed to parse FIT file: {e}")
+            await self._event_repo.log(
+                event_type=EventType.ACTIVITY_INGESTED.value,
+                outcome=EventOutcome.FAILURE.value,
+                user_id=user_id,
+                payload={"source": source, "source_ref": source_ref, "error": str(e)},
+            )
             return None
 
         # Step 2: Check for duplicates (skip for manual uploads)
@@ -122,5 +131,17 @@ class IngestActivity:
             batch_mode=batch_mode,
         )
         await pipeline.run()
+
+        # Emit success event
+        await self._event_repo.log(
+            event_type=EventType.ACTIVITY_INGESTED.value,
+            outcome=EventOutcome.SUCCESS.value,
+            user_id=user_id,
+            payload={
+                "activity_id": str(activity.id),
+                "source": source,
+                "source_ref": source_ref,
+            },
+        )
 
         return activity

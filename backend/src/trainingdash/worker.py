@@ -20,7 +20,11 @@ Engine lifecycle:
 
 import logging
 import os
+import time
+from collections.abc import Callable
 from contextlib import asynccontextmanager
+from functools import wraps
+from typing import Any
 
 from saq import CronJob
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
@@ -70,6 +74,76 @@ async def worker_db_session(ctx: dict):
         yield session
 
 
+def tracked_job(job_name: str) -> Callable:
+    """
+    Decorator that wraps a worker job to emit job.completed/job.failed events.
+
+    Captures execution duration and any errors, logging them to the events table.
+    The user_id is extracted from job kwargs if present.
+
+    Args:
+        job_name: Human-readable name for the job (e.g., "ingest", "sync_xert")
+    """
+
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        async def wrapper(ctx: dict, **kwargs: Any) -> Any:
+            from trainingdash.domain.events import EventOutcome, EventType
+            from trainingdash.repositories.postgres.event_repo import PostgresEventRepo
+
+            user_id = kwargs.get("user_id")
+            start_time = time.monotonic()
+
+            try:
+                result = await func(ctx, **kwargs)
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+
+                # Emit job.completed event
+                async with worker_db_session(ctx) as db:
+                    event_repo = PostgresEventRepo(db)
+                    await event_repo.log(
+                        event_type=EventType.JOB_COMPLETED.value,
+                        outcome=EventOutcome.SUCCESS.value,
+                        user_id=user_id,
+                        payload={
+                            "job_name": job_name,
+                            "duration_ms": duration_ms,
+                        },
+                    )
+                    await db.commit()
+
+                return result
+
+            except Exception as e:
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                error_msg = str(e)[:500]
+
+                # Emit job.failed event
+                try:
+                    async with worker_db_session(ctx) as db:
+                        event_repo = PostgresEventRepo(db)
+                        await event_repo.log(
+                            event_type=EventType.JOB_FAILED.value,
+                            outcome=EventOutcome.FAILURE.value,
+                            user_id=user_id,
+                            payload={
+                                "job_name": job_name,
+                                "duration_ms": duration_ms,
+                                "error": error_msg,
+                            },
+                        )
+                        await db.commit()
+                except Exception:
+                    logger.exception("Failed to log job.failed event for %s", job_name)
+
+                raise
+
+        return wrapper
+
+    return decorator
+
+
+@tracked_job("ingest")
 async def ingest_job(ctx: dict, *, user_id: int, fit_bytes_b64: str, source: str, source_ref: str):
     """Ingest a FIT file and enqueue route matching.
 
@@ -93,6 +167,7 @@ async def ingest_job(ctx: dict, *, user_id: int, fit_bytes_b64: str, source: str
         return {"success": True, "activity_id": str(activity.id)}
 
 
+@tracked_job("match_route")
 async def match_route_job(ctx: dict, *, activity_id: str, user_id: int):
     """Match an activity to a route cluster (thin dispatch to MatchRoute use case)."""
     from trainingdash.use_cases.match_route import MatchRoute
@@ -101,6 +176,7 @@ async def match_route_job(ctx: dict, *, activity_id: str, user_id: int):
         return await MatchRoute(db).execute(activity_id, user_id)
 
 
+@tracked_job("recalculate_after_delete")
 async def recalculate_after_delete_job(ctx: dict, *, user_id: int) -> dict:
     """Recompute fitness model + breakthrough flags after a delete (thin dispatch)."""
     from trainingdash.use_cases.recalc_after_delete import RecalcAfterDelete
@@ -109,6 +185,7 @@ async def recalculate_after_delete_job(ctx: dict, *, user_id: int) -> dict:
         return await RecalcAfterDelete(db).execute(user_id)
 
 
+@tracked_job("sync_xert")
 async def sync_xert_job(ctx: dict, *, user_id: int):
     """
     Sync activities from Xert for a user.
@@ -134,6 +211,7 @@ async def sync_xert_job(ctx: dict, *, user_id: int):
         }
 
 
+@tracked_job("sync_garmin")
 async def sync_garmin_job(ctx: dict, *, user_id: int):
     """
     Sync activities from Garmin Connect for a user.
@@ -167,6 +245,7 @@ async def hourly_sync_scheduler(ctx: dict):
         return await HourlySyncScheduler(db).execute()
 
 
+@tracked_job("recalculate_metrics")
 async def recalculate_metrics_job(ctx: dict, *, user_id: int) -> dict:
     """
     Recompute training metrics (NP, IF, TSS, W'bal, zone times) for all

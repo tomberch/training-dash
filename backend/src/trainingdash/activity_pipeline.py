@@ -16,6 +16,7 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from trainingdash.domain.events import EventOutcome, EventType
 from trainingdash.domain.fitness import detect_breakthrough, get_all_time_bests
 from trainingdash.domain.metrics import (
     compute_intensity_factor,
@@ -26,6 +27,7 @@ from trainingdash.domain.peaks import extract_peak_powers
 from trainingdash.domain.thresholds import ThresholdValues
 from trainingdash.domain.wbal import compute_wbal_series
 from trainingdash.domain.zones import compute_zone_times
+from trainingdash.repositories.postgres.event_repo import PostgresEventRepo
 from trainingdash.repositories.postgres.models import (
     Activity,
     ActivityPeakPower,
@@ -591,6 +593,15 @@ class ActivityPipeline:
             self.activity.is_breakthrough = True
             await self.db.flush()
             await self.db.refresh(self.activity)
+
+            # Emit breakthrough.detected event
+            event_repo = PostgresEventRepo(self.db)
+            await event_repo.log(
+                event_type=EventType.BREAKTHROUGH_DETECTED.value,
+                outcome=EventOutcome.INFO.value,
+                user_id=self.activity.user_id,
+                payload={"activity_id": str(self.activity.id)},
+            )
 
             # Update fitness model (user-level recompute via use case)
             from trainingdash.use_cases.fitness_model_updater import FitnessModelUpdater

@@ -97,7 +97,7 @@ export function SavedFiltersDropdown({ className }: SavedFiltersDropdownProps): 
   const handleFilterClick = (filter: SavedFilter) => {
     setIsOpen(false);
     // Navigate to query page with the filter's query
-    navigate(`/query?q=${encodeURIComponent(filter.query)}`);
+    navigate(`/query?q=${encodeURIComponent(filter.query_text)}`);
   };
 
   const handleNewQuery = () => {
@@ -167,7 +167,7 @@ export function SavedFiltersDropdown({ className }: SavedFiltersDropdownProps): 
                         {filter.name}
                       </div>
                       <div className="text-xs text-muted-foreground truncate font-mono">
-                        {filter.query}
+                        {filter.query_text}
                       </div>
                     </div>
                   </button>

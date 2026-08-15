@@ -108,7 +108,6 @@ function getSuggestions(text: string, cursorPos: number): Suggestion[] {
   const textBeforeCursor = text.slice(0, start).trim().toLowerCase();
   
   // Determine context: are we after an operator?
-  const lastToken = textBeforeCursor.split(/\s+/).pop() || "";
   const isAfterDateField = /(?:date|started_at|start)\s*(?:=|!=|>|>=|<|<=)\s*$/i.test(textBeforeCursor);
   const isAfterOperator = /(?:=|!=|>|>=|<|<=)\s*$/i.test(textBeforeCursor);
 

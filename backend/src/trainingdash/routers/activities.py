@@ -259,7 +259,7 @@ async def get_activity_wbal(
 @router.get("/activities/{activity_id}/same-route")
 async def get_same_route_activities(db: DbSession, repo: ActivityRepoD, user: CurrentUser, activity_id: UUID):
     """Get other activities on the same route, filtered to same direction only.
-    
+
     Uses direction_bearing for fast O(1) comparison. Two activities are considered
     same-direction if their bearings are within 90° of each other.
     """

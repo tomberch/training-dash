@@ -88,14 +88,21 @@ export interface Token {
 }
 
 export class LexerError extends Error {
+  position: number;
+  line: number;
+  column: number;
+
   constructor(
     message: string,
-    public position: number,
-    public line: number,
-    public column: number
+    position: number,
+    line: number,
+    column: number
   ) {
     super(message);
     this.name = "LexerError";
+    this.position = position;
+    this.line = line;
+    this.column = column;
   }
 }
 
@@ -333,7 +340,6 @@ export class Lexer {
 
       // Check for time suffix
       if (this.peek() === "T" && this.isDigit(this.peek(1))) {
-        const timeStart = this.pos;
         this.advance(); // T
         // Read time: HH:MM:SS
         while (this.isDigit(this.peek()) || this.peek() === ":") {

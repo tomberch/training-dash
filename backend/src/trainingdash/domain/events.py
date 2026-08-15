@@ -8,10 +8,10 @@ to provide visibility into background operations.
 Event types follow a `domain.action` naming convention.
 """
 
-from enum import Enum
+from enum import StrEnum
 
 
-class EventOutcome(str, Enum):
+class EventOutcome(StrEnum):
     """Possible outcomes for an event."""
 
     SUCCESS = "success"
@@ -19,7 +19,7 @@ class EventOutcome(str, Enum):
     INFO = "info"
 
 
-class EventType(str, Enum):
+class EventType(StrEnum):
     """
     Canonical event types for the system event log.
 

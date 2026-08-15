@@ -139,7 +139,7 @@ describe("Field Registry", () => {
   });
 
   it("all aliases point to valid fields", () => {
-    for (const [alias, internal] of Object.entries(FIELD_ALIASES)) {
+    for (const [, internal] of Object.entries(FIELD_ALIASES)) {
       expect(FIELD_DEFINITIONS[internal]).toBeDefined();
     }
   });

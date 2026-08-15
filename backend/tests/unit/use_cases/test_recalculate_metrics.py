@@ -11,6 +11,14 @@ from trainingdash.use_cases import RecalculateMetrics
 class MockAsyncSession:
     """Minimal mock for AsyncSession to satisfy the use case."""
 
+    def add(self, obj):
+        """Mock add method for event logging."""
+        pass
+
+    async def flush(self):
+        """Mock flush method for event logging."""
+        pass
+
     async def commit(self):
         pass
 
