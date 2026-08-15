@@ -27,6 +27,9 @@ interface MiniMapProps {
 }
 
 export function MiniMap({ geojson, className = "" }: MiniMapProps) {
+  // Get tile URL from user preference (must be called before any conditional returns)
+  const { url: tileUrl } = useTileConfig();
+
   // Extract positions from GeoJSON
   const positions: [number, number][] = geojson
     ? geojson.features
@@ -47,9 +50,6 @@ export function MiniMap({ geojson, className = "" }: MiniMapProps) {
     positions.reduce((sum, p) => sum + p[0], 0) / positions.length,
     positions.reduce((sum, p) => sum + p[1], 0) / positions.length,
   ];
-
-  // Get tile URL from user preference
-  const { url: tileUrl } = useTileConfig();
 
   return (
     <div className={`rounded-lg overflow-hidden ${className}`}>

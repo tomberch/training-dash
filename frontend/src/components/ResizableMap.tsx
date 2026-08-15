@@ -66,15 +66,15 @@ export function ResizableMap({
   isResizing,
   showResizeHandle = true,
 }: ResizableMapProps) {
+  // Get tile URL from user preference (must be called before any conditional returns)
+  const { url: tileUrl, attribution } = useTileConfig();
+
   if (positions.length === 0) return null;
 
   const center: [number, number] = [
     positions.reduce((sum, p) => sum + p[0], 0) / positions.length,
     positions.reduce((sum, p) => sum + p[1], 0) / positions.length,
   ];
-
-  // Get tile URL from user preference
-  const { url: tileUrl, attribution } = useTileConfig();
 
   return (
     <div className="relative">
