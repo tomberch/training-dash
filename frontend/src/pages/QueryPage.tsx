@@ -1,5 +1,5 @@
 import type { JSX } from "react";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { PageHeader } from "../components/PageHeader";
 import { QueryBuilder } from "../components/QueryBuilder";
@@ -495,14 +495,21 @@ export function QueryPage(): JSX.Element {
   const [page, setPage] = useState(1);
 
   // Sync query from URL when it changes externally (e.g., browser navigation)
+  // Use a ref to track if we should skip the next URL sync (after we update URL ourselves)
+  const skipUrlSyncRef = useRef(false);
+  
   useEffect(() => {
+    if (skipUrlSyncRef.current) {
+      skipUrlSyncRef.current = false;
+      return;
+    }
     const q = searchParams.get("q");
     if (q !== null && q !== query) {
       setQuery(q);
       // Switch to text mode when URL has a query
       if (q) setMode("text");
     }
-  }, [searchParams, query]);
+  }, [searchParams]); // Remove query from deps to avoid loop
 
   const runQuery = useCallback(async (queryText: string, pageNum: number = 1) => {
     if (!queryText.trim()) return;
@@ -514,7 +521,8 @@ export function QueryPage(): JSX.Element {
       const result = await executeQuery(queryText, pageNum, 20);
       setResponse(result);
       setPage(pageNum);
-      // Update URL
+      // Update URL - mark to skip the next sync
+      skipUrlSyncRef.current = true;
       setSearchParams({ q: queryText }, { replace: true });
     } catch (err) {
       if (err instanceof QueryError) {
