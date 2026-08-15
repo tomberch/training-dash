@@ -294,7 +294,7 @@ export function PMCView() {
             />
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height={400}>
+          <ResponsiveContainer width="100%" height={600}>
             <LineChart data={pmcData}>
               {/* TSB zone backgrounds */}
               {TSB_ZONES.map((zone) => (
