@@ -156,6 +156,7 @@ export function Settings({ user, onUserUpdate }: SettingsProps) {
       <div className="space-y-6">
         <ProfileSection user={user} onUserUpdate={onUserUpdate} />
         <PreferencesSection user={user} onUserUpdate={onUserUpdate} />
+        <MapSection user={user} onUserUpdate={onUserUpdate} />
         <PowerHeartRateSection user={user} onUserUpdate={onUserUpdate} />
         <ConnectedAccountsSection />
         <ZonesSection user={user} onUserUpdate={onUserUpdate} />
@@ -487,6 +488,120 @@ function PreferencesSection({ user, onUserUpdate }: { user: User; onUserUpdate: 
           </div>
         </div>
         
+        <FeedbackAlert feedback={feedback} />
+      </CardContent>
+    </Card>
+  );
+}
+
+
+// Map tile style options with preview images
+const MAP_TILE_STYLES = [
+  {
+    value: "osm" as const,
+    label: "OpenStreetMap",
+    preview: "/map-previews/osm.png",
+  },
+  {
+    value: "positron" as const,
+    label: "Positron",
+    preview: "/map-previews/positron.png",
+  },
+  {
+    value: "dark_matter" as const,
+    label: "Dark Matter",
+    preview: "/map-previews/dark_matter.png",
+  },
+  {
+    value: "voyager" as const,
+    label: "Voyager",
+    preview: "/map-previews/voyager.png",
+  },
+];
+
+function MapSection({ user, onUserUpdate }: { user: User; onUserUpdate: (user: User) => void }) {
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  async function handleStyleChange(style: typeof user.map_tile_style) {
+    if (style === user.map_tile_style) return;
+    
+    setSaving(true);
+    setFeedback(null);
+    try {
+      const updated = await updatePreferences({ map_tile_style: style });
+      onUserUpdate(updated);
+      setFeedback({ type: "success", message: "Map style updated" });
+      setTimeout(() => setFeedback(null), 3000);
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Failed to update map style";
+      setFeedback({ type: "error", message });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card className="card-hover">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-card-title">
+          <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          Map
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="mb-4">
+          <h3 className="font-medium mb-1">Map Style</h3>
+          <p className="text-body-secondary">
+            Choose how maps appear throughout the app
+          </p>
+        </div>
+
+        {/* 2x2 grid of style cards */}
+        <div className="grid grid-cols-2 gap-3 max-w-2xl">
+          {MAP_TILE_STYLES.map(({ value, label, preview }) => {
+            const isSelected = user.map_tile_style === value;
+            return (
+              <button
+                key={value}
+                onClick={() => handleStyleChange(value)}
+                disabled={saving}
+                className={cn(
+                  "relative rounded-lg overflow-hidden border-2 transition-all text-left aspect-[16/7]",
+                  isSelected
+                    ? "border-primary ring-2 ring-primary/20"
+                    : "border-border hover:border-muted-foreground/50",
+                  saving && "opacity-50 cursor-not-allowed"
+                )}
+              >
+                {/* Preview image */}
+                <img
+                  src={preview}
+                  alt={`${label} map style preview`}
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+                
+                {/* Label overlaid on image */}
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5">
+                  <span className="text-sm font-medium text-white">{label}</span>
+                </div>
+
+                {/* Checkmark badge for selected */}
+                {isSelected && (
+                  <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-primary flex items-center justify-center shadow-md">
+                    <svg className="w-3 h-3 text-primary-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
         <FeedbackAlert feedback={feedback} />
       </CardContent>
     </Card>

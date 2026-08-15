@@ -44,6 +44,7 @@ class User(Base):
     power_zone_percentages = mapped_column(JSONB, nullable=True)  # custom zone % overrides
     hr_zone_percentages = mapped_column(JSONB, nullable=True)  # custom zone % overrides
     hr_derived_power_enabled: Mapped[bool] = mapped_column(default=False)
+    map_tile_style: Mapped[str] = mapped_column(String(20), default="osm", nullable=False)
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
 
 

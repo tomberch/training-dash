@@ -111,6 +111,11 @@ def create_app() -> FastAPI:
         # Serve static assets (JS, CSS, etc.)
         app.mount("/assets", StaticFiles(directory=static_dir / "assets"), name="assets")
 
+        # Serve map preview images
+        map_previews_dir = static_dir / "map-previews"
+        if map_previews_dir.exists():
+            app.mount("/map-previews", StaticFiles(directory=map_previews_dir), name="map-previews")
+
     # Serve uploaded files (avatars, etc.)
     uploads_dir = Path(os.environ.get("TRAININGDASH_UPLOADS_DIR", "/app/uploads"))
     uploads_dir.mkdir(parents=True, exist_ok=True)

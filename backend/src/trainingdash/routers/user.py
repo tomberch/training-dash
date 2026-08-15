@@ -66,6 +66,7 @@ class UpdateMeRequest(BaseModel):
     power_zone_percentages: dict | None = None
     hr_zone_percentages: dict | None = None
     hr_derived_power_enabled: bool | None = None
+    map_tile_style: str | None = None
 
 
 @router.patch("/me")
@@ -123,6 +124,15 @@ async def update_me(db: DbSession, user: CurrentUser, request: UpdateMeRequest):
 
     if request.hr_derived_power_enabled is not None:
         user.hr_derived_power_enabled = request.hr_derived_power_enabled
+
+    if request.map_tile_style is not None:
+        valid_styles = ("osm", "positron", "dark_matter", "voyager")
+        if request.map_tile_style not in valid_styles:
+            raise HTTPException(
+                status_code=400,
+                detail=f"map_tile_style must be one of: {', '.join(valid_styles)}",
+            )
+        user.map_tile_style = request.map_tile_style
 
     await db.commit()
     await db.refresh(user)

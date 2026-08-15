@@ -10,6 +10,7 @@ import "./App.css";
 import { OnboardingDialog } from "./components/OnboardingDialog";
 import { CommandMenu } from "./components/CommandMenu";
 import { Toaster } from "./components/ui/sonner";
+import { UserContext } from "./contexts/UserContext";
 
 // Lazy-loaded page components for code splitting
 const ActivityDetail = lazy(() => import("./ActivityDetail").then(m => ({ default: m.ActivityDetail })));
@@ -284,13 +285,15 @@ export default function App() {
   }
 
   return (
-    <BrowserRouter>
-      <AppLayout user={user} onLogout={handleLogout} onUserUpdate={setUser} />
-      <OnboardingDialog
-        open={showOnboarding}
-        onDone={() => setShowOnboarding(false)}
-      />
-      <Toaster />
-    </BrowserRouter>
+    <UserContext.Provider value={{ user, updateUser: setUser }}>
+      <BrowserRouter>
+        <AppLayout user={user} onLogout={handleLogout} onUserUpdate={setUser} />
+        <OnboardingDialog
+          open={showOnboarding}
+          onDone={() => setShowOnboarding(false)}
+        />
+        <Toaster />
+      </BrowserRouter>
+    </UserContext.Provider>
   );
 }

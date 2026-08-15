@@ -182,6 +182,7 @@ export interface User {
   power_zone_percentages: Record<string, [number, number | null]> | null;
   hr_zone_percentages: Record<string, [number, number | null]> | null;
   hr_derived_power_enabled: boolean;
+  map_tile_style: "osm" | "positron" | "dark_matter" | "voyager";
   hr_power_model: HrPowerModelStatus | null;
 }
 
@@ -563,6 +564,7 @@ export async function updatePreferences(prefs: {
   power_zone_percentages?: Record<string, [number, number | null]> | null;
   hr_zone_percentages?: Record<string, [number, number | null]> | null;
   hr_derived_power_enabled?: boolean;
+  map_tile_style?: "osm" | "positron" | "dark_matter" | "voyager";
 }): Promise<User> {
   return apiPatch<User>("/me", prefs, "Failed to update preferences");
 }

@@ -30,6 +30,7 @@ def user_response(user: User) -> dict:
         "power_zone_percentages": user.power_zone_percentages,
         "hr_zone_percentages": user.hr_zone_percentages,
         "hr_derived_power_enabled": user.hr_derived_power_enabled,
+        "map_tile_style": user.map_tile_style,
     }
 
 

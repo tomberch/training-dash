@@ -22,10 +22,11 @@ _OSM_TILE_URL = "https://tile.openstreetmap.org"
 _CARTO_TILE_URL = "https://a.basemaps.cartocdn.com"
 
 # Carto style mapping (Literal type ensures only these values are accepted)
-CartoStyle = Literal["light", "dark"]
+CartoStyle = Literal["light", "dark", "voyager"]
 _CARTO_STYLES: dict[CartoStyle, str] = {
     "light": "light_all",
     "dark": "dark_all",
+    "voyager": "rastertiles/voyager",
 }
 
 
@@ -135,9 +136,10 @@ async def get_carto_tile(style: CartoStyle, z: int, x: int, y: int) -> FileRespo
     """
     Proxy and cache CartoDB (CARTO) raster tiles.
 
-    Supports two styles:
-      - light  → Positron (clean light grey, used in latte theme)
-      - dark   → Dark Matter (dark background, used in mocha theme)
+    Supports three styles:
+      - light   → Positron (clean light grey)
+      - dark    → Dark Matter (dark background)
+      - voyager → Voyager (colored, warmer map with road hierarchy)
 
     Tiles are cached to disk for 30 days.
     """

@@ -3,6 +3,7 @@ import { MapContainer, Polyline, TileLayer, useMap } from "react-leaflet";
 import type { LatLngBounds } from "leaflet";
 import L from "leaflet";
 import type { GeoJSONFeatureCollection } from "../api";
+import { useTileConfig } from "../hooks/useTileUrl";
 
 // Component to fit map bounds to polyline
 function FitBounds({ positions }: { positions: [number, number][] }) {
@@ -47,6 +48,9 @@ export function MiniMap({ geojson, className = "" }: MiniMapProps) {
     positions.reduce((sum, p) => sum + p[1], 0) / positions.length,
   ];
 
+  // Get tile URL from user preference
+  const { url: tileUrl } = useTileConfig();
+
   return (
     <div className={`rounded-lg overflow-hidden ${className}`}>
       <MapContainer
@@ -58,7 +62,7 @@ export function MiniMap({ geojson, className = "" }: MiniMapProps) {
         attributionControl={false}
         style={{ height: "100%", width: "100%" }}
       >
-        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+        <TileLayer url={tileUrl} />
         <Polyline positions={positions} color="#6366f1" weight={3} />
         <FitBounds positions={positions} />
       </MapContainer>

@@ -2,6 +2,7 @@ import { MapContainer, Polyline, TileLayer, Marker, CircleMarker, useMap } from 
 import type { LatLngBounds } from "leaflet";
 import L from "leaflet";
 import { useEffect, useRef } from "react";
+import { useTileConfig } from "../hooks/useTileUrl";
 
 // Component to fit map bounds to polyline - only runs once on initial load
 function FitBounds({ positions }: { positions: [number, number][] }) {
@@ -72,9 +73,8 @@ export function ResizableMap({
     positions.reduce((sum, p) => sum + p[1], 0) / positions.length,
   ];
 
-  // OSM tiles via backend proxy
-  const tileUrl = "/tiles/{z}/{x}/{y}.png";
-  const attribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+  // Get tile URL from user preference
+  const { url: tileUrl, attribution } = useTileConfig();
 
   return (
     <div className="relative">

@@ -4,9 +4,11 @@
  * Unlike MiniMap which uses Leaflet tiles, this renders the route as a
  * pure SVG path - much faster for list views with many activities.
  *
- * When showMapBackground is true, displays a grid of OSM raster tiles
+ * When showMapBackground is true, displays a grid of raster tiles
  * composited behind the SVG route overlay.
  */
+
+import { useTileConfig } from "../hooks/useTileUrl";
 
 interface PolylineMapProps {
   /** Google-encoded polyline string */
@@ -284,6 +286,9 @@ export function PolylineMap({
   showMarkers = true,
   showMapBackground = true,
 }: PolylineMapProps) {
+  // Get tile URL from user preference
+  const { baseUrl: tileBase } = useTileConfig();
+
   // Decode polyline
   const coords = polyline ? decodePolyline(polyline) : [];
 
@@ -307,9 +312,6 @@ export function PolylineMap({
   const tileGrid: TileGrid | null = showMapBackground
     ? getTileGrid(bounds.minLat, bounds.maxLat, bounds.minLon, bounds.maxLon, containerW, containerH)
     : null;
-
-  // OSM tile base URL via backend proxy
-  const tileBase = "/tiles";
 
   return (
     <div className={`relative rounded overflow-hidden ${className}`}>
