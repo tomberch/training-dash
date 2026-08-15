@@ -143,7 +143,7 @@ async def execute_query_endpoint(
             "LPAREN": "(",
             "RPAREN": ")",
         }
-        
+
         # Clean up suggestions
         suggestions = None
         if hasattr(e, "expected") and e.expected:
@@ -154,7 +154,7 @@ async def execute_query_endpoint(
                 mapped = token_map.get(s, s)
                 if mapped not in suggestions:
                     suggestions.append(mapped)
-        
+
         # Clean up error message - replace internal tokens with user-friendly names
         message = e.message
         for internal, friendly in token_map.items():
@@ -163,7 +163,7 @@ async def execute_query_endpoint(
         import re
         message = re.sub(r',?\s*__ANON_\d+', '', message)
         message = re.sub(r'__ANON_\d+,?\s*', '', message)
-        
+
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={

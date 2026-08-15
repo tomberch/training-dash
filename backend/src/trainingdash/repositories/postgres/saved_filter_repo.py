@@ -67,7 +67,7 @@ class PostgresSavedFilterRepo:
         result = await self._db.execute(
             select(SavedFilter).where(
                 SavedFilter.user_id == user_id,
-                SavedFilter.is_default == True,  # noqa: E712
+                SavedFilter.is_default == True,
             )
         )
         return result.scalar_one_or_none()
@@ -165,7 +165,7 @@ class PostgresSavedFilterRepo:
             update(SavedFilter)
             .where(
                 SavedFilter.user_id == user_id,
-                SavedFilter.is_default == True,  # noqa: E712
+                SavedFilter.is_default == True,
             )
             .values(is_default=False)
         )
