@@ -1090,8 +1090,10 @@ export async function executeQuery(
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    if (body.error) {
-      throw new QueryError(body.error);
+    // FastAPI wraps HTTPException detail, so error is in body.detail.error
+    const errorDetail = body.detail?.error || body.error;
+    if (errorDetail) {
+      throw new QueryError(errorDetail);
     }
     const { detail, errorId } = await extractError(res, "Query failed");
     throw new ApiError(detail, res.status, errorId);
