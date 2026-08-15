@@ -22,13 +22,11 @@ logger = logging.getLogger(__name__)
 
 
 async def rematch_all_routes():
-    from trainingdash.repositories.postgres.models import Activity, Record, Route
-    from trainingdash.route_matching import find_or_create_route_id, HAUSDORFF_THRESHOLD_M
     from trainingdash.domain.direction import compute_direction_bearing
+    from trainingdash.repositories.postgres.models import Activity, Record, Route
+    from trainingdash.route_matching import HAUSDORFF_THRESHOLD_M, find_or_create_route_id
 
-    engine = create_async_engine(
-        "postgresql+asyncpg://trainingdash:trainingdash@db:5432/trainingdash"
-    )
+    engine = create_async_engine("postgresql+asyncpg://trainingdash:trainingdash@db:5432/trainingdash")
     async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     async with async_session() as session:
@@ -41,9 +39,7 @@ async def rematch_all_routes():
 
         # Clear route assignments and delete routes
         logger.info("Clearing existing route assignments...")
-        await session.execute(
-            update(Activity).values(route_id=None, direction_bearing=None)
-        )
+        await session.execute(update(Activity).values(route_id=None, direction_bearing=None))
         await session.execute(text("DELETE FROM routes"))
         await session.commit()
         logger.info("Cleared all route data")
@@ -52,9 +48,7 @@ async def rematch_all_routes():
         for i, activity in enumerate(activities, 1):
             # Load GPS records
             records_result = await session.execute(
-                select(Record)
-                .where(Record.activity_id == activity.id)
-                .order_by(Record.timestamp)
+                select(Record).where(Record.activity_id == activity.id).order_by(Record.timestamp)
             )
             records = list(records_result.scalars().all())
 
@@ -63,13 +57,9 @@ async def rematch_all_routes():
                 continue
 
             # Compute direction bearing
-            gps_points = [
-                (r.lat, r.lon, r.distance_m)
-                for r in records
-                if r.lat is not None and r.lon is not None
-            ]
+            gps_points = [(r.lat, r.lon, r.distance_m) for r in records if r.lat is not None and r.lon is not None]
             direction_bearing = compute_direction_bearing(gps_points)
-            
+
             # Match route
             route_id = await find_or_create_route_id(session, activity, records)
 
@@ -77,10 +67,7 @@ async def rematch_all_routes():
                 activity.route_id = route_id
                 activity.direction_bearing = direction_bearing
                 await session.commit()
-                logger.info(
-                    f"  [{i}/{len(activities)}] {activity.id}: "
-                    f"route={route_id}, bearing={direction_bearing}"
-                )
+                logger.info(f"  [{i}/{len(activities)}] {activity.id}: route={route_id}, bearing={direction_bearing}")
             else:
                 logger.info(f"  [{i}/{len(activities)}] {activity.id}: No route match (no GPS data)")
 
@@ -88,7 +75,7 @@ async def rematch_all_routes():
         result = await session.execute(select(Route))
         routes = result.scalars().all()
         logger.info(f"\nDone! Created {len(routes)} route clusters from {len(activities)} activities")
-        
+
         for route in sorted(routes, key=lambda r: -r.ride_count)[:10]:
             logger.info(f"  Route {route.id}: {route.ride_count} rides")
 

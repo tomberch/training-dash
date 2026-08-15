@@ -161,8 +161,9 @@ async def execute_query_endpoint(
             message = message.replace(internal, friendly)
         # Remove __ANON_* references from message
         import re
-        message = re.sub(r',?\s*__ANON_\d+', '', message)
-        message = re.sub(r'__ANON_\d+,?\s*', '', message)
+
+        message = re.sub(r",?\s*__ANON_\d+", "", message)
+        message = re.sub(r"__ANON_\d+,?\s*", "", message)
 
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

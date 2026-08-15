@@ -1,6 +1,5 @@
 """Tests for direction detection functions."""
 
-
 from trainingdash.domain.direction import (
     bearings_match,
     compute_direction_bearing,
@@ -25,10 +24,7 @@ class TestComputeDirectionBearing:
     def test_returns_bearing_for_valid_route(self):
         """Should return integer bearing 0-359 for valid GPS data."""
         # Create a ~3km route heading roughly North
-        points = [
-            (46.79 + i * 0.005, 7.50, i * 500.0)
-            for i in range(20)
-        ]
+        points = [(46.79 + i * 0.005, 7.50, i * 500.0) for i in range(20)]
         result = compute_direction_bearing(points)
         assert result is not None
         assert isinstance(result, int)
@@ -37,10 +33,7 @@ class TestComputeDirectionBearing:
     def test_northbound_route_returns_north_bearing(self):
         """Route heading north should return bearing close to 0."""
         # Create route heading North (increasing latitude)
-        points = [
-            (46.79 + i * 0.005, 7.50, i * 500.0)
-            for i in range(20)
-        ]
+        points = [(46.79 + i * 0.005, 7.50, i * 500.0) for i in range(20)]
         bearing = compute_direction_bearing(points)
         # Should be close to 0 (North)
         assert bearing is not None
@@ -49,10 +42,7 @@ class TestComputeDirectionBearing:
     def test_southbound_route_returns_south_bearing(self):
         """Route heading south should return bearing close to 180."""
         # Create route heading South (decreasing latitude)
-        points = [
-            (46.89 - i * 0.005, 7.50, i * 500.0)
-            for i in range(20)
-        ]
+        points = [(46.89 - i * 0.005, 7.50, i * 500.0) for i in range(20)]
         bearing = compute_direction_bearing(points)
         # Should be close to 180 (South)
         assert bearing is not None
@@ -61,10 +51,7 @@ class TestComputeDirectionBearing:
     def test_eastbound_route_returns_east_bearing(self):
         """Route heading east should return bearing close to 90."""
         # Create route heading East (increasing longitude)
-        points = [
-            (46.79, 7.50 + i * 0.007, i * 500.0)
-            for i in range(20)
-        ]
+        points = [(46.79, 7.50 + i * 0.007, i * 500.0) for i in range(20)]
         bearing = compute_direction_bearing(points)
         # Should be close to 90 (East)
         assert bearing is not None
@@ -73,10 +60,7 @@ class TestComputeDirectionBearing:
     def test_westbound_route_returns_west_bearing(self):
         """Route heading west should return bearing close to 270."""
         # Create route heading West (decreasing longitude)
-        points = [
-            (46.79, 7.60 - i * 0.007, i * 500.0)
-            for i in range(20)
-        ]
+        points = [(46.79, 7.60 - i * 0.007, i * 500.0) for i in range(20)]
         bearing = compute_direction_bearing(points)
         # Should be close to 270 (West)
         assert bearing is not None
@@ -85,16 +69,10 @@ class TestComputeDirectionBearing:
     def test_same_route_same_direction_produces_similar_bearings(self):
         """Two runs of same route in same direction should have similar bearings."""
         # Route A: heading NE
-        points_a = [
-            (46.79 + i * 0.004, 7.50 + i * 0.003, i * 500.0)
-            for i in range(20)
-        ]
+        points_a = [(46.79 + i * 0.004, 7.50 + i * 0.003, i * 500.0) for i in range(20)]
 
         # Route B: same direction, slightly different starting point
-        points_b = [
-            (46.791 + i * 0.004, 7.501 + i * 0.003, i * 500.0)
-            for i in range(20)
-        ]
+        points_b = [(46.791 + i * 0.004, 7.501 + i * 0.003, i * 500.0) for i in range(20)]
 
         bearing_a = compute_direction_bearing(points_a)
         bearing_b = compute_direction_bearing(points_b)
@@ -110,16 +88,10 @@ class TestComputeDirectionBearing:
     def test_opposite_directions_produce_opposite_bearings(self):
         """Routes going opposite directions should have ~180° different bearings."""
         # Route A: heading North
-        points_a = [
-            (46.79 + i * 0.005, 7.50, i * 500.0)
-            for i in range(20)
-        ]
+        points_a = [(46.79 + i * 0.005, 7.50, i * 500.0) for i in range(20)]
 
         # Route B: heading South (reverse of A)
-        points_b = [
-            (46.89 - i * 0.005, 7.50, i * 500.0)
-            for i in range(20)
-        ]
+        points_b = [(46.89 - i * 0.005, 7.50, i * 500.0) for i in range(20)]
 
         bearing_a = compute_direction_bearing(points_a)
         bearing_b = compute_direction_bearing(points_b)
@@ -135,10 +107,7 @@ class TestComputeDirectionBearing:
     def test_handles_none_distances(self):
         """Should compute distance from coordinates when distance_m is None."""
         # Create route without distance data
-        points = [
-            (46.79 + i * 0.005, 7.50, None)
-            for i in range(20)
-        ]
+        points = [(46.79 + i * 0.005, 7.50, None) for i in range(20)]
         result = compute_direction_bearing(points)
         assert result is not None
         assert isinstance(result, int)

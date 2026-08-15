@@ -144,6 +144,3 @@ def _haversine_bearing(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
 
     bearing = math.degrees(math.atan2(x, y))
     return (bearing + 360) % 360
-
-
-

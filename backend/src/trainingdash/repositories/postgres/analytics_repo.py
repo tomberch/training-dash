@@ -109,9 +109,7 @@ class PostgresAnalyticsRepo:
         result = await self._session.execute(query)
         return list(result.all())
 
-    async def get_records(
-        self, user_id: int, route_limit: int = 20, route_offset: int = 0
-    ) -> RecordsView:
+    async def get_records(self, user_id: int, route_limit: int = 20, route_offset: int = 0) -> RecordsView:
         """Lifetime PRs + per-route PRs in a single composite query.
 
         Replaces the old 5+N query implementation:
@@ -138,10 +136,7 @@ class PostgresAnalyticsRepo:
         ]
 
         for key, column, extra_filter in max_prs:
-            query = (
-                select(Activity.id, column)
-                .where(Activity.user_id == user_id, column.isnot(None))
-            )
+            query = select(Activity.id, column).where(Activity.user_id == user_id, column.isnot(None))
             if extra_filter is not None:
                 query = query.where(extra_filter)
             query = query.order_by(column.desc()).limit(1)
@@ -178,9 +173,7 @@ class PostgresAnalyticsRepo:
 
         return prs
 
-    async def _get_route_prs(
-        self, user_id: int, limit: int = 20, offset: int = 0
-    ) -> RoutePrsPage:
+    async def _get_route_prs(self, user_id: int, limit: int = 20, offset: int = 0) -> RoutePrsPage:
         """Per-route fastest times with activity title and polyline.
 
         For each route, finds the activity with the fastest elapsed_time_s
@@ -217,11 +210,7 @@ class PostgresAnalyticsRepo:
 
         # Count total unique routes
         count_result = await self._session.execute(
-            select(func.count()).select_from(
-                select(subq.c.route_id)
-                .where(literal_column("rn") == 1)
-                .subquery()
-            )
+            select(func.count()).select_from(select(subq.c.route_id).where(literal_column("rn") == 1).subquery())
         )
         total = count_result.scalar() or 0
 

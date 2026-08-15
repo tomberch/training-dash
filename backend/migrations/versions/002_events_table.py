@@ -58,9 +58,7 @@ def upgrade() -> None:
     )
 
     # Filter by user (partial index - only non-null user_ids)
-    op.execute(
-        "CREATE INDEX idx_events_user_id ON events (user_id) WHERE user_id IS NOT NULL"
-    )
+    op.execute("CREATE INDEX idx_events_user_id ON events (user_id) WHERE user_id IS NOT NULL")
 
     # Index for pruning queries: finding old events to delete
     op.create_index(

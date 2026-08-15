@@ -335,6 +335,7 @@ class RecalculationJob(Base):
     activities_updated: Mapped[int | None] = mapped_column(Integer, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+
 class Event(Base):
     """System event log entry for the Admin System Dashboard.
 
@@ -345,15 +346,12 @@ class Event(Base):
     __tablename__ = "events"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=text("now()")
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
     event_type: Mapped[str] = mapped_column(String(50), nullable=False)
     outcome: Mapped[str] = mapped_column(String(10), nullable=False)
-    user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=True
-    )
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
     payload: Mapped[dict] = mapped_column(JSONB, server_default=text("'{}'::jsonb"), nullable=False)
+
 
 class CacheStats(Base):
     """Hourly cache hit/miss statistics for the Admin System Dashboard.
@@ -363,9 +361,7 @@ class CacheStats(Base):
     """
 
     __tablename__ = "cache_stats"
-    __table_args__ = (
-        UniqueConstraint("bucket_start", "cache_type", name="uq_cache_stats_bucket_type"),
-    )
+    __table_args__ = (UniqueConstraint("bucket_start", "cache_type", name="uq_cache_stats_bucket_type"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     bucket_start: Mapped[datetime] = mapped_column(nullable=False)

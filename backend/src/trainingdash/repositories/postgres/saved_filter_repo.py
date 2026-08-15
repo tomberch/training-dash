@@ -57,9 +57,7 @@ class PostgresSavedFilterRepo:
 
     async def list_for_user(self, user_id: int) -> list[SavedFilter]:
         result = await self._db.execute(
-            select(SavedFilter)
-            .where(SavedFilter.user_id == user_id)
-            .order_by(SavedFilter.name)
+            select(SavedFilter).where(SavedFilter.user_id == user_id).order_by(SavedFilter.name)
         )
         return list(result.scalars().all())
 

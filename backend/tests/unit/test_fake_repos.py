@@ -272,7 +272,6 @@ class TestFakeOAuthLinkRepo:
         assert link is None
 
 
-
 class TestFakeEventRepo:
     """Demonstrates FakeEventRepo usage."""
 

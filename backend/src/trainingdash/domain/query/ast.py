@@ -159,9 +159,7 @@ class DateValue:
 class RelativeDate:
     """A relative date expression like NOW - 30d."""
 
-    base: Literal[
-        "NOW", "TODAY", "START_OF_DAY", "START_OF_WEEK", "START_OF_MONTH", "START_OF_YEAR"
-    ]
+    base: Literal["NOW", "TODAY", "START_OF_DAY", "START_OF_WEEK", "START_OF_MONTH", "START_OF_YEAR"]
     offset_days: int | None = None  # Positive or negative offset in days
 
 

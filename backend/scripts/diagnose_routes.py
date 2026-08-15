@@ -13,15 +13,13 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
+from trainingdash.domain.direction import bearings_match
 from trainingdash.repositories.postgres.models import Activity, Record, Route
-from trainingdash.route_matching import build_linestring_wkt, _meters_to_deg, HAUSDORFF_THRESHOLD_M
-from trainingdash.domain.direction import compute_direction_bearing, bearings_match
+from trainingdash.route_matching import HAUSDORFF_THRESHOLD_M, _meters_to_deg, build_linestring_wkt
 
 
 async def diagnose(activity_id_1: str, activity_id_2: str):
-    engine = create_async_engine(
-        "postgresql+asyncpg://trainingdash:trainingdash@localhost:5432/trainingdash"
-    )
+    engine = create_async_engine("postgresql+asyncpg://trainingdash:trainingdash@localhost:5432/trainingdash")
     async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     async with async_session() as session:
@@ -75,7 +73,7 @@ async def diagnose(activity_id_1: str, activity_id_2: str):
         print("=" * 60)
         b1, b2 = a1.direction_bearing, a2.direction_bearing
         match = bearings_match(b1, b2)
-        
+
         if b1 is None or b2 is None:
             print(f"  Bearing 1: {b1}")
             print(f"  Bearing 2: {b2}")
@@ -87,7 +85,7 @@ async def diagnose(activity_id_1: str, activity_id_2: str):
             print(f"  Bearing 1: {b1}°")
             print(f"  Bearing 2: {b2}°")
             print(f"  Angular difference: {diff}°")
-            print(f"  Threshold: 90°")
+            print("  Threshold: 90°")
             print(f"  Match: {match}")
             if not match:
                 print()
@@ -102,7 +100,7 @@ async def diagnose(activity_id_1: str, activity_id_2: str):
         print("=" * 60)
         print("GPS TRACK ANALYSIS")
         print("=" * 60)
-        
+
         records_1_result = await session.execute(
             select(Record).where(Record.activity_id == a1.id).order_by(Record.timestamp)
         )
@@ -123,7 +121,7 @@ async def diagnose(activity_id_1: str, activity_id_2: str):
             gps_1 = [(r.lat, r.lon) for r in records_1 if r.lat and r.lon]
             gps_2 = [(r.lat, r.lon) for r in records_2 if r.lat and r.lon]
             mid_lat = (sum(lat for lat, _ in gps_1) / len(gps_1) + sum(lat for lat, _ in gps_2) / len(gps_2)) / 2
-            
+
             tolerance_deg = _meters_to_deg(50.0, mid_lat)
             threshold_deg = _meters_to_deg(HAUSDORFF_THRESHOLD_M, mid_lat)
 
@@ -134,23 +132,24 @@ async def diagnose(activity_id_1: str, activity_id_2: str):
                     CAST(ST_SetSRID(ST_Simplify(ST_GeomFromText(:wkt2, 4326), :tol), 4326) AS geometry)
                 ) AS distance
             """).params(wkt1=wkt1, wkt2=wkt2, tol=tolerance_deg)
-            
+
             result = await session.execute(query)
             distance_deg = result.scalar()
-            
+
             if distance_deg is not None:
                 # Convert back to approximate meters
                 distance_m = distance_deg * 111000.0 * abs(float(mid_lat)) if mid_lat else distance_deg * 111000.0
                 # More accurate conversion
                 import math
+
                 distance_m = distance_deg * 111000.0 * math.cos(math.radians(mid_lat))
-                
+
                 print()
                 print(f"  Hausdorff distance: {distance_deg:.8f}° ≈ {distance_m:.1f}m")
                 print(f"  Threshold: {threshold_deg:.8f}° = {HAUSDORFF_THRESHOLD_M}m")
-                
+
                 if distance_m <= HAUSDORFF_THRESHOLD_M:
-                    print(f"  ✓ Distance is within threshold - tracks SHOULD match")
+                    print("  ✓ Distance is within threshold - tracks SHOULD match")
                     if a1.route_id != a2.route_id:
                         print()
                         print("  ⚠ BUG: Activities have different route_ids despite being within threshold!")
@@ -158,7 +157,7 @@ async def diagnose(activity_id_1: str, activity_id_2: str):
                         print("    - Route matching ran at different times with different existing routes")
                         print("    - Latitude difference caused different threshold calculations")
                 else:
-                    print(f"  ✗ Distance exceeds threshold - tracks correctly don't match")
+                    print("  ✗ Distance exceeds threshold - tracks correctly don't match")
         else:
             print("  Could not build WKT for one or both activities (missing GPS data)")
 
@@ -169,9 +168,7 @@ async def diagnose(activity_id_1: str, activity_id_2: str):
             print("ROUTE DETAILS")
             print("=" * 60)
             route_ids = [r for r in [a1.route_id, a2.route_id] if r]
-            result = await session.execute(
-                select(Route).where(Route.id.in_(route_ids))
-            )
+            result = await session.execute(select(Route).where(Route.id.in_(route_ids)))
             routes = result.scalars().all()
             for route in routes:
                 print(f"  Route {route.id}:")
@@ -186,5 +183,5 @@ if __name__ == "__main__":
     if len(sys.argv) != 3:
         print("Usage: uv run python scripts/diagnose_routes.py <activity_id_1> <activity_id_2>")
         sys.exit(1)
-    
+
     asyncio.run(diagnose(sys.argv[1], sys.argv[2]))

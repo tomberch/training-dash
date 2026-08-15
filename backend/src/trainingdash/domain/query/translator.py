@@ -284,9 +284,7 @@ class QueryTranslator:
 
         return ListQueryResult(query=query, has_explicit_limit=has_explicit_limit)
 
-    def _translate_agg_query(
-        self, validated: ValidatedQuery
-    ) -> ScalarAggResult | GroupedAggResult:
+    def _translate_agg_query(self, validated: ValidatedQuery) -> ScalarAggResult | GroupedAggResult:
         """Translate an aggregation query."""
         # Build aggregation columns
         agg_columns = []

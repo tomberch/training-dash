@@ -119,11 +119,7 @@ class PostgresEventRepo:
 
         while True:
             # Find IDs to delete (batched to avoid long locks)
-            id_query = (
-                select(Event.id)
-                .where(Event.created_at < cutoff)
-                .limit(batch_size)
-            )
+            id_query = select(Event.id).where(Event.created_at < cutoff).limit(batch_size)
             id_result = await self._db.execute(id_query)
             ids_to_delete = [row[0] for row in id_result.fetchall()]
 

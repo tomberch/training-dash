@@ -79,12 +79,8 @@ def get_conversion_factor(from_unit: str, to_unit: str) -> float | None:
 FIELD_DEFINITIONS: dict[str, FieldDef] = {
     # Core activity fields
     "id": FieldDef("id", FieldType.STRING, nullable=False, description="Activity UUID"),
-    "started_at": FieldDef(
-        "started_at", FieldType.DATE, nullable=False, description="Activity start time"
-    ),
-    "source": FieldDef(
-        "source", FieldType.STRING, nullable=False, description="Data source (xert, garmin, upload)"
-    ),
+    "started_at": FieldDef("started_at", FieldType.DATE, nullable=False, description="Activity start time"),
+    "source": FieldDef("source", FieldType.STRING, nullable=False, description="Data source (xert, garmin, upload)"),
     "title": FieldDef("title", FieldType.STRING, nullable=True, description="Activity title"),
     # Distance and elevation
     "total_distance_m": FieldDef(
@@ -132,19 +128,11 @@ FIELD_DEFINITIONS: dict[str, FieldDef] = {
         description="Max speed in m/s",
     ),
     # Heart rate fields
-    "avg_hr_bpm": FieldDef(
-        "avg_hr_bpm", FieldType.NUMBER, nullable=True, description="Average heart rate in bpm"
-    ),
-    "max_hr_bpm": FieldDef(
-        "max_hr_bpm", FieldType.NUMBER, nullable=True, description="Max heart rate in bpm"
-    ),
+    "avg_hr_bpm": FieldDef("avg_hr_bpm", FieldType.NUMBER, nullable=True, description="Average heart rate in bpm"),
+    "max_hr_bpm": FieldDef("max_hr_bpm", FieldType.NUMBER, nullable=True, description="Max heart rate in bpm"),
     # Power fields
-    "avg_power_w": FieldDef(
-        "avg_power_w", FieldType.NUMBER, nullable=True, description="Average power in watts"
-    ),
-    "np_power_w": FieldDef(
-        "np_power_w", FieldType.NUMBER, nullable=True, description="Normalized power in watts"
-    ),
+    "avg_power_w": FieldDef("avg_power_w", FieldType.NUMBER, nullable=True, description="Average power in watts"),
+    "np_power_w": FieldDef("np_power_w", FieldType.NUMBER, nullable=True, description="Normalized power in watts"),
     "power_source": FieldDef(
         "power_source",
         FieldType.STRING,
@@ -162,9 +150,7 @@ FIELD_DEFINITIONS: dict[str, FieldDef] = {
     "intensity_factor": FieldDef(
         "intensity_factor", FieldType.NUMBER, nullable=True, description="Intensity Factor (IF)"
     ),
-    "training_load": FieldDef(
-        "training_load", FieldType.NUMBER, nullable=True, description="Training load"
-    ),
+    "training_load": FieldDef("training_load", FieldType.NUMBER, nullable=True, description="Training load"),
     # W'bal metrics
     "wbal_min_joules": FieldDef(
         "wbal_min_joules",

@@ -54,7 +54,6 @@ class TestSavedFiltersAPI:
         assert data["is_default"] is False
         assert "id" in data
 
-
     @pytest.mark.asyncio
     async def test_create_filter_with_default(self, auth_client):
         """Create a filter as default."""
@@ -121,7 +120,6 @@ class TestSavedFiltersAPI:
         resp = await auth_client.get(f"/api/saved-filters/{first_id}")
         assert resp.json()["is_default"] is False
 
-
     # --- Get by ID ---
 
     @pytest.mark.asyncio
@@ -182,7 +180,6 @@ class TestSavedFiltersAPI:
         assert resp.status_code == 200
         assert resp.json()["name"] == "Renamed"
 
-
     @pytest.mark.asyncio
     async def test_update_filter_query(self, auth_client):
         """Update filter query (re-validated)."""
@@ -239,7 +236,6 @@ class TestSavedFiltersAPI:
         )
         assert resp.status_code == 409
 
-
     # --- Delete ---
 
     @pytest.mark.asyncio
@@ -294,7 +290,6 @@ class TestSavedFiltersAPI:
         assert resp.json()["is_default"] is False
         resp = await auth_client.get(f"/api/saved-filters/{second_id}")
         assert resp.json()["is_default"] is True
-
 
     @pytest.mark.asyncio
     async def test_set_default_not_found(self, auth_client):

@@ -443,10 +443,7 @@ class TestComplexQueryValidation:
     """Test validation of complex queries."""
 
     def test_full_query(self):
-        query = parse(
-            'SELECT summary WHERE tss > 100 AND source IN ("xert", "garmin") '
-            "ORDER BY date DESC LIMIT 20"
-        )
+        query = parse('SELECT summary WHERE tss > 100 AND source IN ("xert", "garmin") ORDER BY date DESC LIMIT 20')
         validated = validate(query)
         assert validated.type == "list"
         assert validated.projection.kind == "view"
@@ -455,9 +452,7 @@ class TestComplexQueryValidation:
         assert validated.limit == 20
 
     def test_aggregation_with_group_and_filter(self):
-        query = parse(
-            "COUNT(*), AVG(tss), SUM(distance) WHERE date >= START_OF_YEAR GROUP BY month"
-        )
+        query = parse("COUNT(*), AVG(tss), SUM(distance) WHERE date >= START_OF_YEAR GROUP BY month")
         now = datetime(2026, 8, 14)
         validated = validate(query, now=now)
         assert validated.type == "aggregate"

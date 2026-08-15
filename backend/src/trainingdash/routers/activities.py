@@ -278,10 +278,7 @@ async def get_same_route_activities(db: DbSession, repo: ActivityRepoD, user: Cu
     # Filter to same-direction activities using precomputed bearing
     base_bearing = activity.direction_bearing
 
-    same_direction_activities = [
-        a for a in others
-        if bearings_match(base_bearing, a.direction_bearing)
-    ]
+    same_direction_activities = [a for a in others if bearings_match(base_bearing, a.direction_bearing)]
 
     return {
         "route_id": activity.route_id,

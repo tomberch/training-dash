@@ -24,9 +24,7 @@ def mock_db_session():
 
 @pytest.fixture
 def use_case(activity_repo, mock_db_session):
-    with mock.patch(
-        "trainingdash.use_cases.delete_activity.PostgresEventRepo"
-    ) as mock_event_repo_cls:
+    with mock.patch("trainingdash.use_cases.delete_activity.PostgresEventRepo") as mock_event_repo_cls:
         mock_event_repo_cls.return_value.log = mock.AsyncMock()
         use_case = DeleteActivity(activity_repo, mock_db_session)
         yield use_case

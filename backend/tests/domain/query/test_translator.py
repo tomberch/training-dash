@@ -468,10 +468,7 @@ class TestComplexQueries:
     """Test complex real-world queries."""
 
     def test_full_list_query(self):
-        query = parse(
-            'SELECT summary WHERE tss > 100 AND source IN ("xert", "garmin") '
-            "ORDER BY date DESC LIMIT 20"
-        )
+        query = parse('SELECT summary WHERE tss > 100 AND source IN ("xert", "garmin") ORDER BY date DESC LIMIT 20')
         validated = validate(query)
         result = translate(validated, user_id=1)
 
@@ -485,9 +482,7 @@ class TestComplexQueries:
         assert "activities.user_id = 1" in sql
 
     def test_aggregation_with_group_and_filter(self):
-        query = parse(
-            "COUNT(*), AVG(tss), SUM(distance) WHERE date >= START_OF_YEAR GROUP BY month"
-        )
+        query = parse("COUNT(*), AVG(tss), SUM(distance) WHERE date >= START_OF_YEAR GROUP BY month")
         now = datetime(2026, 8, 14)
         validated = validate(query, now=now)
         result = translate(validated, user_id=1)

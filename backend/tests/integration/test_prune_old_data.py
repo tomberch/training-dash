@@ -134,9 +134,7 @@ class TestPruneOldData:
         # Verify all old events deleted
         count = (
             await db_session.execute(
-                select(func.count())
-                .select_from(Event)
-                .where(Event.event_type.like("test.batch.%"))
+                select(func.count()).select_from(Event).where(Event.event_type.like("test.batch.%"))
             )
         ).scalar()
         assert count == 0
@@ -206,17 +204,11 @@ class TestPruneOldData:
 
         # All data preserved (plus the cache.pruned event)
         event_count = (
-            await db_session.execute(
-                select(func.count())
-                .select_from(Event)
-                .where(Event.event_type.like("test.day%"))
-            )
+            await db_session.execute(select(func.count()).select_from(Event).where(Event.event_type.like("test.day%")))
         ).scalar()
         stats_count = (
             await db_session.execute(
-                select(func.count())
-                .select_from(CacheStats)
-                .where(CacheStats.cache_type.like("test_recent%"))
+                select(func.count()).select_from(CacheStats).where(CacheStats.cache_type.like("test_recent%"))
             )
         ).scalar()
 

@@ -48,7 +48,9 @@ def upgrade() -> None:
     op.create_table(
         "user_oauth_links",
         sa.Column("id", sa.BigInteger(), primary_key=True),
-        sa.Column("user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True),
+        sa.Column(
+            "user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+        ),
         sa.Column("provider", sa.String(20), nullable=False),
         sa.Column("provider_user_id", sa.String(255), nullable=False),
         sa.Column("provider_email", sa.String(255), nullable=True),
@@ -202,7 +204,9 @@ def upgrade() -> None:
     op.create_table(
         "ef_models",
         sa.Column("id", sa.BigInteger(), primary_key=True),
-        sa.Column("user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False),
+        sa.Column(
+            "user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False
+        ),
         sa.Column("ef_value", sa.Numeric(6, 4), nullable=False),
         sa.Column("computed_at", sa.DateTime(), nullable=False),
         sa.Column("ride_count", sa.Integer(), nullable=False),
@@ -213,7 +217,9 @@ def upgrade() -> None:
     op.create_table(
         "xert_credentials",
         sa.Column("id", sa.BigInteger(), primary_key=True),
-        sa.Column("user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False),
+        sa.Column(
+            "user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False
+        ),
         sa.Column("xert_email", sa.String(255), nullable=False),
         sa.Column("encrypted_password", sa.LargeBinary(), nullable=False),
         sa.Column("sync_since", sa.DateTime(), nullable=True),
@@ -226,7 +232,9 @@ def upgrade() -> None:
     op.create_table(
         "garmin_credentials",
         sa.Column("id", sa.BigInteger(), primary_key=True),
-        sa.Column("user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False),
+        sa.Column(
+            "user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False
+        ),
         sa.Column("garmin_email", sa.String(255), nullable=False),
         sa.Column("encrypted_password", sa.LargeBinary(), nullable=False),
         sa.Column("sync_since", sa.DateTime(), nullable=True),

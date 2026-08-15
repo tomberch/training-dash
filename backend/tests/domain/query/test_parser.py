@@ -54,13 +54,13 @@ class TestSimpleComparisons:
         assert result.conditions.op == "<="
 
     def test_equals(self):
-        result = parse("source = \"xert\"")
+        result = parse('source = "xert"')
         assert isinstance(result.conditions, Comparison)
         assert result.conditions.op == "="
         assert result.conditions.value == StringValue(value="xert")
 
     def test_not_equals(self):
-        result = parse("source != \"upload\"")
+        result = parse('source != "upload"')
         assert isinstance(result.conditions, Comparison)
         assert result.conditions.op == "!="
 
@@ -547,10 +547,7 @@ class TestComplexQueries:
     """Test complex real-world queries."""
 
     def test_full_list_query(self):
-        result = parse(
-            'SELECT summary WHERE tss > 100 AND source IN ("xert", "garmin") '
-            "ORDER BY date DESC LIMIT 20"
-        )
+        result = parse('SELECT summary WHERE tss > 100 AND source IN ("xert", "garmin") ORDER BY date DESC LIMIT 20')
         assert result.type == "list"
         assert result.projection.view == "summary"
         assert isinstance(result.conditions, BinaryOp)
@@ -558,16 +555,12 @@ class TestComplexQueries:
         assert result.limit == 20
 
     def test_complex_conditions(self):
-        result = parse(
-            "(tss > 100 OR breakthrough = true) AND date >= START_OF_YEAR"
-        )
+        result = parse("(tss > 100 OR breakthrough = true) AND date >= START_OF_YEAR")
         assert isinstance(result.conditions, BinaryOp)
         assert result.conditions.op == "AND"
 
     def test_aggregation_with_filter_and_group(self):
-        result = parse(
-            "COUNT(*), AVG(tss), SUM(distance) WHERE date >= START_OF_YEAR GROUP BY month"
-        )
+        result = parse("COUNT(*), AVG(tss), SUM(distance) WHERE date >= START_OF_YEAR GROUP BY month")
         assert result.type == "aggregate"
         assert len(result.projection.aggregates) == 3
         assert result.conditions is not None

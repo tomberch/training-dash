@@ -295,7 +295,7 @@ async def flush_cache_stats(ctx: dict) -> dict:
     # Determine the bucket start (previous hour, since we run at :05)
     # This ensures stats are attributed to the hour they were collected in
     now = datetime.now(UTC).replace(tzinfo=None)
-    bucket_start = (now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=1))
+    bucket_start = now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=1)
 
     # Collect all cache types with data
     all_cache_types = set(counters.hits.keys()) | set(counters.misses.keys())
@@ -362,11 +362,7 @@ async def prune_old_data(ctx: dict) -> dict:
         events_deleted = 0
         while True:
             # Find IDs to delete (batched)
-            id_query = (
-                select(Event.id)
-                .where(Event.created_at < cutoff)
-                .limit(batch_size)
-            )
+            id_query = select(Event.id).where(Event.created_at < cutoff).limit(batch_size)
             id_result = await db.execute(id_query)
             ids_to_delete = [row[0] for row in id_result.fetchall()]
 
@@ -380,9 +376,7 @@ async def prune_old_data(ctx: dict) -> dict:
             events_deleted += result.rowcount
 
         # Cache stats: smaller table, single delete is fine
-        cache_result = await db.execute(
-            delete(CacheStats).where(CacheStats.bucket_start < cutoff)
-        )
+        cache_result = await db.execute(delete(CacheStats).where(CacheStats.bucket_start < cutoff))
         cache_deleted = cache_result.rowcount
         await db.commit()
 
@@ -401,8 +395,7 @@ async def prune_old_data(ctx: dict) -> dict:
         await db.commit()
 
     logger.info(
-        f"prune_old_data: deleted {events_deleted} events, "
-        f"{cache_deleted} cache_stats records older than {cutoff}"
+        f"prune_old_data: deleted {events_deleted} events, {cache_deleted} cache_stats records older than {cutoff}"
     )
 
     return {

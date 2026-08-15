@@ -41,12 +41,10 @@ class TestEventInstrumentation:
 
         # Verify events were emitted
         events = (
-            await db_session.execute(
-                select(Event)
-                .where(Event.user_id == test_user.id)
-                .order_by(Event.created_at)
-            )
-        ).scalars().all()
+            (await db_session.execute(select(Event).where(Event.user_id == test_user.id).order_by(Event.created_at)))
+            .scalars()
+            .all()
+        )
 
         event_types = [e.event_type for e in events]
         assert EventType.RECALCULATION_STARTED.value in event_types
@@ -80,11 +78,10 @@ class TestEventInstrumentation:
 
         # Verify event was created
         events = (
-            await db_session.execute(
-                select(Event)
-                .where(Event.event_type == EventType.SCHEDULER_TRIGGERED.value)
-            )
-        ).scalars().all()
+            (await db_session.execute(select(Event).where(Event.event_type == EventType.SCHEDULER_TRIGGERED.value)))
+            .scalars()
+            .all()
+        )
 
         assert len(events) >= 1
         latest = events[-1]
@@ -110,11 +107,7 @@ class TestEventInstrumentation:
         assert event_id is not None
 
         # Verify the event exists with correct data
-        event = (
-            await db_session.execute(
-                select(Event).where(Event.id == event_id)
-            )
-        ).scalar_one()
+        event = (await db_session.execute(select(Event).where(Event.id == event_id))).scalar_one()
 
         assert event.event_type == EventType.ACTIVITY_INGESTED.value
         assert event.outcome == EventOutcome.SUCCESS.value

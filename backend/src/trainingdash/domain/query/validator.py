@@ -127,9 +127,7 @@ class QueryValidator:
             limit=query.limit,
         )
 
-    def _validate_projection(
-        self, projection: Projection | None, query_type: str
-    ) -> Projection | None:
+    def _validate_projection(self, projection: Projection | None, query_type: str) -> Projection | None:
         """Validate the projection clause."""
         if projection is None:
             return None
@@ -179,8 +177,7 @@ class QueryValidator:
         # Check if field is aggregatable
         if internal not in AGGREGATABLE_FIELDS:
             raise ValidationError(
-                f"Field '{agg.field}' cannot be used in {agg.func}(). "
-                "Only numeric fields can be aggregated."
+                f"Field '{agg.field}' cannot be used in {agg.func}(). Only numeric fields can be aggregated."
             )
 
         return replace(agg, field=internal)
@@ -271,8 +268,7 @@ class QueryValidator:
         # Validate operator for field type
         if not is_valid_operator(field_def.field_type, comp.op):
             raise ValidationError(
-                f"Operator '{comp.op}' is not valid for field '{comp.field}' "
-                f"(type: {field_def.field_type.value})"
+                f"Operator '{comp.op}' is not valid for field '{comp.field}' (type: {field_def.field_type.value})"
             )
 
         # Normalize the value
@@ -303,8 +299,7 @@ class QueryValidator:
             FieldType.DURATION,
         ):
             raise ValidationError(
-                f"BETWEEN is not valid for field '{between.field}' "
-                f"(type: {field_def.field_type.value})"
+                f"BETWEEN is not valid for field '{between.field}' (type: {field_def.field_type.value})"
             )
 
         # Normalize the values
@@ -330,9 +325,7 @@ class QueryValidator:
             raise ValidationError(f"Field '{internal}' has no definition")
 
         # Normalize all values
-        normalized_values = [
-            self._normalize_value(v, field_def, in_list.field) for v in in_list.values
-        ]
+        normalized_values = [self._normalize_value(v, field_def, in_list.field) for v in in_list.values]
 
         return replace(in_list, field=internal, values=normalized_values)
 
@@ -353,9 +346,7 @@ class QueryValidator:
 
         # Warn if checking nullable on non-nullable field
         if not field_def.nullable and null_check.is_null:
-            raise ValidationError(
-                f"Field '{null_check.field}' is never NULL"
-            )
+            raise ValidationError(f"Field '{null_check.field}' is never NULL")
 
         return replace(null_check, field=internal)
 
@@ -423,38 +414,32 @@ class QueryValidator:
             # Validate field expects a date
             if field_def.field_type != FieldType.DATE:
                 raise ValidationError(
-                    f"Date value not valid for field '{field_name}' "
-                    f"(type: {field_def.field_type.value})"
+                    f"Date value not valid for field '{field_name}' (type: {field_def.field_type.value})"
                 )
             return value
 
         if isinstance(value, StringValue):
             if field_def.field_type != FieldType.STRING:
                 raise ValidationError(
-                    f"String value not valid for field '{field_name}' "
-                    f"(type: {field_def.field_type.value})"
+                    f"String value not valid for field '{field_name}' (type: {field_def.field_type.value})"
                 )
             return value
 
         if isinstance(value, BoolValue):
             if field_def.field_type != FieldType.BOOLEAN:
                 raise ValidationError(
-                    f"Boolean value not valid for field '{field_name}' "
-                    f"(type: {field_def.field_type.value})"
+                    f"Boolean value not valid for field '{field_name}' (type: {field_def.field_type.value})"
                 )
             return value
 
         return value
 
-    def _normalize_number(
-        self, value: NumberValue, field_def, field_name: str
-    ) -> NumberValue:
+    def _normalize_number(self, value: NumberValue, field_def, field_name: str) -> NumberValue:
         """Normalize a number value, converting units if needed."""
         # Check field type compatibility
         if field_def.field_type not in (FieldType.NUMBER, FieldType.DURATION):
             raise ValidationError(
-                f"Numeric value not valid for field '{field_name}' "
-                f"(type: {field_def.field_type.value})"
+                f"Numeric value not valid for field '{field_name}' (type: {field_def.field_type.value})"
             )
 
         if value.unit is None:
@@ -463,44 +448,32 @@ class QueryValidator:
 
         if field_def.internal_unit is None:
             # Field has no unit, but value has unit - warn
-            raise ValidationError(
-                f"Field '{field_name}' does not accept units, "
-                f"but got value with unit '{value.unit}'"
-            )
+            raise ValidationError(f"Field '{field_name}' does not accept units, but got value with unit '{value.unit}'")
 
         # Convert unit
         factor = get_conversion_factor(value.unit, field_def.internal_unit)
         if factor is None:
             raise ValidationError(
-                f"Cannot convert unit '{value.unit}' to '{field_def.internal_unit}' "
-                f"for field '{field_name}'"
+                f"Cannot convert unit '{value.unit}' to '{field_def.internal_unit}' for field '{field_name}'"
             )
 
         converted_value = value.value * factor
         return NumberValue(value=converted_value, unit=None)
 
-    def _normalize_duration(
-        self, value: DurationValue, field_def, field_name: str
-    ) -> NumberValue:
+    def _normalize_duration(self, value: DurationValue, field_def, field_name: str) -> NumberValue:
         """Normalize a duration value (colon format) to a number in seconds."""
         if field_def.field_type != FieldType.DURATION:
             raise ValidationError(
-                f"Duration value not valid for field '{field_name}' "
-                f"(type: {field_def.field_type.value})"
+                f"Duration value not valid for field '{field_name}' (type: {field_def.field_type.value})"
             )
 
         # Duration is already in seconds, convert to NumberValue
         return NumberValue(value=float(value.seconds), unit=None)
 
-    def _resolve_relative_date(
-        self, value: RelativeDate, field_def, field_name: str
-    ) -> DateValue:
+    def _resolve_relative_date(self, value: RelativeDate, field_def, field_name: str) -> DateValue:
         """Resolve a relative date to an absolute datetime."""
         if field_def.field_type != FieldType.DATE:
-            raise ValidationError(
-                f"Date value not valid for field '{field_name}' "
-                f"(type: {field_def.field_type.value})"
-            )
+            raise ValidationError(f"Date value not valid for field '{field_name}' (type: {field_def.field_type.value})")
 
         # Calculate base datetime
         base_dt = self._get_base_datetime(value.base)

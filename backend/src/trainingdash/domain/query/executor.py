@@ -123,11 +123,7 @@ class QueryExecutor:
         else:
             # No LIMIT, apply server-side pagination
             # First get total count (need a separate count query)
-            count_query = (
-                select(func.count())
-                .select_from(Activity)
-                .where(Activity.user_id == user_id)
-            )
+            count_query = select(func.count()).select_from(Activity).where(Activity.user_id == user_id)
             # Apply the same WHERE conditions from the original query
             # We need to extract them - for now, execute count against full set
             # The translated query already has user_id filter, so we can count from it
@@ -136,9 +132,7 @@ class QueryExecutor:
             # Get the count by re-executing with count
             # For simplicity, we'll execute the full query and count in-memory for now
             # TODO: optimize with proper count query
-            count_result = await self._db.execute(
-                query.with_only_columns(func.count()).order_by(None)
-            )
+            count_result = await self._db.execute(query.with_only_columns(func.count()).order_by(None))
             total = count_result.scalar_one()
 
             # Apply pagination

@@ -201,7 +201,7 @@ async def _flush_with_session(db_session) -> dict:
     counters = cache_stats.get_and_reset()
 
     now = datetime.now(UTC).replace(tzinfo=None)
-    bucket_start = (now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=1))
+    bucket_start = now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=1)
 
     all_cache_types = set(counters.hits.keys()) | set(counters.misses.keys())
 
