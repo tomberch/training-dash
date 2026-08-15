@@ -294,11 +294,11 @@ export function QueryAutocomplete({
         rows={2}
       />
 
-      {/* Suggestions dropdown */}
+      {/* Suggestions dropdown - 75% width to avoid covering Run Query button */}
       {showSuggestions && suggestions.length > 0 && (
         <div
           ref={suggestionsRef}
-          className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto"
+          className="absolute left-0 w-3/4 top-full mt-1 bg-card border border-border rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto"
         >
           {suggestions.map((suggestion, index) => (
             <button
