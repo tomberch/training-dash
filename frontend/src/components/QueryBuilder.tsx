@@ -150,8 +150,8 @@ function getDefaultValue(fieldType: FieldType): string {
 
 function formatValueForQuery(value: string, fieldDef: FieldDef): string {
   if (fieldDef.fieldType === "string") {
-    // Escape quotes in string values
-    const escaped = value.replace(/"/g, '\\"');
+    // Escape backslashes first, then quotes (order matters!)
+    const escaped = value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
     return `"${escaped}"`;
   }
   if (fieldDef.fieldType === "boolean") {
