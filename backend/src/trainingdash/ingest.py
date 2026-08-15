@@ -26,24 +26,6 @@ logger = logging.getLogger(__name__)
 SEMICIRCLES_TO_DEGREES = 180.0 / (2**31)
 
 
-def _get_field(frame, name: str, fallback_name: str | None = None) -> Any:
-    """Get a field value from a fitdecode frame, with optional fallback field name."""
-    try:
-        field = frame.get_field(name)
-        if field is not None and field.value is not None:
-            return field.value
-    except KeyError:
-        pass
-    if fallback_name:
-        try:
-            field = frame.get_field(fallback_name)
-            if field is not None and field.value is not None:
-                return field.value
-        except KeyError:
-            pass
-    return None
-
-
 def _semicircles_to_degrees(semicircles: int | None) -> float | None:
     """Convert FIT semicircles to degrees."""
     if semicircles is None:
@@ -107,7 +89,7 @@ def _derive_utc_offset(
     Derive UTC offset in minutes from FIT Activity message timestamps.
 
     The FIT spec stores local_timestamp (device wall-clock time, naive) and
-    timestamp (UTC, timezone-aware from fitdecode) in the Activity message.
+    timestamp (UTC, timezone-aware) in the Activity message.
     Their difference gives the UTC offset that was in effect when the ride ended.
 
     Validity checks:
@@ -135,88 +117,99 @@ def _derive_utc_offset(
 
 
 def parse_records(fit_bytes: bytes) -> dict[str, Any]:
-    """Parse a FIT file and extract activity data using fitdecode."""
-    import fitdecode
+    """Parse a FIT file and extract activity data using garmin-fit-sdk."""
+    from garmin_fit_sdk import Decoder, Stream
 
     records = []
     laps = []
     session_data = None
     utc_offset_minutes: int | None = None
 
-    with fitdecode.FitReader(fit_bytes) as fit:
-        for frame in fit:
-            if not isinstance(frame, fitdecode.FitDataMessage):
-                continue
+    stream = Stream.from_byte_array(bytearray(fit_bytes))
+    decoder = Decoder(stream)
+    messages, errors = decoder.read(
+        apply_scale_and_offset=True,
+        convert_datetimes_to_dates=True,
+        convert_types_to_strings=True,
+        expand_sub_fields=True,
+        expand_components=True,
+        merge_heart_rates=True,
+    )
 
-            if frame.name == "record":
-                # Get position (convert from semicircles to degrees)
-                lat = _semicircles_to_degrees(_get_field(frame, "position_lat"))
-                lon = _semicircles_to_degrees(_get_field(frame, "position_long"))
+    if errors:
+        logger.warning(f"FIT decode errors: {errors}")
 
-                # Get timestamp
-                ts = _to_naive_utc(_get_field(frame, "timestamp"))
+    # Process record messages
+    for msg in messages.get("record_mesgs", []):
+        # Get position - SDK returns semicircles, need to convert to degrees
+        lat_semi = msg.get("position_lat")
+        lon_semi = msg.get("position_long")
+        lat = _semicircles_to_degrees(lat_semi)
+        lon = _semicircles_to_degrees(lon_semi)
 
-                # Get metrics - prefer enhanced versions for newer FIT files
-                speed = _safe_float(_get_field(frame, "enhanced_speed", "speed"))
-                altitude = _safe_float(_get_field(frame, "enhanced_altitude", "altitude"))
-                distance = _safe_float(_get_field(frame, "distance"))
-                hr = _safe_int(_get_field(frame, "heart_rate"))
-                power = _safe_int(_get_field(frame, "power"))
-                cadence = _safe_int(_get_field(frame, "cadence"))
+        # Get timestamp (SDK converts to datetime)
+        ts = _to_naive_utc(msg.get("timestamp"))
 
-                records.append(
-                    {
-                        "timestamp": ts,
-                        "lat": lat,
-                        "lon": lon,
-                        "distance_m": distance if distance is not None else 0,
-                        "hr_bpm": hr,
-                        "power_w": power,
-                        "speed_mps": speed,
-                        "altitude_m": altitude,
-                        "cadence_rpm": cadence,
-                    }
-                )
+        # Get metrics - prefer enhanced versions for newer FIT files
+        speed = _safe_float(msg.get("enhanced_speed") or msg.get("speed"))
+        altitude = _safe_float(msg.get("enhanced_altitude") or msg.get("altitude"))
+        distance = _safe_float(msg.get("distance"))
+        hr = _safe_int(msg.get("heart_rate"))
+        power = _safe_int(msg.get("power"))
+        cadence = _safe_int(msg.get("cadence"))
 
-            elif frame.name == "lap":
-                start = _to_naive_utc(_get_field(frame, "start_time"))
-                end = _to_naive_utc(_get_field(frame, "timestamp"))
-                laps.append(
-                    {
-                        "start_time": start,
-                        "end_time": end,
-                        "total_distance_m": _safe_float(_get_field(frame, "total_distance")) or 0,
-                        "avg_hr_bpm": _safe_int(_get_field(frame, "avg_heart_rate")),
-                        "avg_power_w": _safe_int(_get_field(frame, "avg_power")),
-                        "max_hr_bpm": _safe_int(_get_field(frame, "max_heart_rate")),
-                    }
-                )
+        records.append(
+            {
+                "timestamp": ts,
+                "lat": lat,
+                "lon": lon,
+                "distance_m": distance if distance is not None else 0,
+                "hr_bpm": hr,
+                "power_w": power,
+                "speed_mps": speed,
+                "altitude_m": altitude,
+                "cadence_rpm": cadence,
+            }
+        )
 
-            elif frame.name == "session":
-                # Extract session summary data
-                timer_time = _safe_float(_get_field(frame, "total_timer_time"))
-                elapsed_time = _safe_float(_get_field(frame, "total_elapsed_time"))
-                logger.debug(f"FIT session: timer_time={timer_time}, elapsed_time={elapsed_time}")
-                session_data = {
-                    "started_at": _to_naive_utc(_get_field(frame, "start_time")),
-                    "total_distance_m": _safe_float(_get_field(frame, "total_distance")) or 0,
-                    "total_timer_time": timer_time,
-                    "total_elapsed_time": elapsed_time,
-                    "total_ascent": _safe_int(_get_field(frame, "total_ascent")),
-                    "avg_speed": _safe_float(_get_field(frame, "enhanced_avg_speed", "avg_speed")),
-                    "max_speed": _safe_float(_get_field(frame, "enhanced_max_speed", "max_speed")),
-                    "avg_hr": _safe_int(_get_field(frame, "avg_heart_rate")),
-                    "max_hr": _safe_int(_get_field(frame, "max_heart_rate")),
-                    "avg_power": _safe_int(_get_field(frame, "avg_power")),
-                }
+    # Process lap messages
+    for msg in messages.get("lap_mesgs", []):
+        start = _to_naive_utc(msg.get("start_time"))
+        end = _to_naive_utc(msg.get("timestamp"))
+        laps.append(
+            {
+                "start_time": start,
+                "end_time": end,
+                "total_distance_m": _safe_float(msg.get("total_distance")) or 0,
+                "avg_hr_bpm": _safe_int(msg.get("avg_heart_rate")),
+                "avg_power_w": _safe_int(msg.get("avg_power")),
+                "max_hr_bpm": _safe_int(msg.get("max_heart_rate")),
+            }
+        )
 
-            elif frame.name == "activity":
-                # The Activity message contains local_timestamp (device wall-clock)
-                # alongside timestamp (UTC). Their difference gives the UTC offset
-                # that was in effect when and where the ride ended.
-                local_ts = _get_field(frame, "local_timestamp")
-                utc_ts = _get_field(frame, "timestamp")
-                utc_offset_minutes = _derive_utc_offset(local_ts, utc_ts)
+    # Process session messages
+    for msg in messages.get("session_mesgs", []):
+        timer_time = _safe_float(msg.get("total_timer_time"))
+        elapsed_time = _safe_float(msg.get("total_elapsed_time"))
+        logger.debug(f"FIT session: timer_time={timer_time}, elapsed_time={elapsed_time}")
+        session_data = {
+            "started_at": _to_naive_utc(msg.get("start_time")),
+            "total_distance_m": _safe_float(msg.get("total_distance")) or 0,
+            "total_timer_time": timer_time,
+            "total_elapsed_time": elapsed_time,
+            "total_ascent": _safe_int(msg.get("total_ascent")),
+            "avg_speed": _safe_float(msg.get("enhanced_avg_speed") or msg.get("avg_speed")),
+            "max_speed": _safe_float(msg.get("enhanced_max_speed") or msg.get("max_speed")),
+            "avg_hr": _safe_int(msg.get("avg_heart_rate")),
+            "max_hr": _safe_int(msg.get("max_heart_rate")),
+            "avg_power": _safe_int(msg.get("avg_power")),
+        }
+
+    # Process activity messages for UTC offset
+    for msg in messages.get("activity_mesgs", []):
+        local_ts = msg.get("local_timestamp")
+        utc_ts = msg.get("timestamp")
+        utc_offset_minutes = _derive_utc_offset(local_ts, utc_ts)
 
     # Build result from session or compute from records
     if session_data and session_data["started_at"]:

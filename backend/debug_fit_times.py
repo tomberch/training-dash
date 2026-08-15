@@ -3,7 +3,7 @@
 
 import sys
 
-import fitdecode
+from garmin_fit_sdk import Decoder, Stream
 
 
 def check_fit_file(filepath: str):
@@ -11,29 +11,28 @@ def check_fit_file(filepath: str):
     print(f"\nChecking: {filepath}")
     print("-" * 60)
 
-    with fitdecode.FitReader(filepath) as fit:
-        for frame in fit:
-            if isinstance(frame, fitdecode.FitDataMessage):
-                if frame.name == "session":
-                    print("\nSession frame fields:")
-                    for field in frame.fields:
-                        if "time" in field.name.lower() or "timer" in field.name.lower():
-                            print(f"  {field.name}: {field.value}")
+    stream = Stream.from_file(filepath)
+    decoder = Decoder(stream)
+    messages, errors = decoder.read()
 
-                    # Specifically check our fields
-                    timer = None
-                    elapsed = None
-                    for field in frame.fields:
-                        if field.name == "total_timer_time":
-                            timer = field.value
-                        elif field.name == "total_elapsed_time":
-                            elapsed = field.value
+    if errors:
+        print(f"Decode errors: {errors}")
 
-                    print(f"\n  total_timer_time (moving):  {timer}")
-                    print(f"  total_elapsed_time (total): {elapsed}")
-                    if timer and elapsed:
-                        diff = elapsed - timer
-                        print(f"  Difference (stopped time):  {diff:.1f}s ({diff / 60:.1f}min)")
+    for session in messages.get("session_mesgs", []):
+        print("\nSession message fields:")
+        for key, value in session.items():
+            if "time" in key.lower() or "timer" in key.lower():
+                print(f"  {key}: {value}")
+
+        # Specifically check our fields
+        timer = session.get("total_timer_time")
+        elapsed = session.get("total_elapsed_time")
+
+        print(f"\n  total_timer_time (moving):  {timer}")
+        print(f"  total_elapsed_time (total): {elapsed}")
+        if timer and elapsed:
+            diff = elapsed - timer
+            print(f"  Difference (stopped time):  {diff:.1f}s ({diff / 60:.1f}min)")
 
 
 if __name__ == "__main__":
