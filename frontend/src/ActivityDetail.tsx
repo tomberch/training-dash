@@ -662,7 +662,7 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
 
         {/* Map */}
         {positions.length > 0 && (
-          <div className="mb-8">
+          <div className="mb-8 relative">
             <ResizableMap
               positions={positions}
               coloredSegments={coloredSegments.length > 0 ? coloredSegments : undefined}
@@ -672,6 +672,42 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
               isResizing={isResizing}
               showResizeHandle={true}
             />
+            {/* Power zone legend - shown when colored segments are displayed */}
+            {coloredSegments.length > 0 && (
+              <div className="absolute bottom-6 left-12 z-[1000] bg-card/90 backdrop-blur-sm rounded-lg px-3 py-2 border border-border shadow-lg">
+                <div className="flex items-center gap-3 text-xs">
+                  <span className="text-muted-foreground font-medium">Power</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-full" style={{ backgroundColor: POWER_ZONE_COLORS["1"] }} />
+                    <span className="text-foreground">Z1</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-full" style={{ backgroundColor: POWER_ZONE_COLORS["2"] }} />
+                    <span className="text-foreground">Z2</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-full" style={{ backgroundColor: POWER_ZONE_COLORS["3"] }} />
+                    <span className="text-foreground">Z3</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-full" style={{ backgroundColor: POWER_ZONE_COLORS["4"] }} />
+                    <span className="text-foreground">Z4</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-full" style={{ backgroundColor: POWER_ZONE_COLORS["5"] }} />
+                    <span className="text-foreground">Z5</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-full" style={{ backgroundColor: POWER_ZONE_COLORS["6"] }} />
+                    <span className="text-foreground">Z6</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-full" style={{ backgroundColor: POWER_ZONE_COLORS["7"] }} />
+                    <span className="text-foreground">Z7</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
