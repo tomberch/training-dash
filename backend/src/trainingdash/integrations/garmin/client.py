@@ -73,6 +73,10 @@ class GarminClientProtocol(Protocol):
         """Download the original FIT file for an activity."""
         ...
 
+    def upload_fit(self, fit_bytes: bytes) -> str:
+        """Upload a FIT file to Garmin Connect. Returns the new activity ID."""
+        ...
+
 
 class GarminClient:
     """
@@ -253,6 +257,74 @@ class GarminClient:
             raise
         except Exception as e:
             raise GarminAPIError(f"Failed to download FIT for activity {activity_id}: {e}") from e
+
+    def upload_fit(self, fit_bytes: bytes) -> str:
+        """
+        Upload a FIT file to Garmin Connect.
+
+        The garminconnect library's upload_activity() requires a file path,
+        so we write the FIT bytes to a temporary file first.
+
+        Args:
+            fit_bytes: The FIT file bytes to upload
+
+        Returns:
+            The Garmin activity ID of the uploaded activity
+
+        Raises:
+            GarminAPIError: if upload fails
+        """
+        if not self._client:
+            raise GarminAPIError("Not authenticated")
+
+        if not fit_bytes:
+            raise GarminAPIError("No FIT data provided for upload")
+
+        import tempfile
+
+        try:
+            # Write FIT bytes to a temporary file
+            with tempfile.NamedTemporaryFile(suffix=".fit", delete=False) as tmp:
+                tmp.write(fit_bytes)
+                tmp_path = tmp.name
+
+            try:
+                # Upload the FIT file
+                result = self._client.upload_activity(tmp_path)
+
+                # Extract activity ID from response
+                # garminconnect returns a dict with detailedImportResult
+                if isinstance(result, dict):
+                    # Check for successful upload
+                    detailed = result.get("detailedImportResult", {})
+                    successes = detailed.get("successes", [])
+                    if successes:
+                        activity_id = str(successes[0].get("internalId", ""))
+                        if activity_id:
+                            logger.info("Uploaded FIT to Garmin, activity ID: %s", activity_id)
+                            return activity_id
+
+                    # Check for failures
+                    failures = detailed.get("failures", [])
+                    if failures:
+                        messages = [f.get("messages", [{}])[0].get("content", "Unknown") for f in failures]
+                        raise GarminAPIError(f"Garmin upload failed: {', '.join(messages)}")
+
+                raise GarminAPIError("Garmin upload succeeded but no activity ID returned")
+
+            finally:
+                # Clean up temp file
+                import os
+
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+
+        except GarminAPIError:
+            raise
+        except Exception as e:
+            raise GarminAPIError(f"Failed to upload FIT to Garmin: {e}") from e
 
 
 # Default client factory - can be replaced in tests

@@ -16,6 +16,17 @@ from trainingdash.routers.serializers import (
     activity_summary,
     records_to_geojson,
 )
+from trainingdash.use_cases.upload_to_provider import (
+    ActivityNotFoundError,
+    CredentialsDecryptError,
+    CredentialsNotFoundError,
+    FitModifyError,
+    NoFitFileError,
+    Provider,
+    ProviderUploadError,
+    UploadToProvider,
+)
+from trainingdash.domain.fit_modifier import FitModifications
 
 router = APIRouter(prefix="/api", tags=["activities"])
 
@@ -38,6 +49,13 @@ class ActivityUpdateRequest(BaseModel):
     """Request body for updating an activity."""
 
     title: str | None = None
+
+
+class UploadToProviderRequest(BaseModel):
+    """Request body for uploading an activity to a provider."""
+
+    provider: Provider
+    device_product_id: int | None = None  # Optional device spoofing
 
 
 async def _get_owned_activity(repo: ActivityRepoD, user: CurrentUser, activity_id: UUID) -> Activity:
@@ -398,3 +416,122 @@ async def delete_activity(
     deleted = await delete_use_case.execute(user.id, activity_id)
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Activity not found")
+
+
+@router.get("/activities/{activity_id}/fit")
+async def download_activity_fit(
+    repo: ActivityRepoD,
+    user: CurrentUser,
+    activity_id: UUID,
+):
+    """Download the original FIT file for an activity.
+
+    Returns the raw FIT bytes with appropriate headers for file download.
+    Returns 404 if the activity doesn't exist or has no stored FIT file.
+    """
+    from fastapi.responses import Response
+
+    activity = await _get_owned_activity(repo, user, activity_id)
+
+    if activity.raw_fit is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No FIT file stored for this activity",
+        )
+
+    # Generate filename from activity date and ID
+    date_str = activity.started_at.strftime("%Y-%m-%d")
+    filename = f"{date_str}_{activity_id}.fit"
+
+    return Response(
+        content=activity.raw_fit,
+        media_type="application/octet-stream",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )
+
+
+@router.post("/activities/{activity_id}/upload")
+async def upload_activity_to_provider(
+    db: DbSession,
+    user: CurrentUser,
+    activity_id: UUID,
+    request: UploadToProviderRequest,
+):
+    """Upload an activity's FIT file to an external provider.
+
+    Supports optional device spoofing via device_product_id (e.g., 4062 for Edge 840).
+
+    Returns:
+        provider: The target provider name
+        provider_activity_id: The activity ID on the target provider
+    """
+    # Build modifications if device spoofing is requested
+    modifications = None
+    if request.device_product_id is not None:
+        modifications = FitModifications(device_product_id=request.device_product_id)
+
+    use_case = UploadToProvider(db)
+
+    try:
+        result = await use_case.execute(
+            user_id=user.id,
+            activity_id=activity_id,
+            provider=request.provider,
+            modifications=modifications,
+        )
+
+        return {
+            "provider": result.provider,
+            "provider_activity_id": result.provider_activity_id,
+        }
+
+    except ActivityNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Activity not found",
+        )
+    except NoFitFileError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No FIT file stored for this activity",
+        )
+    except CredentialsNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+    except CredentialsDecryptError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to decrypt provider credentials",
+        )
+    except FitModifyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+    except ProviderUploadError as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(e),
+        )
+
+
+@router.get("/fit/devices")
+async def list_fit_devices(user: CurrentUser):
+    """List available FIT device types for device spoofing.
+
+    Returns a list of devices with id, name, and display_name.
+    The id is the Garmin product ID to use when uploading with device spoofing.
+
+    Common devices:
+    - Edge 840: id=4062
+    - Edge 1040: id=3843
+    - Edge 530: id=3121
+    """
+    from trainingdash.domain.fit_modifier import get_device_list
+
+    devices = get_device_list()
+    return {"devices": devices, "total": len(devices)}

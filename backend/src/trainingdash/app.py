@@ -16,6 +16,7 @@ from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from trainingdash.integrations.garmin.mock_client import setup_mock_garmin_client
 from trainingdash.integrations.xert.mock_client import setup_mock_xert_client
 from trainingdash.routers import (
     activities,
@@ -34,8 +35,9 @@ from trainingdash.routers import (
 
 logger = logging.getLogger(__name__)
 
-# Initialize mock Xert client if enabled (for E2E testing)
+# Initialize mock clients if enabled (for E2E testing)
 setup_mock_xert_client()
+setup_mock_garmin_client()
 
 
 def generate_error_id() -> str:

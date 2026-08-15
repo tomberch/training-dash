@@ -31,19 +31,21 @@ class HourlySyncScheduler:
         current_hour = datetime.now(UTC).hour
         logger.info(f"HourlySyncScheduler: running for hour {current_hour}")
 
-        # Find users with this sync_hour who have Garmin credentials
+        # Find users with this sync_hour who have Garmin credentials with sync enabled
         garmin_result = await self._db.execute(
             select(GarminCredentials.user_id)
             .join(User, User.id == GarminCredentials.user_id)
             .where(User.sync_hour == current_hour)
+            .where(GarminCredentials.sync_enabled == True)
         )
         garmin_user_ids = garmin_result.scalars().all()
 
-        # Find users with this sync_hour who have Xert credentials
+        # Find users with this sync_hour who have Xert credentials with sync enabled
         xert_result = await self._db.execute(
             select(XertCredentials.user_id)
             .join(User, User.id == XertCredentials.user_id)
             .where(User.sync_hour == current_hour)
+            .where(XertCredentials.sync_enabled == True)
         )
         xert_user_ids = xert_result.scalars().all()
 

@@ -31,6 +31,11 @@ from trainingdash.use_cases.match_route import MatchRoute
 from trainingdash.use_cases.recalc_after_delete import RecalcAfterDelete
 from trainingdash.use_cases.recalculate_metrics import RecalculateMetrics, RecalculationResult
 from trainingdash.use_cases.sync_from_provider import SyncFromProvider, SyncResult
+from trainingdash.use_cases.upload_to_provider import (
+    Provider,
+    UploadResult,
+    UploadToProvider,
+)
 
 __all__ = [
     "BreakthroughEvaluator",
@@ -40,9 +45,12 @@ __all__ = [
     "HourlySyncScheduler",
     "IngestActivity",
     "MatchRoute",
+    "Provider",
     "RecalcAfterDelete",
     "RecalculateMetrics",
     "RecalculationResult",
     "SyncFromProvider",
     "SyncResult",
+    "UploadResult",
+    "UploadToProvider",
 ]

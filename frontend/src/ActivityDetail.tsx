@@ -44,6 +44,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { deleteActivity } from "./api";
+import { ActivityActions } from "@/components/ActivityActions";
+import { UploadToProviderDialog } from "@/components/UploadToProviderDialog";
 
 function ActivityDetailLoadingSkeleton(): React.JSX.Element {
   return (
@@ -187,6 +189,9 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
   const [showDeleteDialog, setShowDeleteDialog] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
 
+  // Upload to provider state
+  const [showUploadDialog, setShowUploadDialog] = React.useState(false);
+
   async function handleDelete(): Promise<void> {
     setIsDeleting(true);
     try {
@@ -199,6 +204,22 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
     } finally {
       setIsDeleting(false);
     }
+  }
+
+  function handleUploadToProvider(): void {
+    setShowUploadDialog(true);
+  }
+
+  function handleExportFit(): void {
+    // Trigger file download via the API endpoint
+    const url = `/api/activities/${activityId}/fit`;
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${activityId}.fit`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success("FIT file download started");
   }
 
   // Lazy section loading
@@ -647,6 +668,11 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
                   Compare
                 </Link>
               )}
+              <ActivityActions
+                activityId={activityId}
+                onUploadToProvider={handleUploadToProvider}
+                onExportFit={handleExportFit}
+              />
               <button
                 onClick={() => setShowDeleteDialog(true)}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-destructive/10 hover:bg-destructive/20 text-destructive transition"
@@ -1061,6 +1087,13 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Upload to provider dialog */}
+      <UploadToProviderDialog
+        activityId={activityId}
+        open={showUploadDialog}
+        onOpenChange={setShowUploadDialog}
+      />
 
       {/* Chart expansion modal */}
       {expandedChart && (() => {

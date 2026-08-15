@@ -678,10 +678,59 @@ class TestHourlySyncScheduler:
         assert result["xert_queued"] == 0
         assert result["garmin_queued"] == 0
 
+    @pytest.mark.asyncio
+    async def test_hourly_sync_respects_sync_enabled_flag(
+        self, db_engine, db_session, encryption_key_env
+    ):
+        """hourly_sync_scheduler skips users with sync_enabled=False."""
+        from trainingdash.crypto import encrypt
 
-# ---------------------------------------------------------------------------
-# Real API tests (skipped unless credentials are set)
-# ---------------------------------------------------------------------------
+        current_hour = datetime.now(UTC).hour
+
+        # user1: sync_enabled=True (default), should be enqueued
+        # user2: sync_enabled=False, should be skipped
+        user1 = User(email="syncenabled@example.com", password_hash=CACHED_HASH_PASS, sync_hour=current_hour)
+        user2 = User(email="syncdisabled@example.com", password_hash=CACHED_HASH_PASS, sync_hour=current_hour)
+        db_session.add_all([user1, user2])
+        await db_session.commit()
+        for u in [user1, user2]:
+            await db_session.refresh(u)
+
+        creds1 = XertCredentials(
+            user_id=user1.id, xert_email="u1@xert.com", encrypted_password=encrypt("p1"), sync_enabled=True
+        )
+        creds2 = XertCredentials(
+            user_id=user2.id, xert_email="u2@xert.com", encrypted_password=encrypt("p2"), sync_enabled=False
+        )
+        db_session.add_all([creds1, creds2])
+        await db_session.commit()
+
+        mock_worker_db_session, _ = _make_worker_db_session_ctx(db_engine)
+
+        async def _fake_enqueue_xert(user_id, scheduled=None):
+            _fake_enqueue_xert.calls.append((user_id, scheduled))
+            return "test-job-key"
+
+        _fake_enqueue_xert.calls = []
+
+        async def _fake_enqueue_garmin(user_id, scheduled=None):
+            return "test-job-key"
+
+        with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
+            with mock.patch("trainingdash.use_cases.hourly_sync_scheduler.enqueue_sync_xert_job", _fake_enqueue_xert):
+                with mock.patch(
+                    "trainingdash.use_cases.hourly_sync_scheduler.enqueue_sync_garmin_job", _fake_enqueue_garmin
+                ):
+                    from trainingdash.worker import hourly_sync_scheduler
+
+                    result = await hourly_sync_scheduler({})
+
+        assert result["success"] is True
+        assert result["xert_queued"] == 1  # Only user1 with sync_enabled=True
+
+        enqueued_user_ids = {user_id for user_id, _ in _fake_enqueue_xert.calls}
+        assert user1.id in enqueued_user_ids
+        assert user2.id not in enqueued_user_ids  # Skipped due to sync_enabled=False
 
 
 @pytest.mark.skipif(

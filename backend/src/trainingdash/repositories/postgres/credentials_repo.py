@@ -59,6 +59,15 @@ class PostgresXertCredentialsRepo:
         await self._db.commit()
         return True
 
+    async def update_sync_enabled(self, user_id: int, sync_enabled: bool) -> bool:
+        result = await self._db.execute(select(XertCredentials).where(XertCredentials.user_id == user_id))
+        creds = result.scalar_one_or_none()
+        if creds is None:
+            return False
+        creds.sync_enabled = sync_enabled
+        await self._db.commit()
+        return True
+
 
 class PostgresGarminCredentialsRepo:
     """PostgreSQL implementation of GarminCredentialsRepo."""
@@ -108,5 +117,14 @@ class PostgresGarminCredentialsRepo:
         if creds is None:
             return False
         await self._db.delete(creds)
+        await self._db.commit()
+        return True
+
+    async def update_sync_enabled(self, user_id: int, sync_enabled: bool) -> bool:
+        result = await self._db.execute(select(GarminCredentials).where(GarminCredentials.user_id == user_id))
+        creds = result.scalar_one_or_none()
+        if creds is None:
+            return False
+        creds.sync_enabled = sync_enabled
         await self._db.commit()
         return True

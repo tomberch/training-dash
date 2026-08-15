@@ -495,6 +495,46 @@ export async function fetchJobStatus(jobId: string): Promise<JobStatus> {
 }
 
 // ============================================================================
+// Upload to Provider API
+// ============================================================================
+
+export interface FitDevice {
+  id: number;
+  name: string;
+  display_name: string;
+}
+
+export interface FitDevicesResponse {
+  devices: FitDevice[];
+  total: number;
+}
+
+export interface UploadToProviderRequest {
+  provider: "xert" | "garmin";
+  device_product_id?: number | null;
+}
+
+export interface UploadToProviderResponse {
+  provider: string;
+  provider_activity_id: string;
+}
+
+export async function fetchFitDevices(): Promise<FitDevicesResponse> {
+  return apiGet<FitDevicesResponse>(`/fit/devices`);
+}
+
+export async function uploadToProvider(
+  activityId: string,
+  request: UploadToProviderRequest
+): Promise<UploadToProviderResponse> {
+  return apiPost<UploadToProviderResponse>(
+    `/activities/${activityId}/upload`,
+    request,
+    "Failed to upload to provider"
+  );
+}
+
+// ============================================================================
 // Auth API
 // ============================================================================
 

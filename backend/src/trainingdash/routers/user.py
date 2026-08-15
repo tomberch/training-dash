@@ -150,13 +150,14 @@ async def get_my_xert_credentials(xert_repo: XertCredentialsRepoD, user: Current
     """Get the current user's Xert credentials status. Never returns the password."""
     creds = await xert_repo.get_by_user_id(user.id)
     if creds is None:
-        return {"configured": False, "xert_email": None, "sync_since": None}
+        return {"configured": False, "xert_email": None, "sync_since": None, "sync_enabled": None}
     return {
         "configured": True,
         "xert_email": creds.xert_email,
         "sync_since": (creds.sync_since.date() if hasattr(creds.sync_since, "date") else creds.sync_since).isoformat()
         if creds.sync_since
         else None,
+        "sync_enabled": creds.sync_enabled,
     }
 
 
@@ -208,6 +209,22 @@ async def delete_my_xert_credentials(xert_repo: XertCredentialsRepoD, user: Curr
     return {"success": True}
 
 
+class SyncEnabledRequest(BaseModel):
+    sync_enabled: bool
+
+
+@router.patch("/me/xert-credentials")
+async def patch_my_xert_credentials(
+    xert_repo: XertCredentialsRepoD, user: CurrentUser, request: SyncEnabledRequest
+):
+    """Update sync_enabled for Xert credentials."""
+    creds = await xert_repo.get_by_user_id(user.id)
+    if creds is None:
+        raise HTTPException(status_code=404, detail="Xert credentials not configured")
+    await xert_repo.update_sync_enabled(user.id, request.sync_enabled)
+    return {"success": True, "sync_enabled": request.sync_enabled}
+
+
 # --- Garmin credentials ---
 
 
@@ -216,13 +233,14 @@ async def get_my_garmin_credentials(garmin_repo: GarminCredentialsRepoD, user: C
     """Get the current user's Garmin credentials status. Never returns the password."""
     creds = await garmin_repo.get_by_user_id(user.id)
     if creds is None:
-        return {"configured": False, "garmin_email": None, "sync_since": None}
+        return {"configured": False, "garmin_email": None, "sync_since": None, "sync_enabled": None}
     return {
         "configured": True,
         "garmin_email": creds.garmin_email,
         "sync_since": (creds.sync_since.date() if hasattr(creds.sync_since, "date") else creds.sync_since).isoformat()
         if creds.sync_since
         else None,
+        "sync_enabled": creds.sync_enabled,
     }
 
 
@@ -333,6 +351,18 @@ async def delete_my_garmin_credentials(garmin_repo: GarminCredentialsRepoD, user
     _pending_garmin_mfa.pop(user.id, None)
     await garmin_repo.delete(user.id)
     return {"success": True}
+
+
+@router.patch("/me/garmin-credentials")
+async def patch_my_garmin_credentials(
+    garmin_repo: GarminCredentialsRepoD, user: CurrentUser, request: SyncEnabledRequest
+):
+    """Update sync_enabled for Garmin credentials."""
+    creds = await garmin_repo.get_by_user_id(user.id)
+    if creds is None:
+        raise HTTPException(status_code=404, detail="Garmin credentials not configured")
+    await garmin_repo.update_sync_enabled(user.id, request.sync_enabled)
+    return {"success": True, "sync_enabled": request.sync_enabled}
 
 
 # --- Thresholds ---

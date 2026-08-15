@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 from geoalchemy2 import Geography
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     Date,
     DateTime,
     Float,
@@ -246,6 +247,7 @@ class XertCredentials(Base):
     encrypted_password: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     sync_since: Mapped[datetime | None] = mapped_column(nullable=True)
     last_synced_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    sync_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
     updated_at: Mapped[datetime] = mapped_column(server_default=text("now()"), onupdate=text("now()"))
 
@@ -259,6 +261,7 @@ class GarminCredentials(Base):
     encrypted_password: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     sync_since: Mapped[datetime | None] = mapped_column(nullable=True)
     last_synced_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    sync_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
     updated_at: Mapped[datetime] = mapped_column(server_default=text("now()"), onupdate=text("now()"))
 

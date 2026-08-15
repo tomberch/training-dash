@@ -73,6 +73,10 @@ class XertClientProtocol(Protocol):
         """Download the raw FIT file for an activity via the web session."""
         ...
 
+    async def upload_fit(self, fit_bytes: bytes, filename: str = "activity.fit") -> str:
+        """Upload a FIT file to Xert. Returns the new activity ID."""
+        ...
+
     async def get_xss(self, activity_id: str) -> float | None:
         """Return the Xert Strain Score for an activity (lightweight JSON call)."""
         ...
@@ -385,6 +389,55 @@ class XertClient:
 
         # Unreachable — loop always returns or raises
         raise XertAPIError(f"FIT download failed for {activity_id}")
+
+    async def upload_fit(self, fit_bytes: bytes, filename: str = "activity.fit") -> str:
+        """
+        Upload a FIT file to Xert via OAuth API.
+
+        URL: POST https://www.xertonline.com/oauth/upload
+        Content-Type: multipart/form-data
+        Authorization: Bearer <token>
+
+        The file is sent as a multipart form field named 'file'.
+
+        Returns the activity ID (path) of the newly created activity.
+        Raises XertAPIError on failure.
+        """
+        await self._oauth.ensure_valid_token()
+
+        if not fit_bytes:
+            raise XertAPIError("No FIT data provided for upload")
+
+        try:
+            # Create multipart form data with the FIT file
+            files = {
+                "file": (filename, fit_bytes, "application/octet-stream"),
+            }
+
+            response = await self._client.post(
+                f"{self.BASE_URL}/oauth/upload",
+                headers=self._oauth.auth_headers(),
+                files=files,
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            if not data.get("success"):
+                error_msg = data.get("message", "Unknown error")
+                raise XertAPIError(f"Xert upload failed: {error_msg}")
+
+            # The response contains the activity path/id
+            activity_id = data.get("path") or data.get("activity_id") or data.get("id")
+            if not activity_id:
+                raise XertAPIError("Xert upload succeeded but no activity ID returned")
+
+            logger.info("Uploaded FIT to Xert, activity ID: %s", activity_id)
+            return activity_id
+
+        except httpx.HTTPStatusError as e:
+            raise XertAPIError(f"Xert upload HTTP error: {e.response.status_code}") from e
+        except httpx.RequestError as e:
+            raise XertAPIError(f"Failed to connect to Xert for upload: {e}") from e
 
     async def get_xss(self, activity_id: str) -> float | None:
         """

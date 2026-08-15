@@ -644,12 +644,12 @@ wheels = [
 ]
 
 [[package]]
-name = "fitdecode"
-version = "0.11.0"
+name = "garmin-fit-sdk"
+version = "21.213.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/87/19/1bde056f443d8ce890dbc0f0bd8a216cc9ebfda4221619767f80cf1835e2/fitdecode-0.11.0.tar.gz", hash = "sha256:52d920e50eaa76eb065b20bfd4e42f72195e894a079098dacc1cafa908cd4b83", size = 107149, upload-time = "2025-08-06T08:08:42.105Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/45/e0/cfa1015e72fc2a94ad38e10685509a41d6c6369bf30b6608dc141d61222e/garmin_fit_sdk-21.213.0.tar.gz", hash = "sha256:24c51c91a5cc39861d95248e04eba61e8b9901d430a75ba5ad1e5f7e1c96fcbc", size = 199035, upload-time = "2026-08-11T21:00:53.332Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/7b/7b/75829f9b77b2546f955ec265de10de993939bf3218b5d957ca79803a2d28/fitdecode-0.11.0-py3-none-any.whl", hash = "sha256:a1bdb9b4d1e9ebac0001fc58c22fe07a3f9967ca4e13258c6ef99cdb8d697a78", size = 109961, upload-time = "2025-08-06T08:08:39.033Z" },
+    { url = "https://files.pythonhosted.org/packages/06/39/dee2dcbf3058c716f5712d7b4506aa6bf3c9e0fb529aa6046e87825873e8/garmin_fit_sdk-21.213.0-py3-none-any.whl", hash = "sha256:f36e843c132a8bb4347cc304fb43e61842668efe7c7710698a843dc4873eb1c8", size = 219263, upload-time = "2026-08-11T21:00:51.932Z" },
 ]
 
 [[package]]
@@ -1595,7 +1595,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "fastapi-sso" },
     { name = "fit-tool" },
-    { name = "fitdecode" },
+    { name = "garmin-fit-sdk" },
     { name = "garminconnect" },
     { name = "geoalchemy2" },
     { name = "httpx" },
@@ -1642,7 +1642,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115" },
     { name = "fastapi-sso", specifier = ">=0.19.0" },
     { name = "fit-tool", specifier = ">=0.2" },
-    { name = "fitdecode", specifier = ">=0.10" },
+    { name = "garmin-fit-sdk", specifier = ">=21.0" },
     { name = "garminconnect", specifier = ">=0.2.25" },
     { name = "geoalchemy2", specifier = ">=0.17" },
     { name = "httpx", specifier = ">=0.28" },

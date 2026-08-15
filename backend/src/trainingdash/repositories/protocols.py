@@ -177,6 +177,14 @@ class XertCredentialsRepo(Protocol):
         """
         ...
 
+    async def update_sync_enabled(self, user_id: int, sync_enabled: bool) -> bool:
+        """
+        Update the sync_enabled flag for a user's Xert credentials.
+
+        Returns True if updated, False if credentials not found.
+        """
+        ...
+
 
 class GarminCredentialsRepo(Protocol):
     """
@@ -210,6 +218,14 @@ class GarminCredentialsRepo(Protocol):
         Delete Garmin credentials for a user.
 
         Returns True if deleted, False if not found.
+        """
+        ...
+
+    async def update_sync_enabled(self, user_id: int, sync_enabled: bool) -> bool:
+        """
+        Update the sync_enabled flag for a user's Garmin credentials.
+
+        Returns True if updated, False if credentials not found.
         """
         ...
 

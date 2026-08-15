@@ -126,6 +126,28 @@ class MockXertClient:
         logger.info("MockXertClient: get_xss(%r) = %s", activity_id, xss)
         return xss
 
+    async def upload_fit(self, fit_bytes: bytes, filename: str = "activity.fit") -> str:
+        """
+        Simulate FIT file upload to Xert.
+
+        Returns a mock activity ID based on the filename and current timestamp.
+        In E2E tests, this allows verifying the upload flow without actually
+        hitting Xert's servers.
+        """
+        import time
+
+        # Generate a predictable mock activity ID
+        timestamp = int(time.time())
+        mock_activity_id = f"mock-upload-{timestamp}"
+
+        logger.info(
+            "MockXertClient: upload_fit(%d bytes, %r) -> %r",
+            len(fit_bytes),
+            filename,
+            mock_activity_id,
+        )
+        return mock_activity_id
+
     async def close(self) -> None:
         """No-op for mock client."""
         pass
