@@ -18,6 +18,8 @@ The modification process:
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
+from typing import Any, Callable
+
 from fit_tool.fit_file_builder import FitFileBuilder
 from fit_tool.profile.messages.device_info_message import DeviceInfoMessage
 from fit_tool.profile.messages.file_id_message import FileIdMessage
@@ -147,7 +149,6 @@ def modify_fit(fit_bytes: bytes, modifications: FitModifications) -> bytes:
         device_info.serial_number = 3413264489
         device_info.device_index = 0
         builder.add(device_info)
-        device_info_added = True
 
         # Copy record messages
         for msg in messages.get("record_mesgs", []):
@@ -182,87 +183,113 @@ def _semicircles_to_degrees(semicircles: int) -> float:
     return semicircles * (180.0 / (2**31))
 
 
+def _copy_field(src: dict, dest: Any, field: str, transform: Callable | None = None) -> None:
+    """Copy a field from src dict to dest object if present and not None.
+
+    Args:
+        src: Source dictionary with field values
+        dest: Destination message object with attribute to set
+        field: Field name (same in src and dest)
+        transform: Optional function to transform the value before setting
+    """
+    if field in src and src[field] is not None:
+        value = src[field]
+        if transform is not None:
+            value = transform(value)
+        setattr(dest, field, value)
+
+
+def _copy_fields(
+    src: dict,
+    dest: Any,
+    fields: list[str],
+    timestamp_fields: list[str] | None = None,
+    position_fields: list[str] | None = None,
+) -> None:
+    """Copy multiple fields from src dict to dest object.
+
+    Args:
+        src: Source dictionary with field values
+        dest: Destination message object
+        fields: List of field names to copy directly
+        timestamp_fields: Fields to transform with _fit_to_unix_ms
+        position_fields: Fields to transform with _semicircles_to_degrees
+    """
+    for field in fields:
+        _copy_field(src, dest, field)
+
+    if timestamp_fields:
+        for field in timestamp_fields:
+            _copy_field(src, dest, field, _fit_to_unix_ms)
+
+    if position_fields:
+        for field in position_fields:
+            _copy_field(src, dest, field, _semicircles_to_degrees)
+
+
 def _copy_record_fields(src: dict, dest: RecordMessage) -> None:
     """Copy fields from parsed record dict to RecordMessage.
 
     garmin-fit-sdk returns scaled values (meters, m/s, etc.) except position
     which is in semicircles. fit_tool expects degrees for position.
     """
-    if "timestamp" in src and src["timestamp"] is not None:
-        dest.timestamp = _fit_to_unix_ms(src["timestamp"])
-    if "position_lat" in src and src["position_lat"] is not None:
-        dest.position_lat = _semicircles_to_degrees(src["position_lat"])
-    if "position_long" in src and src["position_long"] is not None:
-        dest.position_long = _semicircles_to_degrees(src["position_long"])
-    if "heart_rate" in src and src["heart_rate"] is not None:
-        dest.heart_rate = src["heart_rate"]
-    if "cadence" in src and src["cadence"] is not None:
-        dest.cadence = src["cadence"]
-    if "power" in src and src["power"] is not None:
-        dest.power = src["power"]
+    _copy_fields(
+        src,
+        dest,
+        fields=["heart_rate", "cadence", "power", "distance"],
+        timestamp_fields=["timestamp"],
+        position_fields=["position_lat", "position_long"],
+    )
+
     # Prefer enhanced_speed over speed (same value but higher precision)
     if "enhanced_speed" in src and src["enhanced_speed"] is not None:
         dest.speed = src["enhanced_speed"]
     elif "speed" in src and src["speed"] is not None:
         dest.speed = src["speed"]
+
     # Prefer enhanced_altitude over altitude
     if "enhanced_altitude" in src and src["enhanced_altitude"] is not None:
         dest.altitude = src["enhanced_altitude"]
     elif "altitude" in src and src["altitude"] is not None:
         dest.altitude = src["altitude"]
-    if "distance" in src and src["distance"] is not None:
-        dest.distance = src["distance"]
 
 
 def _copy_lap_fields(src: dict, dest: LapMessage) -> None:
     """Copy fields from parsed lap dict to LapMessage."""
-    if "timestamp" in src and src["timestamp"] is not None:
-        dest.timestamp = _fit_to_unix_ms(src["timestamp"])
-    if "start_time" in src and src["start_time"] is not None:
-        dest.start_time = _fit_to_unix_ms(src["start_time"])
-    if "total_elapsed_time" in src and src["total_elapsed_time"] is not None:
-        dest.total_elapsed_time = src["total_elapsed_time"]
-    if "total_timer_time" in src and src["total_timer_time"] is not None:
-        dest.total_timer_time = src["total_timer_time"]
-    if "total_distance" in src and src["total_distance"] is not None:
-        dest.total_distance = src["total_distance"]
-    if "total_moving_time" in src and src["total_moving_time"] is not None:
-        dest.total_moving_time = src["total_moving_time"]
-    if "avg_heart_rate" in src and src["avg_heart_rate"] is not None:
-        dest.avg_heart_rate = src["avg_heart_rate"]
-    if "max_heart_rate" in src and src["max_heart_rate"] is not None:
-        dest.max_heart_rate = src["max_heart_rate"]
-    if "avg_power" in src and src["avg_power"] is not None:
-        dest.avg_power = src["avg_power"]
-    if "max_power" in src and src["max_power"] is not None:
-        dest.max_power = src["max_power"]
+    _copy_fields(
+        src,
+        dest,
+        fields=[
+            "total_elapsed_time",
+            "total_timer_time",
+            "total_distance",
+            "total_moving_time",
+            "avg_heart_rate",
+            "max_heart_rate",
+            "avg_power",
+            "max_power",
+        ],
+        timestamp_fields=["timestamp", "start_time"],
+    )
 
 
 def _copy_session_fields(src: dict, dest: SessionMessage) -> None:
     """Copy fields from parsed session dict to SessionMessage."""
-    if "timestamp" in src and src["timestamp"] is not None:
-        dest.timestamp = _fit_to_unix_ms(src["timestamp"])
-    if "start_time" in src and src["start_time"] is not None:
-        dest.start_time = _fit_to_unix_ms(src["start_time"])
-    if "total_elapsed_time" in src and src["total_elapsed_time"] is not None:
-        dest.total_elapsed_time = src["total_elapsed_time"]
-    if "total_timer_time" in src and src["total_timer_time"] is not None:
-        dest.total_timer_time = src["total_timer_time"]
-    if "total_distance" in src and src["total_distance"] is not None:
-        dest.total_distance = src["total_distance"]
-    if "total_moving_time" in src and src["total_moving_time"] is not None:
-        dest.total_moving_time = src["total_moving_time"]
-    if "total_ascent" in src and src["total_ascent"] is not None:
-        dest.total_ascent = src["total_ascent"]
-    if "avg_speed" in src and src["avg_speed"] is not None:
-        dest.avg_speed = src["avg_speed"]
-    if "max_speed" in src and src["max_speed"] is not None:
-        dest.max_speed = src["max_speed"]
-    if "avg_heart_rate" in src and src["avg_heart_rate"] is not None:
-        dest.avg_heart_rate = src["avg_heart_rate"]
-    if "max_heart_rate" in src and src["max_heart_rate"] is not None:
-        dest.max_heart_rate = src["max_heart_rate"]
-    if "avg_power" in src and src["avg_power"] is not None:
-        dest.avg_power = src["avg_power"]
-    if "max_power" in src and src["max_power"] is not None:
-        dest.max_power = src["max_power"]
+    _copy_fields(
+        src,
+        dest,
+        fields=[
+            "total_elapsed_time",
+            "total_timer_time",
+            "total_distance",
+            "total_moving_time",
+            "total_ascent",
+            "avg_speed",
+            "max_speed",
+            "avg_heart_rate",
+            "max_heart_rate",
+            "avg_power",
+            "max_power",
+        ],
+        timestamp_fields=["timestamp", "start_time"],
+    )

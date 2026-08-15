@@ -166,7 +166,7 @@ export function UploadToProviderDialog({
               <button
                 type="button"
                 onClick={() => setProvider("garmin")}
-                className={`flex-1 px-4 py-2 rounded-lg border text-sm font-medium transition ${
+                className={`flex-1 px-4 py-2 rounded-lg border text-label transition ${
                   provider === "garmin"
                     ? "bg-primary text-primary-foreground border-primary"
                     : "bg-card border-border hover:bg-muted"
@@ -186,7 +186,7 @@ export function UploadToProviderDialog({
               <button
                 type="button"
                 onClick={() => setProvider("xert")}
-                className={`flex-1 px-4 py-2 rounded-lg border text-sm font-medium transition ${
+                className={`flex-1 px-4 py-2 rounded-lg border text-label transition ${
                   provider === "xert"
                     ? "bg-primary text-primary-foreground border-primary"
                     : "bg-card border-border hover:bg-muted"
@@ -214,7 +214,7 @@ export function UploadToProviderDialog({
                 (optional)
               </span>
             </Label>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-caption">
               Change the device to unlock platform-specific features (e.g.,
               Garmin Cycling Dynamics).
             </p>
@@ -265,14 +265,14 @@ export function UploadToProviderDialog({
                       key={device.id}
                       type="button"
                       onClick={() => handleDeviceSelect(device)}
-                      className={`w-full px-3 py-2 text-left text-sm hover:bg-muted transition ${
+                      className={`w-full px-3 py-2 text-left text-body hover:bg-muted transition ${
                         selectedDevice?.id === device.id
                           ? "bg-muted font-medium"
                           : ""
                       }`}
                     >
                       {device.display_name}
-                      <span className="text-muted-foreground ml-2 text-xs">
+                      <span className="text-muted-foreground ml-2 text-caption">
                         ({device.id})
                       </span>
                     </button>
@@ -281,7 +281,7 @@ export function UploadToProviderDialog({
               )}
             </div>
             {selectedDevice && (
-              <p className="text-xs text-success">
+              <p className="text-caption text-success">
                 Selected: {selectedDevice.display_name} (ID: {selectedDevice.id})
               </p>
             )}
@@ -301,7 +301,7 @@ export function UploadToProviderDialog({
                   viewBox="0 0 24 24"
                 >
                   <circle
-                    className="opacity-25"
+                    className="text-primary/25"
                     cx="12"
                     cy="12"
                     r="10"
@@ -309,7 +309,7 @@ export function UploadToProviderDialog({
                     strokeWidth="4"
                   />
                   <path
-                    className="opacity-75"
+                    className="text-primary-foreground"
                     fill="currentColor"
                     d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                   />

@@ -13,7 +13,11 @@ Activity sync:
 - download_fit() downloads original FIT file for an activity
 """
 
+import io
 import logging
+import os
+import tempfile
+import zipfile
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
@@ -243,9 +247,6 @@ class GarminClient:
             zip_data = self._client.download_activity(activity_id, dl_fmt=self._client.ActivityDownloadFormat.ORIGINAL)
 
             # Extract FIT from ZIP
-            import io
-            import zipfile
-
             with zipfile.ZipFile(io.BytesIO(zip_data)) as zf:
                 # Find the FIT file in the ZIP
                 fit_files = [n for n in zf.namelist() if n.lower().endswith(".fit")]
@@ -280,8 +281,6 @@ class GarminClient:
         if not fit_bytes:
             raise GarminAPIError("No FIT data provided for upload")
 
-        import tempfile
-
         try:
             # Write FIT bytes to a temporary file
             with tempfile.NamedTemporaryFile(suffix=".fit", delete=False) as tmp:
@@ -314,8 +313,6 @@ class GarminClient:
 
             finally:
                 # Clean up temp file
-                import os
-
                 try:
                     os.unlink(tmp_path)
                 except OSError:
