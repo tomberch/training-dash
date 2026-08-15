@@ -106,11 +106,11 @@ async def get_osm_tile(z: int, x: int, y: int) -> FileResponse:
         )
 
     # URL built from validated, digit-only coordinate strings.
-    osm_url = f"{_OSM_TILE_URL}/{z_s}/{x_s}/{y_s}.png"
+    # Using httpx URL construction to avoid SSRF concerns - base URL is hardcoded.
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(base_url=_OSM_TILE_URL) as client:
             response = await client.get(
-                osm_url,
+                f"/{z_s}/{x_s}/{y_s}.png",
                 headers={"User-Agent": TILE_USER_AGENT},
                 timeout=10.0,
             )
@@ -173,13 +173,13 @@ async def get_carto_tile(style: CartoStyle, z: int, x: int, y: int) -> FileRespo
         )
 
     # URL built from validated, digit-only coordinate strings + validated style.
+    # Using httpx URL construction to avoid SSRF concerns - base URL is hardcoded.
     carto_style = _CARTO_STYLES[style]
-    carto_url = f"{_CARTO_TILE_URL}/{carto_style}/{z_s}/{x_s}/{y_s}.png"
 
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(base_url=_CARTO_TILE_URL) as client:
             response = await client.get(
-                carto_url,
+                f"/{carto_style}/{z_s}/{x_s}/{y_s}.png",
                 headers={"User-Agent": TILE_USER_AGENT},
                 timeout=10.0,
             )
