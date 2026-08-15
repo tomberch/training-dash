@@ -87,13 +87,9 @@ python -c "import secrets, base64; print(base64.b64encode(secrets.token_bytes(32
 
 ## First Steps
 
-### 1. Log In
+### 1. Register
 
-**Docker deployment** — A seed admin account is created automatically:
-- **Email:** `admin@example.com`
-- **Password:** `admin` (or value of `ADMIN_PASSWORD` env var)
-
-**Manual deployment** — Register the first account at `/register`. The first user automatically becomes admin.
+Open http://localhost:8000 and click **Register** to create your account. The first user automatically becomes admin.
 
 ### 2. Upload Activities
 

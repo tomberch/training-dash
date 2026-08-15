@@ -33,6 +33,11 @@ Self-hosted fitness analytics for cyclists and endurance athletes. Analyze your 
 - Lifetime PRs (longest ride, fastest segments, max power, biggest climb)
 - Per-route PRs with automatic route matching via GPS similarity
 
+**Activity Comparison**
+- Compare multiple activities on the same route side-by-side
+- Overlay performance charts (power, HR, speed) to spot differences
+- Identify where you gained or lost time
+
 **Settings & Preferences**
 - Selectable map tile styles (OpenStreetMap, Positron, Dark Matter, Voyager)
 - Light/Dark/Midnight themes
@@ -96,9 +101,7 @@ cd training-dash
 docker compose up
 ```
 
-Open http://localhost:8000 and log in with the seed admin account:
-- **Email:** `admin@example.com`
-- **Password:** `admin` (or value of `ADMIN_PASSWORD` env var)
+Open http://localhost:8000 and register your account. The first user automatically becomes admin.
 
 To sync activities from Garmin or Xert, go to **Settings > Integrations**.
 
