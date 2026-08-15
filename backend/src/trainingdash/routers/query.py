@@ -134,15 +134,45 @@ async def execute_query_endpoint(
         parsed = parse(query_text)
     except ParseError as e:
         context = e.get_context(query_text) if hasattr(e, "get_context") else None
+        # Filter out internal Lark tokens from suggestions and message
+        token_map = {
+            "EQUAL": "=",
+            "MORETHAN": ">",
+            "LESSTHAN": "<",
+            "COMMA": ",",
+            "LPAREN": "(",
+            "RPAREN": ")",
+        }
+        
+        # Clean up suggestions
+        suggestions = None
+        if hasattr(e, "expected") and e.expected:
+            suggestions = []
+            for s in e.expected:
+                if s.startswith("__ANON"):
+                    continue  # Skip anonymous tokens
+                mapped = token_map.get(s, s)
+                if mapped not in suggestions:
+                    suggestions.append(mapped)
+        
+        # Clean up error message - replace internal tokens with user-friendly names
+        message = e.message
+        for internal, friendly in token_map.items():
+            message = message.replace(internal, friendly)
+        # Remove __ANON_* references from message
+        import re
+        message = re.sub(r',?\s*__ANON_\d+', '', message)
+        message = re.sub(r'__ANON_\d+,?\s*', '', message)
+        
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 "error": {
                     "stage": "parse",
-                    "message": e.message,
+                    "message": message,
                     "line": e.line,
                     "column": e.column,
-                    "suggestions": e.expected if hasattr(e, "expected") else None,
+                    "suggestions": suggestions if suggestions else None,
                     "context": context,
                 }
             },
