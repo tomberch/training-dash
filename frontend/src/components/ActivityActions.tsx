@@ -1,4 +1,3 @@
-import * as React from "react";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -8,7 +7,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 interface ActivityActionsProps {
-  activityId: string;
   onUploadToProvider: () => void;
   onExportFit: () => void;
 }
@@ -18,7 +16,6 @@ interface ActivityActionsProps {
  * Contains secondary actions like Upload to Provider and Export FIT.
  */
 export function ActivityActions({
-  activityId,
   onUploadToProvider,
   onExportFit,
 }: ActivityActionsProps) {

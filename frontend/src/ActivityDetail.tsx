@@ -669,7 +669,6 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
                 </Link>
               )}
               <ActivityActions
-                activityId={activityId}
                 onUploadToProvider={handleUploadToProvider}
                 onExportFit={handleExportFit}
               />
