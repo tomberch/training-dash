@@ -96,9 +96,9 @@ export function ResizableMap({
           
           {coloredSegments.length > 0
             ? coloredSegments.map((seg, i) => (
-                <Polyline key={i} positions={seg.positions} color={seg.color} weight={4} />
+                <Polyline key={i} positions={seg.positions} color={seg.color} weight={6} />
               ))
-            : <Polyline positions={positions} color="#6366f1" weight={5} />}
+            : <Polyline positions={positions} color="#6366f1" weight={6} />}
           
           {otherPositions && (
             <Polyline positions={otherPositions} color="#f59e0b" weight={3} dashArray="5,5" />

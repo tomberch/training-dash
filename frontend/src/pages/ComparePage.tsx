@@ -919,7 +919,7 @@ export function ComparePage() {
 
       {/* Sticky map */}
       {basePositions.length > 0 && (
-        <div className="flex-shrink-0 px-8 pt-6 pb-0">
+        <div className="flex-shrink-0 px-8 pt-6 pb-0 relative">
           <ResizableMap
             positions={basePositions}
             coloredSegments={coloredSegments.length > 0 ? coloredSegments : undefined}
@@ -929,6 +929,25 @@ export function ComparePage() {
             onResizeStart={startResizeHeight}
             isResizing={isResizing}
           />
+          {/* Map legend - shown when colored segments are displayed */}
+          {coloredSegments.length > 0 && (
+            <div className="absolute bottom-6 left-12 z-[1000] bg-card/90 backdrop-blur-sm rounded-lg px-3 py-2 border border-border shadow-lg">
+              <div className="flex items-center gap-4 text-xs">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-full bg-[#10b981]" />
+                  <span className="text-foreground">Ahead</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-full bg-[#6366f1]" />
+                  <span className="text-foreground">Even</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-full bg-[#ef4444]" />
+                  <span className="text-foreground">Behind</span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -937,10 +956,6 @@ export function ComparePage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Base activity selector */}
           <div>
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-3 h-3 rounded-full bg-primary" />
-              <label className="text-sm font-medium text-muted-foreground">Base Activity</label>
-            </div>
             <ActivitySelector
               selectedId={baseActivity?.id ?? null}
               onSelect={handleBaseSelect}
@@ -949,45 +964,21 @@ export function ComparePage() {
               placeholder="Select the base ride..."
               className="border-2 border-primary/30 rounded-xl focus-within:ring-2 focus-within:ring-primary/50"
             />
-            {baseActivity && (
-              <Link
-                to={`/activities/${baseActivity.id}`}
-                className="inline-flex items-center mt-2 text-sm text-primary hover:underline"
-              >
-                <span className="w-2 h-2 rounded-full bg-primary mr-2" />
-                {baseActivity.title || "Untitled"} →
-              </Link>
-            )}
           </div>
           
           {/* Compare activity selector */}
           <div>
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-3 h-3 rounded-full bg-accent" />
-              <label className="text-sm font-medium text-muted-foreground">Compare With</label>
-            </div>
             {baseActivity ? (
               hasSameRouteActivities ? (
-                <>
-                  <ActivitySelector
-                    selectedId={compareActivity?.id ?? null}
-                    onSelect={handleCompareSelect}
-                    filterIds={sameRouteActivityIds}
-                    excludeIds={[baseActivity.id]}
-                    label=""
-                    placeholder="Select ride to compare..."
-                    className="border-2 border-border rounded-xl focus-within:ring-2 focus-within:ring-accent/50"
-                  />
-                  {compareActivity && (
-                    <Link
-                      to={`/activities/${compareActivity.id}`}
-                      className="inline-flex items-center mt-2 text-sm text-accent hover:underline"
-                    >
-                      <span className="w-2 h-2 rounded-full bg-accent mr-2" />
-                      {compareActivity.title || "Untitled"} →
-                    </Link>
-                  )}
-                </>
+                <ActivitySelector
+                  selectedId={compareActivity?.id ?? null}
+                  onSelect={handleCompareSelect}
+                  filterIds={sameRouteActivityIds}
+                  excludeIds={[baseActivity.id]}
+                  label=""
+                  placeholder="Select ride to compare..."
+                  className="border-2 border-border rounded-xl focus-within:ring-2 focus-within:ring-accent/50"
+                />
               ) : (
                 <div className="px-4 py-3 bg-muted rounded-xl border-2 border-border text-muted-foreground text-sm">
                   No other rides on this route yet. Select a different base activity.
@@ -1102,7 +1093,10 @@ export function ComparePage() {
           <div className="space-y-4">
             {/* Activities summary cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-card rounded-lg border border-border p-4">
+              <Link
+                to={`/activities/${baseActivity.id}`}
+                className="bg-card rounded-lg border border-border p-4 card-hover cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:shadow-xl block"
+              >
                 <div className="flex items-center gap-2 mb-2">
                   <span className="w-3 h-3 rounded-full bg-indigo-500" />
                   <span className="text-metric-label text-primary">
@@ -1120,8 +1114,11 @@ export function ComparePage() {
                     day: "numeric",
                   })}
                 </p>
-              </div>
-              <div className="bg-card rounded-lg border border-border p-4">
+              </Link>
+              <Link
+                to={`/activities/${compareActivity.id}`}
+                className="bg-card rounded-lg border border-border p-4 card-hover cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:shadow-xl block"
+              >
                 <div className="flex items-center gap-2 mb-2">
                   <span className="w-3 h-3 rounded-full bg-amber-500" />
                   <span className="text-metric-label text-warning">
@@ -1139,7 +1136,7 @@ export function ComparePage() {
                     day: "numeric",
                   })}
                 </p>
-              </div>
+              </Link>
             </div>
 
             {/* Gap Chart */}
@@ -1224,20 +1221,6 @@ export function ComparePage() {
                         />
                       </ComposedChart>
                     </ResponsiveContainer>
-                  </div>
-                  <div className="flex items-center justify-center gap-6 mt-3 text-caption">
-                    <div className="flex items-center gap-1">
-                      <span className="w-3 h-3 rounded-full bg-green-500" />
-                      <span>Faster (ahead)</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <span className="w-3 h-3 rounded-full bg-indigo-500" />
-                      <span>Even</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <span className="w-3 h-3 rounded-full bg-red-500" />
-                      <span>Slower (behind)</span>
-                    </div>
                   </div>
                 </div>
               </ChartErrorBoundary>
