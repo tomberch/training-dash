@@ -61,6 +61,7 @@ const mockUser: User = {
   hr_zone_percentages: null,
   hr_derived_power_enabled: false,
   hr_power_model: null,
+  map_tile_style: "osm",
 };
 
 // Helper to wrap Settings with Router context

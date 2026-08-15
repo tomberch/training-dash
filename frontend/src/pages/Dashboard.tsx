@@ -12,7 +12,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import { toast } from "sonner";
-import type { Activity, PMCPoint, PowerCurvePoint, Notification, RecordsResponse, ThresholdEntry } from "../api";
+import type { Activity, PMCPoint, PowerCurvePoint, Notification, RecordsResponse, ThresholdEntry, User } from "../api";
 import { 
   fetchActivities, 
   fetchPMC, 
@@ -22,6 +22,7 @@ import {
   dismissNotification,
   fetchRecords,
   fetchThresholds,
+  fetchMe,
 } from "../api";
 import { PolylineMap } from "../components/PolylineMap";
 import { PageHeader } from "../components/PageHeader";
@@ -130,6 +131,7 @@ export function Dashboard({}: DashboardProps): JSX.Element {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [records, setRecords] = useState<RecordsResponse | null>(null);
   const [thresholds, setThresholds] = useState<ThresholdEntry[]>([]);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   
   // Track if we've shown the first-activity celebration
@@ -148,14 +150,16 @@ export function Dashboard({}: DashboardProps): JSX.Element {
       fetchNotifications(),
       fetchRecords(),
       fetchThresholds().catch(() => []),
+      fetchMe().catch(() => null),
     ])
-      .then(([acts, pmc, curve, notifs, recs, thresh]) => {
+      .then(([acts, pmc, curve, notifs, recs, thresh, me]) => {
         setActivities(acts.activities);
         setPmcData(pmc);
         setPowerCurve(curve);
         setNotifications(notifs);
         setRecords(recs);
         setThresholds(thresh);
+        setUser(me);
         setLoading(false);
         
         // First-activity celebration: show once when user goes from 0→1+ activities
@@ -185,6 +189,19 @@ export function Dashboard({}: DashboardProps): JSX.Element {
   const ctlTrend = currentPMC && previousPMC 
     ? ((currentPMC.ctl - previousPMC.ctl) / (previousPMC.ctl || 1) * 100)
     : null;
+
+  // Current threshold (most recent)
+  const currentThreshold = useMemo(() => {
+    if (thresholds.length === 0) return null;
+    // Thresholds are sorted by effective_date descending from API, so first is most recent
+    return thresholds[0];
+  }, [thresholds]);
+
+  // Calculate W/kg if we have FTP and weight
+  const wPerKg = useMemo(() => {
+    if (!currentThreshold?.ftp_watts || !user?.weight_kg) return null;
+    return currentThreshold.ftp_watts / user.weight_kg;
+  }, [currentThreshold, user]);
 
   // Recent activities (top 6 for 3x2 card grid)
   const recentActivities = activities.slice(0, 6);
@@ -473,10 +490,10 @@ export function Dashboard({}: DashboardProps): JSX.Element {
       )}
 
       {/* Top Row: PMC Sparkline + Current Form + Weekly Summary */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10 items-stretch">
         {/* PMC Sparkline */}
         <div 
-          className="lg:col-span-2 bg-card rounded-xl border border-border p-6 cursor-pointer card-hover"
+          className="lg:col-span-2 bg-card rounded-xl border border-border p-6 cursor-pointer card-hover flex flex-col"
           onClick={() => navigate("/pmc")}
         >
           <div className="flex items-center justify-between mb-4">
@@ -493,7 +510,7 @@ export function Dashboard({}: DashboardProps): JSX.Element {
           
           {pmcData.length > 0 ? (
             <>
-              <div className="flex gap-4">
+              <div className="flex gap-4 flex-1 min-h-0">
                 {/* Stacked metrics on the left */}
                 <div className="flex flex-col justify-center gap-3 pr-4 border-r border-border">
                   <div>
@@ -518,7 +535,7 @@ export function Dashboard({}: DashboardProps): JSX.Element {
                 </div>
                 
                 {/* Chart taking remaining space */}
-                <div className="flex-1 h-72">
+                <div className="flex-1 min-h-0">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={pmcData} margin={{ top: 10, right: 10, bottom: 5, left: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#9ca3af" strokeOpacity={0.3} vertical={false} />
@@ -591,6 +608,8 @@ export function Dashboard({}: DashboardProps): JSX.Element {
           )}
         </div>
 
+        {/* Right column: Period Summary + Thresholds */}
+        <div className="flex flex-col gap-6">
         {/* Period Summary */}
         <div className="bg-card rounded-xl border border-border p-6 card-hover">
           <div className="flex items-center justify-between mb-4">
@@ -685,6 +704,35 @@ export function Dashboard({}: DashboardProps): JSX.Element {
             </table>
           )}
         </div>
+
+        {/* Current FTP */}
+        <div 
+          className="bg-card rounded-xl border border-border p-4 cursor-pointer card-hover"
+          onClick={() => navigate("/settings")}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-card-title">FTP</h2>
+            <span className="text-xs text-muted-foreground hover:text-foreground transition-fast">
+              Edit →
+            </span>
+          </div>
+          {currentThreshold?.ftp_watts ? (
+            <div className="flex items-baseline gap-1">
+              <span className="text-3xl font-bold text-foreground">{currentThreshold.ftp_watts}</span>
+              <span className="text-3xl font-bold text-muted-foreground">W</span>
+              {wPerKg && (
+                <>
+                  <span className="text-3xl font-bold text-foreground ml-2">({wPerKg.toFixed(2)}</span>
+                  <span className="text-3xl font-bold text-muted-foreground">W/kg</span>
+                  <span className="text-3xl font-bold text-foreground">)</span>
+                </>
+              )}
+            </div>
+          ) : (
+            <p className="text-muted-foreground text-sm">Not set</p>
+          )}
+        </div>
+      </div>
       </div>
 
       {/* Recent Activities - Card Grid */}

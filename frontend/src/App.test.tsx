@@ -86,6 +86,7 @@ const baseUser = {
   hr_zone_percentages: null,
   hr_derived_power_enabled: false,
   hr_power_model: null,
+  map_tile_style: "osm" as const,
 };
 
 describe("App", () => {
