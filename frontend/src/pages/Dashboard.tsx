@@ -228,37 +228,60 @@ export function Dashboard({}: DashboardProps): JSX.Element {
     return prs.slice(0, 3);
   }, [records]);
 
-  // Weekly summary
-  const weeklySummary = useMemo(() => {
-    const now = new Date();
-    const startOfWeek = new Date(now);
-    startOfWeek.setDate(now.getDate() - now.getDay());
-    startOfWeek.setHours(0, 0, 0, 0);
-    
-    const startOfLastWeek = new Date(startOfWeek);
-    startOfLastWeek.setDate(startOfLastWeek.getDate() - 7);
+  // Period summary state
+  const [summaryPeriod, setSummaryPeriod] = useState<"week" | "month" | "year">("week");
 
-    const thisWeek = activities.filter(a => new Date(a.started_at) >= startOfWeek);
-    const lastWeek = activities.filter(a => {
+  // Period summary calculation
+  const periodSummary = useMemo(() => {
+    const now = new Date();
+    let startOfCurrent: Date;
+    let startOfPrevious: Date;
+    let endOfPrevious: Date;
+
+    if (summaryPeriod === "week") {
+      startOfCurrent = new Date(now);
+      startOfCurrent.setDate(now.getDate() - now.getDay());
+      startOfCurrent.setHours(0, 0, 0, 0);
+      
+      startOfPrevious = new Date(startOfCurrent);
+      startOfPrevious.setDate(startOfPrevious.getDate() - 7);
+      endOfPrevious = new Date(startOfCurrent);
+    } else if (summaryPeriod === "month") {
+      startOfCurrent = new Date(now.getFullYear(), now.getMonth(), 1);
+      
+      startOfPrevious = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      endOfPrevious = new Date(startOfCurrent);
+    } else {
+      // year
+      startOfCurrent = new Date(now.getFullYear(), 0, 1);
+      
+      startOfPrevious = new Date(now.getFullYear() - 1, 0, 1);
+      endOfPrevious = new Date(startOfCurrent);
+    }
+
+    const currentPeriod = activities.filter(a => new Date(a.started_at) >= startOfCurrent);
+    const previousPeriod = activities.filter(a => {
       const d = new Date(a.started_at);
-      return d >= startOfLastWeek && d < startOfWeek;
+      return d >= startOfPrevious && d < endOfPrevious;
     });
 
     return {
-      thisWeek: {
-        count: thisWeek.length,
-        duration: thisWeek.reduce((sum, a) => sum + a.moving_time_s, 0),
-        tss: thisWeek.reduce((sum, a) => sum + (a.tss || 0), 0),
-        distance: thisWeek.reduce((sum, a) => sum + a.total_distance_m, 0),
+      current: {
+        count: currentPeriod.length,
+        duration: currentPeriod.reduce((sum, a) => sum + a.moving_time_s, 0),
+        tss: currentPeriod.reduce((sum, a) => sum + (a.tss || 0), 0),
+        distance: currentPeriod.reduce((sum, a) => sum + a.total_distance_m, 0),
+        elevation: currentPeriod.reduce((sum, a) => sum + (a.elevation_gain_m || 0), 0),
       },
-      lastWeek: {
-        count: lastWeek.length,
-        duration: lastWeek.reduce((sum, a) => sum + a.moving_time_s, 0),
-        tss: lastWeek.reduce((sum, a) => sum + (a.tss || 0), 0),
-        distance: lastWeek.reduce((sum, a) => sum + a.total_distance_m, 0),
+      previous: {
+        count: previousPeriod.length,
+        duration: previousPeriod.reduce((sum, a) => sum + a.moving_time_s, 0),
+        tss: previousPeriod.reduce((sum, a) => sum + (a.tss || 0), 0),
+        distance: previousPeriod.reduce((sum, a) => sum + a.total_distance_m, 0),
+        elevation: previousPeriod.reduce((sum, a) => sum + (a.elevation_gain_m || 0), 0),
       },
     };
-  }, [activities]);
+  }, [activities, summaryPeriod]);
 
   // Handle notification actions
   const handleAcceptNotification = async (id: number) => {
@@ -568,15 +591,37 @@ export function Dashboard({}: DashboardProps): JSX.Element {
           )}
         </div>
 
-        {/* Weekly Summary */}
+        {/* Period Summary */}
         <div className="bg-card rounded-xl border border-border p-6 card-hover">
-          <h2 className="text-card-title mb-4">This Week</h2>
-          {weeklySummary.thisWeek.count === 0 ? (
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-card-title">
+              {summaryPeriod === "week" ? "This Week" : summaryPeriod === "month" ? "This Month" : "This Year"}
+            </h2>
+            <div className="flex gap-1 bg-muted rounded-lg p-0.5">
+              {(["week", "month", "year"] as const).map((period) => (
+                <button
+                  key={period}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSummaryPeriod(period);
+                  }}
+                  className={`px-2 py-1 text-xs font-medium rounded transition-fast ${
+                    summaryPeriod === period
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {period.charAt(0).toUpperCase() + period.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
+          {periodSummary.current.count === 0 && periodSummary.previous.count === 0 ? (
             <div className="h-48 flex flex-col items-center justify-center text-center">
               <svg className="w-16 h-16 text-muted-foreground/50 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <p className="text-muted-foreground mb-1">No rides this week yet</p>
+              <p className="text-muted-foreground mb-1">No rides this {summaryPeriod} yet</p>
               <p className="text-muted-foreground/70 text-sm">Time to get out there!</p>
               <button 
                 onClick={() => navigate("/activities")}
@@ -586,38 +631,58 @@ export function Dashboard({}: DashboardProps): JSX.Element {
               </button>
             </div>
           ) : (
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">Rides</span>
-                <span className="text-lg font-semibold text-foreground">{weeklySummary.thisWeek.count}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">Time</span>
-                <div className="text-right">
-                  <span className="text-lg font-semibold text-foreground">{formatDuration(weeklySummary.thisWeek.duration)}</span>
-                  {weeklySummary.lastWeek.duration > 0 && (
-                    <span className={`ml-2 text-xs ${weeklySummary.thisWeek.duration >= weeklySummary.lastWeek.duration ? "text-success" : "text-destructive"}`}>
-                      vs {formatDuration(weeklySummary.lastWeek.duration)}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">TSS</span>
-                <div className="text-right">
-                  <span className="text-lg font-semibold text-foreground">{Math.round(weeklySummary.thisWeek.tss)}</span>
-                  {weeklySummary.lastWeek.tss > 0 && (
-                    <span className={`ml-2 text-xs ${weeklySummary.thisWeek.tss >= weeklySummary.lastWeek.tss ? "text-success" : "text-destructive"}`}>
-                      vs {Math.round(weeklySummary.lastWeek.tss)}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">Distance</span>
-                <span className="text-lg font-semibold text-foreground">{formatDistance(weeklySummary.thisWeek.distance)}</span>
-              </div>
-            </div>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-muted-foreground text-xs uppercase tracking-wide">
+                  <th className="text-left font-medium pb-3"></th>
+                  <th className="text-right font-medium pb-3">This</th>
+                  <th className="text-right font-medium pb-3">Last</th>
+                  <th className="text-right font-medium pb-3">Diff</th>
+                </tr>
+              </thead>
+              <tbody className="text-foreground">
+                <tr>
+                  <td className="py-1.5 text-muted-foreground">Rides</td>
+                  <td className="py-1.5 text-right font-semibold">{periodSummary.current.count}</td>
+                  <td className="py-1.5 text-right text-muted-foreground">{periodSummary.previous.count}</td>
+                  <td className={`py-1.5 text-right font-medium ${periodSummary.current.count >= periodSummary.previous.count ? "text-success" : "text-destructive"}`}>
+                    {periodSummary.current.count - periodSummary.previous.count >= 0 ? "+" : ""}{periodSummary.current.count - periodSummary.previous.count}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="py-1.5 text-muted-foreground">Time</td>
+                  <td className="py-1.5 text-right font-semibold">{formatDuration(periodSummary.current.duration)}</td>
+                  <td className="py-1.5 text-right text-muted-foreground">{formatDuration(periodSummary.previous.duration)}</td>
+                  <td className={`py-1.5 text-right font-medium ${periodSummary.current.duration >= periodSummary.previous.duration ? "text-success" : "text-destructive"}`}>
+                    {periodSummary.current.duration >= periodSummary.previous.duration ? "+" : "-"}{formatDuration(Math.abs(periodSummary.current.duration - periodSummary.previous.duration))}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="py-1.5 text-muted-foreground">TSS</td>
+                  <td className="py-1.5 text-right font-semibold">{Math.round(periodSummary.current.tss)}</td>
+                  <td className="py-1.5 text-right text-muted-foreground">{Math.round(periodSummary.previous.tss)}</td>
+                  <td className={`py-1.5 text-right font-medium ${periodSummary.current.tss >= periodSummary.previous.tss ? "text-success" : "text-destructive"}`}>
+                    {periodSummary.current.tss - periodSummary.previous.tss >= 0 ? "+" : ""}{Math.round(periodSummary.current.tss - periodSummary.previous.tss)}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="py-1.5 text-muted-foreground">Distance</td>
+                  <td className="py-1.5 text-right font-semibold">{formatDistance(periodSummary.current.distance)}</td>
+                  <td className="py-1.5 text-right text-muted-foreground">{formatDistance(periodSummary.previous.distance)}</td>
+                  <td className={`py-1.5 text-right font-medium ${periodSummary.current.distance >= periodSummary.previous.distance ? "text-success" : "text-destructive"}`}>
+                    {periodSummary.current.distance >= periodSummary.previous.distance ? "+" : "-"}{formatDistance(Math.abs(periodSummary.current.distance - periodSummary.previous.distance))}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="py-1.5 text-muted-foreground">Elevation</td>
+                  <td className="py-1.5 text-right font-semibold">{formatElevation(periodSummary.current.elevation)}</td>
+                  <td className="py-1.5 text-right text-muted-foreground">{formatElevation(periodSummary.previous.elevation)}</td>
+                  <td className={`py-1.5 text-right font-medium ${periodSummary.current.elevation >= periodSummary.previous.elevation ? "text-success" : "text-destructive"}`}>
+                    {periodSummary.current.elevation >= periodSummary.previous.elevation ? "+" : "-"}{formatElevation(Math.abs(periodSummary.current.elevation - periodSummary.previous.elevation))}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           )}
         </div>
       </div>
