@@ -106,14 +106,15 @@ test.describe.serial('Activity Detail', () => {
     await page.goto(`/activities/${sharedActivityId}`);
     await expect(page.getByRole('button', { name: 'Back' })).toBeVisible({ timeout: 15000 });
 
-    // Check for Training Metrics section
-    await expect(page.getByText('Training Metrics')).toBeVisible();
-
-    // Check for training metric labels
-    await expect(page.getByText('Avg Power').first()).toBeVisible();
-    await expect(page.getByText('NP').first()).toBeVisible();
-    await expect(page.getByText('IF').first()).toBeVisible();
+    // Check for Training Load section with training metrics
+    // The Training Load card uses an h3 element, scroll to it
+    const trainingLoadHeader = page.locator('h3', { hasText: 'Training Load' }).first();
+    await trainingLoadHeader.scrollIntoViewIfNeeded();
+    await expect(trainingLoadHeader).toBeVisible();
+    
+    // Check for training metric labels within the page
     await expect(page.getByText('TSS').first()).toBeVisible();
+    await expect(page.getByText('IF').first()).toBeVisible();
   });
 
   test('performance section with charts renders', async ({ page }) => {
@@ -196,31 +197,34 @@ test.describe.serial('Activity Detail', () => {
     await expect(page.getByRole('button', { name: 'Back' })).toBeVisible({ timeout: 15000 });
 
     // Scroll down to trigger lazy loading of Analysis section
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    const analysisHeader = page.getByRole('heading', { name: 'Analysis' });
+    await analysisHeader.scrollIntoViewIfNeeded();
     
     // Wait for the Analysis section header to be visible
-    const analysisHeader = page.getByRole('heading', { name: 'Analysis' });
     await expect(analysisHeader).toBeVisible({ timeout: 10000 });
 
     // Find the Analysis section by its header, then look for charts within main content
     const mainContent = page.getByRole('main');
     
     // Check that Power Curve chart renders (not skeleton)
-    // Look for the Power Curve heading within main content area
-    const powerCurveHeading = mainContent.getByText('Power Curve', { exact: true });
+    // The Power Curve is rendered if the activity has peaks data
+    // Look for the h2 heading with "Power Curve" text
+    const powerCurveHeading = mainContent.locator('h2', { hasText: 'Power Curve' }).first();
+    await powerCurveHeading.scrollIntoViewIfNeeded();
     await expect(powerCurveHeading).toBeVisible({ timeout: 10000 });
     
     // Get the card containing Power Curve and verify it has an SVG chart
-    const powerCurveCard = mainContent.locator('section').filter({ hasText: 'Analysis' }).locator('.bg-card').filter({ hasText: 'Power Curve' });
+    const powerCurveCard = powerCurveHeading.locator('..').locator('..').locator('..');
     const powerCurveSvg = powerCurveCard.locator('svg.recharts-surface');
     await expect(powerCurveSvg).toBeVisible({ timeout: 5000 });
 
     // Check that W'bal chart renders
-    const wbalHeading = mainContent.getByText("W'bal", { exact: true });
+    const wbalHeading = mainContent.locator('h2', { hasText: "W'bal" }).first();
+    await wbalHeading.scrollIntoViewIfNeeded();
     await expect(wbalHeading).toBeVisible({ timeout: 5000 });
     
     // Verify W'bal chart has actual SVG content
-    const wbalCard = mainContent.locator('section').filter({ hasText: 'Analysis' }).locator('.bg-card').filter({ hasText: "W'bal" });
+    const wbalCard = wbalHeading.locator('..').locator('..').locator('..');
     const wbalSvg = wbalCard.locator('svg.recharts-surface');
     await expect(wbalSvg).toBeVisible({ timeout: 5000 });
   });

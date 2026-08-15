@@ -272,7 +272,7 @@ class TestEventRepoDeleteBefore:
         await repo.log(event_type="new.event", outcome=EventOutcome.SUCCESS.value)
 
         # Delete events older than far future (should delete all)
-        future_cutoff = datetime.now(UTC).replace(tzinfo=None) + timedelta(hours=1)
+        future_cutoff = datetime.now(UTC) + timedelta(hours=1)
         deleted = await repo.delete_before(future_cutoff)
 
         assert deleted == 2
@@ -289,7 +289,7 @@ class TestEventRepoDeleteBefore:
         await repo.log(event_type="event.2", outcome=EventOutcome.SUCCESS.value)
 
         # Delete with past cutoff (should delete nothing)
-        past_cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(hours=1)
+        past_cutoff = datetime.now(UTC) - timedelta(hours=1)
         deleted = await repo.delete_before(past_cutoff)
 
         assert deleted == 0
@@ -306,7 +306,7 @@ class TestEventRepoDeleteBefore:
             await repo.log(event_type=f"event.{i}", outcome=EventOutcome.SUCCESS.value)
 
         # Delete all
-        future_cutoff = datetime.now(UTC).replace(tzinfo=None) + timedelta(hours=1)
+        future_cutoff = datetime.now(UTC) + timedelta(hours=1)
         deleted = await repo.delete_before(future_cutoff)
 
         assert deleted == 5

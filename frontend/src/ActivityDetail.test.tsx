@@ -11,7 +11,9 @@ vi.mock("./api", async (importOriginal) => {
     deleteActivity: vi.fn().mockResolvedValue(undefined),
     fetchActivity: vi.fn().mockResolvedValue({
       id: "test-uuid-1",
-      started_at: "2024-03-15T10:00:00",
+      title: "Morning Ride",
+      title_source: "auto",
+      started_at: "2024-03-15T10:00:00Z",
       total_distance_m: 40000,
       moving_time_s: 3600,
       elapsed_time_s: 3700,
@@ -21,6 +23,20 @@ vi.mock("./api", async (importOriginal) => {
       avg_power_w: 240,
       max_speed_mps: 12.0,
       max_hr_bpm: 160,
+      np_power_w: null,
+      intensity_factor: null,
+      tss: null,
+      training_load: null,
+      power_zone_times: null,
+      hr_zone_times: null,
+      wbal_min_joules: null,
+      wbal_min_pct: null,
+      power_source: null,
+      power_confidence: null,
+      peaks: [],
+      is_breakthrough: false,
+      map_polyline: null,
+      utc_offset_minutes: 0,
     }),
     fetchActivityRecords: vi.fn().mockResolvedValue({
       type: "FeatureCollection",
@@ -30,7 +46,7 @@ vi.mock("./api", async (importOriginal) => {
           type: "Feature",
           geometry: { type: "Point", coordinates: [8.5417, 47.3769] },
           properties: {
-            timestamp: "2024-03-15T10:00:00",
+            timestamp: "2024-03-15T10:00:00Z",
             distance_m: 0,
             hr_bpm: 120,
             power_w: 200,
@@ -43,7 +59,7 @@ vi.mock("./api", async (importOriginal) => {
           type: "Feature",
           geometry: { type: "Point", coordinates: [8.5418, 47.377] },
           properties: {
-            timestamp: "2024-03-15T10:00:01",
+            timestamp: "2024-03-15T10:00:01Z",
             distance_m: 10,
             hr_bpm: 121,
             power_w: 201,
@@ -59,7 +75,9 @@ vi.mock("./api", async (importOriginal) => {
       activities: [
         {
           id: "test-uuid-2",
-          started_at: "2024-03-10T08:00:00",
+          title: "Sunday Ride",
+          title_source: "auto",
+          started_at: "2024-03-10T08:00:00Z",
           total_distance_m: 38000,
           moving_time_s: 3500,
           elapsed_time_s: 3600,
@@ -69,6 +87,20 @@ vi.mock("./api", async (importOriginal) => {
           avg_power_w: 220,
           max_speed_mps: 10.0,
           max_hr_bpm: 155,
+          np_power_w: null,
+          intensity_factor: null,
+          tss: null,
+          training_load: null,
+          power_zone_times: null,
+          hr_zone_times: null,
+          wbal_min_joules: null,
+          wbal_min_pct: null,
+          power_source: null,
+          power_confidence: null,
+          peaks: [],
+          is_breakthrough: false,
+          map_polyline: null,
+          utc_offset_minutes: 0,
         },
       ],
     }),
@@ -93,7 +125,7 @@ vi.mock("./api", async (importOriginal) => {
           {
             type: "Feature",
             geometry: { type: "Point", coordinates: [8.5417, 47.3769] },
-            properties: { timestamp: "2024-03-10T08:00:00", distance_m: 0, speed_mps: 7.5 },
+            properties: { timestamp: "2024-03-10T08:00:00Z", distance_m: 0, speed_mps: 7.5 },
           },
         ],
       },
@@ -115,7 +147,7 @@ describe("ActivityDetail", () => {
     renderWithRouter(<ActivityDetail activityId="test-uuid-1" onBack={() => {}} />);
     await waitFor(() => {
       expect(screen.getByText("40.0 km")).toBeInTheDocument();
-      expect(screen.getByText("1h 0m")).toBeInTheDocument();
+      expect(screen.getByText("1h 00m")).toBeInTheDocument();
       expect(screen.getByText("200 m")).toBeInTheDocument();
     });
   });
@@ -174,17 +206,17 @@ describe("ActivityDetail - Delete", () => {
   it("renders delete button", async () => {
     renderWithRouter(<ActivityDetail activityId="test-uuid-1" onBack={() => {}} />);
     await waitFor(() => {
-      expect(screen.getByTitle("Delete this activity")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
     });
   });
 
   it("opens confirmation dialog when delete button clicked", async () => {
     renderWithRouter(<ActivityDetail activityId="test-uuid-1" onBack={() => {}} />);
     await waitFor(() => {
-      expect(screen.getByTitle("Delete this activity")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByTitle("Delete this activity"));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
 
     await waitFor(() => {
       expect(screen.getByRole("alertdialog")).toBeInTheDocument();
@@ -197,11 +229,11 @@ describe("ActivityDetail - Delete", () => {
     const onBack = vi.fn();
     renderWithRouter(<ActivityDetail activityId="test-uuid-1" onBack={onBack} />);
     await waitFor(() => {
-      expect(screen.getByTitle("Delete this activity")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
     });
 
     // Open dialog
-    fireEvent.click(screen.getByTitle("Delete this activity"));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     await waitFor(() => {
       expect(screen.getByRole("alertdialog")).toBeInTheDocument();
     });
@@ -221,11 +253,11 @@ describe("ActivityDetail - Delete", () => {
     const onBack = vi.fn();
     renderWithRouter(<ActivityDetail activityId="test-uuid-1" onBack={onBack} />);
     await waitFor(() => {
-      expect(screen.getByTitle("Delete this activity")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
     });
 
     // Open dialog
-    fireEvent.click(screen.getByTitle("Delete this activity"));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     await waitFor(() => {
       expect(screen.getByRole("alertdialog")).toBeInTheDocument();
     });
@@ -244,11 +276,11 @@ describe("ActivityDetail - Delete", () => {
   it("closes dialog when cancel clicked", async () => {
     renderWithRouter(<ActivityDetail activityId="test-uuid-1" onBack={() => {}} />);
     await waitFor(() => {
-      expect(screen.getByTitle("Delete this activity")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
     });
 
     // Open dialog
-    fireEvent.click(screen.getByTitle("Delete this activity"));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     await waitFor(() => {
       expect(screen.getByRole("alertdialog")).toBeInTheDocument();
     });

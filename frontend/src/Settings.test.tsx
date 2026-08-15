@@ -138,12 +138,13 @@ describe("Settings - Preferences Section", () => {
       onUserUpdate: mockOnUserUpdate,
     });
 
+    // Wait for component to render and find the Imperial button
     await waitFor(() => {
-      expect(screen.getByTestId("unit-toggle")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Imperial" })).toBeInTheDocument();
     });
 
-    const toggle = screen.getByTestId("unit-toggle");
-    fireEvent.click(toggle);
+    const imperialButton = screen.getByRole("button", { name: "Imperial" });
+    fireEvent.click(imperialButton);
 
     await waitFor(() => {
       expect(updatePreferences).toHaveBeenCalledWith({
@@ -168,11 +169,11 @@ describe("Settings - Preferences Section", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByTestId("unit-toggle")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Imperial" })).toBeInTheDocument();
     });
 
-    const toggle = screen.getByTestId("unit-toggle");
-    fireEvent.click(toggle);
+    const imperialButton = screen.getByRole("button", { name: "Imperial" });
+    fireEvent.click(imperialButton);
 
     await waitFor(() => {
       expect(screen.getByText("Preferences saved")).toBeInTheDocument();
@@ -188,11 +189,11 @@ describe("Settings - Preferences Section", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByTestId("unit-toggle")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Imperial" })).toBeInTheDocument();
     });
 
-    const toggle = screen.getByTestId("unit-toggle");
-    fireEvent.click(toggle);
+    const imperialButton = screen.getByRole("button", { name: "Imperial" });
+    fireEvent.click(imperialButton);
 
     await waitFor(() => {
       expect(screen.getByText("Failed to save preferences")).toBeInTheDocument();

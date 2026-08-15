@@ -357,14 +357,10 @@ class TestGenerateTitle:
             batch_mode=False,
         )
 
-        # Mock the title generator module import to fail (simulating no geocoding service)
-        with patch.dict(
-            "sys.modules",
-            {
-                "trainingdash.title_generator": MagicMock(
-                    generate_activity_title=AsyncMock(side_effect=Exception("No geocoding"))
-                )
-            },
+        # Mock the title generator to raise an exception (simulating geocoding failure)
+        with patch(
+            "trainingdash.domain.title_generator.generate_activity_title",
+            new=AsyncMock(side_effect=Exception("No geocoding")),
         ):
             result = await pipeline.generate_title()
 
@@ -567,14 +563,10 @@ class TestErrorHandling:
             batch_mode=False,
         )
 
-        # Mock the title generator module import to fail
-        with patch.dict(
-            "sys.modules",
-            {
-                "trainingdash.title_generator": MagicMock(
-                    generate_activity_title=AsyncMock(side_effect=Exception("Geocoding service unavailable"))
-                )
-            },
+        # Mock the title generator to raise an exception
+        with patch(
+            "trainingdash.domain.title_generator.generate_activity_title",
+            new=AsyncMock(side_effect=Exception("Geocoding service unavailable")),
         ):
             result = await pipeline.generate_title()
 

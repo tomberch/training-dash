@@ -52,11 +52,11 @@ test.describe.serial('Records', () => {
     await expect(page.getByRole('heading', { name: 'Records', exact: true })).toBeVisible();
 
     // Should show Lifetime PRs section (h2)
-    await expect(page.locator('h2', { hasText: 'Lifetime PRs' })).toBeVisible();
+    await expect(page.locator('h2', { hasText: 'Lifetime PRs' })).toBeVisible({ timeout: 15000 });
 
-    // Should show some PR tiles (power duration PRs from cp-ride files)
-    const prTiles = page.locator('.rounded-lg.border.text-center');
-    await expect(prTiles.first()).toBeVisible({ timeout: 15000 });
+    // Should show some PR cards (rounded-2xl border class)
+    const prCards = page.locator('.rounded-2xl.border');
+    await expect(prCards.first()).toBeVisible({ timeout: 15000 });
   });
 
   test('PR tiles display correctly formatted values', async ({ page }) => {
@@ -67,15 +67,15 @@ test.describe.serial('Records', () => {
     // Wait for PRs to load - look for the section heading (h2)
     await expect(page.locator('h2', { hasText: 'Lifetime PRs' })).toBeVisible({ timeout: 15000 });
 
-    // PR tiles should have labels and values
-    const firstTile = page.locator('.rounded-lg.border.text-center').first();
+    // PR tiles should have labels and values - they use rounded-2xl cards
+    const firstTile = page.locator('.rounded-2xl.border').first();
     await expect(firstTile).toBeVisible();
 
-    // Label should be present (uppercase)
-    const label = firstTile.locator('.uppercase');
+    // Label should be present (using text-metric-label class)
+    const label = firstTile.locator('.text-metric-label');
     await expect(label).toBeVisible();
 
-    // Value should be present (bold number)
+    // Value should be present (bold number with text-4xl)
     const value = firstTile.locator('.font-bold');
     await expect(value).toBeVisible();
   });
