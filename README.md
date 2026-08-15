@@ -87,6 +87,13 @@ Self-hosted fitness analytics for cyclists and endurance athletes. Analyze your 
 </details>
 
 <details>
+<summary>Activity Comparison</summary>
+
+![Compare](docs/images/compare.png)
+
+</details>
+
+<details>
 <summary>Settings</summary>
 
 ![Settings](docs/images/settings.png)
