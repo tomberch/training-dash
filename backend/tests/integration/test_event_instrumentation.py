@@ -3,7 +3,7 @@
 Verifies that key use cases emit events to the events table.
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import select
@@ -64,7 +64,6 @@ class TestEventInstrumentation:
         event_repo = PostgresEventRepo(db_session)
 
         # Simulate what the scheduler would emit
-        from datetime import UTC, datetime
         current_hour = datetime.now(UTC).hour
 
         await event_repo.log(

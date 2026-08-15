@@ -4,9 +4,7 @@ from datetime import datetime, timedelta
 from uuid import uuid4
 
 import pytest
-from httpx import AsyncClient, ASGITransport
 
-from trainingdash.app import app
 from trainingdash.repositories.postgres.models import Activity
 
 

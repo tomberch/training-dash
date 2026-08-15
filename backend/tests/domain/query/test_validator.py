@@ -5,18 +5,15 @@ from datetime import datetime
 import pytest
 
 from trainingdash.domain.query import (
-    NumberValue,
-    DateValue,
-    StringValue,
-    BoolValue,
-    Comparison,
     Between,
-    InList,
-    TextMatch,
     BooleanField,
+    DateValue,
+    InList,
+    NumberValue,
+    TextMatch,
+    ValidationError,
     parse,
     validate,
-    ValidationError,
 )
 
 

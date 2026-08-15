@@ -1,6 +1,5 @@
 """Tests for direction detection functions."""
 
-import pytest
 
 from trainingdash.domain.direction import (
     bearings_match,
@@ -90,16 +89,16 @@ class TestComputeDirectionBearing:
             (46.79 + i * 0.004, 7.50 + i * 0.003, i * 500.0)
             for i in range(20)
         ]
-        
+
         # Route B: same direction, slightly different starting point
         points_b = [
             (46.791 + i * 0.004, 7.501 + i * 0.003, i * 500.0)
             for i in range(20)
         ]
-        
+
         bearing_a = compute_direction_bearing(points_a)
         bearing_b = compute_direction_bearing(points_b)
-        
+
         assert bearing_a is not None
         assert bearing_b is not None
         # Bearings should be very close (within a few degrees)
@@ -115,16 +114,16 @@ class TestComputeDirectionBearing:
             (46.79 + i * 0.005, 7.50, i * 500.0)
             for i in range(20)
         ]
-        
+
         # Route B: heading South (reverse of A)
         points_b = [
             (46.89 - i * 0.005, 7.50, i * 500.0)
             for i in range(20)
         ]
-        
+
         bearing_a = compute_direction_bearing(points_a)
         bearing_b = compute_direction_bearing(points_b)
-        
+
         assert bearing_a is not None
         assert bearing_b is not None
         # Bearings should differ by ~180°

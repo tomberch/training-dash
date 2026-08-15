@@ -2,8 +2,6 @@
 
 from datetime import datetime
 
-import pytest
-from sqlalchemy import text
 from sqlalchemy.dialects import postgresql
 
 from trainingdash.domain.query import (
