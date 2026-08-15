@@ -24,6 +24,11 @@ export default defineConfig({
     globals: true,
     setupFiles: './src/setupTests.ts',
     exclude: ['**/node_modules/**', '**/e2e/**'],
+    typecheck: {
+      enabled: true,
+      tsconfig: './tsconfig.app.json',
+      include: ['src/**/*.{ts,tsx}'],
+    },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json-summary', 'html'],
