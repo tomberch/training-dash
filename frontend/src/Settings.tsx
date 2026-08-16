@@ -282,8 +282,8 @@ function ProfileSection({ user, onUserUpdate }: { user: User; onUserUpdate: (use
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {/* Avatar + Form side by side */}
-        <div className="flex items-start gap-6 mb-6">
+        {/* Avatar + Form side by side - matching prototype layout */}
+        <div className="flex items-start gap-8">
           {/* Avatar */}
           <div className="relative flex-shrink-0">
             {user.avatar_path ? (
@@ -312,61 +312,76 @@ function ProfileSection({ user, onUserUpdate }: { user: User; onUserUpdate: (use
               onChange={handleAvatarChange}
               className="hidden"
             />
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploadingAvatar}
-              className="mt-2"
-            >
-              {user.avatar_path ? "Change photo" : "Upload photo"}
-            </Button>
-            {user.avatar_path && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleDeleteAvatar}
-                disabled={uploadingAvatar}
-                className="mt-1 text-destructive hover:text-destructive"
-              >
-                Remove
-              </Button>
-            )}
           </div>
 
-          {/* Form fields */}
-          <div className="flex-1 space-y-4">
+          {/* Form fields - aligned vertically with max-width */}
+          <div className="flex-1 space-y-5 max-w-xl">
             {/* Email (read-only) */}
             <div className="space-y-1.5">
-              <Label className="text-muted-foreground">Email</Label>
+              <Label className="text-muted-foreground text-sm font-medium">Email</Label>
               <Input
                 type="email"
                 value={user.email}
                 disabled
-                className="h-11 px-4 text-base md:text-base"
+                className="h-11 px-4 text-base md:text-base bg-muted text-muted-foreground"
               />
             </div>
 
             {/* Display name */}
             <div className="space-y-1.5">
-              <Label className="text-muted-foreground">Display Name</Label>
+              <Label className="text-muted-foreground text-sm font-medium">Display Name</Label>
               <Input
                 type="text"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 placeholder="How you want to be called"
-                className="h-11 px-4 text-base md:text-base"
+                className="h-11 px-4 text-base md:text-base bg-muted"
               />
-              <p className="text-caption">
+              <p className="text-xs text-muted-foreground mt-1.5">
                 This name will be shown in the header and anywhere your profile appears
               </p>
+            </div>
+
+            {/* Photo buttons under display name - per prototype */}
+            <div className="flex gap-3 pt-2">
+              <Button
+                variant="secondary"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingAvatar}
+                className="bg-muted hover:bg-muted/80 border border-border"
+              >
+                <div className="flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                  </svg>
+                  Change photo
+                </div>
+              </Button>
+              {user.avatar_path && (
+                <Button
+                  variant="ghost"
+                  onClick={handleDeleteAvatar}
+                  disabled={uploadingAvatar}
+                  className="text-destructive hover:text-destructive/80 hover:border-destructive/20 border border-transparent"
+                >
+                  <div className="flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    Remove
+                  </div>
+                </Button>
+              )}
             </div>
           </div>
         </div>
 
-        <Button onClick={handleSaveProfile} disabled={saving}>
-          {saving ? "Saving..." : "Save Profile"}
-        </Button>
+        {/* Save button in footer with border-t */}
+        <div className="mt-6 pt-6 border-t border-border">
+          <Button onClick={handleSaveProfile} disabled={saving}>
+            {saving ? "Saving..." : "Save Profile"}
+          </Button>
+        </div>
 
         <FeedbackAlert feedback={feedback} />
       </CardContent>
@@ -513,6 +528,11 @@ const MAP_TILE_STYLES = [
 function MapSection({ user, onUserUpdate }: { user: User; onUserUpdate: (user: User) => void }) {
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  // Route line width - stored in localStorage until backend support added
+  const [routeLineWidth, setRouteLineWidth] = useState(() => {
+    const stored = localStorage.getItem("route_line_width");
+    return stored ? parseFloat(stored) : 2;
+  });
 
   async function handleStyleChange(style: typeof user.map_tile_style) {
     if (style === user.map_tile_style) return;
@@ -532,6 +552,12 @@ function MapSection({ user, onUserUpdate }: { user: User; onUserUpdate: (user: U
     }
   }
 
+  function handleRouteLineWidthChange(width: number) {
+    setRouteLineWidth(width);
+    localStorage.setItem("route_line_width", width.toString());
+    // TODO: Persist to backend when route_line_width field is added to User model
+  }
+
   return (
     <Card className="card-hover">
       <CardHeader>
@@ -540,57 +566,89 @@ function MapSection({ user, onUserUpdate }: { user: User; onUserUpdate: (user: U
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
-          Map
+          Map Settings
         </CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="mb-4">
-          <h3 className="font-medium mb-1">Map Style</h3>
-          <p className="text-body-secondary">
+      <CardContent className="space-y-6">
+        {/* Map Style */}
+        <div>
+          <h3 className="font-medium text-foreground mb-3">Map Style</h3>
+          <p className="text-sm text-muted-foreground mb-4">
             Choose how maps appear throughout the app
           </p>
+
+          {/* 2x2 grid of style cards */}
+          <div className="grid grid-cols-2 gap-3 max-w-2xl">
+            {MAP_TILE_STYLES.map(({ value, label, preview }) => {
+              const isSelected = user.map_tile_style === value;
+              return (
+                <button
+                  key={value}
+                  onClick={() => handleStyleChange(value)}
+                  disabled={saving}
+                  className={cn(
+                    "relative rounded-lg overflow-hidden border-2 transition-all text-left aspect-[16/7]",
+                    isSelected
+                      ? "border-primary"
+                      : "border-border hover:border-muted-foreground/50",
+                    saving && "opacity-50 cursor-not-allowed"
+                  )}
+                >
+                  {/* Preview image */}
+                  <img
+                    src={preview}
+                    alt={`${label} map style preview`}
+                    className="absolute inset-0 w-full h-full object-cover"
+                  />
+                  
+                  {/* Label overlaid on image */}
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2">
+                    <span className="text-sm font-medium text-white">{label}</span>
+                  </div>
+
+                  {/* Checkmark badge for selected */}
+                  {isSelected && (
+                    <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-primary flex items-center justify-center shadow-md">
+                      <svg className="w-3 h-3 text-primary-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        {/* 2x2 grid of style cards */}
-        <div className="grid grid-cols-2 gap-3 max-w-2xl">
-          {MAP_TILE_STYLES.map(({ value, label, preview }) => {
-            const isSelected = user.map_tile_style === value;
-            return (
-              <button
-                key={value}
-                onClick={() => handleStyleChange(value)}
+        {/* Route Line Thickness */}
+        <div className="pt-6 border-t border-border">
+          <h3 className="font-medium text-foreground mb-3">Route Line Thickness</h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            Adjust the width of route lines on maps
+          </p>
+          
+          <div className="max-w-md">
+            <div className="flex items-center gap-4">
+              <input
+                type="range"
+                min="1"
+                max="5"
+                step="0.5"
+                value={routeLineWidth}
+                onChange={(e) => handleRouteLineWidthChange(parseFloat(e.target.value))}
                 disabled={saving}
-                className={cn(
-                  "relative rounded-lg overflow-hidden border-2 transition-all text-left aspect-[16/7]",
-                  isSelected
-                    ? "border-primary ring-2 ring-primary/20"
-                    : "border-border hover:border-muted-foreground/50",
-                  saving && "opacity-50 cursor-not-allowed"
-                )}
-              >
-                {/* Preview image */}
-                <img
-                  src={preview}
-                  alt={`${label} map style preview`}
-                  className="absolute inset-0 w-full h-full object-cover"
-                />
-                
-                {/* Label overlaid on image */}
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5">
-                  <span className="text-sm font-medium text-white">{label}</span>
-                </div>
-
-                {/* Checkmark badge for selected */}
-                {isSelected && (
-                  <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-primary flex items-center justify-center shadow-md">
-                    <svg className="w-3 h-3 text-primary-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                )}
-              </button>
-            );
-          })}
+                className="flex-1 h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
+              />
+              <div className="w-20 text-right">
+                <span className="text-lg font-semibold text-foreground">{routeLineWidth.toFixed(1)}</span>
+                <span className="text-xs text-muted-foreground ml-1">px</span>
+              </div>
+            </div>
+            <div className="flex justify-between mt-2 text-xs text-muted-foreground">
+              <span>Thin (1px)</span>
+              <span>Thick (5px)</span>
+            </div>
+          </div>
         </div>
 
         <FeedbackAlert feedback={feedback} />
@@ -759,27 +817,228 @@ function ZonesSection({ user, onUserUpdate }: { user: User; onUserUpdate: (user:
   useEffect(() => {
     loadThresholds();
   }, [loadThresholds]);
-  
-  const [editMode, setEditMode] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
-  
+
   // Current percentages from user or defaults
   const powerPercentages = user.power_zone_percentages ?? DEFAULT_POWER_ZONES;
   const hrPercentages = user.hr_zone_percentages ?? DEFAULT_HR_ZONES;
-  
-  // Edited values (only used in edit mode)
-  const [editedPowerPct, setEditedPowerPct] = useState<ZonePercentages>(powerPercentages);
-  const [editedHrPct, setEditedHrPct] = useState<ZonePercentages>(hrPercentages);
-  
+
   // Compute zones from percentages and thresholds
-  const displayPowerPct = editMode ? editedPowerPct : powerPercentages;
-  const displayHrPct = editMode ? editedHrPct : hrPercentages;
-  const powerZones = computePowerZones(ftp ?? 0, displayPowerPct);
-  const hrZones = computeHrZones(lthr ?? 0, displayHrPct);
+  const powerZones = computePowerZones(ftp ?? 0, powerPercentages);
+  const hrZones = computeHrZones(lthr ?? 0, hrPercentages);
+
+  // Check if user has thresholds set
+  const hasFtp = ftp !== null && ftp > 0;
+  const hasLthr = lthr !== null && lthr > 0;
+
+  if (loadingThresholds) {
+    return (
+      <>
+        <Card className="card-hover">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-card-title">
+              <svg className="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              Power Zones
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Skeleton className="h-[200px] w-full" />
+          </CardContent>
+        </Card>
+        <Card className="card-hover">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-card-title">
+              <svg className="w-5 h-5 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+              </svg>
+              Heart Rate Zones
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Skeleton className="h-[200px] w-full" />
+          </CardContent>
+        </Card>
+      </>
+    );
+  }
+
+  return (
+    <>
+      {/* Power Zones Card */}
+      <PowerZonesCard 
+        user={user} 
+        onUserUpdate={onUserUpdate} 
+        powerZones={powerZones} 
+        powerPercentages={powerPercentages}
+        hasFtp={hasFtp}
+        ftp={ftp}
+      />
+      
+      {/* Heart Rate Zones Card */}
+      <HrZonesCard 
+        user={user} 
+        onUserUpdate={onUserUpdate} 
+        hrZones={hrZones}
+        hrPercentages={hrPercentages}
+        hasLthr={hasLthr}
+        lthr={lthr}
+      />
+    </>
+  );
+}
+
+function PowerZonesCard({ 
+  user: _user, 
+  onUserUpdate, 
+  powerZones,
+  powerPercentages,
+  hasFtp,
+  ftp,
+}: { 
+  user: User; 
+  onUserUpdate: (user: User) => void;
+  powerZones: ReturnType<typeof computePowerZones>;
+  powerPercentages: ZonePercentages;
+  hasFtp: boolean;
+  ftp: number | null;
+}) {
+  const [editMode, setEditMode] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [editedPowerPct, setEditedPowerPct] = useState<ZonePercentages>(powerPercentages);
+  
+  const displayZones = editMode ? computePowerZones(ftp ?? 0, editedPowerPct) : powerZones;
   
   function startEdit() {
     setEditedPowerPct({ ...powerPercentages });
+    setEditMode(true);
+    setFeedback(null);
+  }
+  
+  function cancelEdit() {
+    setEditMode(false);
+    setFeedback(null);
+  }
+  
+  async function handleSave() {
+    setSaving(true);
+    setFeedback(null);
+    try {
+      const updated = await updatePreferences({ power_zone_percentages: editedPowerPct });
+      onUserUpdate(updated);
+      setEditMode(false);
+      setFeedback({ type: "success", message: "Power zones saved" });
+      setTimeout(() => setFeedback(null), 3000);
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Failed to save zones";
+      setFeedback({ type: "error", message });
+    } finally {
+      setSaving(false);
+    }
+  }
+  
+  function resetPowerZones() {
+    setEditedPowerPct({ ...DEFAULT_POWER_ZONES });
+  }
+  
+  function updatePowerPct(zone: string, field: "min" | "max", value: string) {
+    const numVal = parseInt(value) || 0;
+    setEditedPowerPct(prev => ({
+      ...prev,
+      [zone]: field === "min" ? [numVal, prev[zone][1]] : [prev[zone][0], value === "" ? null : numVal],
+    }));
+  }
+
+  return (
+    <Card className="card-hover">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-card-title">
+          <svg className="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+          Power Zones
+        </CardTitle>
+        <CardAction>
+          {editMode ? (
+            <div className="flex gap-2">
+              <Button variant="ghost" size="sm" onClick={cancelEdit} disabled={saving}>Cancel</Button>
+              <Button size="sm" onClick={handleSave} disabled={saving}>{saving ? "Saving..." : "Save"}</Button>
+            </div>
+          ) : (
+            <button onClick={startEdit} className="text-primary hover:text-primary/80 text-sm font-medium">Edit</button>
+          )}
+        </CardAction>
+      </CardHeader>
+      <CardContent>
+        <div className="bg-muted/30 rounded-lg overflow-hidden border border-border">
+          <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-muted text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            <div className="col-span-1">Zone</div>
+            <div className="col-span-3">Name</div>
+            <div className="col-span-3">% FTP</div>
+            <div className="col-span-3">Watts</div>
+            <div className="col-span-2">Color</div>
+          </div>
+          {displayZones.map((z) => {
+            const zoneKey = z.zone.toString();
+            const color = POWER_ZONE_COLORS[zoneKey];
+            return (
+              <div key={z.zone} className="grid grid-cols-12 gap-4 px-4 py-3 border-t border-border items-center hover:bg-muted/50 transition">
+                <div className="col-span-1">
+                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-full text-white font-bold text-sm" style={{ backgroundColor: color }}>{z.zone}</span>
+                </div>
+                <div className="col-span-3"><span className="text-sm text-foreground">{z.name}</span></div>
+                <div className="col-span-3">
+                  {editMode ? (
+                    <div className="flex items-center gap-2">
+                      <Input type="number" value={editedPowerPct[zoneKey][0]} onChange={(e) => updatePowerPct(zoneKey, "min", e.target.value)} className="w-16 h-9 text-sm text-right bg-muted" />
+                      <span className="text-muted-foreground">-</span>
+                      <Input type="number" value={editedPowerPct[zoneKey][1] ?? ""} onChange={(e) => updatePowerPct(zoneKey, "max", e.target.value)} placeholder="∞" className="w-16 h-9 text-sm text-right bg-muted" />
+                      <span className="text-xs text-muted-foreground">%</span>
+                    </div>
+                  ) : (
+                    <span className="text-sm text-foreground">{z.minPct}-{z.maxPct ?? "∞"}%</span>
+                  )}
+                </div>
+                <div className="col-span-3"><span className="text-sm text-muted-foreground">{hasFtp ? `${z.minValue}-${z.maxValue ?? "∞"} W` : "— W"}</span></div>
+                <div className="col-span-2"><div className="w-6 h-6 rounded border border-border" style={{ backgroundColor: color }} /></div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+          <p>Power zones use Coggan's 7-zone model. Customize names and ranges as needed.</p>
+          {editMode && <button onClick={resetPowerZones} className="text-primary hover:text-primary/80 font-medium">Reset to defaults</button>}
+        </div>
+        <FeedbackAlert feedback={feedback} />
+      </CardContent>
+    </Card>
+  );
+}
+
+function HrZonesCard({ 
+  user: _user, 
+  onUserUpdate, 
+  hrZones,
+  hrPercentages,
+  hasLthr,
+  lthr,
+}: { 
+  user: User; 
+  onUserUpdate: (user: User) => void;
+  hrZones: ReturnType<typeof computeHrZones>;
+  hrPercentages: ZonePercentages;
+  hasLthr: boolean;
+  lthr: number | null;
+}) {
+  const [editMode, setEditMode] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [editedHrPct, setEditedHrPct] = useState<ZonePercentages>(hrPercentages);
+  
+  const displayZones = editMode ? computeHrZones(lthr ?? 0, editedHrPct) : hrZones;
+  
+  function startEdit() {
     setEditedHrPct({ ...hrPercentages });
     setEditMode(true);
     setFeedback(null);
@@ -794,13 +1053,10 @@ function ZonesSection({ user, onUserUpdate }: { user: User; onUserUpdate: (user:
     setSaving(true);
     setFeedback(null);
     try {
-      const updated = await updatePreferences({
-        power_zone_percentages: editedPowerPct,
-        hr_zone_percentages: editedHrPct,
-      });
+      const updated = await updatePreferences({ hr_zone_percentages: editedHrPct });
       onUserUpdate(updated);
       setEditMode(false);
-      setFeedback({ type: "success", message: "Zone settings saved" });
+      setFeedback({ type: "success", message: "Heart rate zones saved" });
       setTimeout(() => setFeedback(null), 3000);
     } catch (err) {
       const message = err instanceof ApiError ? err.message : "Failed to save zones";
@@ -810,313 +1066,81 @@ function ZonesSection({ user, onUserUpdate }: { user: User; onUserUpdate: (user:
     }
   }
   
-  function resetPowerZones() {
-    setEditedPowerPct({ ...DEFAULT_POWER_ZONES });
-  }
-  
   function resetHrZones() {
     setEditedHrPct({ ...DEFAULT_HR_ZONES });
-  }
-  
-  function updatePowerPct(zone: string, field: "min" | "max", value: string) {
-    const numVal = parseInt(value) || 0;
-    setEditedPowerPct(prev => ({
-      ...prev,
-      [zone]: field === "min" 
-        ? [numVal, prev[zone][1]]
-        : [prev[zone][0], value === "" ? null : numVal],
-    }));
   }
   
   function updateHrPct(zone: string, field: "min" | "max", value: string) {
     const numVal = parseInt(value) || 0;
     setEditedHrPct(prev => ({
       ...prev,
-      [zone]: field === "min"
-        ? [numVal, prev[zone][1]]
-        : [prev[zone][0], value === "" ? null : numVal],
+      [zone]: field === "min" ? [numVal, prev[zone][1]] : [prev[zone][0], value === "" ? null : numVal],
     }));
-  }
-  
-  // Check if user has thresholds set
-  const hasFtp = ftp !== null && ftp > 0;
-  const hasLthr = lthr !== null && lthr > 0;
-  const showThresholdWarning = !hasFtp || !hasLthr;
-
-  if (loadingThresholds) {
-    return (
-      <Card className="card-hover">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-card-title">
-            <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-            Training Zones
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Skeleton className="h-[200px] w-full" />
-        </CardContent>
-      </Card>
-    );
   }
 
   return (
-    <>
-      {/* Warning outside the card when thresholds not set */}
-      {showThresholdWarning && (
-        <div className="bg-warning/10 border border-warning/30 rounded-xl p-5 mb-6">
-          <div className="flex items-start gap-3">
-            <svg className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-foreground mb-1">Threshold Required</p>
-              <p className="text-sm text-muted-foreground">
-                Set your {!hasFtp && !hasLthr ? "FTP and LTHR thresholds" : !hasFtp ? "FTP threshold" : "LTHR threshold"} to see computed zones. 
-                Until then, you can customize zone names and percentages.
-              </p>
-              <Link 
-                to="/athlete?tab=thresholds" 
-                className="inline-flex items-center gap-1 text-primary hover:text-primary/80 text-sm font-medium mt-2"
-              >
-                <span>Go to Athlete → Thresholds</span>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </Link>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <Card className={cn("card-hover relative", editMode && "border-2 border-primary/50")}>
-        {/* Edit mode indicator badge */}
-        {editMode && (
-          <div className="absolute top-0 right-0 bg-primary text-primary-foreground px-4 py-2 rounded-bl-xl rounded-tr-lg text-sm font-medium">
-            Editing Zones
-          </div>
-        )}
-        
-        <CardHeader className={cn(editMode && "pt-12")}>
-          <CardTitle className="flex items-center gap-2 text-card-title">
-            <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-            Training Zones
-          </CardTitle>
-          <CardAction>
+    <Card className="card-hover">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-card-title">
+          <svg className="w-5 h-5 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+          </svg>
+          Heart Rate Zones
+        </CardTitle>
+        <CardAction>
+          {editMode ? (
             <div className="flex gap-2">
-              {editMode ? (
-                <>
-                  <Button variant="ghost" size="sm" onClick={cancelEdit} disabled={saving}>
-                    Cancel
-                  </Button>
-                  <Button size="sm" onClick={handleSave} disabled={saving}>
-                    {saving ? "Saving..." : "Save Changes"}
-                  </Button>
-                </>
-              ) : (
-                <Button variant="ghost" size="sm" onClick={startEdit}>
-                  Edit
-                </Button>
-              )}
+              <Button variant="ghost" size="sm" onClick={cancelEdit} disabled={saving}>Cancel</Button>
+              <Button size="sm" onClick={handleSave} disabled={saving}>{saving ? "Saving..." : "Save"}</Button>
             </div>
-          </CardAction>
-        </CardHeader>
-        <CardContent className="space-y-8">
-          {/* Power Zones */}
-          <div>
-            <div className="flex items-center gap-2 mb-4">
-              <svg className="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-              <h3 className="text-lg font-semibold text-foreground">Power Zones</h3>
-              <span className="text-sm text-muted-foreground ml-2">Based on FTP threshold</span>
-            </div>
-            
-            <div className="bg-muted/30 rounded-lg overflow-hidden border border-border">
-              {/* Table Header */}
-              <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-muted text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                <div className="col-span-1">Zone</div>
-                <div className="col-span-3">Name</div>
-                <div className="col-span-3">% FTP</div>
-                <div className="col-span-3">Watts</div>
-                <div className="col-span-2">Color</div>
-              </div>
-              
-              {/* Zone rows */}
-              {powerZones.map((z) => {
-                const zoneKey = z.zone.toString();
-                const color = POWER_ZONE_COLORS[zoneKey];
-                return (
-                  <div key={z.zone} className="grid grid-cols-12 gap-4 px-4 py-3 border-t border-border items-center hover:bg-muted/50 transition">
-                    <div className="col-span-1">
-                      <span 
-                        className="inline-flex items-center justify-center w-8 h-8 rounded-full text-white font-bold text-sm"
-                        style={{ backgroundColor: color }}
-                      >
-                        {z.zone}
-                      </span>
-                    </div>
-                    <div className="col-span-3">
-                      <span className="text-sm text-foreground">{z.name}</span>
-                    </div>
-                    <div className="col-span-3">
-                      {editMode ? (
-                        <div className="flex items-center gap-2">
-                          <Input
-                            type="number"
-                            value={editedPowerPct[zoneKey][0]}
-                            onChange={(e) => updatePowerPct(zoneKey, "min", e.target.value)}
-                            className="w-16 h-9 text-sm text-right"
-                          />
-                          <span className="text-muted-foreground">-</span>
-                          <Input
-                            type="number"
-                            value={editedPowerPct[zoneKey][1] ?? ""}
-                            onChange={(e) => updatePowerPct(zoneKey, "max", e.target.value)}
-                            placeholder="∞"
-                            className="w-16 h-9 text-sm text-right"
-                          />
-                          <span className="text-xs text-muted-foreground">%</span>
-                        </div>
-                      ) : (
-                        <span className="text-sm text-foreground">{z.minPct}-{z.maxPct ?? "∞"}%</span>
-                      )}
-                    </div>
-                    <div className="col-span-3">
-                      <div className="flex flex-col">
-                        <span className="text-sm text-foreground">
-                          {hasFtp ? `${z.minValue}-${z.maxValue ?? "∞"} W` : "— W"}
-                        </span>
-                        {editMode && !hasFtp && (
-                          <span className="text-xs text-muted-foreground">Set FTP to calculate</span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="col-span-2">
-                      <div 
-                        className="w-6 h-6 rounded border border-border"
-                        style={{ backgroundColor: color }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            
-            <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-              <p>Power zones use Coggan's 7-zone model. Customize names and ranges as needed.</p>
-              {editMode && (
-                <button 
-                  onClick={resetPowerZones}
-                  className="text-primary hover:text-primary/80 font-medium"
-                >
-                  Reset to defaults
-                </button>
-              )}
-            </div>
+          ) : (
+            <button onClick={startEdit} className="text-primary hover:text-primary/80 text-sm font-medium">Edit</button>
+          )}
+        </CardAction>
+      </CardHeader>
+      <CardContent>
+        <div className="bg-muted/30 rounded-lg overflow-hidden border border-border">
+          <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-muted text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            <div className="col-span-1">Zone</div>
+            <div className="col-span-3">Name</div>
+            <div className="col-span-3">% LTHR</div>
+            <div className="col-span-3">BPM</div>
+            <div className="col-span-2">Color</div>
           </div>
-
-          {/* HR Zones */}
-          <div>
-            <div className="flex items-center gap-2 mb-4">
-              <svg className="w-5 h-5 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-              </svg>
-              <h3 className="text-lg font-semibold text-foreground">Heart Rate Zones</h3>
-              <span className="text-sm text-muted-foreground ml-2">Based on LTHR threshold</span>
-            </div>
-            
-            <div className="bg-muted/30 rounded-lg overflow-hidden border border-border">
-              {/* Table Header */}
-              <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-muted text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                <div className="col-span-1">Zone</div>
-                <div className="col-span-3">Name</div>
-                <div className="col-span-3">% LTHR</div>
-                <div className="col-span-3">BPM</div>
-                <div className="col-span-2">Color</div>
+          {displayZones.map((z) => {
+            const zoneKey = z.zone.toString();
+            const color = HR_ZONE_COLORS[zoneKey];
+            return (
+              <div key={z.zone} className="grid grid-cols-12 gap-4 px-4 py-3 border-t border-border items-center hover:bg-muted/50 transition">
+                <div className="col-span-1">
+                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-full text-white font-bold text-sm" style={{ backgroundColor: color }}>{z.zone}</span>
+                </div>
+                <div className="col-span-3"><span className="text-sm text-foreground">{z.name}</span></div>
+                <div className="col-span-3">
+                  {editMode ? (
+                    <div className="flex items-center gap-2">
+                      <Input type="number" value={editedHrPct[zoneKey][0]} onChange={(e) => updateHrPct(zoneKey, "min", e.target.value)} className="w-16 h-9 text-sm text-right bg-muted" />
+                      <span className="text-muted-foreground">-</span>
+                      <Input type="number" value={editedHrPct[zoneKey][1] ?? ""} onChange={(e) => updateHrPct(zoneKey, "max", e.target.value)} placeholder="∞" className="w-16 h-9 text-sm text-right bg-muted" />
+                      <span className="text-xs text-muted-foreground">%</span>
+                    </div>
+                  ) : (
+                    <span className="text-sm text-foreground">{z.minPct}-{z.maxPct ?? "∞"}%</span>
+                  )}
+                </div>
+                <div className="col-span-3"><span className="text-sm text-foreground">{hasLthr ? `${z.minValue}-${z.maxValue ?? "∞"} bpm` : "— bpm"}</span></div>
+                <div className="col-span-2"><div className="w-6 h-6 rounded border border-border" style={{ backgroundColor: color }} /></div>
               </div>
-              
-              {/* Zone rows */}
-              {hrZones.map((z) => {
-                const zoneKey = z.zone.toString();
-                const color = HR_ZONE_COLORS[zoneKey];
-                return (
-                  <div key={z.zone} className="grid grid-cols-12 gap-4 px-4 py-3 border-t border-border items-center hover:bg-muted/50 transition">
-                    <div className="col-span-1">
-                      <span 
-                        className="inline-flex items-center justify-center w-8 h-8 rounded-full text-white font-bold text-sm"
-                        style={{ backgroundColor: color }}
-                      >
-                        {z.zone}
-                      </span>
-                    </div>
-                    <div className="col-span-3">
-                      <span className="text-sm text-foreground">{z.name}</span>
-                    </div>
-                    <div className="col-span-3">
-                      {editMode ? (
-                        <div className="flex items-center gap-2">
-                          <Input
-                            type="number"
-                            value={editedHrPct[zoneKey][0]}
-                            onChange={(e) => updateHrPct(zoneKey, "min", e.target.value)}
-                            className="w-16 h-9 text-sm text-right"
-                          />
-                          <span className="text-muted-foreground">-</span>
-                          <Input
-                            type="number"
-                            value={editedHrPct[zoneKey][1] ?? ""}
-                            onChange={(e) => updateHrPct(zoneKey, "max", e.target.value)}
-                            placeholder="∞"
-                            className="w-16 h-9 text-sm text-right"
-                          />
-                          <span className="text-xs text-muted-foreground">%</span>
-                        </div>
-                      ) : (
-                        <span className="text-sm text-foreground">{z.minPct}-{z.maxPct ?? "∞"}%</span>
-                      )}
-                    </div>
-                    <div className="col-span-3">
-                      <div className="flex flex-col">
-                        <span className="text-sm text-foreground">
-                          {hasLthr ? `${z.minValue}-${z.maxValue ?? "∞"} bpm` : "— bpm"}
-                        </span>
-                        {editMode && !hasLthr && (
-                          <span className="text-xs text-muted-foreground">Set LTHR to calculate</span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="col-span-2">
-                      <div 
-                        className="w-6 h-6 rounded border border-border"
-                        style={{ backgroundColor: color }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            
-            <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-              <p>Heart rate zones use the Friel method. Adjust percentages to match your training methodology.</p>
-              {editMode && (
-                <button 
-                  onClick={resetHrZones}
-                  className="text-primary hover:text-primary/80 font-medium"
-                >
-                  Reset to defaults
-                </button>
-              )}
-            </div>
-          </div>
-
-          <FeedbackAlert feedback={feedback} />
-        </CardContent>
-      </Card>
-    </>
+            );
+          })}
+        </div>
+        <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+          <p>Heart rate zones use the Friel method. Adjust percentages to match your training methodology.</p>
+          {editMode && <button onClick={resetHrZones} className="text-primary hover:text-primary/80 font-medium">Reset to defaults</button>}
+        </div>
+        <FeedbackAlert feedback={feedback} />
+      </CardContent>
+    </Card>
   );
 }
 
@@ -1246,14 +1270,14 @@ function ConnectedAccountsSection(): React.JSX.Element {
             <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
             </svg>
-            Connected Accounts
+            Login Methods
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Google skeleton */}
-          <div className="flex items-center justify-between p-4 border border-border rounded-lg">
-            <div className="flex items-center gap-3">
-              <Skeleton className="h-6 w-6 rounded" />
+          <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+            <div className="flex items-center gap-4">
+              <Skeleton className="h-10 w-10 rounded-lg" />
               <div>
                 <Skeleton className="h-4 w-20 mb-1" />
                 <Skeleton className="h-3 w-32" />
@@ -1262,9 +1286,9 @@ function ConnectedAccountsSection(): React.JSX.Element {
             <Skeleton className="h-9 w-24" />
           </div>
           {/* GitHub skeleton */}
-          <div className="flex items-center justify-between p-4 border border-border rounded-lg">
-            <div className="flex items-center gap-3">
-              <Skeleton className="h-6 w-6 rounded" />
+          <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+            <div className="flex items-center gap-4">
+              <Skeleton className="h-10 w-10 rounded-lg" />
               <div>
                 <Skeleton className="h-4 w-20 mb-1" />
                 <Skeleton className="h-3 w-32" />
@@ -1286,7 +1310,7 @@ function ConnectedAccountsSection(): React.JSX.Element {
           <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
           </svg>
-          Connected Accounts
+          Login Methods
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -1304,11 +1328,11 @@ function ConnectedAccountsSection(): React.JSX.Element {
               </svg>
             </div>
             <div>
-              <h3 className="font-medium">Google</h3>
+              <h3 className="font-medium text-foreground">Google</h3>
               {googleLink ? (
-                <p className="text-body-secondary">{googleLink.provider_email}</p>
+                <p className="text-sm text-muted-foreground">{googleLink.provider_email}</p>
               ) : (
-                <p className="text-body-secondary">Not connected</p>
+                <p className="text-sm text-muted-foreground">Not connected</p>
               )}
             </div>
           </div>
@@ -1324,7 +1348,7 @@ function ConnectedAccountsSection(): React.JSX.Element {
           ) : (
             <a
               href="/auth/google/connect"
-              className="bg-muted hover:bg-muted/80 border border-border px-4 py-2 rounded-lg transition text-sm font-medium"
+              className="bg-muted hover:bg-muted/80 border border-border px-4 py-2 rounded-lg transition text-sm font-medium text-foreground"
             >
               Connect
             </a>
@@ -1335,16 +1359,16 @@ function ConnectedAccountsSection(): React.JSX.Element {
         <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 bg-background rounded-lg flex items-center justify-center">
-              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+              <svg className="w-6 h-6 text-foreground" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
               </svg>
             </div>
             <div>
-              <h3 className="font-medium">GitHub</h3>
+              <h3 className="font-medium text-foreground">GitHub</h3>
               {githubLink ? (
-                <p className="text-body-secondary">{githubLink.provider_email || githubLink.display_name}</p>
+                <p className="text-sm text-muted-foreground">{githubLink.provider_email || githubLink.display_name}</p>
               ) : (
-                <p className="text-body-secondary">Not connected</p>
+                <p className="text-sm text-muted-foreground">Not connected</p>
               )}
             </div>
           </div>
@@ -1360,7 +1384,7 @@ function ConnectedAccountsSection(): React.JSX.Element {
           ) : (
             <a
               href="/auth/github/connect"
-              className="bg-muted hover:bg-muted/80 border border-border px-4 py-2 rounded-lg transition text-sm font-medium"
+              className="bg-muted hover:bg-muted/80 border border-border px-4 py-2 rounded-lg transition text-sm font-medium text-foreground"
             >
               Connect
             </a>
@@ -1474,7 +1498,7 @@ function SyncScheduleSection({ user, onUserUpdate }: { user: User; onUserUpdate:
             value={syncHour}
             onChange={(e) => setSyncHour(parseInt(e.target.value))}
             disabled={saving}
-            className="w-full h-11 px-4 mt-1.5 rounded-lg border border-input bg-transparent text-base focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            className="w-full h-11 px-4 mt-1.5 rounded-lg border border-input bg-muted text-base focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             {Array.from({ length: 24 }, (_, i) => (
               <option key={i} value={i}>
@@ -1498,9 +1522,9 @@ function SyncScheduleSection({ user, onUserUpdate }: { user: User; onUserUpdate:
  */
 function ThresholdsSection({ user: _user }: { user: User }) {
   const [metrics, setMetrics] = useState<{
-    ftp_watts: number | null;
-    lthr_bpm: number | null;
-    max_hr_bpm: number | null;
+    ftp: number | null;
+    lthr: number | null;
+    hrmax: number | null;
   } | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -1508,9 +1532,9 @@ function ThresholdsSection({ user: _user }: { user: User }) {
     fetchCurrentMetrics()
       .then((data) => {
         setMetrics({
-          ftp_watts: data.ftp_watts?.value ?? null,
-          lthr_bpm: data.lthr_bpm?.value ?? null,
-          max_hr_bpm: data.max_hr_bpm?.value ?? null,
+          ftp: data.ftp?.value ?? null,
+          lthr: data.lthr?.value ?? null,
+          hrmax: data.hrmax?.value ?? null,
         });
       })
       .catch(() => {
@@ -1555,19 +1579,19 @@ function ThresholdsSection({ user: _user }: { user: User }) {
             <div className="p-4 bg-muted rounded-lg">
               <div className="text-sm text-muted-foreground mb-1">FTP</div>
               <div className="text-2xl font-bold text-foreground">
-                {metrics?.ftp_watts ? `${metrics.ftp_watts} W` : "—"}
+                {metrics?.ftp ? `${metrics.ftp} W` : "—"}
               </div>
             </div>
             <div className="p-4 bg-muted rounded-lg">
               <div className="text-sm text-muted-foreground mb-1">LTHR</div>
               <div className="text-2xl font-bold text-foreground">
-                {metrics?.lthr_bpm ? `${metrics.lthr_bpm} bpm` : "—"}
+                {metrics?.lthr ? `${metrics.lthr} bpm` : "—"}
               </div>
             </div>
             <div className="p-4 bg-muted rounded-lg">
               <div className="text-sm text-muted-foreground mb-1">Max HR</div>
               <div className="text-2xl font-bold text-foreground">
-                {metrics?.max_hr_bpm ? `${metrics.max_hr_bpm} bpm` : "—"}
+                {metrics?.hrmax ? `${metrics.hrmax} bpm` : "—"}
               </div>
             </div>
           </div>
@@ -1580,24 +1604,14 @@ function ThresholdsSection({ user: _user }: { user: User }) {
 
 function IntegrationsSection() {
   return (
-    <Card className="card-hover">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-card-title">
-          <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" />
-          </svg>
-          Integrations
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <XertIntegration />
-        <GarminIntegration />
-      </CardContent>
-    </Card>
+    <>
+      <XertIntegrationCard />
+      <GarminIntegrationCard />
+    </>
   );
 }
 
-function XertIntegration() {
+function XertIntegrationCard() {
   const [xertStatus, setXertStatus] = useState<XertCredentialsStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState("");
@@ -1669,170 +1683,180 @@ function XertIntegration() {
 
   if (loading) {
     return (
-      <div className="border border-border rounded-lg p-4">
-        <div className="animate-pulse">
-          <div className="h-4 bg-muted rounded w-1/4 mb-2"></div>
-          <div className="h-10 bg-muted rounded"></div>
-        </div>
-      </div>
+      <Card className="card-hover">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-3 text-card-title">
+            <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+              <span className="text-xl font-bold text-primary-foreground">X</span>
+            </div>
+            Xert
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Skeleton className="h-[120px] w-full" />
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <div className="border border-border rounded-lg p-5">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h3 className="font-semibold">Xert</h3>
-          <p className="text-body-secondary">
-            {xertStatus?.configured
-              ? `Connected as ${xertStatus.xert_email}`
-              : "Not connected"}
-          </p>
-        </div>
-        <span
-          data-testid="xert-status"
-          className={cn(
-            "px-3 py-1 text-xs rounded-full",
-            xertStatus?.configured
-              ? "bg-success/20 text-success"
-              : "bg-muted text-muted-foreground"
-          )}
-        >
-          {xertStatus?.configured ? "Connected" : "Not configured"}
-        </span>
-      </div>
-
-
-      
-      <div className="space-y-4">
-        <div className="space-y-1.5">
-          <Label className="text-muted-foreground">Xert Email</Label>
-          {xertStatus?.configured ? (
-            <Input
-              type="email"
-              value={email}
-              disabled
-              data-testid="xert-email"
-              className="h-11 px-4 text-base md:text-base bg-muted/50"
-            />
-          ) : (
-            <Input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="your@email.com"
-              data-testid="xert-email"
-              className="h-11 px-4 text-base md:text-base"
-            />
-          )}
-        </div>
-        
-        <div className="space-y-1.5">
-          <Label className="text-muted-foreground">
-            {xertStatus?.configured ? "Update Password" : "Xert Password"}
-          </Label>
-          <PasswordInput
-            value={password}
-            onChange={setPassword}
-            placeholder={xertStatus?.configured ? "Enter new password to update" : "Enter password"}
-            data-testid="xert-password"
-          />
-        </div>
-        
-        {!xertStatus?.configured && (
-          <div className="space-y-1.5">
-            <Label className="text-muted-foreground">Sync activities since</Label>
-            <Input
-              type="date"
-              value={syncSince}
-              onChange={(e) => setSyncSince(e.target.value)}
-              data-testid="xert-sync-since"
-              className="h-11 px-4 text-base md:text-base"
-            />
-            <p className="text-caption">
-              Activities from this date onwards will be imported
-            </p>
-          </div>
-        )}
-        
-        {xertStatus?.configured ? (
-          <>
-            {/* Save Password button - only shown when password entered */}
-            {password && (
-              <Button
-                onClick={handleConnect}
-                disabled={saving}
-                data-testid="xert-save-password"
-              >
-                {saving ? "Saving..." : "Save Password"}
-              </Button>
+    <Card className="card-hover">
+      <CardHeader>
+        <div className="flex items-center justify-between w-full">
+          <CardTitle className="flex items-center gap-3 text-card-title">
+            <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+              <span className="text-xl font-bold text-primary-foreground">X</span>
+            </div>
+            Xert
+          </CardTitle>
+          <span
+            data-testid="xert-status"
+            className={cn(
+              "px-3 py-1 text-xs rounded-full",
+              xertStatus?.configured
+                ? "bg-success/20 text-success"
+                : "bg-muted text-muted-foreground"
             )}
-            
-            {/* Sync toggle */}
-            <div className="flex items-center justify-between py-3 border-t border-border">
-              <div>
-                <p className="font-medium text-sm">Auto-sync from Xert</p>
-                <p className="text-caption">Automatically import new activities at your daily sync time</p>
-              </div>
-              <button
-                onClick={async () => {
-                  try {
-                    const newValue = !xertStatus.sync_enabled;
-                    await updateXertSyncEnabled(newValue);
-                    setXertStatus({ ...xertStatus, sync_enabled: newValue });
-                  } catch {
-                    setFeedback({ type: "error", message: "Failed to update sync setting" });
-                  }
-                }}
-                disabled={saving}
-                aria-pressed={xertStatus.sync_enabled}
-                className={cn(
-                  "relative inline-flex h-6 w-12 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
-                  xertStatus.sync_enabled ? "bg-primary" : "bg-muted",
-                  saving && "opacity-50 cursor-not-allowed"
-                )}
-              >
-                <span
-                  className={cn(
-                    "pointer-events-none absolute left-1 bottom-1 w-4 h-4 transform rounded-full bg-muted-foreground shadow transition duration-200 ease-in-out",
-                    xertStatus.sync_enabled ? "translate-x-6 bg-white" : "translate-x-0"
-                  )}
-                />
-              </button>
-            </div>
-            
-            <div className="flex gap-3 pt-2">
-              <SyncButton onSync={triggerXertSync} label="Sync Now" />
-              <Button
-                variant="destructive"
-                onClick={handleDisconnect}
-                disabled={saving}
-                data-testid="xert-disconnect"
-              >
-                Disconnect
-              </Button>
-            </div>
-          </>
-        ) : (
-          <Button
-            onClick={handleConnect}
-            disabled={saving || !email || !password}
-            data-testid="xert-connect"
-            className="w-full"
           >
-            {saving ? "Connecting..." : "Connect"}
-          </Button>
+            {xertStatus?.configured ? "Connected" : "Not configured"}
+          </span>
+        </div>
+        {xertStatus?.configured && (
+          <p className="text-sm text-muted-foreground mt-1 ml-[52px]">
+            Connected as {xertStatus.xert_email}
+          </p>
         )}
-      </div>
-      
-      <FeedbackAlert feedback={feedback} />
-    </div>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label className="text-muted-foreground text-sm font-medium">Xert Email</Label>
+            {xertStatus?.configured ? (
+              <Input
+                type="email"
+                value={email}
+                disabled
+                data-testid="xert-email"
+                className="h-11 px-4 text-base md:text-base bg-muted text-muted-foreground"
+              />
+            ) : (
+              <Input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="your@email.com"
+                data-testid="xert-email"
+                className="h-11 px-4 text-base md:text-base bg-muted"
+              />
+            )}
+          </div>
+          
+          <div className="space-y-1.5">
+            <Label className="text-muted-foreground text-sm font-medium">
+              {xertStatus?.configured ? "Update Password" : "Xert Password"}
+            </Label>
+            <PasswordInput
+              value={password}
+              onChange={setPassword}
+              placeholder={xertStatus?.configured ? "Enter new password to update" : "Enter password"}
+              data-testid="xert-password"
+            />
+          </div>
+          
+          {!xertStatus?.configured && (
+            <div className="space-y-1.5">
+              <Label className="text-muted-foreground text-sm font-medium">Sync activities since</Label>
+              <Input
+                type="date"
+                value={syncSince}
+                onChange={(e) => setSyncSince(e.target.value)}
+                data-testid="xert-sync-since"
+                className="h-11 px-4 text-base md:text-base bg-muted"
+              />
+              <p className="text-xs text-muted-foreground mt-1.5">
+                Activities from this date onwards will be imported
+              </p>
+            </div>
+          )}
+          
+          {xertStatus?.configured ? (
+            <>
+              {/* Save Password button - only shown when password entered */}
+              {password && (
+                <Button
+                  onClick={handleConnect}
+                  disabled={saving}
+                  data-testid="xert-save-password"
+                >
+                  {saving ? "Saving..." : "Save Password"}
+                </Button>
+              )}
+              
+              {/* Sync toggle */}
+              <div className="flex items-center justify-between py-3 border-t border-border">
+                <div>
+                  <p className="font-medium text-sm">Auto-sync from Xert</p>
+                  <p className="text-xs text-muted-foreground">Automatically import new activities at your daily sync time</p>
+                </div>
+                <button
+                  onClick={async () => {
+                    try {
+                      const newValue = !xertStatus.sync_enabled;
+                      await updateXertSyncEnabled(newValue);
+                      setXertStatus({ ...xertStatus, sync_enabled: newValue });
+                    } catch {
+                      setFeedback({ type: "error", message: "Failed to update sync setting" });
+                    }
+                  }}
+                  disabled={saving}
+                  aria-pressed={xertStatus.sync_enabled}
+                  className={cn(
+                    "relative inline-flex h-6 w-12 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
+                    xertStatus.sync_enabled ? "bg-primary" : "bg-muted",
+                    saving && "opacity-50 cursor-not-allowed"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "pointer-events-none absolute left-1 bottom-1 w-4 h-4 transform rounded-full bg-muted-foreground shadow transition duration-200 ease-in-out",
+                      xertStatus.sync_enabled ? "translate-x-6 bg-white" : "translate-x-0"
+                    )}
+                  />
+                </button>
+              </div>
+              
+              <div className="flex gap-3 pt-2">
+                <SyncButton onSync={triggerXertSync} label="Sync Now" />
+                <Button
+                  variant="destructive"
+                  onClick={handleDisconnect}
+                  disabled={saving}
+                  data-testid="xert-disconnect"
+                >
+                  Disconnect
+                </Button>
+              </div>
+            </>
+          ) : (
+            <Button
+              onClick={handleConnect}
+              disabled={saving || !email || !password}
+              data-testid="xert-connect"
+            >
+              {saving ? "Connecting..." : "Connect"}
+            </Button>
+          )}
+        </div>
+        
+        <FeedbackAlert feedback={feedback} />
+      </CardContent>
+    </Card>
   );
 }
 
 
 
-function GarminIntegration() {
+function GarminIntegrationCard() {
   const [garminStatus, setGarminStatus] = useState<GarminCredentialsStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState("");
@@ -1891,8 +1915,6 @@ function GarminIntegration() {
       setSaving(false);
     }
   }
-
-
 
   async function handleMfaSubmit() {
     if (!mfaCode) return;
@@ -1956,68 +1978,79 @@ function GarminIntegration() {
 
   if (loading) {
     return (
-      <div className="border border-border rounded-lg p-4">
-        <div className="animate-pulse">
-          <div className="h-4 bg-muted rounded w-1/4 mb-2"></div>
-          <div className="h-10 bg-muted rounded"></div>
-        </div>
-      </div>
+      <Card className="card-hover">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-3 text-card-title">
+            <div className="w-10 h-10 bg-accent rounded-lg flex items-center justify-center">
+              <span className="text-xl font-bold text-accent-foreground">G</span>
+            </div>
+            Garmin
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Skeleton className="h-[120px] w-full" />
+        </CardContent>
+      </Card>
     );
   }
 
-
-
   return (
-    <div className="border border-border rounded-lg p-5">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h3 className="font-semibold">Garmin</h3>
-          <p className="text-body-secondary">
-            {garminStatus?.configured
-              ? `Connected as ${garminStatus.garmin_email}`
-              : "Not connected"}
-          </p>
+    <Card className="card-hover">
+      <CardHeader>
+        <div className="flex items-center justify-between w-full">
+          <CardTitle className="flex items-center gap-3 text-card-title">
+            <div className="w-10 h-10 bg-accent rounded-lg flex items-center justify-center">
+              <span className="text-xl font-bold text-accent-foreground">G</span>
+            </div>
+            Garmin
+          </CardTitle>
+          <span
+            data-testid="garmin-status"
+            className={cn(
+              "px-3 py-1 text-xs rounded-full",
+              garminStatus?.configured
+                ? "bg-success/20 text-success"
+                : "bg-muted text-muted-foreground"
+            )}
+          >
+            {garminStatus?.configured ? "Connected" : "Not configured"}
+          </span>
         </div>
-        <span
-          data-testid="garmin-status"
-          className={cn(
-            "px-3 py-1 text-xs rounded-full",
-            garminStatus?.configured
-              ? "bg-success/20 text-success"
-              : "bg-muted text-muted-foreground"
-          )}
-        >
-          {garminStatus?.configured ? "Connected" : "Not configured"}
-        </span>
-      </div>
-      
-      {mfaRequired ? (
-        <MfaForm
-          mfaCode={mfaCode}
-          setMfaCode={setMfaCode}
-          saving={saving}
-          onSubmit={handleMfaSubmit}
-          onCancel={handleCancelMfa}
-        />
-      ) : (
-        <GarminCredentialsForm
-          email={email}
-          setEmail={setEmail}
-          password={password}
-          setPassword={setPassword}
-          syncSince={syncSince}
-          setSyncSince={setSyncSince}
-          saving={saving}
-          configured={garminStatus?.configured ?? false}
-          syncEnabled={garminStatus?.sync_enabled ?? true}
-          onConnect={handleConnect}
-          onDisconnect={handleDisconnect}
-          onToggleSync={handleToggleSync}
-        />
-      )}
-      
-      <FeedbackAlert feedback={feedback} />
-    </div>
+        {garminStatus?.configured && (
+          <p className="text-sm text-muted-foreground mt-1 ml-[52px]">
+            Connected as {garminStatus.garmin_email}
+          </p>
+        )}
+      </CardHeader>
+      <CardContent>
+        {mfaRequired ? (
+          <MfaForm
+            mfaCode={mfaCode}
+            setMfaCode={setMfaCode}
+            saving={saving}
+            onSubmit={handleMfaSubmit}
+            onCancel={handleCancelMfa}
+          />
+        ) : (
+          <GarminCredentialsForm
+            email={email}
+            setEmail={setEmail}
+            password={password}
+            setPassword={setPassword}
+            syncSince={syncSince}
+            setSyncSince={setSyncSince}
+            saving={saving}
+            configured={garminStatus?.configured ?? false}
+            syncEnabled={garminStatus?.sync_enabled ?? true}
+            onConnect={handleConnect}
+            onDisconnect={handleDisconnect}
+            onToggleSync={handleToggleSync}
+          />
+        )}
+        
+        <FeedbackAlert feedback={feedback} />
+      </CardContent>
+    </Card>
   );
 }
 
@@ -2098,14 +2131,14 @@ function GarminCredentialsForm({
   return (
     <div className="space-y-4">
       <div className="space-y-1.5">
-        <Label className="text-muted-foreground">Garmin Email</Label>
+        <Label className="text-muted-foreground text-sm font-medium">Garmin Email</Label>
         {configured ? (
           <Input
             type="email"
             value={email}
             disabled
             data-testid="garmin-email"
-            className="h-11 px-4 text-base md:text-base bg-muted/50"
+            className="h-11 px-4 text-base md:text-base bg-muted text-muted-foreground"
           />
         ) : (
           <Input
@@ -2114,13 +2147,13 @@ function GarminCredentialsForm({
             onChange={(e) => setEmail(e.target.value)}
             placeholder="your@email.com"
             data-testid="garmin-email"
-            className="h-11 px-4 text-base md:text-base"
+            className="h-11 px-4 text-base md:text-base bg-muted"
           />
         )}
       </div>
       
       <div className="space-y-1.5">
-        <Label className="text-muted-foreground">
+        <Label className="text-muted-foreground text-sm font-medium">
           {configured ? "Update Password" : "Garmin Password"}
         </Label>
         <PasswordInput
@@ -2133,15 +2166,15 @@ function GarminCredentialsForm({
       
       {!configured && (
         <div className="space-y-1.5">
-          <Label className="text-muted-foreground">Sync activities since</Label>
+          <Label className="text-muted-foreground text-sm font-medium">Sync activities since</Label>
           <Input
             type="date"
             value={syncSince}
             onChange={(e) => setSyncSince(e.target.value)}
             data-testid="garmin-sync-since"
-            className="h-11 px-4 text-base md:text-base"
+            className="h-11 px-4 text-base md:text-base bg-muted"
           />
-          <p className="text-caption">
+          <p className="text-xs text-muted-foreground mt-1.5">
             Activities from this date onwards will be imported
           </p>
         </div>
@@ -2164,7 +2197,7 @@ function GarminCredentialsForm({
           <div className="flex items-center justify-between py-3 border-t border-border">
             <div>
               <p className="font-medium text-sm">Auto-sync from Garmin</p>
-              <p className="text-caption">Automatically import new activities at your daily sync time</p>
+              <p className="text-xs text-muted-foreground">Automatically import new activities at your daily sync time</p>
             </div>
             <button
               onClick={onToggleSync}

@@ -16,22 +16,29 @@ test.describe('Settings', () => {
     await registerAndApproveUser(request, testUser);
   });
 
-  test('settings page loads with all sections', async ({ page }) => {
+  test('settings page loads with all tabs', async ({ page }) => {
     await loginViaApi(page, testUser);
     await page.goto('/settings');
 
     // Should show Settings heading
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
 
-    // Should show main sections (CardTitle uses data-slot="card-title")
+    // Should show all tabs
+    await expect(page.getByRole('tab', { name: 'Profile' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Preferences' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Training' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Connections' })).toBeVisible();
+
+    // Profile tab should be active by default and show Profile card
     await expect(page.locator('[data-slot="card-title"]', { hasText: 'Profile' })).toBeVisible();
-    await expect(page.locator('[data-slot="card-title"]', { hasText: 'Preferences' })).toBeVisible();
-    await expect(page.locator('[data-slot="card-title"]', { hasText: 'Training Zones' })).toBeVisible();
   });
 
   test('unit system toggle switches between metric and imperial', async ({ page }) => {
     await loginViaApi(page, testUser);
     await page.goto('/settings');
+
+    // Click Preferences tab to see unit system
+    await page.getByRole('tab', { name: 'Preferences' }).click();
 
     // Wait for preferences section to load
     await expect(page.getByText('Unit System')).toBeVisible();
@@ -50,6 +57,9 @@ test.describe('Settings', () => {
   test('theme selector allows choosing light, dark, or system', async ({ page }) => {
     await loginViaApi(page, testUser);
     await page.goto('/settings');
+
+    // Click Preferences tab to see theme selector
+    await page.getByRole('tab', { name: 'Preferences' }).click();
 
     // Wait for preferences section
     await expect(page.getByText('Theme')).toBeVisible();
