@@ -113,6 +113,9 @@ test.describe('Settings - Provider Integrations', () => {
 
       await expect(page.getByRole('heading', { name: 'Xert', level: 3 })).toBeVisible();
 
+      // Wait for connection state to fully render
+      await page.waitForTimeout(500);
+
       // Check if already connected by looking for disconnect button
       const disconnectButton = page.getByTestId('xert-disconnect');
       const isConnected = await disconnectButton.isVisible().catch(() => false);
@@ -178,9 +181,12 @@ test.describe('Settings - Provider Integrations', () => {
 
       await expect(page.getByRole('heading', { name: 'Xert', level: 3 })).toBeVisible();
 
-      // Check if already connected
-      const autoSyncLabel = page.getByText('Auto-sync from Xert');
-      const isConnected = await autoSyncLabel.isVisible().catch(() => false);
+      // Wait a moment for the page to fully load
+      await page.waitForTimeout(500);
+
+      // Check if already connected by checking if disconnect button is visible
+      const disconnectButton = page.getByTestId('xert-disconnect');
+      const isConnected = await disconnectButton.isVisible().catch(() => false);
       
       if (!isConnected) {
         // Not connected yet, need to connect first
