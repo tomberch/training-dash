@@ -11,6 +11,7 @@ import {
 } from "recharts";
 import type { PeakPower, PowerCurvePoint } from "../api";
 import { fetchPowerCurve } from "../api";
+import { formatAxisDuration } from "@/lib/chartUtils";
 
 // Key durations to highlight (in seconds)
 const KEY_DURATIONS = [5, 30, 60, 300, 1200, 3600];
@@ -30,14 +31,6 @@ const TOOLTIP_STYLE = {
   allTimeColor: "#6366f1",
   secondaryText: "#6b7280",
 } as const;
-
-function formatDuration(seconds: number): string {
-  if (seconds < 60) return `${seconds}s`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  return m > 0 ? `${h}h${m}m` : `${h}h`;
-}
 
 interface ActivityPowerCurveProps {
   peaks: PeakPower[];
@@ -155,7 +148,7 @@ export function ActivityPowerCurve({ peaks, showAllTimeCurve: initialShowAllTime
               dataKey="logDuration"
               type="number"
               domain={["dataMin", "dataMax"]}
-              tickFormatter={(v) => formatDuration(Math.pow(10, v))}
+              tickFormatter={(v) => formatAxisDuration(Math.pow(10, v))}
               ticks={keyDurationTicks}
               tick={{ fontSize: 11, fill: "#6b7280" }}
               axisLine={{ stroke: "#d1d5db" }}
@@ -187,7 +180,7 @@ export function ActivityPowerCurve({ peaks, showAllTimeCurve: initialShowAllTime
                         color: data.isPr ? TOOLTIP_STYLE.prTitle : TOOLTIP_STYLE.normalTitle,
                       }}
                     >
-                      {formatDuration(data.duration)}
+                      {formatAxisDuration(data.duration)}
                       {data.isPr && " - PR!"}
                     </div>
                     {data.activityWatts !== null && (

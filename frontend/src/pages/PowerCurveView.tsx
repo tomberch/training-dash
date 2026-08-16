@@ -13,20 +13,13 @@ import type { PowerCurvePoint, FitnessResponse } from "../api";
 import { fetchPowerCurve, fetchFitness, fetchMe } from "../api";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
+import { formatAxisDuration } from "@/lib/chartUtils";
 
 // Key durations to label (in seconds)
 const KEY_DURATIONS = [5, 30, 60, 300, 1200, 3600, 7200];
 
 // Standard durations for fitness model curve
 const MODEL_DURATIONS = [1, 2, 5, 10, 15, 30, 60, 120, 180, 300, 600, 1200, 1800, 2400, 3600, 5400, 7200];
-
-function formatDuration(seconds: number): string {
-  if (seconds < 60) return `${seconds}s`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  return m > 0 ? `${h}h${m}m` : `${h}h`;
-}
 
 function getStalenessColor(daysAgo: number): string {
   if (daysAgo <= 30) return "#22c55e"; // Green
@@ -403,7 +396,7 @@ export function PowerCurveView() {
                 dataKey="logDuration"
                 type="number"
                 domain={[Math.log10(1), Math.log10(7200)]}
-                tickFormatter={(v) => formatDuration(Math.round(Math.pow(10, v)))}
+                tickFormatter={(v) => formatAxisDuration(Math.round(Math.pow(10, v)))}
                 ticks={KEY_DURATIONS.map(d => Math.log10(d))}
                 tick={{ fontSize: 11, fill: "#6b7280" }}
                 axisLine={{ stroke: "#d1d5db" }}
@@ -435,7 +428,7 @@ export function PowerCurveView() {
                   return (
                     <div className="bg-card border border-border rounded-lg shadow-lg p-3">
                       <div className="text-sm font-medium text-foreground mb-2">
-                        {formatDuration(point.duration)}
+                        {formatAxisDuration(point.duration)}
                       </div>
                       <div className="space-y-1 text-sm">
                         {point[valueKey] !== null && (
@@ -528,7 +521,7 @@ export function PowerCurveView() {
                     className={isKey ? "bg-primary/5" : ""}
                   >
                     <td className={`px-4 py-3 ${isKey ? "font-semibold" : ""} text-foreground`}>
-                      {formatDuration(point.duration_seconds)}
+                      {formatAxisDuration(point.duration_seconds)}
                     </td>
                     <td className="px-4 py-3 text-right font-medium text-foreground">
                       {point.watts} W

@@ -3,6 +3,15 @@ import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { Settings } from "./Settings";
 
+// Mock the theme hook
+vi.mock("./hooks/useTheme", () => ({
+  useTheme: () => ({
+    theme: "latte",
+    setTheme: vi.fn(),
+    resolvedTheme: "latte",
+  }),
+}));
+
 // Mock all API functions
 vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
@@ -78,6 +87,8 @@ describe("Settings", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Clear localStorage to ensure consistent tab state
+    localStorage.removeItem("settings-tab");
   });
 
   it("renders settings page with all sections", async () => {
@@ -91,10 +102,11 @@ describe("Settings", () => {
       expect(screen.getByText("Settings")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("Profile")).toBeInTheDocument();
-    expect(screen.getByText("Preferences")).toBeInTheDocument();
-    expect(screen.getByText("Training Zones")).toBeInTheDocument();
-    expect(screen.getByText("Integrations")).toBeInTheDocument();
+    // Use role-based queries for tabs to avoid matching card titles
+    expect(screen.getByRole("tab", { name: /Profile/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /Preferences/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /Training/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /Connections/i })).toBeInTheDocument();
   });
 
   it("displays user email as read-only", async () => {
@@ -126,6 +138,8 @@ describe("Settings - Preferences Section", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Clear localStorage to ensure consistent tab state
+    localStorage.removeItem("settings-tab");
   });
 
   it("toggles unit system from metric to imperial", async () => {
@@ -139,7 +153,14 @@ describe("Settings - Preferences Section", () => {
       onUserUpdate: mockOnUserUpdate,
     });
 
-    // Wait for component to render and find the Imperial button
+    // First, click on the Preferences tab to see the unit system toggle
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: /Preferences/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: /Preferences/i }));
+
+    // Wait for the Preferences panel to render and find the Imperial button
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Imperial" })).toBeInTheDocument();
     });
@@ -169,6 +190,12 @@ describe("Settings - Preferences Section", () => {
       onUserUpdate: mockOnUserUpdate,
     });
 
+    // Click Preferences tab
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: /Preferences/i })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("tab", { name: /Preferences/i }));
+
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Imperial" })).toBeInTheDocument();
     });
@@ -189,6 +216,12 @@ describe("Settings - Preferences Section", () => {
       onUserUpdate: mockOnUserUpdate,
     });
 
+    // Click Preferences tab
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: /Preferences/i })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("tab", { name: /Preferences/i }));
+
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Imperial" })).toBeInTheDocument();
     });
@@ -207,9 +240,11 @@ describe("Settings - Profile Section", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Clear localStorage to ensure consistent tab state
+    localStorage.removeItem("settings-tab");
   });
 
-  it("saves display name on Save Profile click", async () => {
+  it("saves display name on blur", async () => {
     vi.mocked(updatePreferences).mockResolvedValue({
       ...mockUser,
       display_name: "New Name",
@@ -220,14 +255,19 @@ describe("Settings - Profile Section", () => {
       onUserUpdate: mockOnUserUpdate,
     });
 
+    // Ensure Profile tab is active
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: /Profile/i })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("tab", { name: /Profile/i }));
+
     await waitFor(() => {
       expect(screen.getByDisplayValue("Test User")).toBeInTheDocument();
     });
 
     const displayNameInput = screen.getByDisplayValue("Test User");
     fireEvent.change(displayNameInput, { target: { value: "New Name" } });
-
-    fireEvent.click(screen.getByText("Save Profile"));
+    fireEvent.blur(displayNameInput);
 
     await waitFor(() => {
       expect(updatePreferences).toHaveBeenCalledWith(
@@ -239,18 +279,29 @@ describe("Settings - Profile Section", () => {
   });
 
   it("shows success feedback after saving profile", async () => {
-    vi.mocked(updatePreferences).mockResolvedValue(mockUser);
+    vi.mocked(updatePreferences).mockResolvedValue({
+      ...mockUser,
+      display_name: "Changed Name",
+    });
 
     renderSettings({
       user: mockUser,
       onUserUpdate: mockOnUserUpdate,
     });
 
+    // Ensure Profile tab is active
     await waitFor(() => {
-      expect(screen.getByText("Save Profile")).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: /Profile/i })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("tab", { name: /Profile/i }));
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("Test User")).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText("Save Profile"));
+    const displayNameInput = screen.getByDisplayValue("Test User");
+    fireEvent.change(displayNameInput, { target: { value: "Changed Name" } });
+    fireEvent.blur(displayNameInput);
 
     await waitFor(() => {
       expect(screen.getByText("Profile saved")).toBeInTheDocument();
@@ -262,6 +313,12 @@ describe("Settings - Profile Section", () => {
       user: mockUser,
       onUserUpdate: mockOnUserUpdate,
     });
+
+    // Ensure Profile tab is active
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: /Profile/i })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("tab", { name: /Profile/i }));
 
     await waitFor(() => {
       // Display name "Test User" should show "TU" initials
@@ -279,6 +336,12 @@ describe("Settings - Profile Section", () => {
       user: userWithAvatar,
       onUserUpdate: mockOnUserUpdate,
     });
+
+    // Ensure Profile tab is active
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: /Profile/i })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("tab", { name: /Profile/i }));
 
     await waitFor(() => {
       const avatarImg = screen.getByAltText("Avatar");
