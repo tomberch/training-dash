@@ -101,8 +101,8 @@ test.describe.serial('J005: Breakthrough Upload Flow', () => {
     // Click on Training tab to see zones
     await page.getByRole('tab', { name: 'Training' }).click();
     
-    const trainingZonesHeading = page.getByText('Training Zones');
-    await expect(trainingZonesHeading).toBeVisible({ timeout: 10000 });
+    const powerZonesHeading = page.getByText('Power Zones', { exact: true });
+    await expect(powerZonesHeading).toBeVisible({ timeout: 10000 });
     
     // Note: Auto-threshold creation depends on specific conditions.
     // The sync was successful if activities are visible - FTP validation is optional.
@@ -130,9 +130,12 @@ test.describe.serial('J005: Breakthrough Upload Flow', () => {
     // Wait for settings to load
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
 
-    // Find Training Zones section
-    const trainingZonesHeading = page.getByText('Training Zones');
-    await expect(trainingZonesHeading).toBeVisible({ timeout: 10000 });
+    // Click on Training tab to see zones
+    await page.getByRole('tab', { name: 'Training' }).click();
+
+    // Find Power Zones section (the heading is inside a CardTitle)
+    const powerZonesHeading = page.getByText('Power Zones', { exact: true });
+    await expect(powerZonesHeading).toBeVisible({ timeout: 10000 });
     
     // Note: Verifying specific FTP values depends on auto-threshold creation
     // which may have conditions not met in all scenarios

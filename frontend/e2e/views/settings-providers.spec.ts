@@ -76,10 +76,18 @@ test.describe('Settings - Provider Integrations', () => {
 
       await expect(page.getByRole('heading', { name: 'Xert', level: 3 })).toBeVisible();
 
-      // If not connected, connect first
-      const autoSyncLabel = page.getByText('Auto-sync from Xert');
-      if (!(await autoSyncLabel.isVisible().catch(() => false))) {
-        await page.getByTestId('xert-email').fill('mock@xert.com');
+      // Wait for connection state to fully render
+      await page.waitForTimeout(1000);
+
+      // If not connected, connect first - use disconnect button as reliable indicator
+      const disconnectButton = page.getByTestId('xert-disconnect');
+      const emailInput = page.getByTestId('xert-email');
+      const isConnected = await disconnectButton.isVisible().catch(() => false);
+      
+      if (!isConnected) {
+        // Verify email input is enabled before filling
+        await expect(emailInput).toBeEnabled({ timeout: 5000 });
+        await emailInput.fill('mock@xert.com');
         await page.getByTestId('xert-password').fill('mockpassword');
         await page.getByTestId('xert-connect').click();
         await expect(page.getByText('Xert connected successfully')).toBeVisible({ timeout: 10000 });
@@ -97,7 +105,7 @@ test.describe('Settings - Provider Integrations', () => {
       await syncToggle.click();
 
       // Wait for the API call to complete and state to update
-      await page.waitForTimeout(500);
+      await page.waitForTimeout(1000);
 
       // State should have changed
       const newState = await syncToggle.getAttribute('aria-pressed');
@@ -152,10 +160,20 @@ test.describe('Settings - Provider Integrations', () => {
 
       await expect(page.getByRole('heading', { name: 'Xert', level: 3 })).toBeVisible();
 
-      // Ensure connected
+      // Wait for connection state to fully render - either disconnect button or enabled email input should appear
       const disconnectButton = page.getByTestId('xert-disconnect');
-      if (!(await disconnectButton.isVisible().catch(() => false))) {
-        await page.getByTestId('xert-email').fill('mock@xert.com');
+      const emailInput = page.getByTestId('xert-email');
+      
+      // Wait for state to stabilize - either we're connected (disconnect visible) or not (email enabled)
+      await page.waitForTimeout(1000);
+      
+      // Check if connected - use a proper wait, not just isVisible
+      const isConnected = await disconnectButton.isVisible().catch(() => false);
+      
+      if (!isConnected) {
+        // Not connected - email input should be enabled
+        await expect(emailInput).toBeEnabled({ timeout: 5000 });
+        await emailInput.fill('mock@xert.com');
         await page.getByTestId('xert-password').fill('mockpassword');
         await page.getByTestId('xert-connect').click();
         await expect(page.getByText('Xert connected successfully')).toBeVisible({ timeout: 10000 });
@@ -181,16 +199,18 @@ test.describe('Settings - Provider Integrations', () => {
 
       await expect(page.getByRole('heading', { name: 'Xert', level: 3 })).toBeVisible();
 
-      // Wait a moment for the page to fully load
-      await page.waitForTimeout(500);
+      // Wait for connection state to fully render
+      await page.waitForTimeout(1000);
 
       // Check if already connected by checking if disconnect button is visible
       const disconnectButton = page.getByTestId('xert-disconnect');
+      const emailInput = page.getByTestId('xert-email');
       const isConnected = await disconnectButton.isVisible().catch(() => false);
       
       if (!isConnected) {
-        // Not connected yet, need to connect first
-        await page.getByTestId('xert-email').fill('mock@xert.com');
+        // Not connected - verify email input is enabled before filling
+        await expect(emailInput).toBeEnabled({ timeout: 5000 });
+        await emailInput.fill('mock@xert.com');
         await page.getByTestId('xert-password').fill('mockpassword');
         await page.getByTestId('xert-connect').click();
         await expect(page.getByText('Xert connected successfully')).toBeVisible({ timeout: 10000 });

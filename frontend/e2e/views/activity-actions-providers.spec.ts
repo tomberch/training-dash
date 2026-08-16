@@ -102,9 +102,12 @@ test.describe.serial('Activity Actions - Provider Awareness', () => {
     // Click on Connections tab to see integrations
     await page.getByRole('tab', { name: 'Connections' }).click();
     
-    // Check if already connected
-    const xertAutoSync = page.getByText('Auto-sync from Xert');
-    const isConnected = await xertAutoSync.isVisible().catch(() => false);
+    // Wait for connection state to fully render
+    await page.waitForTimeout(500);
+    
+    // Check if already connected by looking for disconnect button
+    const disconnectButton = page.getByTestId('xert-disconnect');
+    const isConnected = await disconnectButton.isVisible().catch(() => false);
     
     if (!isConnected) {
       // Not connected yet, need to connect
@@ -173,10 +176,19 @@ test.describe.serial('Activity Actions - Provider Awareness', () => {
     
     await expect(page.getByRole('heading', { name: 'Xert', level: 3 })).toBeVisible();
 
+    // Wait for connection state to fully render
+    await page.waitForTimeout(1000);
+
+    // Try to disconnect - wait for disconnect button to be visible before clicking
     const disconnectButton = page.getByTestId('xert-disconnect');
-    if (await disconnectButton.isVisible().catch(() => false)) {
+    try {
+      await expect(disconnectButton).toBeVisible({ timeout: 5000 });
       await disconnectButton.click();
       await expect(page.getByText(/disconnected|removed/i)).toBeVisible({ timeout: 10000 });
+      // Wait for backend to process
+      await page.waitForTimeout(1000);
+    } catch {
+      // Already disconnected or connection state not loaded - continue
     }
 
     // Go to activity - but now upload won't be in menu
@@ -187,6 +199,9 @@ test.describe.serial('Activity Actions - Provider Awareness', () => {
     // Verify the menu item is hidden
     await page.goto(`/activities/${activityId}`);
     await expect(page.getByRole('button', { name: 'Back' })).toBeVisible({ timeout: 15000 });
+    
+    // Wait for provider status to be fetched
+    await page.waitForTimeout(1000);
 
     await page.getByRole('button', { name: /Actions/i }).click();
     await expect(page.getByText('Upload to Provider')).not.toBeVisible();

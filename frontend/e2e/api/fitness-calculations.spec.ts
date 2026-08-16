@@ -134,6 +134,9 @@ test.describe.serial('Fitness Calculations', () => {
   });
 
   test('upload all CP test FIT files', async ({ request }) => {
+    // Increase timeout for multiple file uploads (5 files × ~30s each)
+    test.setTimeout(180000);
+    
     const fitFiles = getCpRideFitFiles();
     expect(fitFiles.length).toBeGreaterThanOrEqual(4);
 

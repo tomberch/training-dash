@@ -154,6 +154,9 @@ test.describe.serial('J007: Upload to Provider Flow', () => {
     // Click on Connections tab to see integrations
     await page.getByRole('tab', { name: 'Connections' }).click();
     
+    // Wait for connection state to fully render
+    await page.waitForTimeout(500);
+    
     await expect(page.getByRole('heading', { name: 'Xert', level: 3 })).toBeVisible();
     
     // Disconnect if connected
@@ -161,11 +164,16 @@ test.describe.serial('J007: Upload to Provider Flow', () => {
     if (await disconnectButton.isVisible().catch(() => false)) {
       await disconnectButton.click();
       await expect(page.getByText(/disconnected|removed/i)).toBeVisible({ timeout: 10000 });
+      // Wait for disconnect to be reflected in backend
+      await page.waitForTimeout(500);
     }
 
-    // Now go to activity
+    // Now go to activity - use a fresh page load to avoid cached state
     await page.goto(`/activities/${activityId}`);
     await expect(page.getByRole('button', { name: 'Back' })).toBeVisible({ timeout: 15000 });
+    
+    // Wait for provider status to be fetched
+    await page.waitForTimeout(500);
 
     // Open Actions menu
     await page.getByRole('button', { name: /Actions/i }).click();

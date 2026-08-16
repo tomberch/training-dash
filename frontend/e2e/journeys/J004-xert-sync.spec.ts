@@ -130,7 +130,7 @@ test.describe.serial('J004: Xert Sync Flow', () => {
   });
 
   test('auto-threshold calculated from CP model (~220W)', async ({ page }) => {
-    // NOTE: This test verifies that after sync, the Training Zones section is visible.
+    // NOTE: This test verifies that after sync, the Power Zones section is visible.
     // The auto-threshold feature creates an FTP based on the CP model, but this may
     // depend on specific conditions being met. For now, we just verify the section exists.
     
@@ -143,9 +143,9 @@ test.describe.serial('J004: Xert Sync Flow', () => {
     // Click on Training tab to see zones
     await page.getByRole('tab', { name: 'Training' }).click();
 
-    // Find Training Zones section
-    const trainingZonesHeading = page.getByText('Training Zones');
-    await expect(trainingZonesHeading).toBeVisible({ timeout: 10000 });
+    // Find Power Zones section (the heading is inside a CardTitle)
+    const powerZonesHeading = page.getByText('Power Zones', { exact: true });
+    await expect(powerZonesHeading).toBeVisible({ timeout: 10000 });
     
     // The section exists - actual FTP value testing is optional since
     // auto-threshold creation depends on specific conditions
@@ -192,13 +192,12 @@ test.describe.serial('J004: Xert Sync Flow', () => {
     // Click on Training tab to see zones
     await page.getByRole('tab', { name: 'Training' }).click();
 
-    // Find Training Zones section
-    const trainingZonesHeading = page.getByText('Training Zones');
-    await expect(trainingZonesHeading).toBeVisible({ timeout: 10000 });
+    // Find Power Zones section (the heading is inside a CardTitle)
+    const powerZonesHeading = page.getByText('Power Zones', { exact: true });
+    await expect(powerZonesHeading).toBeVisible({ timeout: 10000 });
 
-    // Verify the section has content (Power Zones, Heart Rate Zones headings)
-    await expect(page.getByRole('heading', { name: 'Power Zones', level: 3 })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Heart Rate Zones', level: 3 })).toBeVisible();
+    // Verify the section has content (Power Zones, Heart Rate Zones cards)
+    await expect(page.getByText('Heart Rate Zones', { exact: true })).toBeVisible();
   });
 
   test('Xert disconnect removes credentials', async ({ page }) => {
