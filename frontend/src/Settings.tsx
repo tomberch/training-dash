@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link } from "react-router-dom";
 import {
   updatePreferences,
   fetchMyXertCredentials,
@@ -46,6 +46,8 @@ import { useTheme } from "./hooks/useTheme";
 import type { Theme } from "./hooks/useTheme";
 import { SunIcon, MoonIcon, MonitorIcon, SparklesIcon } from "./components/icons/ThemeIcons";
 import { PageHeader } from "./components/PageHeader";
+import { useSettingsTabs } from "./hooks/useSettingsTabs";
+import { SettingsTabs, SettingsTabPanel } from "./components/SettingsTabs";
 
 function EyeIcon({ className }: { className?: string }) {
   return (
@@ -130,21 +132,7 @@ interface SettingsProps {
 
 
 export function Settings({ user, onUserUpdate }: SettingsProps) {
-  const location = useLocation();
-
-  // Scroll to section when URL has hash (e.g., /settings#power-heart-rate)
-  useEffect(() => {
-    if (location.hash) {
-      const elementId = location.hash.slice(1); // Remove '#'
-      const element = document.getElementById(elementId);
-      if (element) {
-        // Small delay to ensure DOM is rendered
-        setTimeout(() => {
-          element.scrollIntoView({ behavior: "smooth", block: "start" });
-        }, 100);
-      }
-    }
-  }, [location.hash]);
+  const { activeTab, setActiveTab } = useSettingsTabs();
 
   return (
     <div className="p-8">
@@ -154,23 +142,44 @@ export function Settings({ user, onUserUpdate }: SettingsProps) {
         subtitle="Manage your profile, preferences, and integrations"
       />
       
-      {/* Content area */}
-      <div className="space-y-6">
-        <ProfileSection user={user} onUserUpdate={onUserUpdate} />
-        <PreferencesSection user={user} onUserUpdate={onUserUpdate} />
-        <MapSection user={user} onUserUpdate={onUserUpdate} />
-        <PowerHeartRateSection user={user} onUserUpdate={onUserUpdate} />
-        <ConnectedAccountsSection />
-        <ZonesSection user={user} onUserUpdate={onUserUpdate} />
-        <IntegrationsSection />
-      </div>
+      {/* Tab Navigation */}
+      <SettingsTabs activeTab={activeTab} onTabChange={setActiveTab} />
+      
+      {/* Tab Panels */}
+      <SettingsTabPanel id="profile" activeTab={activeTab}>
+        <div className="space-y-6">
+          <ProfileSection user={user} onUserUpdate={onUserUpdate} />
+          <ConnectedAccountsSection />
+        </div>
+      </SettingsTabPanel>
+
+      <SettingsTabPanel id="preferences" activeTab={activeTab}>
+        <div className="space-y-6">
+          <PreferencesSection user={user} onUserUpdate={onUserUpdate} />
+          <MapSection user={user} onUserUpdate={onUserUpdate} />
+        </div>
+      </SettingsTabPanel>
+
+      <SettingsTabPanel id="training" activeTab={activeTab}>
+        <div className="space-y-6">
+          <PowerHeartRateSection user={user} onUserUpdate={onUserUpdate} />
+          <ThresholdsSection user={user} />
+          <ZonesSection user={user} onUserUpdate={onUserUpdate} />
+        </div>
+      </SettingsTabPanel>
+
+      <SettingsTabPanel id="connections" activeTab={activeTab}>
+        <div className="space-y-6">
+          <SyncScheduleSection user={user} onUserUpdate={onUserUpdate} />
+          <IntegrationsSection />
+        </div>
+      </SettingsTabPanel>
     </div>
   );
 }
 
 function ProfileSection({ user, onUserUpdate }: { user: User; onUserUpdate: (user: User) => void }) {
   const [displayName, setDisplayName] = useState(user.display_name || "");
-  const [syncHour, setSyncHour] = useState(user.sync_hour);
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
@@ -182,7 +191,6 @@ function ProfileSection({ user, onUserUpdate }: { user: User; onUserUpdate: (use
     try {
       const updated = await updatePreferences({ 
         display_name: displayName || null,
-        sync_hour: syncHour,
       });
       onUserUpdate(updated);
       setFeedback({ type: "success", message: "Profile saved" });
@@ -351,25 +359,6 @@ function ProfileSection({ user, onUserUpdate }: { user: User; onUserUpdate: (use
               />
               <p className="text-caption">
                 This name will be shown in the header and anywhere your profile appears
-              </p>
-            </div>
-
-            {/* Sync Hour */}
-            <div className="space-y-1.5">
-              <Label className="text-muted-foreground">Daily Sync Time</Label>
-              <select
-                value={syncHour}
-                onChange={(e) => setSyncHour(parseInt(e.target.value))}
-                className="w-full h-11 px-4 rounded-lg border border-input bg-transparent text-base focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-              >
-                {Array.from({ length: 24 }, (_, i) => (
-                  <option key={i} value={i}>
-                    {i.toString().padStart(2, "0")}:00 UTC
-                  </option>
-                ))}
-              </select>
-              <p className="text-caption">
-                Your integrations (Garmin, Xert) will sync automatically at this hour
               </p>
             </div>
           </div>
@@ -1435,6 +1424,158 @@ function ConnectedAccountsSection(): React.JSX.Element {
   );
 }
 
+
+/**
+ * Sync Schedule section - controls when daily syncs happen
+ */
+function SyncScheduleSection({ user, onUserUpdate }: { user: User; onUserUpdate: (user: User) => void }) {
+  const [syncHour, setSyncHour] = useState(user.sync_hour);
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  async function handleSave() {
+    setSaving(true);
+    setFeedback(null);
+    try {
+      const updated = await updatePreferences({ sync_hour: syncHour });
+      onUserUpdate(updated);
+      setFeedback({ type: "success", message: "Sync schedule updated" });
+      setTimeout(() => setFeedback(null), 3000);
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Failed to update sync schedule";
+      setFeedback({ type: "error", message });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // Auto-save when sync hour changes
+  useEffect(() => {
+    if (syncHour !== user.sync_hour) {
+      handleSave();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncHour]);
+
+  return (
+    <Card className="card-hover">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-card-title">
+          <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          Sync Schedule
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="max-w-md">
+          <Label className="text-muted-foreground">Daily Sync Time</Label>
+          <select
+            value={syncHour}
+            onChange={(e) => setSyncHour(parseInt(e.target.value))}
+            disabled={saving}
+            className="w-full h-11 px-4 mt-1.5 rounded-lg border border-input bg-transparent text-base focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            {Array.from({ length: 24 }, (_, i) => (
+              <option key={i} value={i}>
+                {i.toString().padStart(2, "0")}:00 UTC
+              </option>
+            ))}
+          </select>
+          <p className="text-caption mt-1.5">
+            Your integrations (Xert, Garmin) will sync automatically at this hour
+          </p>
+        </div>
+        <FeedbackAlert feedback={feedback} />
+      </CardContent>
+    </Card>
+  );
+}
+
+
+/**
+ * Thresholds section - read-only display with link to Athlete page
+ */
+function ThresholdsSection({ user: _user }: { user: User }) {
+  const [metrics, setMetrics] = useState<{
+    ftp_watts: number | null;
+    lthr_bpm: number | null;
+    max_hr_bpm: number | null;
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchCurrentMetrics()
+      .then((data) => {
+        setMetrics({
+          ftp_watts: data.ftp_watts?.value ?? null,
+          lthr_bpm: data.lthr_bpm?.value ?? null,
+          max_hr_bpm: data.max_hr_bpm?.value ?? null,
+        });
+      })
+      .catch(() => {
+        setMetrics(null);
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <Card className="card-hover">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-card-title">
+          <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+          Thresholds
+        </CardTitle>
+        <CardAction>
+          <Link
+            to="/athlete"
+            className="inline-flex items-center gap-1 text-primary hover:text-primary/80 text-sm font-medium"
+          >
+            Edit on Athlete Page
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </Link>
+        </CardAction>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div className="grid grid-cols-3 gap-4 max-w-2xl">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="p-4 bg-muted rounded-lg">
+                <Skeleton className="h-4 w-12 mb-2" />
+                <Skeleton className="h-8 w-20" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-4 max-w-2xl">
+            <div className="p-4 bg-muted rounded-lg">
+              <div className="text-sm text-muted-foreground mb-1">FTP</div>
+              <div className="text-2xl font-bold text-foreground">
+                {metrics?.ftp_watts ? `${metrics.ftp_watts} W` : "—"}
+              </div>
+            </div>
+            <div className="p-4 bg-muted rounded-lg">
+              <div className="text-sm text-muted-foreground mb-1">LTHR</div>
+              <div className="text-2xl font-bold text-foreground">
+                {metrics?.lthr_bpm ? `${metrics.lthr_bpm} bpm` : "—"}
+              </div>
+            </div>
+            <div className="p-4 bg-muted rounded-lg">
+              <div className="text-sm text-muted-foreground mb-1">Max HR</div>
+              <div className="text-2xl font-bold text-foreground">
+                {metrics?.max_hr_bpm ? `${metrics.max_hr_bpm} bpm` : "—"}
+              </div>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 
 function IntegrationsSection() {
