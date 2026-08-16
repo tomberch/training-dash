@@ -62,6 +62,7 @@ down:
 	-docker compose -p $(PROJECT_NAME)-edge -f compose/edge.yml down 2>/dev/null
 	-docker compose -p $(PROJECT_NAME)-latest -f compose/latest.yml down 2>/dev/null
 	-docker compose -p $(PROJECT_NAME)-e2e -f compose/e2e.yml down 2>/dev/null
+	-docker compose -p compose -f compose/dev.yml down 2>/dev/null
 	@echo "All stacks stopped"
 
 ## Stop stack and remove volumes (clean slate)
@@ -116,6 +117,11 @@ _stop-other-stacks:
 			docker compose -p $(PROJECT_NAME)-$$stack -f compose/$$stack.yml down; \
 		fi; \
 	done
+	@# Also stop any rogue stack started with bare 'docker compose' from compose/ dir
+	@if docker compose -p compose ps -q 2>/dev/null | grep -q .; then \
+		echo "Stopping rogue 'compose' stack (use 'make dev' instead of raw docker compose)..."; \
+		docker compose -p compose -f compose/dev.yml down 2>/dev/null || true; \
+	fi
 
 _pull-edge:
 	@echo "Pulling edge image..."
