@@ -5,10 +5,12 @@ import {
   fetchMyXertCredentials,
   saveMyXertCredentials,
   deleteMyXertCredentials,
+  updateXertSyncEnabled,
   fetchMyGarminCredentials,
   saveMyGarminCredentials,
   completeGarminMfa,
   deleteMyGarminCredentials,
+  updateGarminSyncEnabled,
   uploadAvatar,
   deleteAvatar,
   triggerGarminSync,
@@ -1479,7 +1481,7 @@ function XertIntegration() {
         }
       })
       .catch(() => {
-        setXertStatus({ configured: false, xert_email: null, sync_since: null });
+        setXertStatus({ configured: false, xert_email: null, sync_since: null, sync_enabled: true });
       })
       .finally(() => setLoading(false));
   }, []);
@@ -1490,7 +1492,7 @@ function XertIntegration() {
     setFeedback(null);
     try {
       await saveMyXertCredentials(email, password, syncSince);
-      setXertStatus({ configured: true, xert_email: email, sync_since: syncSince });
+      setXertStatus({ configured: true, xert_email: email, sync_since: syncSince, sync_enabled: xertStatus?.sync_enabled ?? true });
       setPassword("");
       setFeedback({ type: "success", message: "Xert connected successfully" });
       setTimeout(() => setFeedback(null), 3000);
@@ -1512,7 +1514,7 @@ function XertIntegration() {
     setFeedback(null);
     try {
       await deleteMyXertCredentials();
-      setXertStatus({ configured: false, xert_email: null, sync_since: null });
+      setXertStatus({ configured: false, xert_email: null, sync_since: null, sync_enabled: true });
       setEmail("");
       setPassword("");
       setFeedback({ type: "success", message: "Xert disconnected" });
@@ -1599,24 +1601,59 @@ function XertIntegration() {
         </div>
         
         {xertStatus?.configured ? (
-          <div className="flex gap-3 pt-2">
-            <Button
-              onClick={handleConnect}
-              disabled={saving || !email || !password}
-              data-testid="xert-connect"
-            >
-              {saving ? "Updating..." : "Update"}
-            </Button>
-            <SyncButton onSync={triggerXertSync} label="Sync Now" />
-            <Button
-              variant="destructive"
-              onClick={handleDisconnect}
-              disabled={saving}
-              data-testid="xert-disconnect"
-            >
-              Disconnect
-            </Button>
-          </div>
+          <>
+            {/* Sync toggle */}
+            <div className="flex items-center justify-between py-3 border-t border-border">
+              <div>
+                <p className="font-medium text-sm">Auto-sync from Xert</p>
+                <p className="text-caption">Automatically import new activities at your daily sync time</p>
+              </div>
+              <button
+                onClick={async () => {
+                  try {
+                    const newValue = !xertStatus.sync_enabled;
+                    await updateXertSyncEnabled(newValue);
+                    setXertStatus({ ...xertStatus, sync_enabled: newValue });
+                  } catch {
+                    setFeedback({ type: "error", message: "Failed to update sync setting" });
+                  }
+                }}
+                disabled={saving}
+                aria-pressed={xertStatus.sync_enabled}
+                className={cn(
+                  "relative inline-flex h-6 w-12 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
+                  xertStatus.sync_enabled ? "bg-primary" : "bg-muted",
+                  saving && "opacity-50 cursor-not-allowed"
+                )}
+              >
+                <span
+                  className={cn(
+                    "pointer-events-none absolute left-1 bottom-1 w-4 h-4 transform rounded-full bg-muted-foreground shadow transition duration-200 ease-in-out",
+                    xertStatus.sync_enabled ? "translate-x-6 bg-white" : "translate-x-0"
+                  )}
+                />
+              </button>
+            </div>
+            
+            <div className="flex gap-3 pt-2">
+              <Button
+                onClick={handleConnect}
+                disabled={saving || !email || !password}
+                data-testid="xert-connect"
+              >
+                {saving ? "Updating..." : "Update"}
+              </Button>
+              <SyncButton onSync={triggerXertSync} label="Sync Now" />
+              <Button
+                variant="destructive"
+                onClick={handleDisconnect}
+                disabled={saving}
+                data-testid="xert-disconnect"
+              >
+                Disconnect
+              </Button>
+            </div>
+          </>
         ) : (
           <Button
             onClick={handleConnect}
@@ -1663,7 +1700,7 @@ function GarminIntegration() {
         }
       })
       .catch(() => {
-        setGarminStatus({ configured: false, garmin_email: null, sync_since: null });
+        setGarminStatus({ configured: false, garmin_email: null, sync_since: null, sync_enabled: true });
       })
       .finally(() => setLoading(false));
   }, []);
@@ -1678,7 +1715,7 @@ function GarminIntegration() {
         setMfaRequired(true);
         setFeedback({ type: "success", message: "MFA required — enter the code from your authenticator app or email" });
       } else {
-        setGarminStatus({ configured: true, garmin_email: email, sync_since: syncSince });
+        setGarminStatus({ configured: true, garmin_email: email, sync_since: syncSince, sync_enabled: garminStatus?.sync_enabled ?? true });
         setPassword("");
         setMfaRequired(false);
         setMfaCode("");
@@ -1704,7 +1741,7 @@ function GarminIntegration() {
     setFeedback(null);
     try {
       await completeGarminMfa(mfaCode);
-      setGarminStatus({ configured: true, garmin_email: email, sync_since: syncSince });
+      setGarminStatus({ configured: true, garmin_email: email, sync_since: syncSince, sync_enabled: garminStatus?.sync_enabled ?? true });
       setPassword("");
       setMfaRequired(false);
       setMfaCode("");
@@ -1726,7 +1763,7 @@ function GarminIntegration() {
     setFeedback(null);
     try {
       await deleteMyGarminCredentials();
-      setGarminStatus({ configured: false, garmin_email: null, sync_since: null });
+      setGarminStatus({ configured: false, garmin_email: null, sync_since: null, sync_enabled: true });
       setEmail("");
       setPassword("");
       setMfaRequired(false);
@@ -1745,6 +1782,17 @@ function GarminIntegration() {
     setMfaCode("");
     setPassword("");
     setFeedback(null);
+  }
+
+  async function handleToggleSync() {
+    if (!garminStatus?.configured) return;
+    const newValue = !garminStatus.sync_enabled;
+    try {
+      await updateGarminSyncEnabled(newValue);
+      setGarminStatus({ ...garminStatus, sync_enabled: newValue });
+    } catch {
+      setFeedback({ type: "error", message: "Failed to update sync setting" });
+    }
   }
 
   if (loading) {
@@ -1802,8 +1850,10 @@ function GarminIntegration() {
           setSyncSince={setSyncSince}
           saving={saving}
           configured={garminStatus?.configured ?? false}
+          syncEnabled={garminStatus?.sync_enabled ?? true}
           onConnect={handleConnect}
           onDisconnect={handleDisconnect}
+          onToggleSync={handleToggleSync}
         />
       )}
       
@@ -1868,8 +1918,10 @@ function GarminCredentialsForm({
   setSyncSince,
   saving,
   configured,
+  syncEnabled,
   onConnect,
   onDisconnect,
+  onToggleSync,
 }: {
   email: string;
   setEmail: (v: string) => void;
@@ -1879,8 +1931,10 @@ function GarminCredentialsForm({
   setSyncSince: (v: string) => void;
   saving: boolean;
   configured: boolean;
+  syncEnabled: boolean;
   onConnect: () => void;
   onDisconnect: () => void;
+  onToggleSync: () => void;
 }) {
   return (
     <div className="space-y-4">
@@ -1921,26 +1975,52 @@ function GarminCredentialsForm({
       </div>
       
       {configured ? (
-        <div className="flex gap-3 pt-2">
-          <Button onClick={onConnect} disabled={saving || !email || !password} data-testid="garmin-connect">
-            {saving ? "Updating..." : "Update"}
-          </Button>
-          <SyncButton onSync={triggerGarminSync} label="Sync Now" />
-          <Button
-            variant="destructive"
-            onClick={onDisconnect}
-            disabled={saving}
-            data-testid="garmin-disconnect"
-          >
-            Disconnect
-          </Button>
-        </div>
+        <>
+          {/* Sync toggle */}
+          <div className="flex items-center justify-between py-3 border-t border-border">
+            <div>
+              <p className="font-medium text-sm">Auto-sync from Garmin</p>
+              <p className="text-caption">Automatically import new activities at your daily sync time</p>
+            </div>
+            <button
+              onClick={onToggleSync}
+              disabled={saving}
+              aria-pressed={syncEnabled}
+              className={cn(
+                "relative inline-flex h-6 w-12 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
+                syncEnabled ? "bg-primary" : "bg-muted",
+                saving && "opacity-50 cursor-not-allowed"
+              )}
+            >
+              <span
+                className={cn(
+                  "pointer-events-none absolute left-1 bottom-1 w-4 h-4 transform rounded-full bg-muted-foreground shadow transition duration-200 ease-in-out",
+                  syncEnabled ? "translate-x-6 bg-white" : "translate-x-0"
+                )}
+              />
+            </button>
+          </div>
+          
+          <div className="flex gap-3 pt-2">
+            <Button onClick={onConnect} disabled={saving || !email || !password} data-testid="garmin-connect">
+              {saving ? "Updating..." : "Update"}
+            </Button>
+            <SyncButton onSync={triggerGarminSync} label="Sync Now" />
+            <Button
+              variant="destructive"
+              onClick={onDisconnect}
+              disabled={saving}
+              data-testid="garmin-disconnect"
+            >
+              Disconnect
+            </Button>
+          </div>
+        </>
       ) : (
         <Button
           onClick={onConnect}
           disabled={saving || !email || !password}
           data-testid="garmin-connect"
-          className="w-full"
         >
           {saving ? "Connecting..." : "Connect"}
         </Button>

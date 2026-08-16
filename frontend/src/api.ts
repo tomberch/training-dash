@@ -200,12 +200,14 @@ export interface XertCredentialsStatus {
   configured: boolean;
   xert_email: string | null;
   sync_since: string | null;
+  sync_enabled: boolean;
 }
 
 export interface GarminCredentialsStatus {
   configured: boolean;
   garmin_email: string | null;
   sync_since: string | null;
+  sync_enabled: boolean;
 }
 
 export interface GarminSaveResponse {
@@ -799,6 +801,10 @@ export async function deleteMyXertCredentials(): Promise<void> {
   return apiDelete("/me/xert-credentials", "Failed to disconnect Xert");
 }
 
+export async function updateXertSyncEnabled(sync_enabled: boolean): Promise<{ success: boolean; sync_enabled: boolean }> {
+  return apiPatch<{ success: boolean; sync_enabled: boolean }>("/me/xert-credentials", { sync_enabled }, "Failed to update sync setting");
+}
+
 // Garmin
 export async function fetchMyGarminCredentials(): Promise<GarminCredentialsStatus> {
   return apiGet<GarminCredentialsStatus>("/me/garmin-credentials");
@@ -824,6 +830,10 @@ export async function completeGarminMfa(mfa_code: string): Promise<GarminSaveRes
 
 export async function deleteMyGarminCredentials(): Promise<void> {
   return apiDelete("/me/garmin-credentials", "Failed to disconnect Garmin");
+}
+
+export async function updateGarminSyncEnabled(sync_enabled: boolean): Promise<{ success: boolean; sync_enabled: boolean }> {
+  return apiPatch<{ success: boolean; sync_enabled: boolean }>("/me/garmin-credentials", { sync_enabled }, "Failed to update sync setting");
 }
 
 // ============================================================================

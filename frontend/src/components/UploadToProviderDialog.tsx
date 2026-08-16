@@ -14,6 +14,8 @@ import { toast } from "sonner";
 import {
   fetchFitDevices,
   uploadToProvider,
+  fetchMyXertCredentials,
+  fetchMyGarminCredentials,
   type FitDevice,
   type UploadToProviderRequest,
 } from "@/api";
@@ -34,7 +36,9 @@ export function UploadToProviderDialog({
   open,
   onOpenChange,
 }: UploadToProviderDialogProps) {
-  const [provider, setProvider] = React.useState<Provider>("garmin");
+  const [provider, setProvider] = React.useState<Provider | null>(null);
+  const [connectedProviders, setConnectedProviders] = React.useState<Provider[]>([]);
+  const [providersLoading, setProvidersLoading] = React.useState(true);
   const [devices, setDevices] = React.useState<FitDevice[]>([]);
   const [devicesLoading, setDevicesLoading] = React.useState(false);
   const [selectedDevice, setSelectedDevice] = React.useState<FitDevice | null>(null);
@@ -44,6 +48,37 @@ export function UploadToProviderDialog({
 
   const deviceInputRef = React.useRef<HTMLInputElement>(null);
   const dropdownRef = React.useRef<HTMLDivElement>(null);
+
+  // Load connected providers on open
+  React.useEffect(() => {
+    if (open) {
+      loadConnectedProviders();
+    }
+  }, [open]);
+
+  async function loadConnectedProviders() {
+    setProvidersLoading(true);
+    try {
+      const [xertStatus, garminStatus] = await Promise.all([
+        fetchMyXertCredentials().catch(() => ({ configured: false })),
+        fetchMyGarminCredentials().catch(() => ({ configured: false })),
+      ]);
+      
+      const connected: Provider[] = [];
+      if (garminStatus.configured) connected.push("garmin");
+      if (xertStatus.configured) connected.push("xert");
+      
+      setConnectedProviders(connected);
+      // Auto-select first connected provider
+      if (connected.length > 0 && !provider) {
+        setProvider(connected[0]);
+      }
+    } catch {
+      toast.error("Failed to load provider status");
+    } finally {
+      setProvidersLoading(false);
+    }
+  }
 
   // Load devices on mount
   React.useEffect(() => {
@@ -128,6 +163,7 @@ export function UploadToProviderDialog({
   }
 
   async function handleUpload() {
+    if (!provider) return;
     setIsUploading(true);
     try {
       const request: UploadToProviderRequest = {
@@ -162,48 +198,67 @@ export function UploadToProviderDialog({
           {/* Provider selection */}
           <div className="space-y-2">
             <Label>Provider</Label>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setProvider("garmin")}
-                className={`flex-1 px-4 py-2 rounded-lg border text-label transition ${
-                  provider === "garmin"
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-card border-border hover:bg-muted"
-                }`}
-              >
-                <div className="flex items-center justify-center gap-2">
-                  <svg
-                    className="w-4 h-4"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
+            {providersLoading ? (
+              <div className="flex gap-2">
+                <div className="flex-1 h-10 bg-muted animate-pulse rounded-lg" />
+                <div className="flex-1 h-10 bg-muted animate-pulse rounded-lg" />
+              </div>
+            ) : connectedProviders.length === 0 ? (
+              <p className="text-body-secondary py-4 text-center">
+                No providers connected. Connect Garmin or Xert in{" "}
+                <a href="/settings" className="text-primary hover:underline">
+                  Settings
+                </a>{" "}
+                to upload activities.
+              </p>
+            ) : (
+              <div className="flex gap-2">
+                {connectedProviders.includes("garmin") && (
+                  <button
+                    type="button"
+                    onClick={() => setProvider("garmin")}
+                    className={`flex-1 px-4 py-2 rounded-lg border text-label transition ${
+                      provider === "garmin"
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-card border-border hover:bg-muted"
+                    }`}
                   >
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" />
-                  </svg>
-                  Garmin Connect
-                </div>
-              </button>
-              <button
-                type="button"
-                onClick={() => setProvider("xert")}
-                className={`flex-1 px-4 py-2 rounded-lg border text-label transition ${
-                  provider === "xert"
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-card border-border hover:bg-muted"
-                }`}
-              >
-                <div className="flex items-center justify-center gap-2">
-                  <svg
-                    className="w-4 h-4"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
+                    <div className="flex items-center justify-center gap-2">
+                      <svg
+                        className="w-4 h-4"
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                      >
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" />
+                      </svg>
+                      Garmin Connect
+                    </div>
+                  </button>
+                )}
+                {connectedProviders.includes("xert") && (
+                  <button
+                    type="button"
+                    onClick={() => setProvider("xert")}
+                    className={`flex-1 px-4 py-2 rounded-lg border text-label transition ${
+                      provider === "xert"
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-card border-border hover:bg-muted"
+                    }`}
                   >
-                    <path d="M13 3L4 14h7l-1 7 9-11h-7l1-7z" />
-                  </svg>
-                  Xert
-                </div>
-              </button>
-            </div>
+                    <div className="flex items-center justify-center gap-2">
+                      <svg
+                        className="w-4 h-4"
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                      >
+                        <path d="M13 3L4 14h7l-1 7 9-11h-7l1-7z" />
+                      </svg>
+                      Xert
+                    </div>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Device selection (optional) */}
@@ -292,7 +347,7 @@ export function UploadToProviderDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={handleUpload} disabled={isUploading}>
+          <Button onClick={handleUpload} disabled={isUploading || !provider || connectedProviders.length === 0}>
             {isUploading ? (
               <>
                 <svg
