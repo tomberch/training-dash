@@ -62,3 +62,23 @@ Statuses: **pending** (enqueued, not yet started) → **running** (in progress) 
 ## Route
 
 A cluster of Activities that follow the same geographic path, identified via Hausdorff distance on simplified polylines. Used for per-route PRs and ride comparison.
+
+## Segment
+
+A defined section of road or trail used for performance tracking. Segments are global (shared across all users) and direction-sensitive (a climb ridden in reverse is a different segment). Three types exist:
+
+- **Climb** — Auto-detected based on `length(m) × grade(%)` score. Categorized as HC, Cat 1-4, or uncategorized.
+- **Sprint** — Auto-detected based on length (150-600m) and flat grade (-3% to +3%).
+- **Arbitrary** — Manually created by a user for any purpose.
+
+Segments have a lifecycle: `suggested` → `approved`. The system auto-detects potential segments and suggests them to users who have ridden them 3+ times. The first user to approve a suggestion becomes the segment's owner (`created_by_user_id`). Dismissed suggestions are deleted.
+
+Duplicate detection uses start/end point proximity (25m) + path overlap (95%) + same direction.
+
+## Segment Effort
+
+A single traversal of a Segment within an Activity. Stores elapsed time, power, HR, speed metrics, and a per-user PR flag. An activity can have multiple efforts if it crosses multiple segments, or crosses the same segment multiple times.
+
+## Segment Suggestion
+
+A pending proposal to create a segment, tied to a specific user. Created when the system detects a climb/sprint on a user's ride. Tracks repetition count and expires after 90 days of inactivity. Multiple users can have suggestions for the same underlying segment; first to approve owns it.

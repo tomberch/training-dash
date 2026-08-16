@@ -35,6 +35,7 @@ services:
       TRAININGDASH_ENCRYPTION_KEY: D1prO+2rx2zmauRYJc8yKA2rbW0ABdAo5uf8ZJMoXSQ=
     volumes:
       - tilecache:/app/tile-cache
+      - uploads:/app/uploads
     depends_on:
       db:
         condition: service_healthy
@@ -56,3 +57,4 @@ services:
 volumes:
   pgdata:
   tilecache:
+  uploads:

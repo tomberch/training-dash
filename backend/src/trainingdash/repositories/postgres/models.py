@@ -145,6 +145,13 @@ class Activity(Base):
     map_polyline: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Routing
     route_id: Mapped[int | None] = mapped_column(ForeignKey("routes.id"), nullable=True)
+    # Event association (one event per activity)
+    ride_event_id: Mapped[UUID | None] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("ride_events.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     # Direction bearing for same-route comparison (0-359 degrees, from start to 25% point)
     direction_bearing: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
     raw_fit: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
@@ -396,3 +403,161 @@ class SavedFilter(Base):
     is_default: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
     updated_at: Mapped[datetime] = mapped_column(server_default=text("now()"), onupdate=text("now()"))
+
+
+# =============================================================================
+# Events Feature Models
+# =============================================================================
+
+
+class RideEvent(Base):
+    """A user-curated event grouping related activities (races, tours, trips).
+
+    Events can span single or multiple days and contain journal entries,
+    media (photos/videos), and links. Activities can be linked at the event
+    level or to specific journal entries.
+    """
+
+    __tablename__ = "ride_events"
+
+    id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True, default=uuid4)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)  # Markdown
+    event_type: Mapped[str] = mapped_column(String(20), nullable=False)  # race, tour, bikepacking, event, other
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    end_date: Mapped[date] = mapped_column(Date, nullable=False)  # Same as start for single-day
+    cover_image_id: Mapped[UUID | None] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("ride_event_media.id", ondelete="SET NULL", use_alter=True),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
+    updated_at: Mapped[datetime] = mapped_column(server_default=text("now()"), onupdate=text("now()"))
+
+    __table_args__ = (
+        # Index for listing events by date
+        {"schema": None},  # default schema
+    )
+
+
+class JournalEntry(Base):
+    """Day-by-day journal entry for a multi-day event.
+
+    Each entry has a date (unique within event), optional description,
+    and can have activities, media, and links attached.
+    """
+
+    __tablename__ = "journal_entries"
+    __table_args__ = (
+        UniqueConstraint("ride_event_id", "entry_date", name="uq_journal_entry_event_date"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True, default=uuid4)
+    ride_event_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("ride_events.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    entry_date: Mapped[date] = mapped_column(Date, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)  # Markdown
+    created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
+    updated_at: Mapped[datetime] = mapped_column(server_default=text("now()"), onupdate=text("now()"))
+
+
+class JournalEntryActivity(Base):
+    """Join table linking activities to journal entries.
+
+    An activity can be linked to at most one journal entry. Linking to
+    a journal entry implicitly links to the parent event.
+    """
+
+    __tablename__ = "journal_entry_activities"
+    __table_args__ = (
+        UniqueConstraint("journal_entry_id", "activity_id", name="uq_journal_entry_activity"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    journal_entry_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("journal_entries.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    activity_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("activities.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class RideEventMedia(Base):
+    """Photos and video embeds attached to events or journal entries.
+
+    Media can be attached to either an event (event-level) or a journal
+    entry (entry-level), but not both. This is enforced by a CHECK constraint.
+    """
+
+    __tablename__ = "ride_event_media"
+    __table_args__ = (
+        # Exactly one of ride_event_id or journal_entry_id must be set
+        {"schema": None},
+    )
+
+    id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True, default=uuid4)
+    ride_event_id: Mapped[UUID | None] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("ride_events.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    journal_entry_id: Mapped[UUID | None] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("journal_entries.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    media_type: Mapped[str] = mapped_column(String(20), nullable=False)  # photo, youtube, vimeo
+    storage_path: Mapped[str | None] = mapped_column(String(500), nullable=True)  # For photos
+    thumbnail_path: Mapped[str | None] = mapped_column(String(500), nullable=True)  # For photo thumbnails
+    external_url: Mapped[str | None] = mapped_column(String(500), nullable=True)  # For youtube/vimeo
+    caption: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
+
+
+class RideEventLink(Base):
+    """External links attached to events or journal entries.
+
+    Links can be attached to either an event (event-level) or a journal
+    entry (entry-level), but not both. This is enforced by a CHECK constraint.
+    """
+
+    __tablename__ = "ride_event_links"
+    __table_args__ = (
+        # Exactly one of ride_event_id or journal_entry_id must be set
+        {"schema": None},
+    )
+
+    id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True, default=uuid4)
+    ride_event_id: Mapped[UUID | None] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("ride_events.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    journal_entry_id: Mapped[UUID | None] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("journal_entries.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    url: Mapped[str] = mapped_column(String(500), nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    link_type: Mapped[str] = mapped_column(String(20), nullable=False)  # route, place, article, video, gear, other
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))

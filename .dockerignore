@@ -1,0 +1,32 @@
+# Exclude local build artifacts that shouldn't be sent to Docker
+frontend/node_modules
+frontend/dist
+frontend/coverage
+frontend/e2e-report
+frontend/e2e-results
+frontend/.auth
+
+# Python cache
+**/__pycache__
+**/*.pyc
+backend/.pytest_cache
+.pytest_cache
+
+# IDE/Editor
+.vscode
+.idea
+*.swp
+
+# Git
+.git
+.github
+
+# Scratch/docs
+.scratch
+docs
+semantic-review
+tests
+
+# Other
+*.log
+.env*

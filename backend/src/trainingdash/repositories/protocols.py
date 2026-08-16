@@ -637,6 +637,193 @@ class SavedFilterRepo(Protocol):
         ...
 
 
+class RideEventRepo(Protocol):
+    """
+    Repository protocol for RideEvent entities.
+
+    RideEvents represent user-curated events (races, tours, trips) that
+    group activities with journal entries, media, and links.
+    """
+
+    async def get_by_id(self, event_id: UUID, user_id: int) -> "RideEvent | None":
+        """
+        Fetch a ride event by ID, scoped to user.
+
+        Returns None if not found or not owned by user.
+        """
+        ...
+
+    async def list_for_user(
+        self,
+        user_id: int,
+        event_type: str | None = None,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> list["RideEvent"]:
+        """
+        List ride events for a user, ordered by start_date descending.
+
+        Args:
+            user_id: Owner's user ID
+            event_type: Optional filter by event type
+            limit: Maximum number of events to return
+            offset: Number of events to skip (for pagination)
+        """
+        ...
+
+    async def count_for_user(self, user_id: int, event_type: str | None = None) -> int:
+        """Count total ride events for a user, optionally filtered by type."""
+        ...
+
+    async def save(self, event: "RideEvent") -> "RideEvent":
+        """
+        Persist a ride event (insert or update).
+
+        Returns the saved event with any DB-generated fields populated.
+        """
+        ...
+
+    async def delete(self, event_id: UUID, user_id: int) -> bool:
+        """
+        Delete a ride event owned by the given user.
+
+        Cascade deletes journal entries, media, links. Unlinks activities.
+
+        Returns True if deleted, False if not found.
+        """
+        ...
+
+
+class JournalEntryRepo(Protocol):
+    """
+    Repository protocol for JournalEntry entities.
+
+    Journal entries are day-by-day records within a ride event.
+    """
+
+    async def get_by_id(self, entry_id: UUID, user_id: int) -> "JournalEntry | None":
+        """
+        Fetch a journal entry by ID, scoped to user (via event ownership).
+
+        Returns None if not found or event not owned by user.
+        """
+        ...
+
+    async def list_for_event(self, event_id: UUID) -> list["JournalEntry"]:
+        """
+        List journal entries for an event, ordered by entry_date ascending.
+        """
+        ...
+
+    async def save(self, entry: "JournalEntry") -> "JournalEntry":
+        """
+        Persist a journal entry (insert or update).
+
+        Returns the saved entry with any DB-generated fields populated.
+        """
+        ...
+
+    async def delete(self, entry_id: UUID, user_id: int) -> bool:
+        """
+        Delete a journal entry (user must own the parent event).
+
+        Returns True if deleted, False if not found.
+        """
+        ...
+
+
+class RideEventMediaRepo(Protocol):
+    """
+    Repository protocol for RideEventMedia entities.
+
+    Media (photos, video embeds) attached to events or journal entries.
+    """
+
+    async def get_by_id(self, media_id: UUID, user_id: int) -> "RideEventMedia | None":
+        """
+        Fetch media by ID, scoped to user (via event/entry ownership).
+
+        Returns None if not found or not accessible by user.
+        """
+        ...
+
+    async def list_for_event(self, event_id: UUID) -> list["RideEventMedia"]:
+        """List all media directly attached to an event (not entries)."""
+        ...
+
+    async def list_for_entry(self, entry_id: UUID) -> list["RideEventMedia"]:
+        """List all media attached to a journal entry."""
+        ...
+
+    async def save(self, media: "RideEventMedia") -> "RideEventMedia":
+        """Persist media (insert or update)."""
+        ...
+
+    async def delete(self, media_id: UUID, user_id: int) -> bool:
+        """Delete media. Returns True if deleted, False if not found."""
+        ...
+
+
+class RideEventLinkRepo(Protocol):
+    """
+    Repository protocol for RideEventLink entities.
+
+    External links attached to events or journal entries.
+    """
+
+    async def get_by_id(self, link_id: UUID, user_id: int) -> "RideEventLink | None":
+        """
+        Fetch link by ID, scoped to user (via event/entry ownership).
+
+        Returns None if not found or not accessible by user.
+        """
+        ...
+
+    async def list_for_event(self, event_id: UUID) -> list["RideEventLink"]:
+        """List all links directly attached to an event (not entries)."""
+        ...
+
+    async def list_for_entry(self, entry_id: UUID) -> list["RideEventLink"]:
+        """List all links attached to a journal entry."""
+        ...
+
+    async def save(self, link: "RideEventLink") -> "RideEventLink":
+        """Persist link (insert or update)."""
+        ...
+
+    async def delete(self, link_id: UUID, user_id: int) -> bool:
+        """Delete link. Returns True if deleted, False if not found."""
+        ...
+
+
+class JournalEntryActivityRepo(Protocol):
+    """
+    Repository protocol for JournalEntryActivity join table.
+
+    Links activities to journal entries within an event.
+    """
+
+    async def list_for_entry(self, entry_id: UUID) -> list["JournalEntryActivity"]:
+        """List activity links for a journal entry, ordered by sort_order."""
+        ...
+
+    async def list_for_event(self, event_id: UUID) -> list["JournalEntryActivity"]:
+        """List all activity links across all entries in an event."""
+        ...
+
+    async def link(self, entry_id: UUID, activity_id: UUID, sort_order: int = 0) -> "JournalEntryActivity":
+        """Link an activity to a journal entry."""
+        ...
+
+    async def unlink(self, entry_id: UUID, activity_id: UUID) -> bool:
+        """Unlink an activity from a journal entry. Returns True if unlinked."""
+        ...
+
+    async def reorder(self, entry_id: UUID, activity_ids: list[UUID]) -> None:
+        """Reorder activities in an entry based on the provided ID list."""
+        ...
+
+
 # Import types for type hints (avoid circular import at runtime)
 from datetime import date, datetime
 from typing import TYPE_CHECKING, Any
@@ -650,8 +837,13 @@ if TYPE_CHECKING:
         Event,
         FitnessHistory,
         GarminCredentials,
+        JournalEntry,
+        JournalEntryActivity,
         Notification,
         RecalculationJob,
+        RideEvent,
+        RideEventLink,
+        RideEventMedia,
         Route,
         SavedFilter,
         User,

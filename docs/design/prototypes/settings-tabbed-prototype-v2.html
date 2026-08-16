@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings Tabbed Prototype v2 - TrainDash</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            primary: {
+              DEFAULT: '#a855f7',
+              hover: '#9333ea',
+              light: '#c084fc',
+              dark: '#7e22ce'
+            },
+            dark: {
+              900: '#0f0f1a',
+              800: '#1a1a2e',
+              700: '#252542',
+              600: '#2d2d4a',
+              500: '#3a3a5c'
+            },
+            success: '#22c55e',
+            warning: '#f59e0b',
+            destructive: '#ef4444'
+          },
+          fontSize: {
+            'xs': ['0.75rem', { lineHeight: '1rem' }],
+            'sm': ['0.875rem', { lineHeight: '1.25rem' }],
+            'base': ['1rem', { lineHeight: '1.5rem' }],
+            'lg': ['1.125rem', { lineHeight: '1.75rem' }],
+            'xl': ['1.25rem', { lineHeight: '1.75rem' }],
+            '2xl': ['1.5rem', { lineHeight: '2rem' }],
+            '3xl': ['1.875rem', { lineHeight: '2.25rem' }],
+          },
+          spacing: {
+            '18': '4.5rem',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    :root {
+      --font-base: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      --transition-fast: 150ms ease;
+      --transition-base: 200ms ease;
+      --transition-slow: 300ms ease;
+    }
+    
+    body { 
+      font-family: var(--font-base);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    
+    /* Consistent card styling */
+    .card {
+      @apply bg-dark-800 border border-dark-600 rounded-xl;
+    }
+    
+    .card-hover {
+      transition: transform var(--transition-base), box-shadow var(--transition-base);
+    }
+    .card-hover:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+    }
+    
+    /* Unified section header */
+    .section-header {
+      @apply flex items-center gap-2 mb-6;
+    }
+    
+    .section-title {
+      @apply text-lg font-semibold text-gray-100 flex items-center gap-2;
+    }
+    
+    .section-icon {
+      @apply w-5 h-5 text-primary;
+    }
+    
+    /* Tab styles */
+    .tab-button {
+      transition: all var(--transition-base);
+      border-bottom: 2px solid transparent;
+      @apply px-4 py-3 text-sm font-medium;
+    }
+    .tab-button:hover {
+      @apply text-primary;
+      background-color: rgba(168, 85, 247, 0.08);
+    }
+    .tab-button.active {
+      @apply text-primary border-primary;
+    }
+    .tab-button:not(.active) {
+      @apply text-gray-400;
+    }
+    
+    /* Tab content transitions */
+    .tab-content {
+      display: none;
+      animation: fadeIn var(--transition-base);
+    }
+    .tab-content.active {
+      display: block;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    /* Form elements */
+    .form-label {
+      @apply block text-sm font-medium text-gray-400 mb-2;
+    }
+    
+    .form-input {
+      @apply w-full bg-dark-700 border border-dark-600 rounded-lg px-4 py-2.5 text-gray-100 
+           focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-transparent
+           disabled:opacity-50 disabled:cursor-not-allowed;
+    }
+    
+    .form-helper {
+      @apply text-xs text-gray-500 mt-1.5;
+    }
+    
+    /* Buttons */
+    .btn {
+      @apply px-6 py-2.5 rounded-lg font-medium text-sm transition-colors var(--transition-base)
+           focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2 focus:ring-offset-dark-800;
+    }
+    
+    .btn-primary {
+      @apply bg-primary hover:bg-primary-hover text-white;
+    }
+    
+    .btn-secondary {
+      @apply bg-dark-600 hover:bg-dark-500 text-gray-100;
+    }
+    
+    .btn-ghost {
+      @apply text-gray-400 hover:text-gray-100 hover:bg-dark-700;
+    }
+    
+    .btn-sm {
+      @apply px-4 py-1.5 text-xs;
+    }
+    
+    /* Toggle switch */
+    .toggle {
+      @apply relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full 
+           transition-colors var(--transition-base) focus:outline-none focus:ring-2 
+           focus:ring-primary focus:ring-offset-2 focus:ring-offset-dark-800;
+    }
+    .toggle-enabled {
+      @apply bg-primary;
+    }
+    .toggle-disabled {
+      @apply bg-dark-600;
+    }
+    .toggle-thumb {
+      @apply pointer-events-none absolute left-1 bottom-1 w-4 h-4 rounded-full 
+           bg-gray-400 shadow transition-transform var(--transition-base);
+    }
+    .toggle-thumb-enabled {
+      @apply translate-x-5 bg-white;
+    }
+    .toggle-thumb-disabled {
+      @apply translate-x-0;
+    }
+    
+    /* Segmented control */
+    .segmented-control {
+      @apply flex bg-dark-700 rounded-lg p-1;
+    }
+    
+    .segment-btn {
+      @apply flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium 
+           transition-colors var(--transition-fast) text-gray-400 hover:text-gray-100;
+    }
+    
+    .segment-btn-active {
+      @apply bg-primary text-white;
+    }
+    
+    /* Table/matrix layouts */
+    .zone-table {
+      @apply bg-dark-700 rounded-lg overflow-hidden;
+    }
+    
+    .zone-header {
+      @apply grid grid-cols-12 gap-4 px-4 py-3 bg-dark-600 
+           text-xs font-semibold text-gray-400 uppercase tracking-wider;
+    }
+    
+    .zone-row {
+      @apply grid grid-cols-12 gap-4 px-4 py-3 border-t border-dark-600 
+           items-center hover:bg-dark-600/50 transition-colors;
+    }
+    
+    /* Alert banners */
+    .alert {
+      @apply rounded-lg p-4 border;
+    }
+    
+    .alert-info {
+      @apply bg-primary/10 border-primary/30;
+    }
+    
+    .alert-warning {
+      @apply bg-warning/10 border-warning/30;
+    }
+  </style>
+</head>
+<body class="bg-dark-900 text-gray-100">
+  <div class="flex min-h-screen">
+    <!-- Sidebar -->
+    <aside class="w-64 bg-dark-800 min-h-screen border-r border-dark-600 p-4 flex-shrink-0">
+      <div class="flex items-center gap-3 mb-8 px-2">
+        <div class="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
+          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a8 8 0 100 16 8 8 0 000-16zm0 14a6 6 0 110-12 6 6 0 010 12z"/></svg>
+        </div>
+        <span class="font-bold text-lg">TrainDash</span>
+      </div>
+      
+      <nav class="space-y-1">
+        <a href="#" class="flex items-center gap-3 px-3 py-2.5 text-gray-400 hover:text-gray-100 hover:bg-dark-600 rounded-lg transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+          <span>Dashboard</span>
+        </a>
+        
+        <a href="#" class="flex items-center gap-3 px-3 py-2.5 text-gray-400 hover:text-gray-100 hover:bg-dark-600 rounded-lg transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+          <span>Athlete</span>
+        </a>
+        
+        <a href="#" class="flex items-center gap-3 px-3 py-2.5 text-primary bg-primary/10 rounded-lg">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          <span>Settings</span>
+        </a>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 p-8 overflow-y-auto">
+      <div class="max-w-5xl mx-auto">
+        <!-- Page Header -->
+        <div class="mb-8">
+          <h1 class="text-3xl font-bold text-gray-100">Settings</h1>
+          <p class="text-base text-gray-400 mt-1">Manage your profile, preferences, and integrations</p>
+        </div>
+
+        <!-- Tab Navigation -->
+        <div class="mb-8 border-b border-dark-600">
+          <div class="flex gap-2" role="tablist">
+            <button 
+              class="tab-button active"
+              onclick="switchTab('profile')"
+              role="tab"
+              aria-selected="true"
+            >
+              <div class="flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                Profile
+              </div>
+            </button>
+            
+            <button 
+              class="tab-button"
+              onclick="switchTab('preferences')"
+              role="tab"
+              aria-selected="false"
+            >
+              <div class="flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+                Preferences
+              </div>
+            </button>
+            
+            <button 
+              class="tab-button"
+              onclick="switchTab('training')"
+              role="tab"
+              aria-selected="false"
+            >
+              <div class="flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                Training
+              </div>
+            </button>
+            
+            <button 
+              class="tab-button"
+              onclick="switchTab('connections')"
+              role="tab"
+              aria-selected="false"
+            >
+              <div class="flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"/></svg>
+                Connections
+              </div>
+            </button>
+          </div>
+        </div>
+
+        <!-- PROFILE TAB -->
+        <div id="profile-tab" class="tab-content active" role="tabpanel">
+          <div class="space-y-6">
+            <!-- Profile Section -->
+            <div class="card p-6 card-hover">
+              <div class="section-header">
+                <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                <h2 class="section-title">Profile</h2>
+              </div>
+              
+              <div class="flex items-start gap-8 mb-8">
+                <!-- Avatar -->
+                <div class="flex-shrink-0">
+                  <div class="w-24 h-24 bg-primary rounded-full flex items-center justify-center text-3xl font-bold text-white">DE</div>
+                  <div class="mt-4 space-y-2">
+                    <button class="btn btn-secondary btn-sm w-full">Change</button>
+                    <button class="btn btn-ghost btn-sm w-full text-destructive hover:text-destructive">Remove</button>
+                  </div>
+                </div>
+                
+                <!-- Form -->
+                <div class="flex-1 max-w-xl space-y-5">
+                  <div>
+                    <label class="form-label">Email</label>
+                    <input type="email" value="debug-1786307634@example.com" class="form-input" disabled>
+                  </div>
+                  
+                  <div>
+                    <label class="form-label">Display Name</label>
+                    <input type="text" placeholder="How you want to be called" class="form-input">
+                    <p class="form-helper">This name will be shown in the header and anywhere your profile appears</p>
+                  </div>
+                </div>
+              </div>
+              
+              <button class="btn btn-primary">Save Profile</button>
+            </div>
+            
+            <!-- Password Section -->
+            <div class="card p-6 card-hover">
+              <div class="section-header">
+                <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                <h2 class="section-title">Password</h2>
+              </div>
+              
+              <p class="text-base text-gray-400 mb-5">Set a password to enable email/password login in addition to your connected accounts.</p>
+              <button class="btn btn-secondary">Set Password</button>
+            </div>
+            
+            <!-- Login Methods Section -->
+            <div class="card p-6 card-hover">
+              <div class="section-header">
+                <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+                <h2 class="section-title">Login Methods</h2>
+              </div>
+              
+              <div class="space-y-3">
+                <!-- Google -->
+                <div class="flex items-center justify-between p-4 bg-dark-700 rounded-lg">
+                  <div class="flex items-center gap-4">
+                    <div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center flex-shrink-0">
+                      <svg class="w-6 h-6" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+                    </div>
+                    <div>
+                      <h3 class="font-medium text-gray-100">Google</h3>
+                      <p class="text-sm text-gray-400">Not connected</p>
+                    </div>
+                  </div>
+                  <button class="btn btn-secondary btn-sm">Connect</button>
+                </div>
+                
+                <!-- GitHub -->
+                <div class="flex items-center justify-between p-4 bg-dark-700 rounded-lg">
+                  <div class="flex items-center gap-4">
+                    <div class="w-10 h-10 bg-dark-900 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+                    </div>
+                    <div>
+                      <h3 class="font-medium text-gray-100">GitHub</h3>
+                      <p class="text-sm text-gray-400">Not connected</p>
+                    </div>
+                  </div>
+                  <button class="btn btn-secondary btn-sm">Connect</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PREFERENCES TAB -->
+        <div id="preferences-tab" class="tab-content" role="tabpanel">
+          <div class="space-y-6">
+            <div class="card p-6 card-hover">
+              <div class="section-header">
+                <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+                <h2 class="section-title">Preferences</h2>
+              </div>
+              
+              <div class="space-y-8">
+                <!-- Theme -->
+                <div class="flex items-center justify-between">
+                  <div>
+                    <h3 class="font-medium text-gray-100 mb-1">Theme</h3>
+                    <p class="text-sm text-gray-400">Choose light, dark, or follow your system preference</p>
+                  </div>
+                  <div class="segmented-control">
+                    <button class="segment-btn">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                      Light
+                    </button>
+                    <button class="segment-btn segment-btn-active">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+                      Dark
+                    </button>
+                    <button class="segment-btn">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                      System
+                    </button>
+                  </div>
+                </div>
+                
+                <!-- Unit System -->
+                <div class="flex items-center justify-between pt-8 border-t border-dark-600">
+                  <div>
+                    <h3 class="font-medium text-gray-100 mb-1">Unit System</h3>
+                    <p class="text-sm text-gray-400">Display distances, elevations, and speeds in kilometers or miles</p>
+                  </div>
+                  <div class="segmented-control">
+                    <button class="segment-btn segment-btn-active">Metric</button>
+                    <button class="segment-btn">Imperial</button>
+                  </div>
+                </div>
+                
+                <!-- Map Style -->
+                <div class="pt-8 border-t border-dark-600">
+                  <h3 class="font-medium text-gray-100 mb-2">Map Style</h3>
+                  <p class="text-sm text-gray-400 mb-5">Choose how maps appear throughout the app</p>
+                  
+                  <div class="grid grid-cols-2 gap-3 max-w-2xl">
+                    <button data-map-style="osm" class="relative rounded-lg overflow-hidden border-2 border-primary transition-all text-left aspect-[16/7] group">
+                      <img src="https://maps.wikimedia.org/img/osm-intl,9,52.513,13.407,200x200.png" alt="OpenStreetMap preview" class="absolute inset-0 w-full h-full object-cover" />
+                      <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-4 py-3">
+                        <span class="text-sm font-medium text-white">OpenStreetMap</span>
+                      </div>
+                      <div class="absolute top-3 right-3 w-6 h-6 rounded-full bg-primary flex items-center justify-center shadow-lg">
+                        <svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+                      </div>
+                    </button>
+                    
+                    <button data-map-style="positron" class="relative rounded-lg overflow-hidden border-2 border-dark-600 hover:border-gray-400 transition-all text-left aspect-[16/7] group">
+                      <img src="https://maps.wikimedia.org/img/positron,9,52.513,13.407,200x200.png" alt="Positron preview" class="absolute inset-0 w-full h-full object-cover" />
+                      <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-4 py-3">
+                        <span class="text-sm font-medium text-white">Positron</span>
+                      </div>
+                    </button>
+                    
+                    <button data-map-style="dark-matter" class="relative rounded-lg overflow-hidden border-2 border-dark-600 hover:border-gray-400 transition-all text-left aspect-[16/7] group">
+                      <img src="https://maps.wikimedia.org/img/dark-matter,9,52.513,13.407,200x200.png" alt="Dark Matter preview" class="absolute inset-0 w-full h-full object-cover" />
+                      <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-4 py-3">
+                        <span class="text-sm font-medium text-white">Dark Matter</span>
+                      </div>
+                    </button>
+                    
+                    <button data-map-style="voyager" class="relative rounded-lg overflow-hidden border-2 border-dark-600 hover:border-gray-400 transition-all text-left aspect-[16/7] group">
+                      <img src="https://maps.wikimedia.org/img/voyager,9,52.513,13.407,200x200.png" alt="Voyager preview" class="absolute inset-0 w-full h-full object-cover" />
+                      <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-4 py-3">
+                        <span class="text-sm font-medium text-white">Voyager</span>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TRAINING TAB -->
+        <div id="training-tab" class="tab-content" role="tabpanel">
+          <div class="space-y-6">
+            <!-- Power & Heart Rate -->
+            <div class="card p-6 card-hover">
+              <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center gap-2">
+                  <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+                  <h2 class="section-title">Power & Heart Rate</h2>
+                </div>
+                <button class="toggle toggle-disabled">
+                  <span class="toggle-thumb toggle-thumb-disabled"></span>
+                </button>
+              </div>
+              
+              <div>
+                <h3 class="font-medium text-gray-100 mb-2">HR-Derived Power</h3>
+                <p class="text-sm text-gray-400 mb-5">Estimate power from heart rate on activities without a power meter. Uses an Efficiency Factor model trained from your dual-sensor rides.</p>
+                
+                <div class="alert alert-info">
+                  <div class="flex items-start gap-3">
+                    <svg class="w-5 h-5 text-primary flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <div class="flex-1">
+                      <p class="text-sm text-gray-300 mb-2">Requirement not met</p>
+                      <p class="text-sm text-gray-400">Record 5 more activities with both power meter and heart rate to enable this feature.</p>
+                      <div class="mt-4 flex items-center gap-3">
+                        <div class="flex-1 h-2 bg-dark-600 rounded-full overflow-hidden">
+                          <div class="h-full bg-primary rounded-full" style="width: 0%"></div>
+                        </div>
+                        <span class="text-xs font-medium text-gray-500">0/5</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Thresholds -->
+            <div class="card p-6 card-hover">
+              <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center gap-2">
+                  <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                  <h2 class="section-title">Thresholds</h2>
+                </div>
+                <a href="#" class="text-primary hover:text-primary-light text-sm font-medium flex items-center gap-1 transition-colors">
+                  Edit on Athlete Page
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                </a>
+              </div>
+              
+              <div class="grid grid-cols-2 gap-4 max-w-lg">
+                <div class="p-5 bg-dark-700 rounded-lg">
+                  <div class="text-sm text-gray-400 mb-2">FTP</div>
+                  <div class="text-3xl font-bold text-gray-100 mb-1">285 W</div>
+                  <p class="text-xs text-gray-500">Last updated: 2 days ago</p>
+                </div>
+                <div class="p-5 bg-dark-700 rounded-lg">
+                  <div class="text-sm text-gray-400 mb-2">LTHR</div>
+                  <div class="text-3xl font-bold text-gray-100 mb-1">165 bpm</div>
+                  <p class="text-xs text-gray-500">Last updated: 1 week ago</p>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Power Zones -->
+            <div class="card p-6 card-hover">
+              <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center gap-2">
+                  <svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                  <h2 class="section-title">Power Zones</h2>
+                </div>
+                <button class="text-primary hover:text-primary-light text-sm font-medium transition-colors">Edit Zones</button>
+              </div>
+              
+              <div class="zone-table">
+                <div class="zone-header">
+                  <div class="col-span-1">Zone</div>
+                  <div class="col-span-3">Name</div>
+                  <div class="col-span-3">% FTP</div>
+                  <div class="col-span-3">Watts</div>
+                  <div class="col-span-2">Color</div>
+                </div>
+                
+                <div class="zone-row">
+                  <div class="col-span-1">
+                    <span class="inline-flex items-center justify-center w-8 h-8 rounded-full text-white font-bold text-sm bg-amber-500">1</span>
+                  </div>
+                  <div class="col-span-3 text-sm text-gray-300">Active Recovery</div>
+                  <div class="col-span-3 text-sm text-gray-300">&lt;55%</div>
+                  <div class="col-span-3 text-sm text-gray-500">— W</div>
+                  <div class="col-span-2">
+                    <div class="w-6 h-6 rounded bg-amber-500 border border-dark-600"></div>
+                  </div>
+                </div>
+                <div class="zone-row">
+                  <div class="col-span-1">
+                    <span class="inline-flex items-center justify-center w-8 h-8 rounded-full text-white font-bold text-sm bg-blue-500">2</span>
+                  </div>
+                  <div class="col-span-3 text-sm text-gray-300">Endurance</div>
+                  <div class="col-span-3 text-sm text-gray-300">56-75%</div>
+                  <div class="col-span-3 text-sm text-gray-500">— W</div>
+                  <div class="col-span-2">
+                    <div class="w-6 h-6 rounded bg-blue-500 border border-dark-600"></div>
+                  </div>
+                </div>
+                <div class="zone-row">
+                  <div class="col-span-1">
+                    <span class="inline-flex items-center justify-center w-8 h-8 rounded-full text-white font-bold text-sm bg-green-500">3</span>
+                  </div>
+                  <div class="col-span-3 text-sm text-gray-300">Tempo</div>
+                  <div class="col-span-3 text-sm text-gray-300">76-90%</div>
+                  <div class="col-span-3 text-sm text-gray-500">— W</div>
+                  <div class="col-span-2">
+                    <div class="w-6 h-6 rounded bg-green-500 border border-dark-600"></div>
+                  </div>
+                </div>
+              </div>
+              
+              <p class="text-xs text-gray-500 mt-4">Power zones use Coggan's 7-zone model. Customize names and ranges as needed.</p>
+            </div>
+            
+            <!-- Heart Rate Zones -->
+            <div class="card p-6 card-hover">
+              <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center gap-2">
+                  <svg class="w-5 h-5 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+                  <h2 class="section-title">Heart Rate Zones</h2>
+                </div>
+                <button class="text-primary hover:text-primary-light text-sm font-medium transition-colors">Edit Zones</button>
+              </div>
+              
+              <div class="zone-table">
+                <div class="zone-header">
+                  <div class="col-span-1">Zone</div>
+                  <div class="col-span-3">Name</div>
+                  <div class="col-span-3">% LTHR</div>
+                  <div class="col-span-3">BPM</div>
+                  <div class="col-span-2">Color</div>
+                </div>
+                
+                <div class="zone-row">
+                  <div class="col-span-1">
+                    <span class="inline-flex items-center justify-center w-8 h-8 rounded-full text-white font-bold text-sm bg-pink-500">1</span>
+                  </div>
+                  <div class="col-span-3 text-sm text-gray-300">Recovery</div>
+                  <div class="col-span-3 text-sm text-gray-300">&lt;82%</div>
+                  <div class="col-span-3 text-sm text-gray-300">&lt;135 bpm</div>
+                  <div class="col-span-2">
+                    <div class="w-6 h-6 rounded bg-pink-500 border border-dark-600"></div>
+                  </div>
+                </div>
+                <div class="zone-row">
+                  <div class="col-span-1">
+                    <span class="inline-flex items-center justify-center w-8 h-8 rounded-full text-white font-bold text-sm bg-red-500">2</span>
+                  </div>
+                  <div class="col-span-3 text-sm text-gray-300">Aerobic</div>
+                  <div class="col-span-3 text-sm text-gray-300">82-89%</div>
+                  <div class="col-span-3 text-sm text-gray-300">135-147 bpm</div>
+                  <div class="col-span-2">
+                    <div class="w-6 h-6 rounded bg-red-500 border border-dark-600"></div>
+                  </div>
+                </div>
+                <div class="zone-row">
+                  <div class="col-span-1">
+                    <span class="inline-flex items-center justify-center w-8 h-8 rounded-full text-white font-bold text-sm bg-orange-500">3</span>
+                  </div>
+                  <div class="col-span-3 text-sm text-gray-300">Tempo</div>
+                  <div class="col-span-3 text-sm text-gray-300">90-94%</div>
+                  <div class="col-span-3 text-sm text-gray-300">148-155 bpm</div>
+                  <div class="col-span-2">
+                    <div class="w-6 h-6 rounded bg-orange-500 border border-dark-600"></div>
+                  </div>
+                </div>
+                <div class="zone-row">
+                  <div class="col-span-1">
+                    <span class="inline-flex items-center justify-center w-8 h-8 rounded-full text-white font-bold text-sm bg-yellow-500">4</span>
+                  </div>
+                  <div class="col-span-3 text-sm text-gray-300">Threshold</div>
+                  <div class="col-span-3 text-sm text-gray-300">95-99%</div>
+                  <div class="col-span-3 text-sm text-gray-300">156-163 bpm</div>
+                  <div class="col-span-2">
+                    <div class="w-6 h-6 rounded bg-yellow-500 border border-dark-600"></div>
+                  </div>
+                </div>
+                <div class="zone-row">
+                  <div class="col-span-1">
+                    <span class="inline-flex items-center justify-center w-8 h-8 rounded-full text-white font-bold text-sm bg-purple-500">5</span>
+                  </div>
+                  <div class="col-span-3 text-sm text-gray-300">Neuromuscular</div>
+                  <div class="col-span-3 text-sm text-gray-300">100%+</div>
+                  <div class="col-span-3 text-sm text-gray-300">164+ bpm</div>
+                  <div class="col-span-2">
+                    <div class="w-6 h-6 rounded bg-purple-500 border border-dark-600"></div>
+                  </div>
+                </div>
+              </div>
+              
+              <p class="text-xs text-gray-500 mt-4">Heart rate zones use the Friel method. Adjust percentages to match your training methodology.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- CONNECTIONS TAB -->
+        <div id="connections-tab" class="tab-content" role="tabpanel">
+          <div class="space-y-6">
+            <!-- Sync Schedule -->
+            <div class="card p-6 card-hover">
+              <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center gap-2">
+                  <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                  <h2 class="section-title">Sync Schedule</h2>
+                </div>
+                <button class="btn btn-primary btn-sm">Save Schedule</button>
+              </div>
+              
+              <div class="max-w-md">
+                <label class="form-label">Daily Sync Time</label>
+                <select class="form-input">
+                  <option>00:00 UTC</option>
+                  <option>01:00 UTC</option>
+                  <option>02:00 UTC</option>
+                  <option selected>03:00 UTC</option>
+                  <option>04:00 UTC</option>
+                  <option>05:00 UTC</option>
+                </select>
+                <p class="form-helper">Your integrations (Xert, Garmin) will sync automatically at this hour</p>
+              </div>
+            </div>
+            
+            <!-- Xert Integration -->
+            <div class="border border-dark-600 rounded-lg p-5">
+              <div class="flex items-center justify-between mb-5">
+                <div>
+                  <h3 class="font-semibold text-gray-100">Xert</h3>
+                  <p class="text-sm text-gray-400">Not connected</p>
+                </div>
+                <span class="bg-dark-600 px-3 py-1 rounded-full text-xs font-medium">Not configured</span>
+              </div>
+              
+              <div class="space-y-4">
+                <div>
+                  <label class="form-label">Xert Email</label>
+                  <input type="email" placeholder="your@email.com" class="form-input">
+                </div>
+                
+                <div>
+                  <label class="form-label">Xert Password</label>
+                  <input type="password" placeholder="Enter password" class="form-input">
+                </div>
+                
+                <div>
+                  <label class="form-label">Sync activities since</label>
+                  <input type="date" value="2026-05-12" class="form-input">
+                  <p class="form-helper">Activities from this date onwards will be imported</p>
+                </div>
+                
+                <button class="btn btn-primary w-full">Connect</button>
+              </div>
+            </div>
+            
+            <!-- Garmin Integration -->
+            <div class="border border-dark-600 rounded-lg p-5">
+              <div class="flex items-center justify-between mb-5">
+                <div>
+                  <h3 class="font-semibold text-gray-100">Garmin</h3>
+                  <p class="text-sm text-gray-400">Not connected</p>
+                </div>
+                <span class="bg-dark-600 px-3 py-1 rounded-full text-xs font-medium">Not configured</span>
+              </div>
+              
+              <div class="space-y-4">
+                <div>
+                  <label class="form-label">Garmin Email</label>
+                  <input type="email" placeholder="your@email.com" class="form-input">
+                </div>
+                
+                <div>
+                  <label class="form-label">Garmin Password</label>
+                  <input type="password" placeholder="Enter password" class="form-input">
+                </div>
+                
+                <div>
+                  <label class="form-label">Sync activities since</label>
+                  <input type="date" value="2026-05-12" class="form-input">
+                  <p class="form-helper">Activities from this date onwards will be imported</p>
+                </div>
+                
+                <button class="btn btn-primary w-full">Connect</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+  
+  <script>
+    function switchTab(tabName) {
+      // Hide all tab contents
+      document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.remove('active');
+      });
+      
+      // Remove active from all buttons
+      document.querySelectorAll('.tab-button').forEach(button => {
+        button.classList.remove('active');
+        button.setAttribute('aria-selected', 'false');
+      });
+      
+      // Show selected tab content
+      document.getElementById(tabName + '-tab').classList.add('active');
+      
+      // Add active to clicked button
+      const clickedButton = event.currentTarget;
+      clickedButton.classList.add('active');
+      clickedButton.setAttribute('aria-selected', 'true');
+    }
+    
+    // Map style selector
+    document.querySelectorAll('[data-map-style]').forEach(button => {
+      button.addEventListener('click', function() {
+        // Remove selected state from all buttons
+        document.querySelectorAll('[data-map-style]').forEach(btn => {
+          btn.classList.remove('border-primary');
+          btn.classList.add('border-dark-600');
+          const existingCheckmark = btn.querySelector('.absolute.top-3.right-3');
+          if (existingCheckmark) existingCheckmark.remove();
+        });
+        
+        // Add selected state to clicked button
+        this.classList.remove('border-dark-600');
+        this.classList.add('border-primary');
+        
+        // Add checkmark
+        const checkmark = document.createElement('div');
+        checkmark.className = 'absolute top-3 right-3 w-6 h-6 rounded-full bg-primary flex items-center justify-center shadow-lg';
+        checkmark.innerHTML = '<svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>';
+        this.appendChild(checkmark);
+      });
+    });
+  </script>
+</body>
+</html>

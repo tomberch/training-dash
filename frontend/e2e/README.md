@@ -37,7 +37,9 @@ e2e/
 │   ├── J003-manual-onboarding.spec.ts
 │   ├── J004-xert-sync.spec.ts
 │   ├── J005-breakthrough.spec.ts
-│   └── J006-admin-approval.spec.ts
+│   ├── J006-admin-approval.spec.ts
+│   ├── J007-upload-to-provider.spec.ts
+│   └── J008-events.spec.ts
 ├── views/              # Page-specific tests
 │   ├── activity-list.spec.ts
 │   ├── activity-detail.spec.ts
@@ -99,6 +101,19 @@ Admin enables approval → New user registers → Sees pending screen → Admin 
 - Runs without pre-auth (fresh browser state)
 - Admin settings management
 - User approval workflow
+
+### J007: Upload to Provider
+File upload with provider sync integration.
+
+### J008: Events
+```
+Create event → View list → Filter by type → View details → Edit (links, entries) → Delete
+```
+- Full event CRUD lifecycle
+- Single-day vs multi-day display differences
+- Markdown description rendering
+- Journal entry management
+- Event filtering by type (race, tour, bikepacking, event)
 
 ## Journey Dependency Map
 

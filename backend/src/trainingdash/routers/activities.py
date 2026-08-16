@@ -418,6 +418,121 @@ async def delete_activity(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Activity not found")
 
 
+# =============================================================================
+# Activity-Event Quick-Link Endpoints
+# =============================================================================
+
+
+@router.get("/activities/{activity_id}/available-events")
+async def get_available_events(
+    db: DbSession,
+    repo: ActivityRepoD,
+    user: CurrentUser,
+    activity_id: UUID,
+):
+    """
+    Get events that this activity could be linked to.
+
+    Returns events where the activity's date falls within the event's date range.
+    """
+    from trainingdash.repositories.postgres.models import RideEvent
+
+    activity = await _get_owned_activity(repo, user, activity_id)
+    if activity.started_at is None:
+        return {"events": []}
+
+    activity_date = activity.started_at.date()
+
+    # Find events where activity date is within event's date range
+    result = await db.execute(
+        select(RideEvent)
+        .where(
+            RideEvent.user_id == user.id,
+            RideEvent.start_date <= activity_date,
+            RideEvent.end_date >= activity_date,
+        )
+        .order_by(RideEvent.start_date.desc())
+    )
+    events = result.scalars().all()
+
+    return {
+        "events": [
+            {
+                "id": str(e.id),
+                "title": e.title,
+                "event_type": e.event_type,
+                "start_date": e.start_date.isoformat(),
+                "end_date": e.end_date.isoformat() if e.end_date else None,
+            }
+            for e in events
+        ]
+    }
+
+
+class LinkToEventRequest(BaseModel):
+    """Request body for linking an activity to an event."""
+
+    event_id: UUID
+
+
+@router.post("/activities/{activity_id}/event", status_code=201)
+async def link_activity_to_event(
+    db: DbSession,
+    repo: ActivityRepoD,
+    user: CurrentUser,
+    activity_id: UUID,
+    request: LinkToEventRequest,
+):
+    """
+    Quick-link an activity to an event.
+
+    The activity is added to a journal entry for its date within the event.
+    If no entry exists for that date, one is auto-created.
+    """
+    from uuid import uuid4
+
+    from trainingdash.repositories.postgres.models import JournalEntry, RideEvent
+    from trainingdash.repositories.postgres.ride_event_repo import (
+        PostgresJournalEntryActivityRepo,
+        PostgresJournalEntryRepo,
+    )
+
+    activity = await _get_owned_activity(repo, user, activity_id)
+
+    # Verify user owns the event
+    result = await db.execute(
+        select(RideEvent).where(RideEvent.id == request.event_id, RideEvent.user_id == user.id)
+    )
+    event = result.scalar_one_or_none()
+    if event is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+
+    # Find or create journal entry for activity date
+    entry_repo = PostgresJournalEntryRepo(db)
+    activity_link_repo = PostgresJournalEntryActivityRepo(db)
+
+    activity_date = activity.started_at.date() if activity.started_at else event.start_date
+    entries = await entry_repo.list_for_event(request.event_id)
+    entry = next((e for e in entries if e.entry_date == activity_date), None)
+
+    if entry is None:
+        entry = JournalEntry(
+            id=uuid4(),
+            ride_event_id=request.event_id,
+            entry_date=activity_date,
+        )
+        entry = await entry_repo.save(entry)
+
+    # Link activity to entry
+    link = await activity_link_repo.link(entry.id, activity_id, sort_order=0)
+
+    return {
+        "event_id": str(request.event_id),
+        "entry_id": str(entry.id),
+        "activity_id": str(activity_id),
+    }
+
+
 @router.get("/activities/{activity_id}/fit")
 async def download_activity_fit(
     repo: ActivityRepoD,

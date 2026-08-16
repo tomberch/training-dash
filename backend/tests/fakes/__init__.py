@@ -35,6 +35,13 @@ from tests.fakes.event_repo import FakeEventRepo
 from tests.fakes.notification_repo import FakeNotificationRepo
 from tests.fakes.oauth_link_repo import FakeOAuthLinkRepo
 from tests.fakes.recalculation_job_repo import FakeRecalculationJobRepo
+from tests.fakes.ride_event_repo import (
+    FakeJournalEntryActivityRepo,
+    FakeJournalEntryRepo,
+    FakeRideEventLinkRepo,
+    FakeRideEventMediaRepo,
+    FakeRideEventRepo,
+)
 from tests.fakes.settings_repo import FakeAppSettingsRepo
 from tests.fakes.user_repo import FakeUserRepo
 
@@ -44,9 +51,14 @@ __all__ = [
     "FakeAuditLogRepo",
     "FakeEventRepo",
     "FakeGarminCredentialsRepo",
+    "FakeJournalEntryActivityRepo",
+    "FakeJournalEntryRepo",
     "FakeNotificationRepo",
     "FakeOAuthLinkRepo",
     "FakeRecalculationJobRepo",
+    "FakeRideEventLinkRepo",
+    "FakeRideEventMediaRepo",
+    "FakeRideEventRepo",
     "FakeUserRepo",
     "FakeXertCredentialsRepo",
 ]
