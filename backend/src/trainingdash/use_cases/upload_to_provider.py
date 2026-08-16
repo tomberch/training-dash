@@ -9,6 +9,7 @@ This use case handles:
 """
 
 import logging
+import re
 from dataclasses import dataclass
 from enum import StrEnum
 from uuid import UUID
@@ -25,6 +26,11 @@ from trainingdash.repositories.postgres.models import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _sanitize_log_value(value: str) -> str:
+    """Sanitize value for logging - remove control characters to prevent log injection."""
+    return re.sub(r"[\r\n\t\x00-\x1f\x7f-\x9f]", "", str(value))
 
 
 class Provider(StrEnum):
@@ -149,8 +155,8 @@ class UploadToProvider:
             try:
                 fit_bytes = modify_fit(fit_bytes, modifications)
                 logger.info(
-                    "Modified FIT for activity %s with device_product_id=%s",
-                    activity_id,
+                    "Modified FIT for activity %s with device_product_id=%d",
+                    _sanitize_log_value(str(activity_id)),
                     modifications.device_product_id,
                 )
             except FitModificationError as e:
@@ -206,9 +212,9 @@ class UploadToProvider:
             provider_activity_id = await client.upload_fit(fit_bytes, filename)
 
             logger.info(
-                "Uploaded activity %s to Xert as %s for user %s",
+                "Uploaded activity %s to Xert as %s for user %d",
                 activity.id,
-                provider_activity_id,
+                _sanitize_log_value(provider_activity_id),
                 user_id,
             )
 
@@ -254,9 +260,9 @@ class UploadToProvider:
             provider_activity_id = client.upload_fit(fit_bytes)
 
             logger.info(
-                "Uploaded activity %s to Garmin as %s for user %s",
+                "Uploaded activity %s to Garmin as %s for user %d",
                 activity.id,
-                provider_activity_id,
+                _sanitize_log_value(provider_activity_id),
                 user_id,
             )
 

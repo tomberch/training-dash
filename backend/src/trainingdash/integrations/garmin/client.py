@@ -17,6 +17,7 @@ import contextlib
 import io
 import logging
 import os
+import re
 import tempfile
 import zipfile
 from dataclasses import dataclass
@@ -26,6 +27,20 @@ from typing import Protocol
 from garminconnect import Garmin
 
 logger = logging.getLogger(__name__)
+
+
+def _mask_email(email: str) -> str:
+    """Mask email for safe logging - shows first 2 chars + domain."""
+    if not email or "@" not in email:
+        return "***"
+    local, domain = email.rsplit("@", 1)
+    masked_local = local[:2] + "***" if len(local) > 2 else "***"
+    return f"{masked_local}@{domain}"
+
+
+def _sanitize_log_value(value: str) -> str:
+    """Sanitize value for logging - remove control characters to prevent log injection."""
+    return re.sub(r"[\r\n\t\x00-\x1f\x7f-\x9f]", "", str(value))
 
 
 class GarminAPIError(Exception):
@@ -130,7 +145,7 @@ class GarminClient:
                 prompt_mfa=self._mfa_callback,
             )
             self._client.login()
-            logger.info("Garmin login successful for %s", email)
+            logger.info("Garmin login successful for %s", _mask_email(email))
             return True
         except GarminMFARequired:
             # Re-raise our own exception

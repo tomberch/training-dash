@@ -18,7 +18,11 @@ import os
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from trainingdash.integrations.garmin.client import GarminActivity, GarminAPIError
+from trainingdash.integrations.garmin.client import (
+    GarminActivity,
+    GarminAPIError,
+    _mask_email,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -50,12 +54,12 @@ class MockGarminClient:
             raise GarminAPIError("Invalid Garmin credentials")
         self._logged_in = True
         self._email = email
-        logger.info("MockGarminClient: login successful for %r", email)
+        logger.info("MockGarminClient: login successful for %s", _mask_email(email))
         return True
 
     def complete_mfa(self, code: str) -> None:
         """Simulate MFA completion. Mock always succeeds."""
-        logger.info("MockGarminClient: MFA completed with code %r", code)
+        logger.info("MockGarminClient: MFA completed")
 
     def list_activities(
         self,
