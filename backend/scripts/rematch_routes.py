@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 async def rematch_all_routes():
-    from trainingdash.domain.direction import compute_direction_bearing
+    from trainingdash.domain.direction import compute_direction_bearings
     from trainingdash.repositories.postgres.models import Activity, Record, Route
     from trainingdash.route_matching import HAUSDORFF_THRESHOLD_M, find_or_create_route_id
 
@@ -39,7 +39,9 @@ async def rematch_all_routes():
 
         # Clear route assignments and delete routes
         logger.info("Clearing existing route assignments...")
-        await session.execute(update(Activity).values(route_id=None, direction_bearing=None))
+        await session.execute(
+            update(Activity).values(route_id=None, direction_bearing=None, direction_bearing_75=None)
+        )
         await session.execute(text("DELETE FROM routes"))
         await session.commit()
         logger.info("Cleared all route data")
@@ -56,18 +58,22 @@ async def rematch_all_routes():
                 logger.info(f"  [{i}/{len(activities)}] {activity.id}: No GPS records, skipping")
                 continue
 
-            # Compute direction bearing
+            # Compute direction bearings (25% and 75%)
             gps_points = [(r.lat, r.lon, r.distance_m) for r in records if r.lat is not None and r.lon is not None]
-            direction_bearing = compute_direction_bearing(gps_points)
+            bearings = compute_direction_bearings(gps_points)
 
             # Match route
             route_id = await find_or_create_route_id(session, activity, records)
 
             if route_id is not None:
                 activity.route_id = route_id
-                activity.direction_bearing = direction_bearing
+                activity.direction_bearing = bearings.bearing_25
+                activity.direction_bearing_75 = bearings.bearing_75
                 await session.commit()
-                logger.info(f"  [{i}/{len(activities)}] {activity.id}: route={route_id}, bearing={direction_bearing}")
+                logger.info(
+                    f"  [{i}/{len(activities)}] {activity.id}: route={route_id}, "
+                    f"bearing_25={bearings.bearing_25}, bearing_75={bearings.bearing_75}"
+                )
             else:
                 logger.info(f"  [{i}/{len(activities)}] {activity.id}: No route match (no GPS data)")
 

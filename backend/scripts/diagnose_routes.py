@@ -44,13 +44,15 @@ async def diagnose(activity_id_1: str, activity_id_2: str):
         print(f"Activity 1: {a1.id}")
         print(f"  Title: {a1.title}")
         print(f"  Route ID: {a1.route_id}")
-        print(f"  Direction Bearing: {a1.direction_bearing}")
+        print(f"  Direction Bearing (25%): {a1.direction_bearing}")
+        print(f"  Direction Bearing (75%): {a1.direction_bearing_75}")
         print(f"  Started: {a1.started_at}")
         print()
         print(f"Activity 2: {a2.id}")
         print(f"  Title: {a2.title}")
         print(f"  Route ID: {a2.route_id}")
-        print(f"  Direction Bearing: {a2.direction_bearing}")
+        print(f"  Direction Bearing (25%): {a2.direction_bearing}")
+        print(f"  Direction Bearing (75%): {a2.direction_bearing_75}")
         print(f"  Started: {a2.started_at}")
         print()
 
@@ -71,29 +73,36 @@ async def diagnose(activity_id_1: str, activity_id_2: str):
         print("=" * 60)
         print("DIRECTION BEARING ANALYSIS")
         print("=" * 60)
-        b1, b2 = a1.direction_bearing, a2.direction_bearing
-        match = bearings_match(b1, b2)
+        b1_25, b2_25 = a1.direction_bearing, a2.direction_bearing
+        b1_75, b2_75 = a1.direction_bearing_75, a2.direction_bearing_75
+        match = bearings_match(b1_25, b2_25, b1_75, b2_75)
 
-        if b1 is None or b2 is None:
-            print(f"  Bearing 1: {b1}")
-            print(f"  Bearing 2: {b2}")
-            print(f"  Match: {match} (one or both are None, defaults to True)")
-        else:
-            diff = abs(b1 - b2)
-            if diff > 180:
-                diff = 360 - diff
-            print(f"  Bearing 1: {b1}°")
-            print(f"  Bearing 2: {b2}°")
-            print(f"  Angular difference: {diff}°")
-            print("  Threshold: 90°")
-            print(f"  Match: {match}")
-            if not match:
-                print()
-                print("  ✗ Bearings differ by ≥90°, considered different directions.")
-                print("    This could be:")
-                print("    - Opposite direction on an out-and-back route")
-                print("    - GPS noise at the start causing bearing variance")
-                print("    - Different start points on the same route")
+        print(f"  25% Bearing 1: {b1_25}°" if b1_25 else "  25% Bearing 1: None")
+        print(f"  25% Bearing 2: {b2_25}°" if b2_25 else "  25% Bearing 2: None")
+        if b1_25 is not None and b2_25 is not None:
+            diff_25 = abs(b1_25 - b2_25)
+            if diff_25 > 180:
+                diff_25 = 360 - diff_25
+            print(f"  25% Angular difference: {diff_25}°")
+        print()
+        print(f"  75% Bearing 1: {b1_75}°" if b1_75 else "  75% Bearing 1: None")
+        print(f"  75% Bearing 2: {b2_75}°" if b2_75 else "  75% Bearing 2: None")
+        if b1_75 is not None and b2_75 is not None:
+            diff_75 = abs(b1_75 - b2_75)
+            if diff_75 > 180:
+                diff_75 = 360 - diff_75
+            print(f"  75% Angular difference: {diff_75}°")
+        print()
+        print("  Threshold: 90° (both 25% and 75% must match)")
+        print(f"  Overall Match: {match}")
+        if not match:
+            print()
+            print("  ✗ Bearings differ by ≥90° at one or both checkpoints.")
+            print("    This indicates opposite direction on the route.")
+            print("    Possible scenarios:")
+            print("    - Opposite direction on an out-and-back route")
+            print("    - Clockwise vs counterclockwise on a loop")
+            print("    - GPS noise causing bearing variance")
 
         # Load GPS records and compute actual Hausdorff distance
         print()

@@ -154,6 +154,8 @@ class Activity(Base):
     )
     # Direction bearing for same-route comparison (0-359 degrees, from start to 25% point)
     direction_bearing: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    # Direction bearing at 75% for detecting opposite-direction loops
+    direction_bearing_75: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
     raw_fit: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     utc_offset_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))

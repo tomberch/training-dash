@@ -278,8 +278,9 @@ async def get_activity_wbal(
 async def get_same_route_activities(db: DbSession, repo: ActivityRepoD, user: CurrentUser, activity_id: UUID):
     """Get other activities on the same route, filtered to same direction only.
 
-    Uses direction_bearing for fast O(1) comparison. Two activities are considered
-    same-direction if their bearings are within 90° of each other.
+    Uses dual-bearing comparison (25% and 75%) for direction detection.
+    This catches opposite-direction loops where both directions initially
+    head the same way but diverge later.
     """
     from trainingdash.domain.direction import bearings_match
 
@@ -293,10 +294,17 @@ async def get_same_route_activities(db: DbSession, repo: ActivityRepoD, user: Cu
     if not others:
         return {"route_id": activity.route_id, "activities": []}
 
-    # Filter to same-direction activities using precomputed bearing
-    base_bearing = activity.direction_bearing
-
-    same_direction_activities = [a for a in others if bearings_match(base_bearing, a.direction_bearing)]
+    # Filter to same-direction activities using precomputed bearings (25% and 75%)
+    same_direction_activities = [
+        a
+        for a in others
+        if bearings_match(
+            activity.direction_bearing,
+            a.direction_bearing,
+            activity.direction_bearing_75,
+            a.direction_bearing_75,
+        )
+    ]
 
     return {
         "route_id": activity.route_id,
@@ -321,8 +329,13 @@ async def compare_activities(
     if activity_a.route_id is None or activity_a.route_id != activity_b.route_id:
         return {"comparable": False, "gap_series": [], "other_geojson": None, "reason": "different_routes"}
 
-    # Verify same direction using precomputed bearings
-    if not bearings_match(activity_a.direction_bearing, activity_b.direction_bearing):
+    # Verify same direction using precomputed bearings (25% and 75%)
+    if not bearings_match(
+        activity_a.direction_bearing,
+        activity_b.direction_bearing,
+        activity_a.direction_bearing_75,
+        activity_b.direction_bearing_75,
+    ):
         return {
             "comparable": False,
             "gap_series": [],

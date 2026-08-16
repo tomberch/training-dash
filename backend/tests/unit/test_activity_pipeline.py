@@ -106,10 +106,18 @@ class TestRouteMatchResult:
     def test_default_values(self):
         result = RouteMatchResult()
         assert result.route_id is None
+        assert result.direction_bearing is None
+        assert result.direction_bearing_75 is None
 
     def test_with_route(self):
         result = RouteMatchResult(route_id=42)
         assert result.route_id == 42
+
+    def test_with_bearings(self):
+        result = RouteMatchResult(route_id=42, direction_bearing=90, direction_bearing_75=270)
+        assert result.route_id == 42
+        assert result.direction_bearing == 90
+        assert result.direction_bearing_75 == 270
 
 
 class TestTitleResult:

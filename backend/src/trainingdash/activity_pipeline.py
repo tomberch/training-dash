@@ -85,6 +85,7 @@ class RouteMatchResult:
 
     route_id: int | None = None
     direction_bearing: int | None = None
+    direction_bearing_75: int | None = None
 
 
 @dataclass
@@ -636,12 +637,13 @@ class ActivityPipeline:
         Step 6: Match activity to existing route or create new one.
 
         Uses GPS track similarity to identify recurring routes.
-        Also computes direction bearing for fast same-route direction comparison.
+        Also computes direction bearings at 25% and 75% for detecting
+        opposite-direction loops.
 
         Returns:
-            RouteMatchResult with route_id and direction_bearing if matched
+            RouteMatchResult with route_id and direction bearings if matched
         """
-        from trainingdash.domain.direction import compute_direction_bearing
+        from trainingdash.domain.direction import compute_direction_bearings
         from trainingdash.route_matching import find_or_create_route_id
 
         result = RouteMatchResult()
@@ -653,11 +655,14 @@ class ActivityPipeline:
             if r.get("lat") is not None and r.get("lon") is not None
         ]
 
-        # Compute direction bearing for same-route direction comparison
-        direction_bearing = compute_direction_bearing(gps_points)
-        if direction_bearing is not None:
-            result.direction_bearing = direction_bearing
-            self.activity.direction_bearing = direction_bearing
+        # Compute direction bearings for same-route direction comparison
+        bearings = compute_direction_bearings(gps_points)
+        if bearings.bearing_25 is not None:
+            result.direction_bearing = bearings.bearing_25
+            self.activity.direction_bearing = bearings.bearing_25
+        if bearings.bearing_75 is not None:
+            result.direction_bearing_75 = bearings.bearing_75
+            self.activity.direction_bearing_75 = bearings.bearing_75
 
         # Match route
         route_id = await find_or_create_route_id(self.db, self.activity, self.records)
