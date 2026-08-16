@@ -28,10 +28,11 @@ import ReactMarkdown from "react-markdown";
 import rehypeSanitize from "rehype-sanitize";
 import { formatEventDuration, isSingleDayEvent, formatEventHeaderDates } from "@/lib/event-utils";
 import { EventTourMap } from "@/components/EventTourMap";
+import { VideoLinkCard } from "@/components/VideoLinkCard";
 import Lightbox from "yet-another-react-lightbox";
 import "yet-another-react-lightbox/styles.css";
 
-// Custom styles for more visible navigation arrows
+// Custom styles for more visible navigation arrows and image padding
 const lightboxStyles = {
   button: {
     filter: "drop-shadow(0 0 4px rgba(0, 0, 0, 0.9))",
@@ -44,6 +45,9 @@ const lightboxStyles = {
     width: 32,
     height: 32,
     color: "white",
+  },
+  slide: {
+    padding: "0 64px",
   },
 };
 
@@ -175,20 +179,37 @@ function PhotoGallery({ photos }: { photos: EventMedia[] }) {
 
 function LinksList({ links }: { links: EventLink[] }) {
   if (links.length === 0) return null;
+  
+  const videoLinks = links.filter((link) => link.link_type === "video");
+  const otherLinks = links.filter((link) => link.link_type !== "video");
+  
   return (
-    <div className="flex flex-wrap gap-2">
-      {links.map((link: EventLink) => (
-        <a
-          key={link.id}
-          href={link.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-muted rounded-lg text-sm hover:bg-muted/80 transition-colors"
-        >
-          <LinkIcon type={link.link_type} />
-          {link.title}
-        </a>
-      ))}
+    <div className="space-y-4">
+      {/* Video links with thumbnails */}
+      {videoLinks.length > 0 && (
+        <div className="flex flex-wrap gap-3">
+          {videoLinks.map((link: EventLink) => (
+            <VideoLinkCard key={link.id} url={link.url} title={link.title} />
+          ))}
+        </div>
+      )}
+      {/* Other links as chips */}
+      {otherLinks.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {otherLinks.map((link: EventLink) => (
+            <a
+              key={link.id}
+              href={link.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-muted rounded-lg text-sm hover:bg-muted/80 transition-colors"
+            >
+              <LinkIcon type={link.link_type} />
+              {link.title}
+            </a>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

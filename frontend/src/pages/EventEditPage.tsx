@@ -264,6 +264,7 @@ function AddLinkDialog({
     { value: "route", label: "Route" },
     { value: "place", label: "Place" },
     { value: "article", label: "Article" },
+    { value: "video", label: "Video" },
     { value: "gear", label: "Gear" },
     { value: "other", label: "Other" },
   ];
