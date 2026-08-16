@@ -184,20 +184,29 @@ function ProfileSection({ user, onUserUpdate }: { user: User; onUserUpdate: (use
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const originalDisplayName = useRef(user.display_name || "");
 
-  async function handleSaveProfile() {
+  // Auto-save display name when it changes and loses focus
+  async function handleDisplayNameBlur() {
+    const trimmedName = displayName.trim();
+    // Only save if value actually changed
+    if (trimmedName === originalDisplayName.current) return;
+    
     setSaving(true);
     setFeedback(null);
     try {
       const updated = await updatePreferences({ 
-        display_name: displayName || null,
+        display_name: trimmedName || null,
       });
       onUserUpdate(updated);
+      originalDisplayName.current = trimmedName;
       setFeedback({ type: "success", message: "Profile saved" });
       setTimeout(() => setFeedback(null), 3000);
     } catch (err) {
       const message = err instanceof ApiError ? err.message : "Failed to save profile";
       setFeedback({ type: "error", message });
+      // Revert to original value on error
+      setDisplayName(originalDisplayName.current);
     } finally {
       setSaving(false);
     }
@@ -334,7 +343,9 @@ function ProfileSection({ user, onUserUpdate }: { user: User; onUserUpdate: (use
                 type="text"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
+                onBlur={handleDisplayNameBlur}
                 placeholder="How you want to be called"
+                disabled={saving}
                 className="h-11 px-4 text-base md:text-base bg-muted"
               />
               <p className="text-xs text-muted-foreground mt-1.5">
@@ -376,13 +387,6 @@ function ProfileSection({ user, onUserUpdate }: { user: User; onUserUpdate: (use
           </div>
         </div>
 
-        {/* Save button in footer with border-t */}
-        <div className="mt-6 pt-6 border-t border-border">
-          <Button onClick={handleSaveProfile} disabled={saving}>
-            {saving ? "Saving..." : "Save Profile"}
-          </Button>
-        </div>
-
         <FeedbackAlert feedback={feedback} />
       </CardContent>
     </Card>
@@ -420,14 +424,14 @@ function PreferencesSection({ user, onUserUpdate }: { user: User; onUserUpdate: 
           <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
           </svg>
-          Preferences
+          Display
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Theme selector */}
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="font-medium mb-1">Theme</h3>
+            <h3 className="font-medium text-foreground mb-1">Theme</h3>
             <p className="text-body-secondary">
               Choose light, dark, or follow your system preference
             </p>
@@ -460,7 +464,7 @@ function PreferencesSection({ user, onUserUpdate }: { user: User; onUserUpdate: 
         {/* Unit system */}
         <div className="flex items-center justify-between pt-6 border-t border-border">
           <div>
-            <h3 className="font-medium mb-1">Unit System</h3>
+            <h3 className="font-medium text-foreground mb-1">Unit System</h3>
             <p className="text-body-secondary">
               Display distances, elevations, and speeds in kilometers or miles
             </p>
@@ -1721,16 +1725,11 @@ function XertIntegrationCard() {
             {xertStatus?.configured ? "Connected" : "Not configured"}
           </span>
         </div>
-        {xertStatus?.configured && (
-          <p className="text-sm text-muted-foreground mt-1 ml-[52px]">
-            Connected as {xertStatus.xert_email}
-          </p>
-        )}
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <Label className="text-muted-foreground text-sm font-medium">Xert Email</Label>
+            <Label className="text-muted-foreground text-sm font-medium">Email</Label>
             {xertStatus?.configured ? (
               <Input
                 type="email"
@@ -1753,7 +1752,7 @@ function XertIntegrationCard() {
           
           <div className="space-y-1.5">
             <Label className="text-muted-foreground text-sm font-medium">
-              {xertStatus?.configured ? "Update Password" : "Xert Password"}
+              {xertStatus?.configured ? "Update Password" : "Password"}
             </Label>
             <PasswordInput
               value={password}
@@ -2016,11 +2015,6 @@ function GarminIntegrationCard() {
             {garminStatus?.configured ? "Connected" : "Not configured"}
           </span>
         </div>
-        {garminStatus?.configured && (
-          <p className="text-sm text-muted-foreground mt-1 ml-[52px]">
-            Connected as {garminStatus.garmin_email}
-          </p>
-        )}
       </CardHeader>
       <CardContent>
         {mfaRequired ? (
@@ -2131,7 +2125,7 @@ function GarminCredentialsForm({
   return (
     <div className="space-y-4">
       <div className="space-y-1.5">
-        <Label className="text-muted-foreground text-sm font-medium">Garmin Email</Label>
+        <Label className="text-muted-foreground text-sm font-medium">Email</Label>
         {configured ? (
           <Input
             type="email"
@@ -2154,7 +2148,7 @@ function GarminCredentialsForm({
       
       <div className="space-y-1.5">
         <Label className="text-muted-foreground text-sm font-medium">
-          {configured ? "Update Password" : "Garmin Password"}
+          {configured ? "Update Password" : "Password"}
         </Label>
         <PasswordInput
           value={password}
