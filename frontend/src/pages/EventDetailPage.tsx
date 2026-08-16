@@ -27,6 +27,9 @@ import type { EventDetail, EventMedia, EventLink, JournalEntryActivity } from "@
 import ReactMarkdown from "react-markdown";
 import rehypeSanitize from "rehype-sanitize";
 import { formatEventDuration, isSingleDayEvent, formatEventHeaderDates } from "@/lib/event-utils";
+import { EventTourMap } from "@/components/EventTourMap";
+import Lightbox from "yet-another-react-lightbox";
+import "yet-another-react-lightbox/styles.css";
 
 function MarkdownDisplay({ source, className }: { source: string; className?: string }) {
   return (
@@ -111,19 +114,45 @@ function ActivityCard({ activity }: { activity: JournalEntryActivity }) {
 }
 
 function PhotoGallery({ photos }: { photos: EventMedia[] }) {
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+
   if (photos.length === 0) return null;
+
+  const slides = photos.map((media) => ({
+    src: media.storage_path,
+    alt: media.caption || "",
+  }));
+
   return (
-    <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
-      {photos.map((media: EventMedia) => (
-        <div key={media.id} className="aspect-square">
-          <img
-            src={media.thumbnail_path || media.storage_path}
-            alt={media.caption || ""}
-            className="w-full h-full object-cover rounded-lg"
-          />
-        </div>
-      ))}
-    </div>
+    <>
+      <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
+        {photos.map((media: EventMedia, index: number) => (
+          <button
+            key={media.id}
+            type="button"
+            className="aspect-square cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded-lg"
+            onClick={() => {
+              setLightboxIndex(index);
+              setLightboxOpen(true);
+            }}
+          >
+            <img
+              src={media.thumbnail_path || media.storage_path}
+              alt={media.caption || ""}
+              loading="lazy"
+              className="w-full h-full object-cover rounded-lg hover:opacity-90 transition-opacity"
+            />
+          </button>
+        ))}
+      </div>
+      <Lightbox
+        open={lightboxOpen}
+        close={() => setLightboxOpen(false)}
+        index={lightboxIndex}
+        slides={slides}
+      />
+    </>
   );
 }
 
@@ -313,6 +342,9 @@ export function EventDetailPage() {
             <MarkdownDisplay source={event.description} className="prose prose-sm max-w-none text-foreground prose-headings:text-foreground prose-p:text-foreground prose-strong:text-foreground prose-a:text-primary" />
           </section>
         )}
+
+        {/* Tour Map - shows all activities across all days */}
+        <EventTourMap entries={event.entries} isSingleDay={isSingleDay} />
 
         {event.links.length > 0 && (
           <section>
