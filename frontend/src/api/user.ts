@@ -82,6 +82,10 @@ export async function dismissAllNotifications(): Promise<{ success: boolean; dis
   return apiPost("/me/notifications/dismiss-all", undefined, "Failed to dismiss notifications");
 }
 
+export async function createNotification(type: string, message: string): Promise<Notification> {
+  return apiPost<Notification>("/me/notifications", { type, message }, "Failed to create notification");
+}
+
 // Avatar
 export async function uploadAvatar(file: File): Promise<{ avatar_path: string }> {
   const res = await fetch(`${API_BASE}/me/avatar`, {

@@ -23,8 +23,11 @@ class TestNotificationsEndpoint:
         assert response.status_code == 200
         data = response.json()
 
-        assert isinstance(data, list)
-        assert len(data) == 0
+        assert "notifications" in data
+        assert "total_pending" in data
+        assert isinstance(data["notifications"], list)
+        assert len(data["notifications"]) == 0
+        assert data["total_pending"] == 0
 
     @pytest.mark.asyncio
     async def test_notifications_includes_required_fields(self, auth_client, db_session, seed_user):
@@ -44,8 +47,8 @@ class TestNotificationsEndpoint:
         assert response.status_code == 200
         data = response.json()
 
-        assert len(data) == 1
-        n = data[0]
+        assert len(data["notifications"]) == 1
+        n = data["notifications"][0]
         assert "id" in n
         assert "type" in n
         assert "message" in n
@@ -72,8 +75,9 @@ class TestNotificationsEndpoint:
         data = response.json()
 
         # Only pending should be returned
-        assert len(data) == 1
-        assert data[0]["message"] == "Status: pending"
+        assert len(data["notifications"]) == 1
+        assert data["notifications"][0]["message"] == "Status: pending"
+        assert data["total_pending"] == 1
 
     @pytest.mark.asyncio
     async def test_notifications_requires_auth(self, app_client):
@@ -177,6 +181,68 @@ class TestAcceptNotification:
         assert response.status_code == 400
 
 
+class TestCreateNotification:
+    """Tests for creating notifications from frontend."""
+
+    @pytest.mark.asyncio
+    async def test_create_notification(self, auth_client):
+        """POST /me/notifications creates a notification."""
+        response = await auth_client.post(
+            "/api/me/notifications",
+            json={"type": "activity_uploaded", "message": "Activity uploaded successfully"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+
+        assert "id" in data
+        assert data["type"] == "activity_uploaded"
+        assert data["message"] == "Activity uploaded successfully"
+        assert "created_at" in data
+
+    @pytest.mark.asyncio
+    async def test_create_notification_appears_in_list(self, auth_client):
+        """Created notification appears in GET /me/notifications."""
+        # Create notification
+        await auth_client.post(
+            "/api/me/notifications",
+            json={"type": "threshold_saved", "message": "FTP updated to 260W"},
+        )
+
+        # Verify it appears in list
+        response = await auth_client.get("/api/me/notifications")
+        data = response.json()
+
+        assert data["total_pending"] >= 1
+        messages = [n["message"] for n in data["notifications"]]
+        assert "FTP updated to 260W" in messages
+
+    @pytest.mark.asyncio
+    async def test_create_notification_requires_auth(self, app_client):
+        """POST /me/notifications requires authentication."""
+        response = await app_client.post(
+            "/api/me/notifications",
+            json={"type": "test", "message": "Test"},
+        )
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_create_notification_requires_type_and_message(self, auth_client):
+        """POST /me/notifications requires type and message fields."""
+        # Missing message
+        response = await auth_client.post(
+            "/api/me/notifications",
+            json={"type": "test"},
+        )
+        assert response.status_code == 422
+
+        # Missing type
+        response = await auth_client.post(
+            "/api/me/notifications",
+            json={"message": "Test"},
+        )
+        assert response.status_code == 422
+
+
 class TestDismissNotification:
     """Tests for dismissing notifications."""
 
@@ -253,7 +319,7 @@ class TestFTPAutoDetection:
         data = response.json()
 
         # Should have FTP suggestion notification
-        ftp_notifications = [n for n in data if n["type"] == "ftp_suggestion"]
+        ftp_notifications = [n for n in data["notifications"] if n["type"] == "ftp_suggestion"]
         assert len(ftp_notifications) >= 1
 
         # Notification should have payload with suggested FTP
@@ -290,7 +356,7 @@ class TestFTPAutoDetection:
         response = await auth_client.get("/api/me/notifications")
         data = response.json()
 
-        ftp_notifications = [n for n in data if n["type"] == "ftp_suggestion"]
+        ftp_notifications = [n for n in data["notifications"] if n["type"] == "ftp_suggestion"]
         # Within 5% = no notification (or possibly one if edge case)
         # This is a soft assertion since CP estimation varies
         assert len(ftp_notifications) <= 1

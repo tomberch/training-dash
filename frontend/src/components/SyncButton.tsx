@@ -8,6 +8,7 @@ import {
   triggerGarminSync,
 } from "../api";
 import { Button } from "@/components/ui/button";
+import { notifyError } from "@/lib/notify";
 
 interface SyncButtonProps {
   className?: string;
@@ -73,8 +74,9 @@ export function SyncButton({ className, onSyncComplete }: SyncButtonProps): JSX.
       onSyncComplete?.();
     } catch (err) {
       console.error("Sync failed:", err);
-      toast.error("Sync failed", {
+      notifyError("Sync failed", {
         description: err instanceof Error ? err.message : "Please try again",
+        bellType: "sync_failed",
       });
     } finally {
       setSyncing(false);

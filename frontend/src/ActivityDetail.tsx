@@ -31,6 +31,7 @@ import { deleteActivity, fetchMyXertCredentials, fetchMyGarminCredentials } from
 import { ActivityActions } from "@/components/ActivityActions";
 import { UploadToProviderDialog } from "@/components/UploadToProviderDialog";
 import { getNiceTicks, getNiceTimeTicks } from "./lib/chartUtils";
+import { notifyError } from "@/lib/notify";
 import {
   ActivityDetailSkeleton, MetricGroupCard, MetricEntry,
   SectionHeader, ChartCard, ZoneChart, WbalChart,
@@ -104,7 +105,7 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
       toast.success("Activity deleted");
       onBack();
     } catch {
-      toast.error("Failed to delete activity");
+      notifyError("Failed to delete activity", { bellType: "activity_delete_failed" });
       setShowDeleteDialog(false);
     } finally {
       setIsDeleting(false);

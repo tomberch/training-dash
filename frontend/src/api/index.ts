@@ -70,6 +70,7 @@ export {
   acceptNotification,
   dismissNotification,
   dismissAllNotifications,
+  createNotification,
   uploadAvatar,
   deleteAvatar,
   triggerGarminSync,

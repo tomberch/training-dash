@@ -21,6 +21,7 @@ import {
   deleteMetric,
   type MetricEntryResponse,
 } from "@/api";
+import { notifySuccess, notifyError } from "@/lib/notify";
 
 // Metric type definitions for thresholds
 const METRIC_TYPES: Record<string, MetricType> = {
@@ -289,6 +290,7 @@ export function AthleteThresholds() {
   }
 
   async function handleSave(data: MetricEntryCreate | MetricEntryUpdate) {
+    const metricName = METRIC_TYPES[selectedMetricKey]?.display_name || selectedMetricKey;
     try {
       if (selectedEntry) {
         // Update existing entry
@@ -297,6 +299,9 @@ export function AthleteThresholds() {
           value: updateData.value,
           effective_date: updateData.effective_date,
           notes: updateData.notes,
+        });
+        notifySuccess(`${metricName} updated`, {
+          bellType: "threshold_saved",
         });
       } else {
         // Create new entry
@@ -309,12 +314,18 @@ export function AthleteThresholds() {
           source_detail: createData.source_detail,
           notes: createData.notes,
         });
+        notifySuccess(`${metricName} saved`, {
+          bellType: "threshold_saved",
+        });
       }
       // Reload metrics after save
       await loadMetrics();
       setModalOpen(false);
     } catch (err) {
       console.error("Failed to save metric:", err);
+      notifyError(`Failed to save ${metricName}`, {
+        bellType: "threshold_save_failed",
+      });
       throw err; // Let modal handle the error
     }
   }

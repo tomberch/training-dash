@@ -5,14 +5,11 @@ import type { JSX } from "react";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import type { Activity, PMCPoint, PowerCurvePoint, Notification, RecordsResponse, ThresholdEntry, User } from "../api";
+import type { Activity, PMCPoint, PowerCurvePoint, RecordsResponse, ThresholdEntry, User } from "../api";
 import { 
   fetchActivities, 
   fetchPMC, 
   fetchPowerCurve, 
-  fetchNotifications,
-  acceptNotification,
-  dismissNotification,
   fetchRecords,
   fetchThresholds,
   fetchMe,
@@ -34,7 +31,6 @@ export function Dashboard(): JSX.Element {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [pmcData, setPmcData] = useState<PMCPoint[]>([]);
   const [powerCurve, setPowerCurve] = useState<PowerCurvePoint[]>([]);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [records, setRecords] = useState<RecordsResponse | null>(null);
   const [thresholds, setThresholds] = useState<ThresholdEntry[]>([]);
   const [user, setUser] = useState<User | null>(null);
@@ -53,17 +49,15 @@ export function Dashboard(): JSX.Element {
       fetchActivities(),
       fetchPMC(eightWeeksAgo.toISOString().split("T")[0], today.toISOString().split("T")[0]),
       fetchPowerCurve(),
-      fetchNotifications(),
       fetchRecords(),
       fetchThresholds().catch(() => []),
       fetchMe().catch(() => null),
     ])
 
-      .then(([acts, pmc, curve, notifsResponse, recs, thresh, me]) => {
+      .then(([acts, pmc, curve, recs, thresh, me]) => {
         setActivities(acts.activities);
         setPmcData(pmc);
         setPowerCurve(curve);
-        setNotifications(notifsResponse.notifications);
         setRecords(recs);
         setThresholds(thresh);
         setUser(me);
@@ -102,17 +96,6 @@ export function Dashboard(): JSX.Element {
     return thresholds[0];
   }, [thresholds]);
 
-  // Handle notification actions
-  const handleAcceptNotification = async (id: number) => {
-    await acceptNotification(id);
-    setNotifications(prev => prev.filter(n => n.id !== id));
-  };
-
-  const handleDismissNotification = async (id: number) => {
-    await dismissNotification(id);
-    setNotifications(prev => prev.filter(n => n.id !== id));
-  };
-
   if (loading) {
     return <DashboardSkeleton />;
   }
@@ -149,15 +132,6 @@ export function Dashboard(): JSX.Element {
         </div>
       )}
 
-      {/* Notifications Banner */}
-      {notifications.length > 0 && (
-        <NotificationsBanner 
-          notifications={notifications}
-          onAccept={handleAcceptNotification}
-          onDismiss={handleDismissNotification}
-        />
-      )}
-
       {/* Top Row: PMC Sparkline + Period Summary + FTP */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10 items-stretch">
         <PMCSparkline pmcData={pmcData} currentPMC={currentPMC} ctlTrend={ctlTrend} />
@@ -170,65 +144,6 @@ export function Dashboard(): JSX.Element {
       <RecentActivities activities={activities} />
       <WhatsNotable activities={activities} records={records} />
       <PowerCurveThumbnail powerCurve={powerCurve} />
-    </div>
-  );
-}
-
-
-
-// Notifications banner component (kept inline as it's specific to Dashboard)
-interface NotificationsBannerProps {
-  notifications: Notification[];
-  onAccept: (id: number) => void;
-  onDismiss: (id: number) => void;
-}
-
-function NotificationsBanner({ notifications, onAccept, onDismiss }: NotificationsBannerProps): JSX.Element {
-  return (
-    <div className="mb-8 space-y-2">
-      {notifications.map(notif => (
-        <div 
-          key={notif.id}
-          className="flex items-center justify-between p-4 bg-warning/10 border border-warning/30 rounded-lg"
-        >
-          <div className="flex items-center gap-3">
-            <svg className="w-5 h-5 text-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span className="text-sm text-warning-foreground">{notif.message}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            {notif.payload?.suggested_ftp && (
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => onAccept(notif.id)}
-                className="h-7 text-xs bg-warning text-warning-foreground hover:bg-warning/80"
-              >
-                Apply {notif.payload.suggested_ftp}W
-              </Button>
-            )}
-            {notif.payload?.suggested_hrmax && (
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => onAccept(notif.id)}
-                className="h-7 text-xs bg-warning text-warning-foreground hover:bg-warning/80"
-              >
-                Apply {notif.payload.suggested_hrmax} bpm
-              </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onDismiss(notif.id)}
-              className="h-7 text-xs text-warning-foreground hover:bg-warning/20"
-            >
-              Dismiss
-            </Button>
-          </div>
-        </div>
-      ))}
     </div>
   );
 }

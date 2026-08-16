@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { uploadFit, fetchJobStatus } from "../api";
 import { Button } from "@/components/ui/button";
+import { notifySuccess, notifyError } from "@/lib/notify";
 
 interface UploadButtonProps {
   onUploadComplete?: () => void;
@@ -74,13 +75,21 @@ export function UploadButton({
             onClick: () => navigate(`/activities/${activityId}`),
           },
         });
+        // Also persist to bell (without the action button)
+        notifySuccess("Activity uploaded", {
+          bellType: "activity_uploaded",
+          toastOnly: true, // Toast already shown above with action
+        });
       } else {
-        toast.success("Activity uploaded successfully");
+        notifySuccess("Activity uploaded", {
+          bellType: "activity_uploaded",
+        });
       }
     } catch (err) {
       console.error("Upload failed:", err);
-      toast.error("Upload failed", {
+      notifyError("Upload failed", {
         description: err instanceof Error ? err.message : "Please try again",
+        bellType: "activity_upload_failed",
       });
     } finally {
       setUploading(false);

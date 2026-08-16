@@ -26,6 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createThreshold, updatePreferences, uploadFit } from "../api";
 import { toast } from "sonner";
+import { notifySuccess, notifyError } from "@/lib/notify";
 
 interface Props {
   open: boolean;
@@ -169,16 +170,18 @@ export function OnboardingDialog({ open, onDone }: Props): React.JSX.Element {
         lthr_bpm: lthr !== "" ? parseInt(lthr, 10) : undefined,
         hrmax_bpm: hrmax !== "" ? parseInt(hrmax, 10) : undefined,
       });
-      toast.success("Thresholds saved!", {
+      notifySuccess("Thresholds saved", {
         description: "Your training zones are now configured.",
+        bellType: "threshold_saved",
       });
       setStep("get-data");
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : "Failed to save thresholds";
       setError(errorMessage);
-      toast.error("Failed to save thresholds", {
+      notifyError("Failed to save thresholds", {
         description: "Please check your values and try again.",
+        bellType: "threshold_save_failed",
       });
     } finally {
       setSavingThresholds(false);
@@ -193,14 +196,16 @@ export function OnboardingDialog({ open, onDone }: Props): React.JSX.Element {
     setError(null);
     try {
       await uploadFit(file);
-      toast.success("Activity uploaded!", {
+      notifySuccess("Activity uploaded!", {
         description: "Your first ride has been imported.",
+        bellType: "activity_uploaded",
       });
       onDone();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to upload file");
-      toast.error("Upload failed", {
+      notifyError("Upload failed", {
         description: err instanceof Error ? err.message : "Please try again",
+        bellType: "activity_upload_failed",
       });
     } finally {
       setUploading(false);

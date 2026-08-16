@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { notifySuccess, notifyError } from "@/lib/notify";
 import {
   fetchFitDevices,
   uploadToProvider,
@@ -174,14 +175,22 @@ export function UploadToProviderDialog({
       const providerName = provider === "garmin" ? "Garmin Connect" : "Xert";
       // Don't show ID if it's just a placeholder like "uploaded"
       if (result.provider_activity_id && result.provider_activity_id !== "uploaded") {
-        toast.success(`Uploaded to ${providerName} (ID: ${result.provider_activity_id})`);
+        notifySuccess(`Uploaded to ${providerName}`, {
+          description: `Activity ID: ${result.provider_activity_id}`,
+          bellType: "provider_upload",
+        });
       } else {
-        toast.success(`Successfully uploaded to ${providerName}`);
+        notifySuccess(`Uploaded to ${providerName}`, {
+          bellType: "provider_upload",
+        });
       }
       onOpenChange(false);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Upload failed";
-      toast.error(message);
+      notifyError("Upload to provider failed", {
+        description: message,
+        bellType: "provider_upload_failed",
+      });
     } finally {
       setIsUploading(false);
     }

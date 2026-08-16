@@ -745,6 +745,36 @@ async def dismiss_all_notifications(db: DbSession, user: CurrentUser):
     return {"success": True, "dismissed_count": count}
 
 
+class CreateNotificationRequest(BaseModel):
+    type: str
+    message: str
+
+
+@router.post("/me/notifications")
+async def create_notification_endpoint(
+    db: DbSession,
+    user: CurrentUser,
+    request: CreateNotificationRequest,
+):
+    """Create a notification from the frontend (for important user actions)."""
+    from trainingdash.notifications import create_notification
+
+    notification = await create_notification(
+        db,
+        user_id=user.id,
+        notification_type=request.type,
+        message=request.message,
+    )
+    await db.commit()
+
+    return {
+        "id": notification.id,
+        "type": notification.type,
+        "message": notification.message,
+        "created_at": utc_str(notification.created_at),
+    }
+
+
 # --- Avatar ---
 
 
