@@ -59,11 +59,11 @@ export function Dashboard(): JSX.Element {
       fetchMe().catch(() => null),
     ])
 
-      .then(([acts, pmc, curve, notifs, recs, thresh, me]) => {
+      .then(([acts, pmc, curve, notifsResponse, recs, thresh, me]) => {
         setActivities(acts.activities);
         setPmcData(pmc);
         setPowerCurve(curve);
-        setNotifications(notifs);
+        setNotifications(notifsResponse.notifications);
         setRecords(recs);
         setThresholds(thresh);
         setUser(me);

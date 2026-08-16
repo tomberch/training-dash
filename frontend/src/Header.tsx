@@ -1,5 +1,6 @@
 import type { JSX } from "react";
 import { Logo } from "./components/Logo";
+import { NotificationBell } from "./components/NotificationBell";
 import { SyncButton } from "./components/SyncButton";
 import { UploadButton } from "./components/UploadButton";
 import { UserMenu } from "./components/UserMenu";
@@ -40,6 +41,8 @@ export function Header({
               className="gap-2"
             />
           )}
+
+          <NotificationBell />
 
           <UserMenu
             displayName={displayName}

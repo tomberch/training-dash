@@ -41,6 +41,11 @@ export interface Notification {
   created_at: string;
 }
 
+export interface NotificationsResponse {
+  notifications: Notification[];
+  total_pending: number;
+}
+
 export async function fetchMe(): Promise<User> {
   return apiGet<User>("/me");
 }
@@ -61,8 +66,8 @@ export async function updatePreferences(prefs: {
   return apiPatch<User>("/me", prefs, "Failed to update preferences");
 }
 
-export async function fetchNotifications(): Promise<Notification[]> {
-  return apiGet<Notification[]>("/me/notifications");
+export async function fetchNotifications(limit: number = 20): Promise<NotificationsResponse> {
+  return apiGet<NotificationsResponse>(`/me/notifications?limit=${limit}`);
 }
 
 export async function acceptNotification(id: number): Promise<void> {
@@ -71,6 +76,10 @@ export async function acceptNotification(id: number): Promise<void> {
 
 export async function dismissNotification(id: number): Promise<void> {
   return apiPost(`/me/notifications/${id}/dismiss`, undefined, "Failed to dismiss notification");
+}
+
+export async function dismissAllNotifications(): Promise<{ success: boolean; dismissed_count: number }> {
+  return apiPost("/me/notifications/dismiss-all", undefined, "Failed to dismiss notifications");
 }
 
 // Avatar

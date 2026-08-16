@@ -25,8 +25,9 @@ from trainingdash.integrations.protocols import (
     CredentialInfo,
     SyncProvider,
 )
+from trainingdash.notifications import create_notification
 from trainingdash.repositories.postgres.event_repo import PostgresEventRepo
-from trainingdash.repositories.postgres.models import Activity, Notification
+from trainingdash.repositories.postgres.models import Activity
 
 logger = logging.getLogger(__name__)
 
@@ -298,17 +299,16 @@ class SyncFromProvider:
 
             # Create notification if duplicates were skipped
             if skipped_duplicates > 0:
-                notification = Notification(
+                await create_notification(
+                    self._db,
                     user_id=user_id,
-                    type="sync_duplicates_skipped",
+                    notification_type="sync_duplicates_skipped",
                     message=(
                         f"Skipped {skipped_duplicates} duplicate "
                         f"{'activity' if skipped_duplicates == 1 else 'activities'} "
                         f"from {provider_name.title()} (already imported from another source)"
                     ),
-                    status="pending",
                 )
-                self._db.add(notification)
                 await self._db.commit()
 
             return SyncResult(

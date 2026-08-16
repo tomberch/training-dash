@@ -6,9 +6,9 @@ import os
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from trainingdash.auth import CurrentUser, DbSession, hash_password
 from trainingdash.crypto import EncryptionError, encrypt
@@ -579,9 +579,15 @@ async def update_my_zones(db: DbSession, user: CurrentUser, request: UpdateZoneP
 
 # --- Notifications ---
 
+MAX_NOTIFICATIONS_PER_USER = 50
+
 
 @router.get("/me/notifications")
-async def get_notifications(db: DbSession, user: CurrentUser):
+async def get_notifications(
+    db: DbSession,
+    user: CurrentUser,
+    limit: int = Query(default=20, ge=1, le=50),
+):
     """Get pending notifications for the current user."""
     result = await db.execute(
         select(Notification)
@@ -590,19 +596,34 @@ async def get_notifications(db: DbSession, user: CurrentUser):
             Notification.status == "pending",
         )
         .order_by(Notification.created_at.desc())
+        .limit(limit)
     )
     notifications = result.scalars().all()
 
-    return [
-        {
-            "id": n.id,
-            "type": n.type,
-            "message": n.message,
-            "payload": json.loads(n.payload) if n.payload else None,
-            "created_at": utc_str(n.created_at),
-        }
-        for n in notifications
-    ]
+    # Also get total pending count for the badge
+    count_result = await db.execute(
+        select(func.count())
+        .select_from(Notification)
+        .where(
+            Notification.user_id == user.id,
+            Notification.status == "pending",
+        )
+    )
+    total_pending = count_result.scalar() or 0
+
+    return {
+        "notifications": [
+            {
+                "id": n.id,
+                "type": n.type,
+                "message": n.message,
+                "payload": json.loads(n.payload) if n.payload else None,
+                "created_at": utc_str(n.created_at),
+            }
+            for n in notifications
+        ],
+        "total_pending": total_pending,
+    }
 
 
 @router.post("/me/notifications/{notification_id}/accept")
@@ -701,6 +722,27 @@ async def dismiss_notification(db: DbSession, user: CurrentUser, notification_id
     await db.commit()
 
     return {"success": True}
+
+
+@router.post("/me/notifications/dismiss-all")
+async def dismiss_all_notifications(db: DbSession, user: CurrentUser):
+    """Dismiss all pending notifications for the current user."""
+    result = await db.execute(
+        select(Notification).where(
+            Notification.user_id == user.id,
+            Notification.status == "pending",
+        )
+    )
+    notifications = result.scalars().all()
+
+    count = 0
+    for notification in notifications:
+        notification.status = "dismissed"
+        count += 1
+
+    await db.commit()
+
+    return {"success": True, "dismissed_count": count}
 
 
 # --- Avatar ---
