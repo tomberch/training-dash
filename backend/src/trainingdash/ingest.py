@@ -272,7 +272,7 @@ async def is_duplicate_activity(
     Check if an activity is a duplicate based on:
     - Same user
     - started_at within 60 seconds
-    - total_distance_m within 1%
+    - total_distance_m within 5% OR incoming distance is 0 (unknown)
 
     Used to prevent duplicate imports when user syncs from both Xert and Garmin,
     or re-syncs the same source. First activity wins (kept), duplicates are skipped.
@@ -281,7 +281,7 @@ async def is_duplicate_activity(
         db: Database session
         user_id: The user's ID
         started_at: Activity start time
-        total_distance_m: Total distance in meters
+        total_distance_m: Total distance in meters (may be 0 if unknown from provider list API)
         source: Source identifier (for logging only)
 
     Returns:
@@ -303,22 +303,53 @@ async def is_duplicate_activity(
     )
     candidates = result.scalars().all()
 
+    if not candidates:
+        return False
+
     for candidate in candidates:
-        # Check distance within 1%
-        if total_distance_m > 0 and candidate.total_distance_m > 0:
-            distance_ratio = candidate.total_distance_m / total_distance_m
-            if 0.99 <= distance_ratio <= 1.01:
-                logger.info(
-                    f"Duplicate activity detected: {source} activity at {started_at} "
-                    f"({total_distance_m:.0f}m) matches existing activity {candidate.id} "
-                    f"from {candidate.source} at {candidate.started_at} ({candidate.total_distance_m:.0f}m)"
-                )
-                return True
-        elif total_distance_m == 0 and candidate.total_distance_m == 0:
-            # Both have zero distance (indoor/stationary) - treat as duplicate by time only
+        # If incoming distance is 0 (unknown from provider list API), match by time only
+        if total_distance_m == 0:
             logger.info(
-                f"Duplicate activity detected: {source} activity at {started_at} "
-                f"(0m) matches existing activity {candidate.id} from {candidate.source}"
+                "Duplicate activity detected (distance unknown): %s activity at %s "
+                "matches existing activity %s from %s at %s (%.0fm)",
+                source,
+                started_at,
+                candidate.id,
+                candidate.source,
+                candidate.started_at,
+                candidate.total_distance_m,
+            )
+            return True
+
+        # If candidate has 0 distance but incoming has distance, still match by time
+        # (handles indoor/stationary activities)
+        if candidate.total_distance_m == 0:
+            logger.info(
+                "Duplicate activity detected (existing has 0 distance): %s activity at %s "
+                "(%.0fm) matches existing activity %s from %s at %s (0m)",
+                source,
+                started_at,
+                total_distance_m,
+                candidate.id,
+                candidate.source,
+                candidate.started_at,
+            )
+            return True
+
+        # Check distance within 5% (providers may compute distance slightly differently)
+        distance_ratio = candidate.total_distance_m / total_distance_m
+        if 0.95 <= distance_ratio <= 1.05:
+            logger.info(
+                "Duplicate activity detected: %s activity at %s (%.0fm) "
+                "matches existing activity %s from %s at %s (%.0fm, ratio=%.3f)",
+                source,
+                started_at,
+                total_distance_m,
+                candidate.id,
+                candidate.source,
+                candidate.started_at,
+                candidate.total_distance_m,
+                distance_ratio,
             )
             return True
 
