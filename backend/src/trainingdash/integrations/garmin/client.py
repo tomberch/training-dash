@@ -312,7 +312,7 @@ class GarminClient:
                         logger.info("Uploaded FIT to Garmin successfully (no activity ID returned)")
                         # Return a placeholder - the upload worked but Garmin didn't return an ID
                         return "uploaded"
-                    
+
                     # Format 2: Detailed import result
                     detailed = result.get("detailedImportResult", {})
                     successes = detailed.get("successes", [])
@@ -333,7 +333,7 @@ class GarminClient:
                                 content = m.get("content", "")
                                 if content:
                                     failure_messages.append(content)
-                        
+
                         if failure_messages:
                             combined = "; ".join(failure_messages)
                             # Check for common failure reasons
@@ -342,13 +342,13 @@ class GarminClient:
                             raise GarminAPIError(f"Garmin upload failed: {combined}")
                         else:
                             raise GarminAPIError("Garmin upload failed with unknown error")
-                    
+
                     # Format 3: Direct activityId
                     if "activityId" in result:
                         activity_id = str(result["activityId"])
                         logger.info("Uploaded FIT to Garmin (alt format), activity ID: %s", activity_id)
                         return activity_id
-                    
+
                     # Check for empty detailedImportResult (might indicate duplicate)
                     if detailed and not successes and not failures:
                         logger.warning("Garmin returned empty detailedImportResult: %r", detailed)
