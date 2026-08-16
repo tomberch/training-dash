@@ -43,7 +43,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { deleteActivity } from "./api";
+import { deleteActivity, fetchMyXertCredentials, fetchMyGarminCredentials } from "./api";
 import { ActivityActions } from "@/components/ActivityActions";
 import { UploadToProviderDialog } from "@/components/UploadToProviderDialog";
 
@@ -191,6 +191,23 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
 
   // Upload to provider state
   const [showUploadDialog, setShowUploadDialog] = React.useState(false);
+  const [hasConnectedProviders, setHasConnectedProviders] = React.useState(false);
+
+  // Check for connected providers on mount
+  React.useEffect(() => {
+    async function checkProviders() {
+      try {
+        const [xertStatus, garminStatus] = await Promise.all([
+          fetchMyXertCredentials().catch(() => ({ configured: false })),
+          fetchMyGarminCredentials().catch(() => ({ configured: false })),
+        ]);
+        setHasConnectedProviders(xertStatus.configured || garminStatus.configured);
+      } catch {
+        setHasConnectedProviders(false);
+      }
+    }
+    checkProviders();
+  }, []);
 
   async function handleDelete(): Promise<void> {
     setIsDeleting(true);
@@ -671,6 +688,7 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
               <ActivityActions
                 onUploadToProvider={handleUploadToProvider}
                 onExportFit={handleExportFit}
+                hasConnectedProviders={hasConnectedProviders}
               />
               <button
                 onClick={() => setShowDeleteDialog(true)}
