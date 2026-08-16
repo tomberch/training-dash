@@ -31,6 +31,22 @@ import { EventTourMap } from "@/components/EventTourMap";
 import Lightbox from "yet-another-react-lightbox";
 import "yet-another-react-lightbox/styles.css";
 
+// Custom styles for more visible navigation arrows
+const lightboxStyles = {
+  button: {
+    filter: "drop-shadow(0 0 4px rgba(0, 0, 0, 0.9))",
+    background: "rgba(0, 0, 0, 0.4)",
+    borderRadius: "50%",
+    padding: "8px",
+    margin: "16px",
+  },
+  icon: {
+    width: 32,
+    height: 32,
+    color: "white",
+  },
+};
+
 function MarkdownDisplay({ source, className }: { source: string; className?: string }) {
   return (
     <div className={className}>
@@ -151,6 +167,7 @@ function PhotoGallery({ photos }: { photos: EventMedia[] }) {
         close={() => setLightboxOpen(false)}
         index={lightboxIndex}
         slides={slides}
+        styles={lightboxStyles}
       />
     </>
   );

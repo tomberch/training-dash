@@ -36,3 +36,19 @@ export const HR_ZONE_COLORS: Record<string, string> = {
   "4": "#eab308", // Threshold - yellow
   "5": "#ef4444", // VO2max - red
 };
+
+// Day colors for multi-day event maps (cycling through distinguishable colors)
+export const DAY_COLORS: string[] = [
+  "#6366f1", // indigo
+  "#f97316", // orange
+  "#22c55e", // green
+  "#ec4899", // pink
+  "#3b82f6", // blue
+  "#eab308", // yellow
+  "#8b5cf6", // violet
+  "#14b8a6", // teal
+  "#ef4444", // red
+  "#84cc16", // lime
+  "#06b6d4", // cyan
+  "#f43f5e", // rose
+];

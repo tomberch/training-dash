@@ -219,6 +219,7 @@ def serialize_activity_link(link: JournalEntryActivity, activity: Activity | Non
             "distance_km": round(activity.total_distance_m / 1000, 1) if activity.total_distance_m else None,
             "elevation_m": round(activity.elevation_gain_m) if activity.elevation_gain_m else None,
             "duration_seconds": activity.moving_time_s,
+            "map_polyline": activity.map_polyline,
         }
     return result
 

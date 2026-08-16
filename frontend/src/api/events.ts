@@ -56,6 +56,7 @@ export interface ActivityDetails {
   distance_km: number | null;
   elevation_m: number | null;
   duration_seconds: number | null;
+  map_polyline: string | null;
 }
 
 export interface JournalEntryActivity {

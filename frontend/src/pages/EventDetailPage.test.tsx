@@ -78,6 +78,7 @@ const mockMultiDayEvent = {
             distance_km: 85.5,
             elevation_m: 1200,
             duration_seconds: 14400, // 4h
+            map_polyline: null,
           },
         },
       ],
