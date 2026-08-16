@@ -171,9 +171,13 @@ export function UploadToProviderDialog({
         device_product_id: selectedDevice?.id ?? null,
       };
       const result = await uploadToProvider(activityId, request);
-      toast.success(
-        `Uploaded to ${provider === "garmin" ? "Garmin Connect" : "Xert"} (ID: ${result.provider_activity_id})`
-      );
+      const providerName = provider === "garmin" ? "Garmin Connect" : "Xert";
+      // Don't show ID if it's just a placeholder like "uploaded"
+      if (result.provider_activity_id && result.provider_activity_id !== "uploaded") {
+        toast.success(`Uploaded to ${providerName} (ID: ${result.provider_activity_id})`);
+      } else {
+        toast.success(`Successfully uploaded to ${providerName}`);
+      }
       onOpenChange(false);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Upload failed";

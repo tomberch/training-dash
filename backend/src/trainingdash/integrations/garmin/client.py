@@ -130,12 +130,19 @@ class GarminClient:
                 prompt_mfa=self._mfa_callback,
             )
             self._client.login()
+            logger.info("Garmin login successful for %s", email)
             return True
         except GarminMFARequired:
             # Re-raise our own exception
             raise
         except Exception as e:
             error_msg = str(e).lower()
+            if "429" in error_msg or "rate limit" in error_msg or "too many requests" in error_msg:
+                logger.warning("Garmin rate limited: %s", e)
+                raise GarminAPIError(
+                    "Garmin is temporarily blocking requests from this IP. "
+                    "Please wait 30-60 minutes before trying again."
+                ) from e
             if "mfa" in error_msg or "two-factor" in error_msg or "verification" in error_msg:
                 self._awaiting_mfa = True
                 raise GarminMFARequired("MFA code required") from e
@@ -289,13 +296,24 @@ class GarminClient:
                 tmp_path = tmp.name
 
             try:
-                # Upload the FIT file
-                result = self._client.upload_activity(tmp_path)
+                # Upload the FIT file using import_activity (better documented response)
+                # import_activity treats it as an import, not a device sync
+                result = self._client.import_activity(tmp_path)
+                logger.info("Garmin import_activity response: %r", result)
 
                 # Extract activity ID from response
-                # garminconnect returns a dict with detailedImportResult
+                # import_activity can return different formats:
+                # 1. {'status': 'uploaded', 'fileName': '...'} - success but no ID
+                # 2. {'detailedImportResult': {'successes': [...], 'failures': [...]}}
+                # 3. {'activityId': '...'} - direct ID
                 if isinstance(result, dict):
-                    # Check for successful upload
+                    # Format 1: Simple status response (import_activity typical response)
+                    if result.get("status") == "uploaded":
+                        logger.info("Uploaded FIT to Garmin successfully (no activity ID returned)")
+                        # Return a placeholder - the upload worked but Garmin didn't return an ID
+                        return "uploaded"
+                    
+                    # Format 2: Detailed import result
                     detailed = result.get("detailedImportResult", {})
                     successes = detailed.get("successes", [])
                     if successes:
@@ -304,13 +322,43 @@ class GarminClient:
                             logger.info("Uploaded FIT to Garmin, activity ID: %s", activity_id)
                             return activity_id
 
-                    # Check for failures
+                    # Check for failures - these include duplicates
                     failures = detailed.get("failures", [])
                     if failures:
-                        messages = [f.get("messages", [{}])[0].get("content", "Unknown") for f in failures]
-                        raise GarminAPIError(f"Garmin upload failed: {', '.join(messages)}")
+                        # Extract failure messages
+                        failure_messages = []
+                        for f in failures:
+                            msgs = f.get("messages", [])
+                            for m in msgs:
+                                content = m.get("content", "")
+                                if content:
+                                    failure_messages.append(content)
+                        
+                        if failure_messages:
+                            combined = "; ".join(failure_messages)
+                            # Check for common failure reasons
+                            if "duplicate" in combined.lower():
+                                raise GarminAPIError(f"Activity already exists in Garmin Connect: {combined}")
+                            raise GarminAPIError(f"Garmin upload failed: {combined}")
+                        else:
+                            raise GarminAPIError("Garmin upload failed with unknown error")
+                    
+                    # Format 3: Direct activityId
+                    if "activityId" in result:
+                        activity_id = str(result["activityId"])
+                        logger.info("Uploaded FIT to Garmin (alt format), activity ID: %s", activity_id)
+                        return activity_id
+                    
+                    # Check for empty detailedImportResult (might indicate duplicate)
+                    if detailed and not successes and not failures:
+                        logger.warning("Garmin returned empty detailedImportResult: %r", detailed)
+                        raise GarminAPIError("Garmin rejected upload - activity may already exist")
 
-                raise GarminAPIError("Garmin upload succeeded but no activity ID returned")
+                logger.warning("Unexpected Garmin upload response format: %r", result)
+                raise GarminAPIError(
+                    "Garmin returned unexpected response format. "
+                    "Check Garmin Connect to verify if the activity was uploaded."
+                )
 
             finally:
                 # Clean up temp file
