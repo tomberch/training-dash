@@ -26,7 +26,6 @@ import math
 from datetime import UTC, datetime
 
 import numpy as np
-from scipy.optimize import curve_fit
 
 # Key durations for breakthrough detection (seconds)
 BREAKTHROUGH_DURATIONS = [5, 60, 300, 1200]  # 5s, 1min, 5min, 20min
@@ -82,9 +81,11 @@ def _fit_2_parameter_model(
     weights: np.ndarray | None = None,
 ) -> tuple[float, float] | None:
     """
-    Fit the 2-parameter CP model using nonlinear least squares.
+    Fit the 2-parameter CP model using Gauss-Newton nonlinear least squares.
 
     The model: P(t) = CP + W'/t
+
+    Uses a pure numpy implementation to avoid scipy dependency.
 
     Args:
         durations: Array of durations in seconds
@@ -100,43 +101,64 @@ def _fit_2_parameter_model(
     # Initial guesses based on data
     # CP ~ power at longest duration
     # W' ~ (power at shortest - power at longest) * shortest duration
-    cp_init = float(np.min(powers))
-    w_prime_init = float((np.max(powers) - cp_init) * np.min(durations))
+    cp = float(np.min(powers))
+    w_prime = float((np.max(powers) - cp) * np.min(durations))
 
-    # Bounds: CP > 0, W' > 0
-    # Typical ranges: CP 100-500W, W' 5000-40000 J
-    bounds = ([50, 1000], [600, 50000])
+    # Clamp initial guesses to bounds
+    cp = max(50.0, min(600.0, cp))
+    w_prime = max(1000.0, min(50000.0, w_prime))
+
+    # Set up weights (default to uniform)
+    if weights is None:
+        w = np.ones_like(powers)
+    else:
+        w = weights
+
+    # Gauss-Newton iteration
+    max_iter = 50
+    tol = 1e-6
 
     try:
-        if weights is not None:
-            # Weighted least squares via sigma (inverse of weights)
-            sigma = 1.0 / np.sqrt(weights)
-            popt, _ = curve_fit(
-                _hyperbolic_model,
-                durations,
-                powers,
-                p0=[cp_init, w_prime_init],
-                bounds=bounds,
-                sigma=sigma,
-                absolute_sigma=True,
-                maxfev=1000,
-            )
-        else:
-            popt, _ = curve_fit(
-                _hyperbolic_model,
-                durations,
-                powers,
-                p0=[cp_init, w_prime_init],
-                bounds=bounds,
-                maxfev=1000,
-            )
+        for _ in range(max_iter):
+            # Model prediction: P(t) = cp + w_prime / t
+            pred = cp + w_prime / durations
 
-        cp, w_prime = popt
+            # Residuals (weighted)
+            residuals = (powers - pred) * np.sqrt(w)
+
+            # Jacobian: dP/d(cp) = 1, dP/d(w_prime) = 1/t
+            J = np.column_stack([np.ones_like(durations), 1.0 / durations])
+            # Apply weights to Jacobian
+            J_weighted = J * np.sqrt(w)[:, np.newaxis]
+
+            # Gauss-Newton step: solve J^T J delta = J^T r
+            JTJ = J_weighted.T @ J_weighted
+            JTr = J_weighted.T @ residuals
+
+            # Add small regularization for numerical stability
+            JTJ += np.eye(2) * 1e-8
+
+            delta = np.linalg.solve(JTJ, JTr)
+
+            # Update parameters
+            cp_new = cp + delta[0]
+            w_prime_new = w_prime + delta[1]
+
+            # Apply bounds
+            cp_new = max(50.0, min(600.0, cp_new))
+            w_prime_new = max(1000.0, min(50000.0, w_prime_new))
+
+            # Check convergence
+            if abs(cp_new - cp) < tol and abs(w_prime_new - w_prime) < tol * 100:
+                cp, w_prime = cp_new, w_prime_new
+                break
+
+            cp, w_prime = cp_new, w_prime_new
+
         return float(cp), float(w_prime)
 
-    except (RuntimeError, ValueError):
+    except (np.linalg.LinAlgError, ValueError, FloatingPointError):
         # Fitting failed, fall back to linear regression on work-time model
-        # W = CP * t + W' (linear in CP and W')
         return _fit_linear_work_model(durations, powers)
 
 
