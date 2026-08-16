@@ -25,6 +25,10 @@ logger = logging.getLogger(__name__)
 # Default fixtures directory (matches docker-compose.e2e.yml volume mount)
 DEFAULT_FIXTURES_DIR = "/app/e2e-fixtures/fit-files"
 
+# Sentinel password value that makes the mock simulate failed credentials.
+# Not a real secret — used only by the E2E mock to exercise the failure path.
+INVALID_PASSWORD_SENTINEL = "invalid"  # noqa: S105 - not a secret, E2E mock sentinel
+
 
 class MockGarminClient:
     """
@@ -41,8 +45,8 @@ class MockGarminClient:
         logger.info("MockGarminClient initialized with fixtures_dir=%r", self._fixtures_dir)
 
     def login(self, email: str, password: str) -> bool:
-        """Simulate Garmin login. Always succeeds unless password is 'invalid'."""
-        if password == "invalid":
+        """Simulate Garmin login. Always succeeds unless password is the invalid sentinel."""
+        if password == INVALID_PASSWORD_SENTINEL:
             raise GarminAPIError("Invalid Garmin credentials")
         self._logged_in = True
         self._email = email

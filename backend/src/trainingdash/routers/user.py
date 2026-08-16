@@ -214,9 +214,7 @@ class SyncEnabledRequest(BaseModel):
 
 
 @router.patch("/me/xert-credentials")
-async def patch_my_xert_credentials(
-    xert_repo: XertCredentialsRepoD, user: CurrentUser, request: SyncEnabledRequest
-):
+async def patch_my_xert_credentials(xert_repo: XertCredentialsRepoD, user: CurrentUser, request: SyncEnabledRequest):
     """Update sync_enabled for Xert credentials."""
     creds = await xert_repo.get_by_user_id(user.id)
     if creds is None:

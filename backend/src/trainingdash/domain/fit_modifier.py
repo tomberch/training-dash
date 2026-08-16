@@ -15,10 +15,10 @@ The modification process:
 4. Copy all other messages (records, laps, sessions) unchanged
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
-
-from typing import Any, Callable
+from datetime import UTC, datetime
+from typing import Any
 
 from fit_tool.fit_file_builder import FitFileBuilder
 from fit_tool.profile.messages.device_info_message import DeviceInfoMessage
@@ -131,7 +131,7 @@ def modify_fit(fit_bytes: bytes, modifications: FitModifications) -> bytes:
         if file_time_created_fit is not None:
             file_time_created_ms = _fit_to_unix_ms(file_time_created_fit)
         else:
-            file_time_created_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+            file_time_created_ms = int(datetime.now(UTC).timestamp() * 1000)
 
         # Add spoofed file_id message
         file_id = FileIdMessage()

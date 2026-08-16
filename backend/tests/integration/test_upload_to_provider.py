@@ -8,7 +8,6 @@ Tests the endpoints:
 
 import sys
 from pathlib import Path
-from uuid import UUID as UUIDType
 
 import pytest
 

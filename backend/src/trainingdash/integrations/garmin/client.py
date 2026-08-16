@@ -13,6 +13,7 @@ Activity sync:
 - download_fit() downloads original FIT file for an activity
 """
 
+import contextlib
 import io
 import logging
 import os
@@ -313,10 +314,8 @@ class GarminClient:
 
             finally:
                 # Clean up temp file
-                try:
+                with contextlib.suppress(OSError):
                     os.unlink(tmp_path)
-                except OSError:
-                    pass
 
         except GarminAPIError:
             raise

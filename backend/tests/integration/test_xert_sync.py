@@ -679,9 +679,7 @@ class TestHourlySyncScheduler:
         assert result["garmin_queued"] == 0
 
     @pytest.mark.asyncio
-    async def test_hourly_sync_respects_sync_enabled_flag(
-        self, db_engine, db_session, encryption_key_env
-    ):
+    async def test_hourly_sync_respects_sync_enabled_flag(self, db_engine, db_session, encryption_key_env):
         """hourly_sync_scheduler skips users with sync_enabled=False."""
         from trainingdash.crypto import encrypt
 

@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 
 from trainingdash.auth import CurrentUser, DbSession
 from trainingdash.dependencies import ActivityRepoD, DeleteActivityD, ThresholdRepoD
+from trainingdash.domain.fit_modifier import FitModifications
 from trainingdash.repositories.postgres.models import Activity, ActivityPeakPower, Record
 from trainingdash.routers.datetime_utils import utc_str
 from trainingdash.routers.serializers import (
@@ -26,7 +27,6 @@ from trainingdash.use_cases.upload_to_provider import (
     ProviderUploadError,
     UploadToProvider,
 )
-from trainingdash.domain.fit_modifier import FitModifications
 
 router = APIRouter(prefix="/api", tags=["activities"])
 

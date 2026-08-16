@@ -10,7 +10,7 @@ This use case handles:
 
 import logging
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from uuid import UUID
 
 from sqlalchemy import select
@@ -27,7 +27,7 @@ from trainingdash.repositories.postgres.models import (
 logger = logging.getLogger(__name__)
 
 
-class Provider(str, Enum):
+class Provider(StrEnum):
     """Supported upload providers."""
 
     XERT = "xert"
@@ -182,9 +182,7 @@ class UploadToProvider:
     ) -> UploadResult:
         """Upload FIT to Xert."""
         # Get credentials
-        result = await self._db.execute(
-            select(XertCredentials).where(XertCredentials.user_id == user_id)
-        )
+        result = await self._db.execute(select(XertCredentials).where(XertCredentials.user_id == user_id))
         creds = result.scalar_one_or_none()
 
         if creds is None:
@@ -235,9 +233,7 @@ class UploadToProvider:
     ) -> UploadResult:
         """Upload FIT to Garmin Connect."""
         # Get credentials
-        result = await self._db.execute(
-            select(GarminCredentials).where(GarminCredentials.user_id == user_id)
-        )
+        result = await self._db.execute(select(GarminCredentials).where(GarminCredentials.user_id == user_id))
         creds = result.scalar_one_or_none()
 
         if creds is None:
