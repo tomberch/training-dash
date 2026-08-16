@@ -88,7 +88,7 @@ test.describe.serial('J007: Upload to Provider Flow', () => {
     await deviceInput.fill('Edge');
     
     // Should show Edge devices in dropdown
-    await expect(page.getByText(/Edge \d+/)).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText(/Edge \d+/).first()).toBeVisible({ timeout: 5000 });
   });
 
   test('user can upload activity to mock Xert', async ({ page }) => {
@@ -143,7 +143,7 @@ test.describe.serial('J007: Upload to Provider Flow', () => {
     expect(download.suggestedFilename()).toMatch(/\.fit$/);
   });
 
-  test('upload without credentials shows error', async ({ page, request }) => {
+  test('upload option hidden when no credentials configured', async ({ page, request }) => {
     // First disconnect Xert
     await loginViaApi(page, testUser);
     await page.goto('/settings');
@@ -157,21 +157,18 @@ test.describe.serial('J007: Upload to Provider Flow', () => {
       await expect(page.getByText(/disconnected|removed/i)).toBeVisible({ timeout: 10000 });
     }
 
-    // Now try to upload
+    // Now go to activity
     await page.goto(`/activities/${activityId}`);
     await expect(page.getByRole('button', { name: 'Back' })).toBeVisible({ timeout: 15000 });
 
-    // Open Upload dialog
+    // Open Actions menu
     await page.getByRole('button', { name: /Actions/i }).click();
-    await page.getByText('Upload to Provider').click();
-    await expect(page.getByRole('dialog')).toBeVisible();
 
-    // Select Xert and try to upload
-    await page.getByRole('button', { name: /Xert/i }).click();
-    await page.getByRole('button', { name: 'Upload' }).click();
-
-    // Should show error about missing credentials
-    await expect(page.getByText(/No Xert credentials/i)).toBeVisible({ timeout: 10000 });
+    // Upload to Provider should be hidden when no providers are connected
+    await expect(page.getByText('Upload to Provider')).not.toBeVisible();
+    
+    // Export FIT File should still be visible
+    await expect(page.getByText('Export FIT File')).toBeVisible();
   });
 
   test('device selection is remembered across sessions', async ({ page }) => {

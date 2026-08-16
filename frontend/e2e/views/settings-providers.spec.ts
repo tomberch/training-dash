@@ -110,15 +110,44 @@ test.describe('Settings - Provider Integrations', () => {
         await expect(page.getByText('Xert connected successfully')).toBeVisible({ timeout: 10000 });
       }
 
-      // Should show Update button (same as Connect, but for updating credentials)
-      await expect(page.getByTestId('xert-connect')).toBeVisible();
-      await expect(page.getByTestId('xert-connect')).toHaveText(/Update/i);
-
       // Should show Sync Now button
       await expect(page.getByRole('button', { name: /Sync Now/i })).toBeVisible();
 
       // Should show Disconnect button
       await expect(page.getByTestId('xert-disconnect')).toBeVisible();
+      
+      // Email should be read-only (disabled)
+      const emailInput = page.getByTestId('xert-email');
+      await expect(emailInput).toBeDisabled();
+      
+      // Update/Save Password button should NOT be visible when password is empty
+      await expect(page.getByTestId('xert-save-password')).not.toBeVisible();
+    });
+
+    test('xert shows Save Password button when password entered', async ({ page }) => {
+      await loginViaApi(page, testUser);
+      await page.goto('/settings');
+
+      await expect(page.getByRole('heading', { name: 'Xert', level: 3 })).toBeVisible();
+
+      // Ensure connected
+      const disconnectButton = page.getByTestId('xert-disconnect');
+      if (!(await disconnectButton.isVisible().catch(() => false))) {
+        await page.getByTestId('xert-email').fill('mock@xert.com');
+        await page.getByTestId('xert-password').fill('mockpassword');
+        await page.getByTestId('xert-connect').click();
+        await expect(page.getByText('Xert connected successfully')).toBeVisible({ timeout: 10000 });
+      }
+
+      // Save Password button should not be visible initially
+      await expect(page.getByTestId('xert-save-password')).not.toBeVisible();
+
+      // Enter a new password
+      await page.getByTestId('xert-password').fill('newpassword');
+
+      // Save Password button should now appear
+      await expect(page.getByTestId('xert-save-password')).toBeVisible();
+      await expect(page.getByTestId('xert-save-password')).toHaveText('Save Password');
     });
 
     test('xert disconnect removes auto-sync toggle', async ({ page }) => {

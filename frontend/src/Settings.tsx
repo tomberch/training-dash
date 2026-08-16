@@ -1566,18 +1566,30 @@ function XertIntegration() {
       <div className="space-y-4">
         <div className="space-y-1.5">
           <Label className="text-muted-foreground">Xert Email</Label>
-          <Input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="your@email.com"
-            data-testid="xert-email"
-            className="h-11 px-4 text-base md:text-base"
-          />
+          {xertStatus?.configured ? (
+            <Input
+              type="email"
+              value={email}
+              disabled
+              data-testid="xert-email"
+              className="h-11 px-4 text-base md:text-base bg-muted/50"
+            />
+          ) : (
+            <Input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="your@email.com"
+              data-testid="xert-email"
+              className="h-11 px-4 text-base md:text-base"
+            />
+          )}
         </div>
         
         <div className="space-y-1.5">
-          <Label className="text-muted-foreground">Xert Password</Label>
+          <Label className="text-muted-foreground">
+            {xertStatus?.configured ? "Update Password" : "Xert Password"}
+          </Label>
           <PasswordInput
             value={password}
             onChange={setPassword}
@@ -1586,22 +1598,35 @@ function XertIntegration() {
           />
         </div>
         
-        <div className="space-y-1.5">
-          <Label className="text-muted-foreground">Sync activities since</Label>
-          <Input
-            type="date"
-            value={syncSince}
-            onChange={(e) => setSyncSince(e.target.value)}
-            data-testid="xert-sync-since"
-            className="h-11 px-4 text-base md:text-base"
-          />
-          <p className="text-caption">
-            Activities from this date onwards will be imported
-          </p>
-        </div>
+        {!xertStatus?.configured && (
+          <div className="space-y-1.5">
+            <Label className="text-muted-foreground">Sync activities since</Label>
+            <Input
+              type="date"
+              value={syncSince}
+              onChange={(e) => setSyncSince(e.target.value)}
+              data-testid="xert-sync-since"
+              className="h-11 px-4 text-base md:text-base"
+            />
+            <p className="text-caption">
+              Activities from this date onwards will be imported
+            </p>
+          </div>
+        )}
         
         {xertStatus?.configured ? (
           <>
+            {/* Save Password button - only shown when password entered */}
+            {password && (
+              <Button
+                onClick={handleConnect}
+                disabled={saving}
+                data-testid="xert-save-password"
+              >
+                {saving ? "Saving..." : "Save Password"}
+              </Button>
+            )}
+            
             {/* Sync toggle */}
             <div className="flex items-center justify-between py-3 border-t border-border">
               <div>
@@ -1636,13 +1661,6 @@ function XertIntegration() {
             </div>
             
             <div className="flex gap-3 pt-2">
-              <Button
-                onClick={handleConnect}
-                disabled={saving || !email || !password}
-                data-testid="xert-connect"
-              >
-                {saving ? "Updating..." : "Update"}
-              </Button>
               <SyncButton onSync={triggerXertSync} label="Sync Now" />
               <Button
                 variant="destructive"
@@ -1940,18 +1958,30 @@ function GarminCredentialsForm({
     <div className="space-y-4">
       <div className="space-y-1.5">
         <Label className="text-muted-foreground">Garmin Email</Label>
-        <Input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="your@email.com"
-          data-testid="garmin-email"
-          className="h-11 px-4 text-base md:text-base"
-        />
+        {configured ? (
+          <Input
+            type="email"
+            value={email}
+            disabled
+            data-testid="garmin-email"
+            className="h-11 px-4 text-base md:text-base bg-muted/50"
+          />
+        ) : (
+          <Input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="your@email.com"
+            data-testid="garmin-email"
+            className="h-11 px-4 text-base md:text-base"
+          />
+        )}
       </div>
       
       <div className="space-y-1.5">
-        <Label className="text-muted-foreground">Garmin Password</Label>
+        <Label className="text-muted-foreground">
+          {configured ? "Update Password" : "Garmin Password"}
+        </Label>
         <PasswordInput
           value={password}
           onChange={setPassword}
@@ -1960,22 +1990,35 @@ function GarminCredentialsForm({
         />
       </div>
       
-      <div className="space-y-1.5">
-        <Label className="text-muted-foreground">Sync activities since</Label>
-        <Input
-          type="date"
-          value={syncSince}
-          onChange={(e) => setSyncSince(e.target.value)}
-          data-testid="garmin-sync-since"
-          className="h-11 px-4 text-base md:text-base"
-        />
-        <p className="text-caption">
-          Activities from this date onwards will be imported
-        </p>
-      </div>
+      {!configured && (
+        <div className="space-y-1.5">
+          <Label className="text-muted-foreground">Sync activities since</Label>
+          <Input
+            type="date"
+            value={syncSince}
+            onChange={(e) => setSyncSince(e.target.value)}
+            data-testid="garmin-sync-since"
+            className="h-11 px-4 text-base md:text-base"
+          />
+          <p className="text-caption">
+            Activities from this date onwards will be imported
+          </p>
+        </div>
+      )}
       
       {configured ? (
         <>
+          {/* Save Password button - only shown when password entered */}
+          {password && (
+            <Button
+              onClick={onConnect}
+              disabled={saving}
+              data-testid="garmin-save-password"
+            >
+              {saving ? "Saving..." : "Save Password"}
+            </Button>
+          )}
+          
           {/* Sync toggle */}
           <div className="flex items-center justify-between py-3 border-t border-border">
             <div>
@@ -2002,9 +2045,6 @@ function GarminCredentialsForm({
           </div>
           
           <div className="flex gap-3 pt-2">
-            <Button onClick={onConnect} disabled={saving || !email || !password} data-testid="garmin-connect">
-              {saving ? "Updating..." : "Update"}
-            </Button>
             <SyncButton onSync={triggerGarminSync} label="Sync Now" />
             <Button
               variant="destructive"
