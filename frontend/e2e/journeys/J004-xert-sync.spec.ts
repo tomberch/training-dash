@@ -31,6 +31,9 @@ test.describe.serial('J004: Xert Sync Flow', () => {
     // Wait for settings page to load
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
 
+    // Click on Connections tab to see integrations
+    await page.getByRole('tab', { name: 'Connections' }).click();
+
     // Find Integrations section with Xert subsection
     await expect(page.getByRole('heading', { name: 'Xert', level: 3 })).toBeVisible();
 
@@ -60,6 +63,9 @@ test.describe.serial('J004: Xert Sync Flow', () => {
     
     await loginViaApi(page, testUser);
     await page.goto('/settings');
+
+    // Click on Connections tab to see integrations
+    await page.getByRole('tab', { name: 'Connections' }).click();
 
     // Wait for Xert section to load
     await expect(page.getByRole('heading', { name: 'Xert', level: 3 })).toBeVisible();
@@ -134,6 +140,9 @@ test.describe.serial('J004: Xert Sync Flow', () => {
     // Wait for settings to load
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
 
+    // Click on Training tab to see zones
+    await page.getByRole('tab', { name: 'Training' }).click();
+
     // Find Training Zones section
     const trainingZonesHeading = page.getByText('Training Zones');
     await expect(trainingZonesHeading).toBeVisible({ timeout: 10000 });
@@ -180,6 +189,9 @@ test.describe.serial('J004: Xert Sync Flow', () => {
     // Wait for settings to load
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
 
+    // Click on Training tab to see zones
+    await page.getByRole('tab', { name: 'Training' }).click();
+
     // Find Training Zones section
     const trainingZonesHeading = page.getByText('Training Zones');
     await expect(trainingZonesHeading).toBeVisible({ timeout: 10000 });
@@ -192,6 +204,9 @@ test.describe.serial('J004: Xert Sync Flow', () => {
   test('Xert disconnect removes credentials', async ({ page }) => {
     await loginViaApi(page, testUser);
     await page.goto('/settings');
+
+    // Click on Connections tab to see integrations
+    await page.getByRole('tab', { name: 'Connections' }).click();
 
     // Wait for Xert section to load
     await expect(page.getByRole('heading', { name: 'Xert', level: 3 })).toBeVisible();

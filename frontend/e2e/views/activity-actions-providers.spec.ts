@@ -38,6 +38,9 @@ test.describe.serial('Activity Actions - Provider Awareness', () => {
     await page.goto('/settings');
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
 
+    // Click on Connections tab to see integrations
+    await page.getByRole('tab', { name: 'Connections' }).click();
+
     // Verify Xert is not connected (no auto-sync toggle visible)
     const xertAutoSync = page.getByText('Auto-sync from Xert');
     if (await xertAutoSync.isVisible().catch(() => false)) {
@@ -67,6 +70,10 @@ test.describe.serial('Activity Actions - Provider Awareness', () => {
     
     // Connect Xert
     await page.goto('/settings');
+    
+    // Click on Connections tab to see integrations
+    await page.getByRole('tab', { name: 'Connections' }).click();
+    
     await expect(page.getByRole('heading', { name: 'Xert', level: 3 })).toBeVisible();
 
     await page.getByTestId('xert-email').fill('mock@xert.com');
@@ -91,8 +98,16 @@ test.describe.serial('Activity Actions - Provider Awareness', () => {
     
     // Ensure Xert is connected (from previous test)
     await page.goto('/settings');
+    
+    // Click on Connections tab to see integrations
+    await page.getByRole('tab', { name: 'Connections' }).click();
+    
+    // Check if already connected
     const xertAutoSync = page.getByText('Auto-sync from Xert');
-    if (!(await xertAutoSync.isVisible().catch(() => false))) {
+    const isConnected = await xertAutoSync.isVisible().catch(() => false);
+    
+    if (!isConnected) {
+      // Not connected yet, need to connect
       await page.getByTestId('xert-email').fill('mock@xert.com');
       await page.getByTestId('xert-password').fill('mockpassword');
       await page.getByTestId('xert-connect').click();
@@ -152,6 +167,10 @@ test.describe.serial('Activity Actions - Provider Awareness', () => {
     
     // Disconnect Xert
     await page.goto('/settings');
+    
+    // Click on Connections tab to see integrations
+    await page.getByRole('tab', { name: 'Connections' }).click();
+    
     await expect(page.getByRole('heading', { name: 'Xert', level: 3 })).toBeVisible();
 
     const disconnectButton = page.getByTestId('xert-disconnect');

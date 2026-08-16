@@ -42,6 +42,9 @@ test.describe.serial('J007: Upload to Provider Flow', () => {
     // Wait for settings page to load
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
 
+    // Click on Connections tab to see integrations
+    await page.getByRole('tab', { name: 'Connections' }).click();
+
     // Find Xert section
     await expect(page.getByRole('heading', { name: 'Xert', level: 3 })).toBeVisible();
 
@@ -148,6 +151,9 @@ test.describe.serial('J007: Upload to Provider Flow', () => {
     await loginViaApi(page, testUser);
     await page.goto('/settings');
     
+    // Click on Connections tab to see integrations
+    await page.getByRole('tab', { name: 'Connections' }).click();
+    
     await expect(page.getByRole('heading', { name: 'Xert', level: 3 })).toBeVisible();
     
     // Disconnect if connected
@@ -175,6 +181,9 @@ test.describe.serial('J007: Upload to Provider Flow', () => {
     // Reconnect Xert first
     await loginViaApi(page, testUser);
     await page.goto('/settings');
+    
+    // Click on Connections tab to see integrations
+    await page.getByRole('tab', { name: 'Connections' }).click();
     
     await expect(page.getByRole('heading', { name: 'Xert', level: 3 })).toBeVisible();
     await page.getByTestId('xert-email').fill('mock@xert.com');

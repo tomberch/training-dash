@@ -28,6 +28,9 @@ test.describe('Settings - Provider Integrations', () => {
       // Wait for settings page to load
       await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
 
+      // Click on Connections tab to see integrations
+      await page.getByRole('tab', { name: 'Connections' }).click();
+
       // Find Xert section
       await expect(page.getByRole('heading', { name: 'Xert', level: 3 })).toBeVisible();
 
@@ -42,6 +45,9 @@ test.describe('Settings - Provider Integrations', () => {
     test('xert auto-sync toggle appears after connecting', async ({ page }) => {
       await loginViaApi(page, testUser);
       await page.goto('/settings');
+
+      // Click on Connections tab to see integrations
+      await page.getByRole('tab', { name: 'Connections' }).click();
 
       await expect(page.getByRole('heading', { name: 'Xert', level: 3 })).toBeVisible();
 
@@ -64,6 +70,9 @@ test.describe('Settings - Provider Integrations', () => {
     test('xert auto-sync toggle can be switched', async ({ page }) => {
       await loginViaApi(page, testUser);
       await page.goto('/settings');
+
+      // Click on Connections tab to see integrations
+      await page.getByRole('tab', { name: 'Connections' }).click();
 
       await expect(page.getByRole('heading', { name: 'Xert', level: 3 })).toBeVisible();
 
@@ -99,11 +108,18 @@ test.describe('Settings - Provider Integrations', () => {
       await loginViaApi(page, testUser);
       await page.goto('/settings');
 
+      // Click on Connections tab to see integrations
+      await page.getByRole('tab', { name: 'Connections' }).click();
+
       await expect(page.getByRole('heading', { name: 'Xert', level: 3 })).toBeVisible();
 
-      // Ensure connected
+      // Check if already connected by looking for disconnect button
       const disconnectButton = page.getByTestId('xert-disconnect');
-      if (!(await disconnectButton.isVisible().catch(() => false))) {
+      const isConnected = await disconnectButton.isVisible().catch(() => false);
+      
+      if (!isConnected) {
+        // Not connected yet, need to connect
+        // The email input should be enabled
         await page.getByTestId('xert-email').fill('mock@xert.com');
         await page.getByTestId('xert-password').fill('mockpassword');
         await page.getByTestId('xert-connect').click();
@@ -127,6 +143,9 @@ test.describe('Settings - Provider Integrations', () => {
     test('xert shows Save Password button when password entered', async ({ page }) => {
       await loginViaApi(page, testUser);
       await page.goto('/settings');
+
+      // Click on Connections tab to see integrations
+      await page.getByRole('tab', { name: 'Connections' }).click();
 
       await expect(page.getByRole('heading', { name: 'Xert', level: 3 })).toBeVisible();
 
@@ -154,11 +173,17 @@ test.describe('Settings - Provider Integrations', () => {
       await loginViaApi(page, testUser);
       await page.goto('/settings');
 
+      // Click on Connections tab to see integrations
+      await page.getByRole('tab', { name: 'Connections' }).click();
+
       await expect(page.getByRole('heading', { name: 'Xert', level: 3 })).toBeVisible();
 
-      // Ensure connected first
+      // Check if already connected
       const autoSyncLabel = page.getByText('Auto-sync from Xert');
-      if (!(await autoSyncLabel.isVisible().catch(() => false))) {
+      const isConnected = await autoSyncLabel.isVisible().catch(() => false);
+      
+      if (!isConnected) {
+        // Not connected yet, need to connect first
         await page.getByTestId('xert-email').fill('mock@xert.com');
         await page.getByTestId('xert-password').fill('mockpassword');
         await page.getByTestId('xert-connect').click();
@@ -185,6 +210,9 @@ test.describe('Settings - Provider Integrations', () => {
       await page.goto('/settings');
 
       await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+
+      // Click on Connections tab to see integrations
+      await page.getByRole('tab', { name: 'Connections' }).click();
 
       // Find Garmin section
       await expect(page.getByRole('heading', { name: 'Garmin', level: 3 })).toBeVisible();
@@ -213,6 +241,9 @@ test.describe('Settings - Provider Integrations', () => {
     test('garmin auto-sync toggle appears when connected', async ({ page }) => {
       await loginViaApi(page, testUser);
       await page.goto('/settings');
+
+      // Click on Connections tab to see integrations
+      await page.getByRole('tab', { name: 'Connections' }).click();
 
       await expect(page.getByRole('heading', { name: 'Garmin', level: 3 })).toBeVisible();
 

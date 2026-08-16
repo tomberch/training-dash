@@ -35,6 +35,9 @@ test.describe.serial('J005: Breakthrough Upload Flow', () => {
     // Wait for settings page to load
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
 
+    // Click on Connections tab to see integrations
+    await page.getByRole('tab', { name: 'Connections' }).click();
+
     // Connect Xert credentials
     await page.getByTestId('xert-email').fill('mock@xert.com');
     await page.getByTestId('xert-password').fill('mockpassword');
@@ -94,6 +97,10 @@ test.describe.serial('J005: Breakthrough Upload Flow', () => {
 
     // Verify baseline threshold ≈ 220W
     await page.goto('/settings');
+    
+    // Click on Training tab to see zones
+    await page.getByRole('tab', { name: 'Training' }).click();
+    
     const trainingZonesHeading = page.getByText('Training Zones');
     await expect(trainingZonesHeading).toBeVisible({ timeout: 10000 });
     

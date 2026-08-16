@@ -231,7 +231,7 @@ function XertIntegrationCard() {
             <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
               <span className="text-xl font-bold text-primary-foreground">X</span>
             </div>
-            Xert
+            <h3 className="text-base font-medium">Xert</h3>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -251,7 +251,7 @@ function XertIntegrationCard() {
             <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
               <span className="text-xl font-bold text-primary-foreground">X</span>
             </div>
-            Xert
+            <h3 className="text-base font-medium">Xert</h3>
           </CardTitle>
           <span
             data-testid="xert-status"
@@ -473,7 +473,7 @@ function GarminIntegrationCard() {
             <div className="w-10 h-10 bg-accent rounded-lg flex items-center justify-center">
               <span className="text-xl font-bold text-accent-foreground">G</span>
             </div>
-            Garmin
+            <h3 className="text-base font-medium">Garmin</h3>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -493,7 +493,7 @@ function GarminIntegrationCard() {
             <div className="w-10 h-10 bg-accent rounded-lg flex items-center justify-center">
               <span className="text-xl font-bold text-accent-foreground">G</span>
             </div>
-            Garmin
+            <h3 className="text-base font-medium">Garmin</h3>
           </CardTitle>
           <span
             data-testid="garmin-status"
