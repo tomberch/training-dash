@@ -2,7 +2,7 @@
 name = "trainingdash-backend"
 version = "0.1.0"
 description = "Self-hosted fitness analysis backend"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.34",
@@ -11,7 +11,7 @@ dependencies = [
     "geoalchemy2>=0.17",
     "pydantic>=2.0",
     "email-validator>=2.0",
-    "fit-tool>=0.2",
+    "fit-tool>=0.9",
     "garmin-fit-sdk>=21.0",
     "python-multipart>=0.0.20",
     "bcrypt>=4.0",
@@ -20,12 +20,13 @@ dependencies = [
     "cryptography>=50.0.0",
     "httpx>=0.28",
     "garminconnect>=0.2.25",
-    "curl-cffi>=0.7",
+    "curl-cffi>=0.9",
     "alembic>=1.13",
     "psycopg2-binary>=2.9",
     "scipy>=1.14",
     "fastapi-sso>=0.19.0",
     "lark>=1.2",
+    "pillow>=11.0",
 ]
 
 [project.optional-dependencies]
