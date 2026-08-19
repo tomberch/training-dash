@@ -15,6 +15,16 @@ interface SyncButtonProps {
   onSyncComplete?: () => void;
 }
 
+// Custom event name for sync settings changes
+export const SYNC_SETTINGS_CHANGED_EVENT = "sync-settings-changed";
+
+/**
+ * Dispatch this event when sync settings change to update the header SyncButton.
+ */
+export function notifySyncSettingsChanged(): void {
+  window.dispatchEvent(new CustomEvent(SYNC_SETTINGS_CHANGED_EVENT));
+}
+
 /**
  * Sync button that triggers sync for all configured integrations with sync enabled.
  * Only renders if at least one integration (Xert or Garmin) has sync enabled.
@@ -50,6 +60,13 @@ export function SyncButton({ className, onSyncComplete }: SyncButtonProps): JSX.
     const handleFocus = () => checkIntegrations();
     window.addEventListener("focus", handleFocus);
     return () => window.removeEventListener("focus", handleFocus);
+  }, [checkIntegrations]);
+
+  // Re-check when sync settings change (from settings page)
+  useEffect(() => {
+    const handleSettingsChanged = () => checkIntegrations();
+    window.addEventListener(SYNC_SETTINGS_CHANGED_EVENT, handleSettingsChanged);
+    return () => window.removeEventListener(SYNC_SETTINGS_CHANGED_EVENT, handleSettingsChanged);
   }, [checkIntegrations]);
 
   const hasAnySyncEnabled = xertSyncEnabled || garminSyncEnabled;

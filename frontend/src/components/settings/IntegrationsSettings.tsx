@@ -27,6 +27,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { FeedbackAlert } from "./FeedbackAlert";
 import { PasswordInput } from "./PasswordInput";
+import { notifySyncSettingsChanged } from "@/components/SyncButton";
 
 interface IntegrationsSettingsProps {
   user: User;
@@ -309,6 +310,7 @@ function XertIntegrationCard() {
                       const newValue = !xertStatus.sync_enabled;
                       await updateXertSyncEnabled(newValue);
                       setXertStatus({ ...xertStatus, sync_enabled: newValue });
+                      notifySyncSettingsChanged();
                     } catch {
                       setFeedback({ type: "error", message: "Failed to update sync setting" });
                     }
@@ -460,6 +462,7 @@ function GarminIntegrationCard() {
     try {
       await updateGarminSyncEnabled(newValue);
       setGarminStatus({ ...garminStatus, sync_enabled: newValue });
+      notifySyncSettingsChanged();
     } catch {
       setFeedback({ type: "error", message: "Failed to update sync setting" });
     }
