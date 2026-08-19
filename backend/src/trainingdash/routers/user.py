@@ -843,11 +843,14 @@ async def delete_avatar(db: DbSession, user: CurrentUser):
 
 @router.post("/me/sync/garmin")
 async def trigger_garmin_sync(garmin_repo: GarminCredentialsRepoD, user: CurrentUser):
-    """Trigger a Garmin sync for the current user."""
+    """Trigger a Garmin sync for the current user. Requires sync_enabled=true."""
     from trainingdash.jobs import enqueue_sync_garmin_job
 
-    if not await garmin_repo.exists(user.id):
+    creds = await garmin_repo.get_by_user_id(user.id)
+    if creds is None:
         raise HTTPException(status_code=400, detail="No Garmin credentials configured")
+    if not creds.sync_enabled:
+        raise HTTPException(status_code=400, detail="Garmin sync is disabled")
 
     job_id = await enqueue_sync_garmin_job(user.id)
     if job_id is None:
@@ -857,11 +860,14 @@ async def trigger_garmin_sync(garmin_repo: GarminCredentialsRepoD, user: Current
 
 @router.post("/me/sync/xert")
 async def trigger_xert_sync(xert_repo: XertCredentialsRepoD, user: CurrentUser):
-    """Trigger a Xert sync for the current user."""
+    """Trigger a Xert sync for the current user. Requires sync_enabled=true."""
     from trainingdash.jobs import enqueue_sync_xert_job
 
-    if not await xert_repo.exists(user.id):
+    creds = await xert_repo.get_by_user_id(user.id)
+    if creds is None:
         raise HTTPException(status_code=400, detail="No Xert credentials configured")
+    if not creds.sync_enabled:
+        raise HTTPException(status_code=400, detail="Xert sync is disabled")
 
     job_id = await enqueue_sync_xert_job(user.id)
     if job_id is None:

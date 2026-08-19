@@ -272,10 +272,14 @@ async def is_duplicate_activity(
     Check if an activity is a duplicate based on:
     - Same user
     - started_at within 60 seconds
-    - total_distance_m within 5% OR incoming distance is 0 (unknown)
+    - total_distance_m within 10% OR either distance is 0/unknown
 
     Used to prevent duplicate imports when user syncs from both Xert and Garmin,
     or re-syncs the same source. First activity wins (kept), duplicates are skipped.
+
+    Note: We use 10% distance tolerance because provider list APIs may report
+    distances that differ from what's computed from the FIT file (different GPS
+    algorithms, rounding, etc.).
 
     Args:
         db: Database session
@@ -336,9 +340,10 @@ async def is_duplicate_activity(
             )
             return True
 
-        # Check distance within 5% (providers may compute distance slightly differently)
+        # Check distance within 10% (provider list APIs may report distances that
+        # differ significantly from FIT file computed distances)
         distance_ratio = candidate.total_distance_m / total_distance_m
-        if 0.95 <= distance_ratio <= 1.05:
+        if 0.90 <= distance_ratio <= 1.10:
             logger.info(
                 "Duplicate activity detected: %s activity at %s (%.0fm) "
                 "matches existing activity %s from %s at %s (%.0fm, ratio=%.3f)",

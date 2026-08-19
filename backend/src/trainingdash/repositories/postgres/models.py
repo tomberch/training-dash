@@ -242,6 +242,7 @@ class EFModel(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
     ef_value: Mapped[float] = mapped_column(Numeric(6, 4), nullable=False)  # NP/HR ratio
+    vi_value: Mapped[float] = mapped_column(Numeric(5, 4), nullable=False, default=1.25)  # NP/avg ratio
     computed_at: Mapped[datetime] = mapped_column(nullable=False)
     ride_count: Mapped[int] = mapped_column(Integer, nullable=False)  # Number of rides used
     confidence: Mapped[float] = mapped_column(Numeric(4, 3), nullable=False)  # 0.0-1.0

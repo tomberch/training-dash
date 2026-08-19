@@ -16,13 +16,13 @@ interface SyncButtonProps {
 }
 
 /**
- * Sync button that triggers sync for all configured integrations.
- * Only renders if at least one integration (Xert or Garmin) is configured.
+ * Sync button that triggers sync for all configured integrations with sync enabled.
+ * Only renders if at least one integration (Xert or Garmin) has sync enabled.
  */
 export function SyncButton({ className, onSyncComplete }: SyncButtonProps): JSX.Element | null {
   const [syncing, setSyncing] = useState(false);
-  const [hasXert, setHasXert] = useState(false);
-  const [hasGarmin, setHasGarmin] = useState(false);
+  const [xertSyncEnabled, setXertSyncEnabled] = useState(false);
+  const [garminSyncEnabled, setGarminSyncEnabled] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
   const checkIntegrations = useCallback(async () => {
@@ -31,8 +31,9 @@ export function SyncButton({ className, onSyncComplete }: SyncButtonProps): JSX.
         fetchMyXertCredentials(),
         fetchMyGarminCredentials(),
       ]);
-      setHasXert(xertStatus.configured);
-      setHasGarmin(garminStatus.configured);
+      // Only consider integrations that are both configured AND have sync enabled
+      setXertSyncEnabled(xertStatus.configured && xertStatus.sync_enabled === true);
+      setGarminSyncEnabled(garminStatus.configured && garminStatus.sync_enabled === true);
     } catch (err) {
       console.error("Failed to check integration status:", err);
     } finally {
@@ -51,17 +52,17 @@ export function SyncButton({ className, onSyncComplete }: SyncButtonProps): JSX.
     return () => window.removeEventListener("focus", handleFocus);
   }, [checkIntegrations]);
 
-  const hasAnyIntegration = hasXert || hasGarmin;
+  const hasAnySyncEnabled = xertSyncEnabled || garminSyncEnabled;
 
   async function handleSync(): Promise<void> {
     setSyncing(true);
     try {
       const syncPromises: Promise<{ success: boolean; job_id?: string }>[] = [];
 
-      if (hasXert) {
+      if (xertSyncEnabled) {
         syncPromises.push(triggerXertSync());
       }
-      if (hasGarmin) {
+      if (garminSyncEnabled) {
         syncPromises.push(triggerGarminSync());
       }
 
@@ -88,8 +89,8 @@ export function SyncButton({ className, onSyncComplete }: SyncButtonProps): JSX.
     return null;
   }
 
-  // Don't render if no integrations are configured
-  if (!hasAnyIntegration) {
+  // Don't render if no integrations have sync enabled
+  if (!hasAnySyncEnabled) {
     return null;
   }
 

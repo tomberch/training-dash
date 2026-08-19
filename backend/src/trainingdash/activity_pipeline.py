@@ -386,25 +386,26 @@ class ActivityPipeline:
             return result
 
         # Try to estimate power
-        estimated_power, confidence = await estimate_power_from_hr(
+        estimated_avg, estimated_np, confidence = await estimate_power_from_hr(
             self.db, self.activity.user_id, self.activity.avg_hr_bpm
         )
 
-        if estimated_power is None:
+        if estimated_avg is None:
             return result
 
         # Store results
         result.power_source = "hr_derived"
         result.power_confidence = confidence
-        result.estimated_power = estimated_power
+        result.estimated_power = estimated_avg
 
-        # Update activity
-        self.activity.avg_power_w = estimated_power
+        # Update activity with both avg and NP
+        self.activity.avg_power_w = estimated_avg
+        self.activity.np_power_w = estimated_np
         self.activity.power_source = "hr_derived"
         self.activity.power_confidence = confidence
 
-        # Recompute metrics with estimated power
-        await self._recompute_metrics_with_estimated_power(estimated_power)
+        # Compute IF and TSS using the estimated NP
+        await self._compute_training_load_from_np(estimated_np)
 
         await self.db.flush()
         await self.db.refresh(self.activity)
@@ -416,8 +417,8 @@ class ActivityPipeline:
         query = await self.db.execute(select(User).where(User.id == self.activity.user_id))
         return query.scalar_one_or_none()
 
-    async def _recompute_metrics_with_estimated_power(self, estimated_power: int) -> None:
-        """Recompute NP, IF, TSS using estimated power."""
+    async def _compute_training_load_from_np(self, np_power: int) -> None:
+        """Compute IF and TSS using the estimated NP."""
         activity_date = self.activity.started_at.date()
         threshold = await self._get_threshold_for_date(activity_date)
 
@@ -426,17 +427,13 @@ class ActivityPipeline:
 
         ftp = threshold.ftp_watts
 
-        # For HR-derived power, estimate NP as slightly lower than avg
-        np_estimate = int(estimated_power * 0.95)
-        self.activity.np_power_w = np_estimate
-
         if ftp > 0:
-            intensity_factor = compute_intensity_factor(np_estimate, ftp)
+            intensity_factor = compute_intensity_factor(np_power, ftp)
             self.activity.intensity_factor = intensity_factor
 
             duration_s = self.activity.moving_time_s or self.activity.elapsed_time_s
             if intensity_factor is not None:
-                tss = compute_tss(duration_s, np_estimate, intensity_factor, ftp)
+                tss = compute_tss(duration_s, np_power, intensity_factor, ftp)
                 self.activity.tss = tss
 
     async def check_hrmax_detection(self) -> HrmaxDetectionResult:

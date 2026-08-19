@@ -300,8 +300,8 @@ function XertIntegrationCard() {
               
               <div className="flex items-center justify-between py-3 border-t border-border">
                 <div>
-                  <p className="font-medium text-sm">Auto-sync from Xert</p>
-                  <p className="text-xs text-muted-foreground">Automatically import new activities at your daily sync time</p>
+                  <p className="font-medium text-sm">Sync from Xert</p>
+                  <p className="text-xs text-muted-foreground">Import new activities via sync</p>
                 </div>
                 <button
                   onClick={async () => {
@@ -326,7 +326,7 @@ function XertIntegrationCard() {
               </div>
               
               <div className="flex gap-3 pt-2">
-                <SyncButton onSync={triggerXertSync} label="Sync Now" />
+                {xertStatus.sync_enabled && <SyncButton onSync={triggerXertSync} label="Sync Now" />}
                 <Button variant="destructive" onClick={handleDisconnect} disabled={saving} data-testid="xert-disconnect">Disconnect</Button>
               </div>
             </>
@@ -571,8 +571,8 @@ function GarminCredentialsForm({
           {password && <Button onClick={onConnect} disabled={saving} data-testid="garmin-save-password">{saving ? "Saving..." : "Save Password"}</Button>}
           <div className="flex items-center justify-between py-3 border-t border-border">
             <div>
-              <p className="font-medium text-sm">Auto-sync from Garmin</p>
-              <p className="text-xs text-muted-foreground">Automatically import new activities at your daily sync time</p>
+              <p className="font-medium text-sm">Sync from Garmin</p>
+              <p className="text-xs text-muted-foreground">Import new activities via sync</p>
             </div>
             <button onClick={onToggleSync} disabled={saving} aria-pressed={syncEnabled}
               className={cn("relative inline-flex h-6 w-12 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2", syncEnabled ? "bg-primary" : "bg-muted", saving && "opacity-50 cursor-not-allowed")}>
@@ -580,7 +580,7 @@ function GarminCredentialsForm({
             </button>
           </div>
           <div className="flex gap-3 pt-2">
-            <SyncButton onSync={triggerGarminSync} label="Sync Now" />
+            {syncEnabled && <SyncButton onSync={triggerGarminSync} label="Sync Now" />}
             <Button variant="destructive" onClick={onDisconnect} disabled={saving} data-testid="garmin-disconnect">Disconnect</Button>
           </div>
         </>

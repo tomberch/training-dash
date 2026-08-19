@@ -25,6 +25,13 @@ def compute_ef(np_watts: int, avg_hr: int) -> float:
     return np_watts / avg_hr
 
 
+def compute_vi(np_watts: int, avg_watts: int) -> float:
+    """Compute Variability Index: NP / avg power."""
+    if avg_watts <= 0:
+        return 1.25  # Default if no valid avg
+    return np_watts / avg_watts
+
+
 def compute_decay_weight(activity_date: datetime, reference_date: datetime) -> float:
     """
     Compute decay weight for an activity based on age.
@@ -55,6 +62,8 @@ async def update_ef_model(db: AsyncSession, user_id: int) -> EFModel | None:
         .where(
             Activity.user_id == user_id,
             Activity.np_power_w.isnot(None),
+            Activity.avg_power_w.isnot(None),
+            Activity.avg_power_w > 0,
             Activity.avg_hr_bpm.isnot(None),
             Activity.avg_hr_bpm > 0,
             Activity.power_source != "hr_derived",  # Only measured power
@@ -66,22 +75,26 @@ async def update_ef_model(db: AsyncSession, user_id: int) -> EFModel | None:
     if len(dual_sensor_rides) < MIN_RIDES_FOR_MODEL:
         return None
 
-    # Compute weighted average EF
+    # Compute weighted average EF and VI
     now = datetime.now(UTC).replace(tzinfo=None)
     total_weight = 0.0
     weighted_ef_sum = 0.0
+    weighted_vi_sum = 0.0
 
     for activity in dual_sensor_rides:
         ef = compute_ef(activity.np_power_w, activity.avg_hr_bpm)
+        vi = compute_vi(activity.np_power_w, activity.avg_power_w)
         weight = compute_decay_weight(activity.started_at, now)
 
         weighted_ef_sum += ef * weight
+        weighted_vi_sum += vi * weight
         total_weight += weight
 
     if total_weight == 0:
         return None
 
     ef_value = weighted_ef_sum / total_weight
+    vi_value = weighted_vi_sum / total_weight
 
     # Compute confidence score
     confidence = compute_confidence(dual_sensor_rides, now)
@@ -92,6 +105,7 @@ async def update_ef_model(db: AsyncSession, user_id: int) -> EFModel | None:
 
     if existing:
         existing.ef_value = ef_value
+        existing.vi_value = vi_value
         existing.computed_at = now
         existing.ride_count = len(dual_sensor_rides)
         existing.confidence = confidence
@@ -100,6 +114,7 @@ async def update_ef_model(db: AsyncSession, user_id: int) -> EFModel | None:
         model = EFModel(
             user_id=user_id,
             ef_value=ef_value,
+            vi_value=vi_value,
             computed_at=now,
             ride_count=len(dual_sensor_rides),
             confidence=confidence,
@@ -156,18 +171,21 @@ async def estimate_power_from_hr(
     db: AsyncSession,
     user_id: int,
     avg_hr: int,
-) -> tuple[int | None, float | None]:
+) -> tuple[int | None, int | None, float | None]:
     """
     Estimate power from heart rate using the EF model.
 
-    Returns (estimated_power, confidence) or (None, None) if no model.
+    Since EF = NP / HR, the formula EF × HR gives us NP (Normalized Power).
+    We derive average power using the user's personal Variability Index (VI = NP / avg).
+
+    Returns (estimated_avg_power, estimated_np, confidence) or (None, None, None) if no model.
     """
     # Get EF model
     result = await db.execute(select(EFModel).where(EFModel.user_id == user_id))
     model = result.scalar_one_or_none()
 
     if model is None:
-        return None, None
+        return None, None, None
 
     # Check staleness
     now = datetime.now(UTC).replace(tzinfo=None)
@@ -180,10 +198,15 @@ async def estimate_power_from_hr(
     else:
         adjusted_confidence = model.confidence
 
-    # Estimate power: power = EF × HR
-    estimated_power = int(round(float(model.ef_value) * avg_hr))
+    # Estimate NP: since EF = NP / HR, then NP = EF × HR
+    estimated_np = int(round(float(model.ef_value) * avg_hr))
 
-    return estimated_power, round(adjusted_confidence, 3)
+    # Derive average power using user's personal VI
+    # VI = NP / avg, so avg = NP / VI
+    vi = float(model.vi_value) if model.vi_value else 1.25
+    estimated_avg = int(round(estimated_np / vi))
+
+    return estimated_avg, estimated_np, round(adjusted_confidence, 3)
 
 
 async def get_ef_model_status(db: AsyncSession, user_id: int) -> dict:
@@ -222,6 +245,7 @@ async def get_ef_model_status(db: AsyncSession, user_id: int) -> dict:
             "enabled": enabled,
             "model_exists": False,
             "ef_value": None,
+            "vi_value": None,
             "confidence": None,
             "ride_count": eligible_count,
             "computed_at": None,
@@ -236,6 +260,7 @@ async def get_ef_model_status(db: AsyncSession, user_id: int) -> dict:
         "enabled": enabled,
         "model_exists": True,
         "ef_value": float(model.ef_value),
+        "vi_value": float(model.vi_value) if model.vi_value else 1.25,
         "confidence": float(model.confidence),
         "ride_count": model.ride_count,
         "computed_at": model.computed_at.isoformat(),
