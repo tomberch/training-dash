@@ -493,3 +493,284 @@ class TestActivityType:
         assert response.status_code == 200
         data = response.json()
         assert data["pagination"]["total"] == 2
+
+
+class TestActivityBikeTagging:
+    """Tests for activity bike tagging via PATCH /api/activities/{id}."""
+
+    async def _upload(self, auth_client) -> str:
+        """Upload a minimal test activity and return its id."""
+        fit_data = make_test_fit(num_records=5)
+        resp = await auth_client.post(
+            "/api/upload",
+            files={"file": ("test.fit", fit_data, "application/octet-stream")},
+        )
+        assert resp.status_code in (200, 202)
+        return resp.json()["id"]
+
+    async def _create_bike(self, auth_client, name: str = "Test Bike") -> int:
+        """Create a bike and return its id."""
+        resp = await auth_client.post(
+            "/api/bikes",
+            json={"name": name, "bike_type": "road"},
+        )
+        assert resp.status_code == 201
+        return resp.json()["id"]
+
+    @pytest.mark.asyncio
+    async def test_activity_includes_bike_id_in_response(self, auth_client):
+        """Activity response includes bike_id field."""
+        activity_id = await self._upload(auth_client)
+        response = await auth_client.get(f"/api/activities/{activity_id}")
+        assert response.status_code == 200
+        data = response.json()
+        assert "bike_id" in data
+        assert data["bike_id"] is None  # No bike assigned yet
+
+    @pytest.mark.asyncio
+    async def test_activity_includes_bike_summary_in_list(self, auth_client):
+        """Activity list response includes bike_id and bike summary fields."""
+        await self._upload(auth_client)
+        response = await auth_client.get("/api/activities")
+        assert response.status_code == 200
+        activity = response.json()["activities"][0]
+        assert "bike_id" in activity
+        assert "bike" in activity
+        assert activity["bike"] is None  # No bike assigned
+
+    @pytest.mark.asyncio
+    async def test_assign_bike_to_activity(self, auth_client):
+        """PATCH can assign a bike to an activity."""
+        activity_id = await self._upload(auth_client)
+        bike_id = await self._create_bike(auth_client)
+
+        response = await auth_client.patch(
+            f"/api/activities/{activity_id}",
+            json={"bike_id": bike_id},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["bike_id"] == bike_id
+        assert data["bike"] is not None
+        assert data["bike"]["id"] == bike_id
+        assert data["bike"]["name"] == "Test Bike"
+
+    @pytest.mark.asyncio
+    async def test_assign_bike_persists(self, auth_client):
+        """Assigned bike is persisted and returned on subsequent requests."""
+        activity_id = await self._upload(auth_client)
+        bike_id = await self._create_bike(auth_client)
+
+        await auth_client.patch(
+            f"/api/activities/{activity_id}",
+            json={"bike_id": bike_id},
+        )
+
+        # Verify via GET
+        get_resp = await auth_client.get(f"/api/activities/{activity_id}")
+        assert get_resp.json()["bike_id"] == bike_id
+
+    @pytest.mark.asyncio
+    async def test_remove_bike_from_activity(self, auth_client):
+        """PATCH with bike_id=null removes the bike."""
+        activity_id = await self._upload(auth_client)
+        bike_id = await self._create_bike(auth_client)
+
+        # First assign
+        await auth_client.patch(
+            f"/api/activities/{activity_id}",
+            json={"bike_id": bike_id},
+        )
+
+        # Then remove
+        response = await auth_client.patch(
+            f"/api/activities/{activity_id}",
+            json={"bike_id": None},
+        )
+        assert response.status_code == 200
+        assert response.json()["bike_id"] is None
+        assert response.json()["bike"] is None
+
+    @pytest.mark.asyncio
+    async def test_change_bike_on_activity(self, auth_client):
+        """PATCH can change from one bike to another."""
+        activity_id = await self._upload(auth_client)
+        bike1_id = await self._create_bike(auth_client, "Bike 1")
+        bike2_id = await self._create_bike(auth_client, "Bike 2")
+
+        # Assign first bike
+        await auth_client.patch(
+            f"/api/activities/{activity_id}",
+            json={"bike_id": bike1_id},
+        )
+
+        # Change to second bike
+        response = await auth_client.patch(
+            f"/api/activities/{activity_id}",
+            json={"bike_id": bike2_id},
+        )
+        assert response.status_code == 200
+        assert response.json()["bike_id"] == bike2_id
+        assert response.json()["bike"]["name"] == "Bike 2"
+
+    @pytest.mark.asyncio
+    async def test_cannot_assign_nonexistent_bike(self, auth_client):
+        """Cannot assign a bike that doesn't exist."""
+        activity_id = await self._upload(auth_client)
+
+        response = await auth_client.patch(
+            f"/api/activities/{activity_id}",
+            json={"bike_id": 99999},
+        )
+        assert response.status_code == 400
+        assert "not found" in response.json()["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_cannot_assign_other_users_bike(self, auth_client, app_client, db_session):
+        """Cannot assign another user's bike to an activity."""
+        from tests.integration.fixtures import CACHED_HASH_TESTPASS
+        from trainingdash.repositories.postgres.models import Bike, User
+
+        activity_id = await self._upload(auth_client)
+
+        # Create another user with a bike
+        other_user = User(email="other@example.com", password_hash=CACHED_HASH_TESTPASS)
+        db_session.add(other_user)
+        await db_session.commit()
+        await db_session.refresh(other_user)
+
+        other_bike = Bike(user_id=other_user.id, name="Other's Bike", bike_type="road")
+        db_session.add(other_bike)
+        await db_session.commit()
+        await db_session.refresh(other_bike)
+
+        response = await auth_client.patch(
+            f"/api/activities/{activity_id}",
+            json={"bike_id": other_bike.id},
+        )
+        assert response.status_code == 400
+        assert "not found" in response.json()["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_cannot_assign_retired_bike(self, auth_client):
+        """Cannot assign a retired bike to an activity."""
+        activity_id = await self._upload(auth_client)
+        bike_id = await self._create_bike(auth_client)
+
+        # Retire the bike
+        await auth_client.post(f"/api/bikes/{bike_id}/retire")
+
+        response = await auth_client.patch(
+            f"/api/activities/{activity_id}",
+            json={"bike_id": bike_id},
+        )
+        assert response.status_code == 400
+        assert "retired" in response.json()["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_bike_distance_updates_on_assign(self, auth_client):
+        """Assigning a bike adds the activity distance to bike total."""
+        activity_id = await self._upload(auth_client)
+        bike_id = await self._create_bike(auth_client)
+
+        # Get activity distance
+        activity_resp = await auth_client.get(f"/api/activities/{activity_id}")
+        activity_distance = activity_resp.json()["total_distance_m"]
+
+        # Check bike distance before
+        bike_before = await auth_client.get(f"/api/bikes/{bike_id}")
+        assert bike_before.json()["total_distance_m"] == 0
+
+        # Assign bike
+        await auth_client.patch(
+            f"/api/activities/{activity_id}",
+            json={"bike_id": bike_id},
+        )
+
+        # Check bike distance after
+        bike_after = await auth_client.get(f"/api/bikes/{bike_id}")
+        assert bike_after.json()["total_distance_m"] == activity_distance
+
+    @pytest.mark.asyncio
+    async def test_bike_distance_updates_on_remove(self, auth_client):
+        """Removing a bike subtracts the activity distance from bike total."""
+        activity_id = await self._upload(auth_client)
+        bike_id = await self._create_bike(auth_client)
+
+        # Assign bike
+        await auth_client.patch(
+            f"/api/activities/{activity_id}",
+            json={"bike_id": bike_id},
+        )
+
+        # Get activity distance
+        activity_resp = await auth_client.get(f"/api/activities/{activity_id}")
+        activity_distance = activity_resp.json()["total_distance_m"]
+
+        # Verify bike has distance
+        bike_mid = await auth_client.get(f"/api/bikes/{bike_id}")
+        assert bike_mid.json()["total_distance_m"] == activity_distance
+
+        # Remove bike
+        await auth_client.patch(
+            f"/api/activities/{activity_id}",
+            json={"bike_id": None},
+        )
+
+        # Check bike distance is back to 0
+        bike_after = await auth_client.get(f"/api/bikes/{bike_id}")
+        assert bike_after.json()["total_distance_m"] == 0
+
+    @pytest.mark.asyncio
+    async def test_bike_distance_updates_on_change(self, auth_client):
+        """Changing bikes transfers distance from old to new bike."""
+        activity_id = await self._upload(auth_client)
+        bike1_id = await self._create_bike(auth_client, "Bike 1")
+        bike2_id = await self._create_bike(auth_client, "Bike 2")
+
+        # Assign to first bike
+        await auth_client.patch(
+            f"/api/activities/{activity_id}",
+            json={"bike_id": bike1_id},
+        )
+
+        # Get activity distance
+        activity_resp = await auth_client.get(f"/api/activities/{activity_id}")
+        activity_distance = activity_resp.json()["total_distance_m"]
+
+        # Verify bike 1 has distance
+        bike1_mid = await auth_client.get(f"/api/bikes/{bike1_id}")
+        assert bike1_mid.json()["total_distance_m"] == activity_distance
+
+        # Change to second bike
+        await auth_client.patch(
+            f"/api/activities/{activity_id}",
+            json={"bike_id": bike2_id},
+        )
+
+        # Check bike 1 lost distance, bike 2 gained it
+        bike1_after = await auth_client.get(f"/api/bikes/{bike1_id}")
+        bike2_after = await auth_client.get(f"/api/bikes/{bike2_id}")
+        assert bike1_after.json()["total_distance_m"] == 0
+        assert bike2_after.json()["total_distance_m"] == activity_distance
+
+    @pytest.mark.asyncio
+    async def test_update_title_does_not_affect_bike(self, auth_client):
+        """Updating title without bike_id doesn't change bike assignment."""
+        activity_id = await self._upload(auth_client)
+        bike_id = await self._create_bike(auth_client)
+
+        # Assign bike
+        await auth_client.patch(
+            f"/api/activities/{activity_id}",
+            json={"bike_id": bike_id},
+        )
+
+        # Update title only
+        response = await auth_client.patch(
+            f"/api/activities/{activity_id}",
+            json={"title": "New Title"},
+        )
+        assert response.status_code == 200
+        assert response.json()["title"] == "New Title"
+        assert response.json()["bike_id"] == bike_id  # Bike unchanged

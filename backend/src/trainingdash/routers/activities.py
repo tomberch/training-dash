@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 
 from trainingdash.auth import CurrentUser, DbSession
-from trainingdash.dependencies import ActivityRepoD, DeleteActivityD, ThresholdRepoD
+from trainingdash.dependencies import ActivityRepoD, BikeRepoD, DeleteActivityD, ThresholdRepoD
 from trainingdash.domain.activity_type import validate_activity_type
 from trainingdash.domain.fit_modifier import FitModifications
 from trainingdash.repositories.postgres.models import Activity, ActivityPeakPower, Record
@@ -51,6 +51,7 @@ class ActivityUpdateRequest(BaseModel):
 
     title: str | None = None
     activity_type: str | None = None
+    bike_id: int | None = None  # Set to update, explicitly set to null to remove
 
 
 class UploadToProviderRequest(BaseModel):
@@ -150,9 +151,14 @@ async def get_activity(db: DbSession, repo: ActivityRepoD, user: CurrentUser, ac
 
 @router.patch("/activities/{activity_id}")
 async def update_activity(
-    db: DbSession, repo: ActivityRepoD, user: CurrentUser, activity_id: UUID, request: ActivityUpdateRequest
+    db: DbSession,
+    repo: ActivityRepoD,
+    bike_repo: BikeRepoD,
+    user: CurrentUser,
+    activity_id: UUID,
+    request: ActivityUpdateRequest,
 ):
-    """Update an activity (title and/or activity_type)."""
+    """Update an activity (title, activity_type, and/or bike_id)."""
     activity = await _get_owned_activity(repo, user, activity_id)
 
     if request.title is not None:
@@ -167,6 +173,38 @@ async def update_activity(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(e),
             )
+
+    # Handle bike_id changes
+    # Use model_dump to distinguish "not provided" from "explicitly set to null"
+    if "bike_id" in request.model_dump(exclude_unset=True):
+        new_bike_id = request.bike_id
+        old_bike_id = activity.bike_id
+        activity_distance = activity.total_distance_m or 0
+
+        # Validate new bike belongs to user (if not removing)
+        if new_bike_id is not None:
+            new_bike = await bike_repo.get_by_id(new_bike_id, user.id)
+            if new_bike is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Bike not found or not owned by user",
+                )
+            if new_bike.retired_at is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cannot assign a retired bike to an activity",
+                )
+
+        # Update bike distance totals if bike changed
+        if old_bike_id != new_bike_id and activity_distance > 0:
+            # Subtract from old bike
+            if old_bike_id is not None:
+                await bike_repo.update_distance(old_bike_id, user.id, -activity_distance)
+            # Add to new bike
+            if new_bike_id is not None:
+                await bike_repo.update_distance(new_bike_id, user.id, activity_distance)
+
+        activity.bike_id = new_bike_id
 
     await db.commit()
     await db.refresh(activity)

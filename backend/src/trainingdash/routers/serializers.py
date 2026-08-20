@@ -47,6 +47,15 @@ def user_summary(user: User) -> dict:
     }
 
 
+def bike_summary(bike: Bike) -> dict[str, Any]:
+    """Return a minimal bike summary for embedding in activity responses."""
+    return {
+        "id": bike.id,
+        "name": bike.name,
+        "bike_type": bike.bike_type,
+    }
+
+
 def activity_summary(a: Activity) -> dict[str, Any]:
     """Return basic activity info for list views."""
     return {
@@ -69,6 +78,8 @@ def activity_summary(a: Activity) -> dict[str, Any]:
         "is_breakthrough": a.is_breakthrough,
         "map_polyline": a.map_polyline,
         "activity_type": a.activity_type,
+        "bike_id": a.bike_id,
+        "bike": bike_summary(a.bike) if a.bike else None,
     }
 
 
