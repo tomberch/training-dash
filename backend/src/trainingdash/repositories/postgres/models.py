@@ -3,7 +3,7 @@ from decimal import Decimal
 from uuid import UUID, uuid4
 
 import sqlalchemy as sa
-from geoalchemy2 import Geography
+from geoalchemy2 import Geography, Geometry
 from sqlalchemy import (
     BigInteger,
     Boolean,
@@ -616,3 +616,61 @@ class RideEventLink(Base):
     link_type: Mapped[str] = mapped_column(String(20), nullable=False)  # route, place, article, video, gear, other
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
+
+
+
+# =============================================================================
+# Race Planner Models
+# =============================================================================
+
+
+class RaceCourse(Base):
+    """A race course with elevation profile and segments for pacing optimization.
+
+    Courses can be imported from GPX files, FIT files, or created manually.
+    The geometry stores the full 3D linestring (lat, lon, elevation).
+    Processed data (elevation_profile, segments, climbs) is stored as JSONB
+    for flexible querying and efficient retrieval.
+    """
+
+    __tablename__ = "race_courses"
+    __table_args__ = (
+        sa.CheckConstraint(
+            "source_type IN ('gpx', 'fit', 'manual')",
+            name="valid_source_type",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_type: Mapped[str] = mapped_column(String(20), nullable=False)  # gpx, fit, manual
+    source_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # Course metrics
+    distance_m: Mapped[float] = mapped_column(Float, nullable=False)
+    elevation_gain_m: Mapped[float] = mapped_column(Float, nullable=False)
+    elevation_loss_m: Mapped[float] = mapped_column(Float, nullable=False)
+    min_elevation_m: Mapped[float | None] = mapped_column(Float, nullable=True)
+    max_elevation_m: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Geometry (PostGIS) - LineStringZ includes elevation
+    geometry: Mapped[object] = mapped_column(
+        Geometry("LINESTRINGZ", srid=4326, spatial_index=True), nullable=False
+    )
+
+    # Processed data (JSONB)
+    # elevation_profile: [{distance_m, elevation_m, grade_pct}, ...]
+    elevation_profile: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    # segments: [{start_m, end_m, avg_grade_pct, distance_m, min_elevation_m, max_elevation_m}, ...]
+    segments: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    # climbs: [{name, start_m, end_m, distance_m, avg_grade_pct, elevation_gain_m, category}, ...]
+    climbs: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
+    updated_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
+
+    # Relationships
+    user: Mapped["User"] = relationship("User", lazy="select")
