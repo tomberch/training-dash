@@ -1,7 +1,6 @@
 """Tests for bike domain logic (CdA/Crr defaults, validation)."""
 
 from decimal import Decimal
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -11,7 +10,7 @@ from trainingdash.domain.bike import (
     CALIBRATION_ELIGIBLE_BIKE_TYPES,
     get_effective_cda,
     get_effective_crr,
-    is_calibration_eligible,
+    is_calibration_eligible_type,
     validate_bike_type,
 )
 
@@ -67,89 +66,65 @@ class TestBikeTypeConstants:
 class TestGetEffectiveCda:
     """Tests for get_effective_cda function."""
 
-    def _make_bike(self, bike_type: str, cda: float | None = None) -> MagicMock:
-        """Create a mock bike with given attributes."""
-        bike = MagicMock()
-        bike.bike_type = bike_type
-        bike.cda = Decimal(str(cda)) if cda is not None else None
-        return bike
+    def test_returns_cda_when_set(self):
+        """Returns the provided CdA if explicitly set."""
+        assert get_effective_cda("road", 0.28) == 0.28
 
-    def test_returns_bike_cda_when_set(self):
-        """Returns the bike's CdA if explicitly set."""
-        bike = self._make_bike("road", cda=0.28)
-        assert get_effective_cda(bike) == 0.28
+    def test_returns_cda_from_decimal(self):
+        """Returns float when CdA is a Decimal."""
+        result = get_effective_cda("road", Decimal("0.30"))
+        assert result == 0.30
+        assert isinstance(result, float)
 
     def test_returns_default_when_cda_none(self):
         """Returns default CdA for bike type when not set."""
         for bike_type in BIKE_TYPES:
-            bike = self._make_bike(bike_type, cda=None)
             expected = BIKE_TYPE_DEFAULTS[bike_type]["cda"]
-            assert get_effective_cda(bike) == expected
-
-    def test_returns_float(self):
-        """Always returns a float, even if bike.cda is Decimal."""
-        bike = self._make_bike("road", cda=0.30)
-        result = get_effective_cda(bike)
-        assert isinstance(result, float)
+            assert get_effective_cda(bike_type, None) == expected
 
 
 class TestGetEffectiveCrr:
     """Tests for get_effective_crr function."""
 
-    def _make_bike(self, bike_type: str, crr: float | None = None) -> MagicMock:
-        """Create a mock bike with given attributes."""
-        bike = MagicMock()
-        bike.bike_type = bike_type
-        bike.crr = Decimal(str(crr)) if crr is not None else None
-        return bike
+    def test_returns_crr_when_set(self):
+        """Returns the provided Crr if explicitly set."""
+        assert get_effective_crr("road", 0.0035) == 0.0035
 
-    def test_returns_bike_crr_when_set(self):
-        """Returns the bike's Crr if explicitly set."""
-        bike = self._make_bike("road", crr=0.0035)
-        assert get_effective_crr(bike) == 0.0035
+    def test_returns_crr_from_decimal(self):
+        """Returns float when Crr is a Decimal."""
+        result = get_effective_crr("road", Decimal("0.004"))
+        assert result == 0.004
+        assert isinstance(result, float)
 
     def test_returns_default_when_crr_none(self):
         """Returns default Crr for bike type when not set."""
         for bike_type in BIKE_TYPES:
-            bike = self._make_bike(bike_type, crr=None)
             expected = BIKE_TYPE_DEFAULTS[bike_type]["crr"]
-            assert get_effective_crr(bike) == expected
-
-    def test_returns_float(self):
-        """Always returns a float, even if bike.crr is Decimal."""
-        bike = self._make_bike("road", crr=0.004)
-        result = get_effective_crr(bike)
-        assert isinstance(result, float)
+            assert get_effective_crr(bike_type, None) == expected
 
 
-class TestIsCalibrationEligible:
-    """Tests for is_calibration_eligible function."""
-
-    def _make_bike(self, bike_type: str) -> MagicMock:
-        """Create a mock bike with given bike_type."""
-        bike = MagicMock()
-        bike.bike_type = bike_type
-        return bike
+class TestIsCalibrationEligibleType:
+    """Tests for is_calibration_eligible_type function."""
 
     def test_road_eligible(self):
         """Road bikes are eligible for calibration."""
-        assert is_calibration_eligible(self._make_bike("road")) is True
+        assert is_calibration_eligible_type("road") is True
 
     def test_tt_eligible(self):
         """TT bikes are eligible for calibration."""
-        assert is_calibration_eligible(self._make_bike("tt")) is True
+        assert is_calibration_eligible_type("tt") is True
 
     def test_gravel_eligible(self):
         """Gravel bikes are eligible for calibration."""
-        assert is_calibration_eligible(self._make_bike("gravel")) is True
+        assert is_calibration_eligible_type("gravel") is True
 
     def test_mtb_eligible(self):
         """MTB bikes are eligible for calibration."""
-        assert is_calibration_eligible(self._make_bike("mtb")) is True
+        assert is_calibration_eligible_type("mtb") is True
 
     def test_ebike_not_eligible(self):
         """E-bikes are not eligible (motor skews power data)."""
-        assert is_calibration_eligible(self._make_bike("ebike")) is False
+        assert is_calibration_eligible_type("ebike") is False
 
 
 class TestValidateBikeType:
