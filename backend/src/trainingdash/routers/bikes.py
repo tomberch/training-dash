@@ -1,5 +1,7 @@
 """Bikes endpoints: CRUD for user bikes/equipment."""
 
+from typing import Any
+
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
@@ -50,7 +52,7 @@ async def list_bikes(
     user: CurrentUser,
     bike_repo: BikeRepoD,
     include_retired: bool = Query(False, description="Include retired bikes"),
-):
+) -> dict[str, Any]:
     """List bikes for the current user."""
     bikes = await bike_repo.get_by_user(user.id, include_retired=include_retired)
     return {"bikes": [bike_response(b) for b in bikes]}
@@ -61,7 +63,7 @@ async def get_bike(
     bike_id: int,
     user: CurrentUser,
     bike_repo: BikeRepoD,
-):
+) -> dict[str, Any]:
     """Get a single bike by ID."""
     bike = await bike_repo.get_by_id(bike_id, user.id)
     if bike is None:
@@ -74,7 +76,7 @@ async def create_bike(
     user: CurrentUser,
     bike_repo: BikeRepoD,
     request: BikeCreate,
-):
+) -> dict[str, Any]:
     """Create a new bike."""
     # Validate bike type
     if not validate_bike_type(request.bike_type):
@@ -112,7 +114,7 @@ async def update_bike(
     user: CurrentUser,
     bike_repo: BikeRepoD,
     request: BikeUpdate,
-):
+) -> dict[str, Any]:
     """Update a bike's fields."""
     bike = await bike_repo.get_by_id(bike_id, user.id)
     if bike is None:
@@ -159,7 +161,7 @@ async def set_default_bike(
     bike_id: int,
     user: CurrentUser,
     bike_repo: BikeRepoD,
-):
+) -> dict[str, Any]:
     """Set a bike as the user's default."""
     bike = await bike_repo.get_by_id(bike_id, user.id)
     if bike is None:
@@ -183,7 +185,7 @@ async def retire_bike(
     bike_id: int,
     user: CurrentUser,
     bike_repo: BikeRepoD,
-):
+) -> dict[str, Any]:
     """Retire a bike (soft delete)."""
     result = await bike_repo.retire(bike_id, user.id)
     if not result:
