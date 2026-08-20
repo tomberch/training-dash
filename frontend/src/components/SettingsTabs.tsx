@@ -1,10 +1,13 @@
 import { cn } from "@/lib/utils";
+import { useNavigate } from "react-router-dom";
 import type { SettingsTab } from "@/hooks/useSettingsTabs";
 
 interface TabConfig {
   id: SettingsTab;
   label: string;
   icon: React.ReactNode;
+  isLink?: boolean;
+  href?: string;
 }
 
 const TABS: TabConfig[] = [
@@ -36,6 +39,18 @@ const TABS: TabConfig[] = [
     ),
   },
   {
+    id: "gear",
+    label: "Gear",
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+      </svg>
+    ),
+    isLink: true,
+    href: "/settings/gear",
+  },
+  {
     id: "connections",
     label: "Connections",
     icon: (
@@ -52,13 +67,23 @@ interface SettingsTabsProps {
 }
 
 export function SettingsTabs({ activeTab, onTabChange }: SettingsTabsProps) {
+  const navigate = useNavigate();
+  
+  const handleTabClick = (tab: TabConfig) => {
+    if (tab.isLink && tab.href) {
+      navigate(tab.href);
+    } else {
+      onTabChange(tab.id);
+    }
+  };
+
   return (
     <div className="mb-8 border-b border-border overflow-x-auto">
       <div className="flex gap-6 md:gap-8 min-w-max">
         {TABS.map((tab) => (
           <button
             key={tab.id}
-            onClick={() => onTabChange(tab.id)}
+            onClick={() => handleTabClick(tab)}
             className={cn(
               "pb-3 px-1 text-sm font-medium transition-colors border-b-2 -mb-px",
               activeTab === tab.id
@@ -71,6 +96,11 @@ export function SettingsTabs({ activeTab, onTabChange }: SettingsTabsProps) {
             <div className="flex items-center gap-2">
               {tab.icon}
               {tab.label}
+              {tab.isLink && (
+                <svg className="w-3 h-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              )}
             </div>
           </button>
         ))}

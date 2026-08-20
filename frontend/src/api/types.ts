@@ -27,6 +27,91 @@ export const ACTIVITY_TYPE_LABELS: Record<ActivityType, string> = {
   other: "Other",
 };
 
+// ============================================================================
+// Bike/Gear Types (defined before Activity for type reference)
+// ============================================================================
+
+export type BikeType = "road" | "gravel" | "mtb" | "tt" | "track" | "cx" | "commuter" | "ebike" | "other";
+
+/** All valid bike types as an array for iteration */
+export const BIKE_TYPES: readonly BikeType[] = [
+  "road",
+  "gravel",
+  "mtb",
+  "tt",
+  "track",
+  "cx",
+  "commuter",
+  "ebike",
+  "other",
+] as const;
+
+/** Bike type display labels */
+export const BIKE_TYPE_LABELS: Record<BikeType, string> = {
+  road: "Road",
+  gravel: "Gravel",
+  mtb: "MTB",
+  tt: "TT/Tri",
+  track: "Track",
+  cx: "Cyclocross",
+  commuter: "Commuter",
+  ebike: "E-bike",
+  other: "Other",
+};
+
+/** Minimal bike summary embedded in activity responses */
+export interface BikeSummary {
+  id: number;
+  name: string;
+  bike_type: BikeType;
+}
+
+export interface Bike {
+  id: number;
+  name: string;
+  bike_type: BikeType;
+  model_year: number | null;
+  weight_kg: number | null;
+  photo_path: string | null;
+  total_distance_m: number;
+  cda: number | null;
+  crr: number | null;
+  cda_source: "manual" | "calibrated" | null;
+  crr_source: "manual" | "calibrated" | null;
+  calibrated_at: string | null;
+  is_default: boolean;
+  retired_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BikeListResponse {
+  bikes: Bike[];
+}
+
+export interface BikeCreateRequest {
+  name: string;
+  bike_type: BikeType;
+  model_year?: number | null;
+  weight_kg?: number | null;
+  cda?: number | null;
+  crr?: number | null;
+  is_default?: boolean;
+}
+
+export interface BikeUpdateRequest {
+  name?: string;
+  bike_type?: BikeType;
+  model_year?: number | null;
+  weight_kg?: number | null;
+  cda?: number | null;
+  crr?: number | null;
+}
+
+// ============================================================================
+// Activity Types
+// ============================================================================
+
 export interface Activity {
   id: string;
   title: string | null;
@@ -56,6 +141,8 @@ export interface Activity {
   map_polyline: string | null;
   utc_offset_minutes: number | null;
   activity_type: ActivityType | null;
+  bike_id: number | null;
+  bike: BikeSummary | null;
 }
 
 export interface PaginationMeta {

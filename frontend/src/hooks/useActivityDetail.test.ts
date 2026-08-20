@@ -59,6 +59,8 @@ const mockActivity = {
   map_polyline: null,
   utc_offset_minutes: null,
   activity_type: null,
+  bike_id: null,
+  bike: null,
 };
 
 const mockGeojson = {

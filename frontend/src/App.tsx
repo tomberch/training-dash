@@ -33,6 +33,7 @@ const EventsPage = lazy(() => import("./pages/EventsPage").then(m => ({ default:
 const EventDetailPage = lazy(() => import("./pages/EventDetailPage").then(m => ({ default: m.EventDetailPage })));
 const EventFormPage = lazy(() => import("./pages/EventFormPage").then(m => ({ default: m.EventFormPage })));
 const EventEditPage = lazy(() => import("./pages/EventEditPage").then(m => ({ default: m.EventEditPage })));
+const GearPage = lazy(() => import("./pages/GearPage").then(m => ({ default: m.GearPage })));
 
 // Page loading skeleton for Suspense fallback
 function PageLoadingSkeleton() {
@@ -164,6 +165,10 @@ function AppLayout({ user, onLogout, onUserUpdate }: {
                     onUserUpdate={onUserUpdate}
                   />
                 } 
+              />
+              <Route 
+                path="/settings/gear" 
+                element={<GearPage unitSystem={user.unit_system} />} 
               />
               {user.is_admin && (
                 <Route path="/admin" element={<AdminViewWrapper />} />

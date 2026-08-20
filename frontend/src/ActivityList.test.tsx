@@ -56,6 +56,9 @@ const baseActivity = {
   map_polyline: null as string | null,
   utc_offset_minutes: null as number | null,
   activity_type: null,
+  // Bike
+  bike_id: null as number | null,
+  bike: null,
 };
 
 // Helper to render with router
