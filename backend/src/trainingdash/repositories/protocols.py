@@ -826,6 +826,68 @@ class JournalEntryActivityRepo(Protocol):
         ...
 
 
+class CourseRepo(Protocol):
+    """
+    Repository protocol for RaceCourse entities.
+
+    Courses represent race/event courses for pacing optimization.
+    Each user can have multiple courses imported from GPX/FIT files.
+    """
+
+    async def get_by_id(self, course_id: int, user_id: int) -> "RaceCourse | None":
+        """
+        Fetch a course by ID, scoped to user.
+
+        Returns None if not found or not owned by user.
+        """
+        ...
+
+    async def get_by_user(self, user_id: int) -> list["RaceCourse"]:
+        """
+        List courses for a user, ordered by created_at descending.
+
+        Returns:
+            List of RaceCourse objects
+        """
+        ...
+
+    async def save(self, course: "RaceCourse") -> "RaceCourse":
+        """
+        Persist a course (insert or update).
+
+        Returns the saved course with any DB-generated fields populated.
+        """
+        ...
+
+    async def delete(self, course_id: int, user_id: int) -> bool:
+        """
+        Delete a course.
+
+        Returns True if deleted, False if not found.
+        """
+        ...
+
+    async def update_processed_data(
+        self,
+        course_id: int,
+        user_id: int,
+        elevation_profile: list[dict],
+        segments: list[dict],
+        climbs: list[dict],
+    ) -> None:
+        """
+        Update the processed data for a course.
+
+        Args:
+            course_id: Course ID
+            user_id: Owner's user ID (for security scoping)
+            elevation_profile: List of {distance_m, elevation_m, grade_pct}
+            segments: List of {start_m, end_m, avg_grade_pct, distance_m, ...}
+            climbs: List of {name, start_m, end_m, avg_grade_pct, category, ...}
+        """
+        ...
+
+
 class BikeRepo(Protocol):
     """
     Repository protocol for Bike entities.
@@ -925,6 +987,7 @@ if TYPE_CHECKING:
         JournalEntry,
         JournalEntryActivity,
         Notification,
+        RaceCourse,
         RecalculationJob,
         RideEvent,
         RideEventLink,

@@ -23,6 +23,7 @@ from trainingdash.repositories.postgres.activity_repo import PostgresActivityRep
 from trainingdash.repositories.postgres.analytics_repo import PostgresAnalyticsRepo
 from trainingdash.repositories.postgres.audit_log_repo import PostgresAuditLogRepo
 from trainingdash.repositories.postgres.bike_repo import PostgresBikeRepo
+from trainingdash.repositories.postgres.course_repo import PostgresCourseRepo
 from trainingdash.repositories.postgres.credentials_repo import (
     PostgresGarminCredentialsRepo,
     PostgresXertCredentialsRepo,
@@ -44,6 +45,7 @@ from trainingdash.repositories.protocols import (
     AppSettingsRepo,
     AuditLogRepo,
     BikeRepo,
+    CourseRepo,
     EventRepo,
     GarminCredentialsRepo,
     NotificationRepo,
@@ -69,6 +71,11 @@ async def get_analytics_repo(db: DbSession) -> AnalyticsRepo:
 async def get_bike_repo(db: DbSession) -> BikeRepo:
     """Create a BikeRepo bound to the current session."""
     return PostgresBikeRepo(db)
+
+
+async def get_course_repo(db: DbSession) -> CourseRepo:
+    """Create a CourseRepo bound to the current session."""
+    return PostgresCourseRepo(db)
 
 
 async def get_user_repo(db: DbSession) -> UserRepo:
@@ -141,6 +148,7 @@ def get_geocoding_service(db: DbSession) -> GeocodingService:
 ActivityRepoD = Annotated[ActivityRepo, Depends(get_activity_repo)]
 AnalyticsRepoD = Annotated[AnalyticsRepo, Depends(get_analytics_repo)]
 BikeRepoD = Annotated[BikeRepo, Depends(get_bike_repo)]
+CourseRepoD = Annotated[CourseRepo, Depends(get_course_repo)]
 UserRepoD = Annotated[UserRepo, Depends(get_user_repo)]
 XertCredentialsRepoD = Annotated[XertCredentialsRepo, Depends(get_xert_credentials_repo)]
 GarminCredentialsRepoD = Annotated[GarminCredentialsRepo, Depends(get_garmin_credentials_repo)]
