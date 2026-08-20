@@ -2,6 +2,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
 
+import sqlalchemy as sa
 from geoalchemy2 import Geography
 from sqlalchemy import (
     BigInteger,
@@ -88,6 +89,50 @@ class AppSettings(Base):
         return "true" if value else "false"
 
 
+class Bike(Base):
+    """User bike/equipment for CdA/Crr calibration and race planning."""
+
+    __tablename__ = "bikes"
+    __table_args__ = (
+        sa.CheckConstraint(
+            "bike_type IN ('road', 'tt', 'gravel', 'mtb', 'ebike')",
+            name="valid_bike_type",
+        ),
+        sa.CheckConstraint(
+            "cda_source IN ('default', 'manual', 'calibrated') OR cda_source IS NULL",
+            name="valid_cda_source",
+        ),
+        sa.CheckConstraint(
+            "crr_source IN ('default', 'manual', 'calibrated') OR crr_source IS NULL",
+            name="valid_crr_source",
+        ),
+        sa.Index(
+            "idx_bikes_default",
+            "user_id",
+            unique=True,
+            postgresql_where=sa.text("is_default = TRUE AND retired_at IS NULL"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    bike_type: Mapped[str] = mapped_column(String(20), nullable=False)  # road, tt, gravel, mtb, ebike
+    model_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    weight_kg: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
+    photo_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    total_distance_m: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("0"))
+    cda: Mapped[Decimal | None] = mapped_column(Numeric(4, 3), nullable=True)  # CdA in m²
+    crr: Mapped[Decimal | None] = mapped_column(Numeric(5, 4), nullable=True)  # Rolling resistance coefficient
+    cda_source: Mapped[str | None] = mapped_column(String(20), nullable=True)  # default, manual, calibrated
+    crr_source: Mapped[str | None] = mapped_column(String(20), nullable=True)  # default, manual, calibrated
+    calibrated_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    retired_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
+    updated_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
+
+
 class Route(Base):
     __tablename__ = "routes"
 
@@ -160,6 +205,10 @@ class Activity(Base):
     utc_offset_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Activity type: road, gravel, mtb, virtual, indoor, commute, other (null = unclassified legacy)
     activity_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # Bike used for this activity (for CdA/Crr calibration and tracking)
+    bike_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("bikes.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
 
 
