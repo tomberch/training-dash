@@ -155,14 +155,14 @@ class TestPostgresBikeRepo:
         saved = await repo.save(bike)
         assert saved.total_distance_m == 0
 
-        await repo.update_distance(saved.id, 50000.0)  # 50km
+        await repo.update_distance(saved.id, seed_user.id, 50000.0)  # 50km
 
         # Re-fetch to see updated value
         updated = await repo.get_by_id(saved.id, seed_user.id)
         assert updated.total_distance_m == 50000.0
 
         # Add more
-        await repo.update_distance(saved.id, 25000.0)  # +25km
+        await repo.update_distance(saved.id, seed_user.id, 25000.0)  # +25km
         updated = await repo.get_by_id(saved.id, seed_user.id)
         assert updated.total_distance_m == 75000.0
 
@@ -179,7 +179,7 @@ class TestPostgresBikeRepo:
         )
         saved = await repo.save(bike)
 
-        await repo.update_distance(saved.id, -10000.0)  # -10km
+        await repo.update_distance(saved.id, seed_user.id, -10000.0)  # -10km
 
         updated = await repo.get_by_id(saved.id, seed_user.id)
         assert updated.total_distance_m == 90000.0

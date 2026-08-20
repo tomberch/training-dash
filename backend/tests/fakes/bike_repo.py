@@ -47,9 +47,9 @@ class FakeBikeRepo:
         self._bikes[(bike.user_id, bike.id)] = bike
         return bike
 
-    async def update_distance(self, bike_id: int, delta_m: float) -> None:
+    async def update_distance(self, bike_id: int, user_id: int, delta_m: float) -> None:
         for (uid, bid), bike in self._bikes.items():
-            if bid == bike_id:
+            if bid == bike_id and uid == user_id:
                 bike.total_distance_m = (bike.total_distance_m or 0) + delta_m
                 return
 

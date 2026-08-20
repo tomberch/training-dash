@@ -84,17 +84,18 @@ class PostgresBikeRepo:
         await self._session.refresh(bike)
         return bike
 
-    async def update_distance(self, bike_id: int, delta_m: float) -> None:
+    async def update_distance(self, bike_id: int, user_id: int, delta_m: float) -> None:
         """
         Update a bike's total_distance_m by adding delta_m.
 
         Args:
             bike_id: Bike ID
+            user_id: Owner's user ID (for security scoping)
             delta_m: Distance to add (can be negative for corrections)
         """
         await self._session.execute(
             update(Bike)
-            .where(Bike.id == bike_id)
+            .where(Bike.id == bike_id, Bike.user_id == user_id)
             .values(total_distance_m=Bike.total_distance_m + delta_m)
         )
         await self._session.commit()

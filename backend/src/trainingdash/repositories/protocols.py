@@ -871,12 +871,13 @@ class BikeRepo(Protocol):
         """
         ...
 
-    async def update_distance(self, bike_id: int, delta_m: float) -> None:
+    async def update_distance(self, bike_id: int, user_id: int, delta_m: float) -> None:
         """
         Update a bike's total_distance_m by adding delta_m.
 
         Args:
             bike_id: Bike ID
+            user_id: Owner's user ID (for security scoping)
             delta_m: Distance to add (can be negative for corrections)
         """
         ...
