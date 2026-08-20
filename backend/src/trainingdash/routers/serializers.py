@@ -5,6 +5,7 @@ from typing import Any
 
 from trainingdash.repositories.postgres.models import (
     Activity,
+    Bike,
     RecalculationJob,
     Record,
     User,
@@ -133,4 +134,27 @@ def recalculation_job_response(job: RecalculationJob) -> dict[str, Any]:
         "completed_at": utc_str(job.completed_at) if job.completed_at else None,
         "activities_updated": job.activities_updated,
         "error_message": job.error_message,
+    }
+
+
+
+def bike_response(bike: Bike) -> dict[str, Any]:
+    """Return a dict of bike info for API responses."""
+    return {
+        "id": bike.id,
+        "name": bike.name,
+        "bike_type": bike.bike_type,
+        "model_year": bike.model_year,
+        "weight_kg": float(bike.weight_kg) if bike.weight_kg else None,
+        "photo_path": bike.photo_path,
+        "total_distance_m": bike.total_distance_m,
+        "cda": float(bike.cda) if bike.cda else None,
+        "crr": float(bike.crr) if bike.crr else None,
+        "cda_source": bike.cda_source,
+        "crr_source": bike.crr_source,
+        "calibrated_at": utc_str(bike.calibrated_at) if bike.calibrated_at else None,
+        "is_default": bike.is_default,
+        "retired_at": utc_str(bike.retired_at) if bike.retired_at else None,
+        "created_at": utc_str(bike.created_at),
+        "updated_at": utc_str(bike.updated_at),
     }
