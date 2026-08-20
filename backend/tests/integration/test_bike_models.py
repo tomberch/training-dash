@@ -166,6 +166,32 @@ class TestActivityBikeRelationship:
         assert activity.bike_id == bike.id
 
     @pytest.mark.asyncio
+    async def test_activity_bike_relationship_navigation(self, db_session, seed_user):
+        """Activity.bike relationship allows navigation to Bike object."""
+        from datetime import datetime
+
+        bike = Bike(user_id=seed_user.id, name="Relationship Test Bike", bike_type="gravel")
+        db_session.add(bike)
+        await db_session.commit()
+        await db_session.refresh(bike)
+
+        activity = Activity(
+            user_id=seed_user.id,
+            source="test",
+            source_ref="bike-rel-test-1",
+            started_at=datetime(2024, 1, 1, 12, 0, 0),
+            bike_id=bike.id,
+        )
+        db_session.add(activity)
+        await db_session.commit()
+        await db_session.refresh(activity)
+
+        # Test relationship navigation
+        assert activity.bike is not None
+        assert activity.bike.name == "Relationship Test Bike"
+        assert activity.bike.bike_type == "gravel"
+
+    @pytest.mark.asyncio
     async def test_activity_bike_id_set_null_on_bike_delete(self, db_session):
         """Activity.bike_id is set to NULL when bike is deleted (SET NULL)."""
         from datetime import datetime

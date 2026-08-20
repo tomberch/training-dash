@@ -22,7 +22,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from trainingdash.repositories.postgres.db import Base
 
@@ -115,7 +115,7 @@ class Bike(Base):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     bike_type: Mapped[str] = mapped_column(String(20), nullable=False)  # road, tt, gravel, mtb, ebike
     model_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -129,8 +129,8 @@ class Bike(Base):
     calibrated_at: Mapped[datetime | None] = mapped_column(nullable=True)
     is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     retired_at: Mapped[datetime | None] = mapped_column(nullable=True)
-    created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
-    updated_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
+    created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
+    updated_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
 
 
 class Route(Base):
@@ -209,6 +209,7 @@ class Activity(Base):
     bike_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("bikes.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    bike: Mapped["Bike | None"] = relationship("Bike", lazy="joined")
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
 
 
