@@ -27,7 +27,11 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { deleteActivity, fetchMyXertCredentials, fetchMyGarminCredentials } from "./api";
+import { deleteActivity, fetchMyXertCredentials, fetchMyGarminCredentials, updateActivityType, ACTIVITY_TYPES, ACTIVITY_TYPE_LABELS } from "./api";
+import type { ActivityType } from "./api";
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import { ActivityActions } from "@/components/ActivityActions";
 import { UploadToProviderDialog } from "@/components/UploadToProviderDialog";
 import { getNiceTicks, getNiceTimeTicks } from "./lib/chartUtils";
@@ -82,6 +86,15 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
   const [isDeleting, setIsDeleting] = React.useState(false);
   const [showUploadDialog, setShowUploadDialog] = React.useState(false);
   const [hasConnectedProviders, setHasConnectedProviders] = React.useState(false);
+  const [activityType, setActivityType] = React.useState<ActivityType | null>(null);
+  const [isUpdatingType, setIsUpdatingType] = React.useState(false);
+
+  // Sync activity type state when activity loads
+  React.useEffect(() => {
+    if (activity) {
+      setActivityType(activity.activity_type);
+    }
+  }, [activity]);
 
   React.useEffect(() => {
     async function checkProviders() {
@@ -97,6 +110,20 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
     }
     checkProviders();
   }, []);
+
+  async function handleActivityTypeChange(newType: ActivityType | null): Promise<void> {
+    if (newType === activityType) return;
+    setIsUpdatingType(true);
+    try {
+      await updateActivityType(activityId, newType);
+      setActivityType(newType);
+      toast.success(`Activity type ${newType ? `set to ${newType}` : "cleared"}`);
+    } catch {
+      notifyError("Failed to update activity type", { bellType: "activity_update_failed" });
+    } finally {
+      setIsUpdatingType(false);
+    }
+  }
 
   async function handleDelete(): Promise<void> {
     setIsDeleting(true);
@@ -278,7 +305,47 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
 
 
         <div className="text-body-secondary mt-2 flex flex-wrap items-center justify-between gap-3">
-          <span>{formatActivityDate(activity.started_at, activity.utc_offset_minutes, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}{" · "}{formatActivityTime(activity.started_at, activity.utc_offset_minutes)}{" - "}{formatActivityTime(activityEndTimeIso(activity.started_at, activity.elapsed_time_s), activity.utc_offset_minutes)}</span>
+          <div className="flex items-center gap-3">
+            <span>{formatActivityDate(activity.started_at, activity.utc_offset_minutes, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}{" · "}{formatActivityTime(activity.started_at, activity.utc_offset_minutes)}{" - "}{formatActivityTime(activityEndTimeIso(activity.started_at, activity.elapsed_time_s), activity.utc_offset_minutes)}</span>
+            <span className="text-border">·</span>
+            <DropdownMenu>
+              <DropdownMenuTrigger>
+                <button
+                  disabled={isUpdatingType}
+                  className="flex items-center gap-1.5 px-2 py-1 text-sm rounded-md hover:bg-muted transition disabled:opacity-50"
+                >
+                  {isUpdatingType ? (
+                    <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z" />
+                    </svg>
+                  )}
+                  <span className="capitalize">{activityType ?? "Unclassified"}</span>
+                  <svg className="w-3.5 h-3.5 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuItem onClick={() => handleActivityTypeChange(null)} className={activityType === null ? "bg-muted" : ""}>
+                  Unclassified
+                </DropdownMenuItem>
+                {ACTIVITY_TYPES.map((type) => (
+                  <DropdownMenuItem
+                    key={type}
+                    onClick={() => handleActivityTypeChange(type)}
+                    className={activityType === type ? "bg-muted" : ""}
+                  >
+                    {ACTIVITY_TYPE_LABELS[type]}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
           <div className="flex items-center gap-2">
             <Link to={`/analyze?activity=${activityId}`} className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-muted/50 hover:bg-muted text-foreground transition">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>Analyze

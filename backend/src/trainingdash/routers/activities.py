@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 
 from trainingdash.auth import CurrentUser, DbSession
 from trainingdash.dependencies import ActivityRepoD, DeleteActivityD, ThresholdRepoD
+from trainingdash.domain.activity_type import validate_activity_type
 from trainingdash.domain.fit_modifier import FitModifications
 from trainingdash.repositories.postgres.models import Activity, ActivityPeakPower, Record
 from trainingdash.routers.datetime_utils import utc_str
@@ -49,6 +50,7 @@ class ActivityUpdateRequest(BaseModel):
     """Request body for updating an activity."""
 
     title: str | None = None
+    activity_type: str | None = None
 
 
 class UploadToProviderRequest(BaseModel):
@@ -72,6 +74,7 @@ async def list_activities(
     user: CurrentUser,
     page: int = Query(DEFAULT_PAGE, ge=1, description="Page number (1-indexed)"),
     per_page: int = Query(DEFAULT_PER_PAGE, ge=1, le=MAX_PER_PAGE, description="Items per page"),
+    activity_type: str | None = Query(None, description="Filter by activity type (empty string for unclassified)"),
 ):
     """List activities for the current user with pagination.
 
@@ -80,14 +83,14 @@ async def list_activities(
         pagination: Pagination metadata (total, page, per_page, total_pages)
     """
     # Count total activities
-    total = await repo.count_for_user(user.id)
+    total = await repo.count_for_user(user.id, activity_type=activity_type)
 
     # Calculate pagination
     total_pages = (total + per_page - 1) // per_page if total > 0 else 1
     offset = (page - 1) * per_page
 
     # Fetch page of activities
-    activities = await repo.list_for_user(user.id, limit=per_page, offset=offset)
+    activities = await repo.list_for_user(user.id, limit=per_page, offset=offset, activity_type=activity_type)
 
     return {
         "activities": [activity_summary(a) for a in activities],
@@ -149,12 +152,21 @@ async def get_activity(db: DbSession, repo: ActivityRepoD, user: CurrentUser, ac
 async def update_activity(
     db: DbSession, repo: ActivityRepoD, user: CurrentUser, activity_id: UUID, request: ActivityUpdateRequest
 ):
-    """Update an activity (currently only title)."""
+    """Update an activity (title and/or activity_type)."""
     activity = await _get_owned_activity(repo, user, activity_id)
 
     if request.title is not None:
         activity.title = request.title
         activity.title_source = "manual"
+
+    if request.activity_type is not None:
+        try:
+            activity.activity_type = validate_activity_type(request.activity_type)
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e),
+            )
 
     await db.commit()
     await db.refresh(activity)

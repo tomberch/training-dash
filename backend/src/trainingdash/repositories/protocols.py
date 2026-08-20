@@ -37,6 +37,7 @@ class ActivityRepo(Protocol):
         user_id: int,
         limit: int = 20,
         offset: int = 0,
+        activity_type: str | None = None,
     ) -> list[Activity]:
         """
         List activities for a user, ordered by started_at descending.
@@ -45,14 +46,15 @@ class ActivityRepo(Protocol):
             user_id: Owner's user ID
             limit: Maximum number of activities to return
             offset: Number of activities to skip (for pagination)
+            activity_type: Filter by activity type (None = all, empty string = unclassified)
 
         Returns:
             List of Activity objects
         """
         ...
 
-    async def count_for_user(self, user_id: int) -> int:
-        """Count total activities for a user."""
+    async def count_for_user(self, user_id: int, activity_type: str | None = None) -> int:
+        """Count total activities for a user, optionally filtered by type."""
         ...
 
     async def save(self, activity: Activity) -> Activity:

@@ -14,6 +14,7 @@ from trainingdash.domain.metrics import (
     compute_normalized_power,
     compute_tss,
 )
+from trainingdash.domain.activity_type import detect_activity_type
 from trainingdash.domain.polyline import generate_map_polyline
 from trainingdash.domain.wbal import compute_wbal_series
 from trainingdash.domain.zones import compute_zone_times
@@ -203,6 +204,9 @@ def parse_records(fit_bytes: bytes) -> dict[str, Any]:
             "avg_hr": _safe_int(msg.get("avg_heart_rate")),
             "max_hr": _safe_int(msg.get("max_heart_rate")),
             "avg_power": _safe_int(msg.get("avg_power")),
+            # Sport/sub_sport for activity type detection
+            "sport": msg.get("sport"),
+            "sub_sport": msg.get("sub_sport"),
         }
 
     # Process activity messages for UTC offset
@@ -244,6 +248,11 @@ def parse_records(fit_bytes: bytes) -> dict[str, Any]:
         max_speed = 0
         max_hr = None
 
+    # Detect activity type from FIT sport/sub_sport fields
+    sport = session_data.get("sport") if session_data else None
+    sub_sport = session_data.get("sub_sport") if session_data else None
+    activity_type = detect_activity_type(sport, sub_sport)
+
     return {
         "started_at": started_at,
         "total_distance_m": float(total_distance),
@@ -256,6 +265,7 @@ def parse_records(fit_bytes: bytes) -> dict[str, Any]:
         "max_speed_mps": float(max_speed),
         "max_hr_bpm": max_hr,
         "utc_offset_minutes": utc_offset_minutes,
+        "activity_type": activity_type,
         "records": records,
         "laps": laps,
     }
@@ -392,6 +402,7 @@ async def _store_parsed_fit(
         map_polyline=generate_map_polyline(parsed["records"]),
         raw_fit=fit_bytes,
         utc_offset_minutes=parsed["utc_offset_minutes"],
+        activity_type=parsed["activity_type"],
     )
     db.add(activity)
     await db.flush()

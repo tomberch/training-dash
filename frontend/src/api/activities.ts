@@ -5,12 +5,21 @@ import { apiGet, apiPost, apiPatch, apiDelete, API_BASE, ApiError, extractError 
 import type {
   Activity, PaginatedActivities, GeoJSONFeatureCollection,
   WbalResponse, SameRouteResponse, CompareResponse, JobStatus,
+  ActivityType,
 } from "./types";
 
-export async function fetchActivities(page?: number, perPage?: number): Promise<PaginatedActivities> {
+export async function fetchActivities(
+  page?: number,
+  perPage?: number,
+  activityType?: string | null
+): Promise<PaginatedActivities> {
   const params = new URLSearchParams();
   if (page) params.set("page", page.toString());
   if (perPage) params.set("per_page", perPage.toString());
+  // null = no filter (all), undefined = no filter, "" = unclassified, "road" etc = specific type
+  if (activityType !== undefined && activityType !== null) {
+    params.set("activity_type", activityType);
+  }
   const query = params.toString();
   return apiGet<PaginatedActivities>(`/activities${query ? `?${query}` : ""}`);
 }
@@ -33,6 +42,15 @@ export async function fetchSameRouteActivities(id: string): Promise<SameRouteRes
 
 export async function updateActivityTitle(id: string, title: string): Promise<Activity> {
   return apiPatch<Activity>(`/activities/${id}`, { title }, "Failed to update activity title");
+}
+
+export async function updateActivityType(id: string, activityType: ActivityType | null): Promise<Activity> {
+  // Send empty string to clear (set to null), otherwise send the type
+  return apiPatch<Activity>(
+    `/activities/${id}`,
+    { activity_type: activityType ?? "" },
+    "Failed to update activity type"
+  );
 }
 
 export async function generateActivityTitle(id: string): Promise<Activity> {

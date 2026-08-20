@@ -11,6 +11,7 @@ export { API_BASE, ApiError, extractError, apiGet, apiPost, apiPut, apiPatch, ap
 export type {
   PeakPower,
   Activity,
+  ActivityType,
   PaginationMeta,
   PaginatedActivities,
   GeoJSONFeature,
@@ -27,6 +28,7 @@ export type {
   WbalResponse,
   JobStatus,
 } from "./types";
+export { ACTIVITY_TYPES, ACTIVITY_TYPE_LABELS } from "./types";
 
 // Activities API
 export type {
@@ -42,6 +44,7 @@ export {
   fetchActivityWbal,
   fetchSameRouteActivities,
   updateActivityTitle,
+  updateActivityType,
   generateActivityTitle,
   deleteActivity,
   fetchComparison,

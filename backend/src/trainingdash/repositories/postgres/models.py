@@ -158,6 +158,8 @@ class Activity(Base):
     direction_bearing_75: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
     raw_fit: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     utc_offset_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Activity type: road, gravel, mtb, virtual, indoor, commute, other (null = unclassified legacy)
+    activity_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
 
 

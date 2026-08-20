@@ -67,6 +67,7 @@ def activity_summary(a: Activity) -> dict[str, Any]:
         "tss": a.tss,
         "is_breakthrough": a.is_breakthrough,
         "map_polyline": a.map_polyline,
+        "activity_type": a.activity_type,
     }
 
 

@@ -58,6 +58,7 @@ const mockActivity = {
   is_breakthrough: false,
   map_polyline: null,
   utc_offset_minutes: null,
+  activity_type: null,
 };
 
 const mockGeojson = {

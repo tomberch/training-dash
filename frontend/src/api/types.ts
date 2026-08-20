@@ -10,6 +10,23 @@ export interface PeakPower {
   is_pr: boolean;
 }
 
+export type ActivityType = "road" | "gravel" | "mtb" | "virtual" | "indoor" | "commute" | "ebike" | "other";
+
+/** All valid activity types as an array for iteration */
+export const ACTIVITY_TYPES: readonly ActivityType[] = ["road", "gravel", "mtb", "virtual", "indoor", "commute", "ebike", "other"] as const;
+
+/** Activity type display labels */
+export const ACTIVITY_TYPE_LABELS: Record<ActivityType, string> = {
+  road: "Road",
+  gravel: "Gravel",
+  mtb: "MTB",
+  virtual: "Virtual",
+  indoor: "Indoor",
+  commute: "Commute",
+  ebike: "E-bike",
+  other: "Other",
+};
+
 export interface Activity {
   id: string;
   title: string | null;
@@ -38,6 +55,7 @@ export interface Activity {
   is_breakthrough: boolean;
   map_polyline: string | null;
   utc_offset_minutes: number | null;
+  activity_type: ActivityType | null;
 }
 
 export interface PaginationMeta {

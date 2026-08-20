@@ -13,6 +13,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from trainingdash.repositories.postgres.models import Activity, Route
 
 
+def _apply_activity_type_filter(query, activity_type: str | None):
+    """Apply activity_type filter to a query.
+
+    Args:
+        query: SQLAlchemy select query
+        activity_type: None = no filter, "" = unclassified (NULL), else specific type
+    """
+    if activity_type is None:
+        return query
+    if activity_type == "":
+        # Empty string means unclassified (NULL in DB)
+        return query.where(Activity.activity_type.is_(None))
+    return query.where(Activity.activity_type == activity_type)
+
+
 class PostgresActivityRepo:
     """
     PostgreSQL implementation of the ActivityRepo protocol.
@@ -42,22 +57,28 @@ class PostgresActivityRepo:
         user_id: int,
         limit: int = 20,
         offset: int = 0,
+        activity_type: str | None = None,
     ) -> list[Activity]:
         """
         List activities for a user, ordered by started_at descending.
+
+        Args:
+            activity_type: Filter by type. None = all, "" = unclassified only.
         """
+        query = select(Activity).where(Activity.user_id == user_id)
+        query = _apply_activity_type_filter(query, activity_type)
+
         result = await self._session.execute(
-            select(Activity)
-            .where(Activity.user_id == user_id)
-            .order_by(Activity.started_at.desc())
-            .offset(offset)
-            .limit(limit)
+            query.order_by(Activity.started_at.desc()).offset(offset).limit(limit)
         )
         return list(result.scalars().all())
 
-    async def count_for_user(self, user_id: int) -> int:
-        """Count total activities for a user."""
-        result = await self._session.execute(select(func.count(Activity.id)).where(Activity.user_id == user_id))
+    async def count_for_user(self, user_id: int, activity_type: str | None = None) -> int:
+        """Count total activities for a user, optionally filtered by type."""
+        query = select(func.count(Activity.id)).where(Activity.user_id == user_id)
+        query = _apply_activity_type_filter(query, activity_type)
+
+        result = await self._session.execute(query)
         return result.scalar() or 0
 
     async def save(self, activity: Activity) -> Activity:

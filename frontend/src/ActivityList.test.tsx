@@ -7,6 +7,18 @@ vi.mock("./api", () => ({
   fetchActivities: vi.fn(),
   login: vi.fn(),
   uploadFit: vi.fn(),
+  register: vi.fn(),
+  ACTIVITY_TYPES: ["road", "gravel", "mtb", "virtual", "indoor", "commute", "ebike", "other"],
+  ACTIVITY_TYPE_LABELS: {
+    road: "Road",
+    gravel: "Gravel",
+    mtb: "MTB",
+    virtual: "Virtual",
+    indoor: "Indoor",
+    commute: "Commute",
+    ebike: "E-bike",
+    other: "Other",
+  },
 }));
 
 import { fetchActivities } from "./api";
@@ -43,6 +55,7 @@ const baseActivity = {
   // Map
   map_polyline: null as string | null,
   utc_offset_minutes: null as number | null,
+  activity_type: null,
 };
 
 // Helper to render with router

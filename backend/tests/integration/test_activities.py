@@ -332,3 +332,164 @@ class TestDeleteActivity:
 
         deleted_route = (await db_session.execute(select(Route).where(Route.id == route_id))).scalar_one_or_none()
         assert deleted_route is None
+
+
+
+class TestActivityType:
+    """Tests for activity_type field and filtering."""
+
+    async def _upload(self, auth_client) -> str:
+        """Upload a minimal test activity and return its id."""
+        fit_data = make_test_fit(num_records=5)
+        resp = await auth_client.post(
+            "/api/upload",
+            files={"file": ("test.fit", fit_data, "application/octet-stream")},
+        )
+        assert resp.status_code in (200, 202)
+        return resp.json()["id"]
+
+    @pytest.mark.asyncio
+    async def test_activity_type_in_list_response(self, auth_client):
+        """Activity list includes activity_type field."""
+        await self._upload(auth_client)
+        response = await auth_client.get("/api/activities")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["activities"]) == 1
+        # activity_type should be present (may be null for test FIT files)
+        assert "activity_type" in data["activities"][0]
+
+    @pytest.mark.asyncio
+    async def test_activity_type_in_detail_response(self, auth_client):
+        """Activity detail includes activity_type field."""
+        activity_id = await self._upload(auth_client)
+        response = await auth_client.get(f"/api/activities/{activity_id}")
+        assert response.status_code == 200
+        data = response.json()
+        assert "activity_type" in data
+
+    @pytest.mark.asyncio
+    async def test_update_activity_type(self, auth_client):
+        """PATCH can update activity_type."""
+        activity_id = await self._upload(auth_client)
+
+        response = await auth_client.patch(
+            f"/api/activities/{activity_id}",
+            json={"activity_type": "gravel"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["activity_type"] == "gravel"
+
+        # Verify it persisted
+        get_resp = await auth_client.get(f"/api/activities/{activity_id}")
+        assert get_resp.json()["activity_type"] == "gravel"
+
+    @pytest.mark.asyncio
+    async def test_update_activity_type_to_null(self, auth_client):
+        """PATCH with empty string sets activity_type to null."""
+        activity_id = await self._upload(auth_client)
+
+        # First set it to something
+        await auth_client.patch(
+            f"/api/activities/{activity_id}",
+            json={"activity_type": "road"},
+        )
+
+        # Then clear it
+        response = await auth_client.patch(
+            f"/api/activities/{activity_id}",
+            json={"activity_type": ""},
+        )
+        assert response.status_code == 200
+        assert response.json()["activity_type"] is None
+
+    @pytest.mark.asyncio
+    async def test_update_activity_type_invalid(self, auth_client):
+        """PATCH with invalid activity_type returns 400."""
+        activity_id = await self._upload(auth_client)
+
+        response = await auth_client.patch(
+            f"/api/activities/{activity_id}",
+            json={"activity_type": "invalid_type"},
+        )
+        assert response.status_code == 400
+        assert "Invalid activity_type" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_filter_activities_by_type(self, auth_client, db_session):
+        """GET /activities?activity_type= filters by type."""
+        from uuid import UUID
+
+        from trainingdash.repositories.postgres.models import Activity as ActivityModel
+
+        # Upload 3 activities
+        id1 = await self._upload(auth_client)
+        id2 = await self._upload(auth_client)
+        id3 = await self._upload(auth_client)
+
+        # Set different types directly in DB
+        act1 = (await db_session.execute(select(ActivityModel).where(ActivityModel.id == UUID(id1)))).scalar_one()
+        act2 = (await db_session.execute(select(ActivityModel).where(ActivityModel.id == UUID(id2)))).scalar_one()
+        act3 = (await db_session.execute(select(ActivityModel).where(ActivityModel.id == UUID(id3)))).scalar_one()
+
+        act1.activity_type = "road"
+        act2.activity_type = "gravel"
+        act3.activity_type = "road"
+        await db_session.commit()
+
+        # Filter by road
+        response = await auth_client.get("/api/activities?activity_type=road")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["pagination"]["total"] == 2
+        assert all(a["activity_type"] == "road" for a in data["activities"])
+
+        # Filter by gravel
+        response = await auth_client.get("/api/activities?activity_type=gravel")
+        data = response.json()
+        assert data["pagination"]["total"] == 1
+        assert data["activities"][0]["activity_type"] == "gravel"
+
+    @pytest.mark.asyncio
+    async def test_filter_activities_by_unclassified(self, auth_client, db_session):
+        """GET /activities?activity_type= with empty string filters for NULL."""
+        from uuid import UUID
+
+        from trainingdash.repositories.postgres.models import Activity as ActivityModel
+
+        id1 = await self._upload(auth_client)
+        id2 = await self._upload(auth_client)
+
+        # Set one to road, set one to null (unclassified)
+        act1 = (await db_session.execute(select(ActivityModel).where(ActivityModel.id == UUID(id1)))).scalar_one()
+        act2 = (await db_session.execute(select(ActivityModel).where(ActivityModel.id == UUID(id2)))).scalar_one()
+        act1.activity_type = "road"
+        act2.activity_type = None  # Explicitly set to unclassified
+        await db_session.commit()
+
+        # Filter for unclassified (null)
+        response = await auth_client.get("/api/activities?activity_type=")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["pagination"]["total"] == 1
+        assert data["activities"][0]["activity_type"] is None
+
+    @pytest.mark.asyncio
+    async def test_no_filter_returns_all(self, auth_client, db_session):
+        """GET /activities without filter returns all types."""
+        from uuid import UUID
+
+        from trainingdash.repositories.postgres.models import Activity as ActivityModel
+
+        id1 = await self._upload(auth_client)
+        id2 = await self._upload(auth_client)
+
+        act1 = (await db_session.execute(select(ActivityModel).where(ActivityModel.id == UUID(id1)))).scalar_one()
+        act1.activity_type = "road"
+        await db_session.commit()
+
+        response = await auth_client.get("/api/activities")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["pagination"]["total"] == 2

@@ -231,7 +231,7 @@ describe("EventDetailPage", () => {
       // Single-day events should show only 4 stats columns (Distance, Elevation, Time, Photos)
       // The Activities stat should only appear in the stats bar, not as section header
       const statsBar = document.querySelector(".bg-card.border-b");
-      expect(statsBar?.textContent).not.toContain("Activities");
+      expect(statsBar?.textContent ?? "").not.toContain("Activities");
     });
   });
 

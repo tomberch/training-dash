@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Activity, PaginationMeta } from "./api";
-import { ApiError, fetchActivities, login, register } from "./api";
+import { ApiError, fetchActivities, login, register, ACTIVITY_TYPES, ACTIVITY_TYPE_LABELS } from "./api";
 import { formatDistance, formatTime, formatElevation, formatActivityDate } from "./format";
 import type { UnitSystem } from "./format";
 import { ErrorDisplay } from "./ErrorDisplay";
@@ -9,6 +9,16 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Logo } from "./components/Logo";
 import { PolylineMap } from "./components/PolylineMap";
 import { PageHeader } from "./components/PageHeader";
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
+
+// Filter options: null = all, "" = unclassified, then all activity types
+const ACTIVITY_TYPE_FILTER_OPTIONS: { value: string | null; label: string }[] = [
+  { value: null, label: "All types" },
+  { value: "", label: "Unclassified" },
+  ...ACTIVITY_TYPES.map((type) => ({ value: type, label: ACTIVITY_TYPE_LABELS[type] })),
+];
 
 // Activity row component (Xert-inspired)
 function ActivityRow({ 
@@ -219,23 +229,32 @@ export function ActivityList({
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | ApiError | null>(null);
+  // Filter state: null = all types, "" = unclassified only, "road"/etc = specific type
+  const [typeFilter, setTypeFilter] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
-    fetchActivities(currentPage, 20)
+    fetchActivities(currentPage, 20, typeFilter ?? undefined)
       .then((result) => {
         setActivities(result.activities);
         setPagination(result.pagination);
       })
       .catch((e) => setError(e))
       .finally(() => setLoading(false));
-  }, [currentPage]);
+  }, [currentPage, typeFilter]);
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
     // Scroll to top when changing pages
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
+
+  const handleTypeFilterChange = (value: string | null) => {
+    setTypeFilter(value);
+    setCurrentPage(1); // Reset to first page when filter changes
+  };
+
+  const currentTypeLabel = ACTIVITY_TYPE_FILTER_OPTIONS.find(opt => opt.value === typeFilter)?.label ?? "All types";
 
   if (error) {
     return <ErrorDisplay error={error} context="loading activities" />;
@@ -251,6 +270,31 @@ export function ActivityList({
             {pagination && (
               <span>{pagination.total} {pagination.total === 1 ? "activity" : "activities"}</span>
             )}
+            <span>•</span>
+            <DropdownMenu>
+              <DropdownMenuTrigger>
+                <button className="flex items-center gap-1.5 text-primary hover:text-primary/80 transition">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                  </svg>
+                  {currentTypeLabel}
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                {ACTIVITY_TYPE_FILTER_OPTIONS.map((option) => (
+                  <DropdownMenuItem
+                    key={option.value ?? "all"}
+                    onClick={() => handleTypeFilterChange(option.value)}
+                    className={typeFilter === option.value ? "bg-muted" : ""}
+                  >
+                    {option.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
             <span>•</span>
             <button
               onClick={() => navigate("/activities/table")}
