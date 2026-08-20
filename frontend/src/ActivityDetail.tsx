@@ -27,13 +27,15 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { deleteActivity, fetchMyXertCredentials, fetchMyGarminCredentials, updateActivityType, ACTIVITY_TYPES, ACTIVITY_TYPE_LABELS } from "./api";
-import type { ActivityType } from "./api";
+import { deleteActivity, fetchMyXertCredentials, fetchMyGarminCredentials, updateActivityType, updateActivityBike, ACTIVITY_TYPES, ACTIVITY_TYPE_LABELS } from "./api";
+import type { ActivityType, Bike } from "./api";
+import { fetchBikes } from "./api/bikes";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 import { ActivityActions } from "@/components/ActivityActions";
 import { UploadToProviderDialog } from "@/components/UploadToProviderDialog";
+import { BikePicker } from "@/components/BikePicker";
 import { getNiceTicks, getNiceTimeTicks } from "./lib/chartUtils";
 import { notifyError } from "@/lib/notify";
 import {
@@ -88,6 +90,7 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
   const [hasConnectedProviders, setHasConnectedProviders] = React.useState(false);
   const [activityType, setActivityType] = React.useState<ActivityType | null>(null);
   const [isUpdatingType, setIsUpdatingType] = React.useState(false);
+  const [defaultBike, setDefaultBike] = React.useState<Bike | null>(null);
 
   // Sync activity type state when activity loads
   React.useEffect(() => {
@@ -95,6 +98,20 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
       setActivityType(activity.activity_type);
     }
   }, [activity]);
+
+  // Fetch default bike for "assumed default" indicator
+  React.useEffect(() => {
+    async function loadDefaultBike() {
+      try {
+        const bikes = await fetchBikes(false);
+        const def = bikes.find((b) => b.is_default);
+        setDefaultBike(def || null);
+      } catch {
+        // Silently fail - not critical
+      }
+    }
+    loadDefaultBike();
+  }, []);
 
   React.useEffect(() => {
     async function checkProviders() {
@@ -122,6 +139,16 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
       notifyError("Failed to update activity type", { bellType: "activity_update_failed" });
     } finally {
       setIsUpdatingType(false);
+    }
+  }
+
+  async function handleBikeChange(bikeId: number | null): Promise<void> {
+    const updated = await updateActivityBike(activityId, bikeId);
+    // Update local activity state with new bike
+    if (activity) {
+      // Find the bike name for the toast message
+      const bikeName = updated.bike?.name;
+      toast.success(bikeName ? `Bike set to ${bikeName}` : "Bike removed");
     }
   }
 
@@ -345,6 +372,12 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
+            <span className="text-border">·</span>
+            <BikePicker
+              selectedBike={activity.bike}
+              defaultBike={defaultBike}
+              onChange={handleBikeChange}
+            />
           </div>
           <div className="flex items-center gap-2">
             <Link to={`/analyze?activity=${activityId}`} className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-muted/50 hover:bg-muted text-foreground transition">

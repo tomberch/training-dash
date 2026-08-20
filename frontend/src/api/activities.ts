@@ -53,6 +53,14 @@ export async function updateActivityType(id: string, activityType: ActivityType 
   );
 }
 
+export async function updateActivityBike(id: string, bikeId: number | null): Promise<Activity> {
+  return apiPatch<Activity>(
+    `/activities/${id}`,
+    { bike_id: bikeId },
+    "Failed to update activity bike"
+  );
+}
+
 export async function generateActivityTitle(id: string): Promise<Activity> {
   return apiPost<Activity>(`/activities/${id}/generate-title`, {}, "Failed to generate activity title");
 }

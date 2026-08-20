@@ -12,6 +12,12 @@ export type {
   PeakPower,
   Activity,
   ActivityType,
+  BikeType,
+  BikeSummary,
+  Bike,
+  BikeCreateRequest,
+  BikeUpdateRequest,
+  BikeListResponse,
   PaginationMeta,
   PaginatedActivities,
   GeoJSONFeature,
@@ -28,7 +34,7 @@ export type {
   WbalResponse,
   JobStatus,
 } from "./types";
-export { ACTIVITY_TYPES, ACTIVITY_TYPE_LABELS } from "./types";
+export { ACTIVITY_TYPES, ACTIVITY_TYPE_LABELS, BIKE_TYPES, BIKE_TYPE_LABELS } from "./types";
 
 // Activities API
 export type {
@@ -45,6 +51,7 @@ export {
   fetchSameRouteActivities,
   updateActivityTitle,
   updateActivityType,
+  updateActivityBike,
   generateActivityTitle,
   deleteActivity,
   fetchComparison,
