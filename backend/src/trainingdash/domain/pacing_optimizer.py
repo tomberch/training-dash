@@ -27,7 +27,7 @@ equality and inequality constraints efficiently.
 Future enhancement (#573): Optimize W'bal trajectory, not just constrain it.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
 from scipy.optimize import minimize
@@ -52,15 +52,15 @@ class OptimizationConfig:
 
     Attributes:
         method: Scipy optimization method. Default 'SLSQP'.
-        max_iterations: Maximum optimizer iterations. Default 1000.
-        tolerance: Convergence tolerance. Default 1e-6.
+        max_iterations: Maximum optimizer iterations. Default 200.
+        tolerance: Convergence tolerance. Default 1e-4.
         power_bounds_pct: Min/max power as fraction of FTP. Default (0.5, 1.2).
         wbal_min_threshold: Minimum W'bal to maintain (joules). Default 0.
     """
 
     method: str = "SLSQP"
-    max_iterations: int = 1000
-    tolerance: float = 1e-6
+    max_iterations: int = 200
+    tolerance: float = 1e-4
     power_bounds_pct: tuple[float, float] = (0.5, 1.2)
     wbal_min_threshold: float = 0.0
 
@@ -98,20 +98,76 @@ class OptimizedPlan:
     message: str = ""
 
 
-@dataclass
-class _OptimizationContext:
-    """Internal context passed to objective/constraint functions."""
+def _compute_segment_times(
+    powers: np.ndarray,
+    segments: list[CourseSegment],
+    rider_params: RiderParams,
+    env_params: EnvironmentParams,
+    _cache: dict | None = None,
+) -> np.ndarray:
+    """Compute time for each segment given power distribution.
+    
+    Optionally uses a cache keyed by (power, grade) tuples.
+    """
+    times = np.zeros(len(segments))
+    for i, seg in enumerate(segments):
+        power = powers[i]
+        grade = seg.avg_grade_pct
+        
+        # Check cache
+        if _cache is not None:
+            cache_key = (round(power, 1), round(grade, 2))
+            if cache_key in _cache:
+                times[i] = seg.length_m / _cache[cache_key]
+                continue
+        
+        speed = speed_from_power(power, grade, rider_params, env_params)
+        
+        # Store in cache
+        if _cache is not None:
+            _cache[cache_key] = speed
+            
+        times[i] = seg.length_m / speed if speed > 0 else 1e6
+    return times
 
-    segments: list[CourseSegment]
-    rider_params: RiderParams
-    env_params: EnvironmentParams
-    target_energy_j: float
-    cp: float
-    w_prime: float
-    ftp: float
-    config: OptimizationConfig
-    # Cache for computed values
-    _cache: dict = field(default_factory=dict)
+
+def _compute_wbal_min_fast(
+    powers: np.ndarray,
+    times: np.ndarray,
+    cp: float,
+    w_prime: float,
+) -> float:
+    """
+    Fast W'bal minimum calculation for optimizer.
+
+    Uses segment-level approximation instead of per-second expansion.
+    For segments where power > CP, W'bal depletes.
+    For segments where power < CP, W'bal recovers exponentially.
+
+    This is an approximation but runs in O(n_segments) instead of O(total_seconds).
+    """
+    wbal = w_prime
+    min_wbal = w_prime
+
+    for power, time in zip(powers, times, strict=True):
+        if power > cp:
+            # Depletion: linear drain
+            depletion = (power - cp) * time
+            wbal = max(0.0, wbal - depletion)
+        elif power < cp:
+            # Recovery: exponential approach to W'
+            # Using average recovery over segment
+            deficit = cp - power
+            if deficit > 0 and time > 0:
+                tau = w_prime / deficit
+                # Exponential recovery: wbal approaches w_prime
+                wbal = w_prime - (w_prime - wbal) * np.exp(-time / tau)
+                wbal = min(w_prime, wbal)
+        # At exactly CP: no change
+
+        min_wbal = min(min_wbal, wbal)
+
+    return min_wbal
 
 
 def optimize_pacing(
@@ -168,27 +224,15 @@ def optimize_pacing(
     if config is None:
         config = OptimizationConfig()
 
-    # Build optimization context
-    ctx = _OptimizationContext(
-        segments=segments,
-        rider_params=rider_params,
-        env_params=env_params,
-        target_energy_j=target_energy_kj * 1000,
-        cp=rider_cp,
-        w_prime=rider_w_prime,
-        ftp=rider_ftp,
-        config=config,
-    )
-
+    target_energy_j = target_energy_kj * 1000
     n_segments = len(segments)
 
     # Generate initial guess from heuristic if not provided
     if initial_guess is None:
         # Estimate intensity from energy budget and typical course time
-        # This is approximate - the optimizer will adjust
         estimated_time_s = sum(seg.length_m / 8.0 for seg in segments)  # ~30 km/h avg
-        estimated_avg_power = target_energy_kj * 1000 / estimated_time_s
-        target_intensity = min(1.0, estimated_avg_power / rider_ftp)
+        estimated_avg_power = target_energy_j / estimated_time_s
+        target_intensity = max(0.5, min(1.0, estimated_avg_power / rider_ftp))
 
         initial_guess = generate_heuristic_pacing(
             segments,
@@ -198,39 +242,64 @@ def optimize_pacing(
             env_params=env_params,
         )
 
-    # Extract initial powers
+    # Extract initial powers and scale to match energy budget
     x0 = np.array([t.target_power_w for t in initial_guess.targets])
+
+    # Scale initial guess to roughly match energy budget
+    init_times = _compute_segment_times(x0, segments, rider_params, env_params)
+    init_energy = np.sum(x0 * init_times)
+    if init_energy > 0:
+        scale_factor = target_energy_j / init_energy
+        # Don't scale too aggressively
+        scale_factor = max(0.5, min(1.5, scale_factor))
+        x0 = x0 * scale_factor
 
     # Power bounds per segment
     min_power = rider_ftp * config.power_bounds_pct[0]
     max_power = rider_ftp * config.power_bounds_pct[1]
     bounds = [(min_power, max_power) for _ in range(n_segments)]
 
-    # Constraints
+    # Clip initial guess to bounds
+    x0 = np.clip(x0, min_power, max_power)
+
+    # Speed cache for performance - keyed by (power, grade)
+    speed_cache: dict[tuple[float, float], float] = {}
+
+    # Objective function
+    def objective(powers: np.ndarray) -> float:
+        times = _compute_segment_times(powers, segments, rider_params, env_params, speed_cache)
+        return np.sum(times)
+
+    # Energy equality constraint: sum(power * time) = target
+    def energy_constraint(powers: np.ndarray) -> float:
+        times = _compute_segment_times(powers, segments, rider_params, env_params, speed_cache)
+        total_energy = np.sum(powers * times)
+        return total_energy - target_energy_j
+
+    # W'bal inequality constraint: min_wbal >= threshold
+    def wbal_constraint(powers: np.ndarray) -> float:
+        times = _compute_segment_times(powers, segments, rider_params, env_params, speed_cache)
+        min_wbal = _compute_wbal_min_fast(powers, times, rider_cp, rider_w_prime)
+        return min_wbal - config.wbal_min_threshold
+
     constraints = [
-        # Energy equality constraint
-        {
-            "type": "eq",
-            "fun": lambda x, c=ctx: _energy_constraint(x, c),
-        },
-        # W'bal inequality constraint (min_wbal >= threshold)
-        {
-            "type": "ineq",
-            "fun": lambda x, c=ctx: _wbal_constraint(x, c),
-        },
+        {"type": "eq", "fun": energy_constraint},
+        {"type": "ineq", "fun": wbal_constraint},
     ]
 
     # Calculate baseline times for comparison
-    constant_power = target_energy_kj * 1000 / _estimate_time_at_power(
-        np.full(n_segments, rider_ftp * 0.85), ctx
+    constant_power_guess = target_energy_j / sum(
+        seg.length_m / 8.0 for seg in segments
     )
-    # Recalculate with actual constant power
-    constant_time = _estimate_time_at_power(np.full(n_segments, constant_power), ctx)
+    constant_power_guess = np.clip(constant_power_guess, min_power, max_power)
+    constant_powers = np.full(n_segments, constant_power_guess)
+    constant_time = objective(constant_powers)
     heuristic_time = initial_guess.total_time_s
 
-    # Run optimization
+    # Run optimization with reduced iterations for performance
+    # The heuristic initial guess is already good; optimizer refines it
     result = minimize(
-        fun=lambda x, c=ctx: _objective(x, c),
+        fun=objective,
         x0=x0,
         method=config.method,
         bounds=bounds,
@@ -243,16 +312,16 @@ def optimize_pacing(
     )
 
     # Extract optimized powers
-    optimized_powers = result.x
+    optimized_powers = np.array(result.x)
 
     # Build pacing targets from optimized powers
-    targets = _build_targets(optimized_powers, ctx)
+    targets = _build_targets(optimized_powers, segments, rider_params, env_params)
     total_time = sum(t.estimated_time_s for t in targets)
     total_distance = sum(t.distance_m for t in targets)
 
     # Calculate metrics
-    total_energy_j = sum(t.target_power_w * t.estimated_time_s for t in targets)
-    avg_power = total_energy_j / total_time if total_time > 0 else 0
+    total_energy_j_actual = sum(t.target_power_w * t.estimated_time_s for t in targets)
+    avg_power = total_energy_j_actual / total_time if total_time > 0 else 0
 
     # NP approximation (time-weighted 4th power mean)
     weighted_4th = sum(
@@ -262,7 +331,7 @@ def optimize_pacing(
 
     intensity_factor = np_power / rider_ftp if rider_ftp > 0 else 0
 
-    # W'bal check
+    # W'bal check using accurate method for final result
     times = np.array([t.estimated_time_s for t in targets])
     _, wbal_min = check_wbal_feasibility(
         optimized_powers, times, rider_cp, rider_w_prime
@@ -292,83 +361,20 @@ def optimize_pacing(
         wbal_min=wbal_min,
         converged=result.success,
         iterations=result.nit,
-        message=result.message,
+        message=result.message if hasattr(result, "message") else "",
     )
-
-
-def _objective(powers: np.ndarray, ctx: _OptimizationContext) -> float:
-    """Objective function: total time to complete course."""
-    return _estimate_time_at_power(powers, ctx)
-
-
-def _estimate_time_at_power(
-    powers: np.ndarray, ctx: _OptimizationContext
-) -> float:
-    """Calculate total time for given power distribution."""
-    total_time = 0.0
-    for i, seg in enumerate(ctx.segments):
-        speed = speed_from_power(
-            powers[i], seg.avg_grade_pct, ctx.rider_params, ctx.env_params
-        )
-        if speed > 0:
-            total_time += seg.length_m / speed
-        else:
-            total_time += 1e6  # Penalty for zero speed
-    return total_time
-
-
-def _energy_constraint(powers: np.ndarray, ctx: _OptimizationContext) -> float:
-    """
-    Energy equality constraint.
-
-    Returns 0 when total energy equals target.
-    Constraint: sum(power * time) = target_energy_j
-    """
-    total_energy = 0.0
-    for i, seg in enumerate(ctx.segments):
-        speed = speed_from_power(
-            powers[i], seg.avg_grade_pct, ctx.rider_params, ctx.env_params
-        )
-        if speed > 0:
-            time = seg.length_m / speed
-            total_energy += powers[i] * time
-    return total_energy - ctx.target_energy_j
-
-
-def _wbal_constraint(powers: np.ndarray, ctx: _OptimizationContext) -> float:
-    """
-    W'bal inequality constraint.
-
-    Returns min_wbal - threshold, which must be >= 0.
-    This ensures W'bal never drops below the threshold.
-    """
-    # Calculate segment times
-    times = []
-    for i, seg in enumerate(ctx.segments):
-        speed = speed_from_power(
-            powers[i], seg.avg_grade_pct, ctx.rider_params, ctx.env_params
-        )
-        if speed > 0:
-            times.append(seg.length_m / speed)
-        else:
-            times.append(1e6)
-
-    _, min_wbal = check_wbal_feasibility(
-        powers, np.array(times), ctx.cp, ctx.w_prime
-    )
-
-    return min_wbal - ctx.config.wbal_min_threshold
 
 
 def _build_targets(
-    powers: np.ndarray, ctx: _OptimizationContext
+    powers: np.ndarray,
+    segments: list[CourseSegment],
+    rider_params: RiderParams,
+    env_params: EnvironmentParams,
 ) -> list[PacingTarget]:
     """Build PacingTarget list from optimized powers."""
     targets = []
-    for i, seg in enumerate(ctx.segments):
-        speed = speed_from_power(
-            powers[i], seg.avg_grade_pct, ctx.rider_params, ctx.env_params
-        )
+    for i, seg in enumerate(segments):
+        speed = speed_from_power(powers[i], seg.avg_grade_pct, rider_params, env_params)
         time = seg.length_m / speed if speed > 0 else float("inf")
 
         targets.append(
