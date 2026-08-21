@@ -375,6 +375,15 @@ export interface ElevationPoint {
   grade_pct: number;
 }
 
+export interface CourseListItem {
+  id: number;
+  name: string;
+  source_type: string;
+  distance_m: number;
+  elevation_gain_m: number;
+  created_at: string;
+}
+
 export interface CourseDetail {
   id: number;
   name: string;

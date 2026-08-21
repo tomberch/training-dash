@@ -3,3 +3,4 @@
  */
 
 export { PlanDetail } from "./PlanDetail";
+export { GeneratePlan } from "./GeneratePlan";

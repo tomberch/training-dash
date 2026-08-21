@@ -8,6 +8,7 @@ import type {
   RacePlanResponse,
   GeneratePlanRequest,
   CourseDetail,
+  CourseListItem,
 } from "./types";
 
 /**
@@ -68,4 +69,11 @@ export async function regenerateRacePlan(
  */
 export async function fetchCourse(courseId: number): Promise<CourseDetail> {
   return apiGet<CourseDetail>(`/courses/${courseId}`);
+}
+
+/**
+ * Fetch all courses for the current user.
+ */
+export async function fetchCourses(): Promise<CourseListItem[]> {
+  return apiGet<CourseListItem[]>("/courses");
 }
