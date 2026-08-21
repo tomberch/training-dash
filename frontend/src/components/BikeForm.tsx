@@ -159,12 +159,12 @@ export function BikeForm({ open, onClose, bike, onSave }: BikeFormProps) {
               value={bikeType}
               onChange={(e) => setBikeType(e.target.value as BikeType)}
               className={cn(
-                "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors",
+                "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors dark:bg-input/30",
                 "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               )}
             >
               {BIKE_TYPES.map((type) => (
-                <option key={type} value={type}>
+                <option key={type} value={type} className="bg-popover text-popover-foreground">
                   {BIKE_TYPE_LABELS[type]}
                 </option>
               ))}
