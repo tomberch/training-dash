@@ -66,26 +66,44 @@ class CalibrationInput:
     """Input data for a single calibration segment.
 
     Attributes:
-        power: Mean power in watts.
-        speed: Mean speed in m/s.
-        grade: Mean grade as percentage.
+        power: Power readings in watts (array).
+        speed: Speed readings in m/s (array).
+        grade: Grade readings as percentage (array).
         air_density: Air density in kg/m³.
         rider_mass: Total mass (rider + bike) in kg.
         crr: Rolling resistance coefficient.
-        duration_s: Segment duration in seconds (for weighting).
     """
 
-    power: float
-    speed: float
-    grade: float
+    power: tuple[float, ...]
+    speed: tuple[float, ...]
+    grade: tuple[float, ...]
     air_density: float
     rider_mass: float
     crr: float
-    duration_s: float = 1.0
+
+    @property
+    def duration_s(self) -> float:
+        """Duration of segment in seconds (assumes 1Hz sampling)."""
+        return float(len(self.power))
+
+    @property
+    def mean_power(self) -> float:
+        """Mean power in watts."""
+        return float(np.mean(self.power)) if self.power else 0.0
+
+    @property
+    def mean_speed(self) -> float:
+        """Mean speed in m/s."""
+        return float(np.mean(self.speed)) if self.speed else 0.0
+
+    @property
+    def mean_grade(self) -> float:
+        """Mean grade as percentage."""
+        return float(np.mean(self.grade)) if self.grade else 0.0
 
 
 def _estimate_cda_single_segment(inp: CalibrationInput, efficiency: float = 0.97) -> float:
-    """Estimate CdA from a single calibration segment.
+    """Estimate CdA from a single calibration segment using its mean values.
 
     Rearranges the power equation to solve for CdA:
     P·η/v = m·g·Crr·cos(θ) + m·g·sin(θ) + 0.5·ρ·CdA·v²
@@ -98,15 +116,19 @@ def _estimate_cda_single_segment(inp: CalibrationInput, efficiency: float = 0.97
     Returns:
         Estimated CdA in m². May be negative if data is bad.
     """
-    if inp.speed <= 0:
+    mean_speed = inp.mean_speed
+    mean_power = inp.mean_power
+    mean_grade = inp.mean_grade
+
+    if mean_speed <= 0:
         return 0.0
 
     import math
 
-    theta = math.atan(inp.grade / 100.0)
+    theta = math.atan(mean_grade / 100.0)
 
     # Force at wheel = P × η / v
-    wheel_force = inp.power * efficiency / inp.speed
+    wheel_force = mean_power * efficiency / mean_speed
 
     # Subtract gravity and rolling resistance forces
     gravity_force = inp.rider_mass * GRAVITY * math.sin(theta)
@@ -115,7 +137,7 @@ def _estimate_cda_single_segment(inp: CalibrationInput, efficiency: float = 0.97
 
     # Aero force = 0.5 × ρ × CdA × v²
     # CdA = aero_force / (0.5 × ρ × v²)
-    dynamic_pressure = 0.5 * inp.air_density * inp.speed * inp.speed
+    dynamic_pressure = 0.5 * inp.air_density * mean_speed * mean_speed
 
     if dynamic_pressure <= 0:
         return 0.0
@@ -124,17 +146,23 @@ def _estimate_cda_single_segment(inp: CalibrationInput, efficiency: float = 0.97
 
 
 def estimate_cda(
-    inputs: list[CalibrationInput],
-    efficiency: float = 0.97,
+    segments: list[CalibrationInput],
+    crr_fixed: float | None = None,
 ) -> CdAEstimate:
-    """Estimate CdA using weighted linear regression across segments.
+    """Estimate CdA using linear regression across segments.
 
-    Uses duration-weighted averaging of per-segment estimates, with
-    outlier filtering.
+    Uses the cycling power equation rearranged into linear form:
+    P·η/v - m·g·Crr = 0.5·ρ·CdA·v²
+
+    Let y = P·η/v - m·g·Crr  (adjusted power per velocity)
+    Let x = 0.5·ρ·v²         (dynamic pressure)
+
+    Then: y = CdA × x (linear through origin)
 
     Args:
-        inputs: List of calibration inputs (one per segment).
-        efficiency: Drivetrain efficiency (default 0.97).
+        segments: List of calibration inputs (one per segment).
+        crr_fixed: Fixed rolling resistance coefficient. If None, uses
+            the crr from each segment's input.
 
     Returns:
         CdAEstimate with the estimated value and confidence metrics.
@@ -142,21 +170,57 @@ def estimate_cda(
     Raises:
         ValueError: If no valid inputs provided.
     """
-    if not inputs:
+    import math
+
+    if not segments:
         raise ValueError("No calibration inputs provided")
 
-    # Calculate per-segment estimates
+    efficiency = 0.97  # Drivetrain efficiency
+
+    # Build arrays for linear regression
+    # y = adjusted_force (what's left after subtracting rolling/gravity)
+    # x = dynamic_pressure (0.5 * rho * v^2)
+    # Regression: y = CdA * x (through origin)
+
+    x_values: list[float] = []
+    y_values: list[float] = []
+    weights: list[float] = []
     segment_estimates: list[float] = []
-    segment_weights: list[float] = []
 
-    for inp in inputs:
-        cda = _estimate_cda_single_segment(inp, efficiency)
-        # Filter out clearly invalid estimates
-        if 0.1 < cda < 0.8:  # Reasonable CdA range
-            segment_estimates.append(cda)
-            segment_weights.append(inp.duration_s)
+    for inp in segments:
+        mean_speed = inp.mean_speed
+        mean_power = inp.mean_power
+        mean_grade = inp.mean_grade
+        crr = crr_fixed if crr_fixed is not None else inp.crr
 
-    if not segment_estimates:
+        if mean_speed <= 0:
+            continue
+
+        theta = math.atan(mean_grade / 100.0)
+
+        # Force at wheel = P × η / v
+        wheel_force = mean_power * efficiency / mean_speed
+
+        # Subtract gravity and rolling resistance forces
+        gravity_force = inp.rider_mass * GRAVITY * math.sin(theta)
+        rolling_force = inp.rider_mass * GRAVITY * crr * math.cos(theta)
+        adjusted_force = wheel_force - gravity_force - rolling_force  # y
+
+        # Dynamic pressure term
+        dynamic_pressure = 0.5 * inp.air_density * mean_speed * mean_speed  # x
+
+        if dynamic_pressure <= 0:
+            continue
+
+        # Per-segment CdA estimate
+        cda_estimate = adjusted_force / dynamic_pressure
+        if 0.1 < cda_estimate < 0.8:  # Reasonable CdA range
+            x_values.append(dynamic_pressure)
+            y_values.append(adjusted_force)
+            weights.append(inp.duration_s)
+            segment_estimates.append(cda_estimate)
+
+    if not x_values:
         # All estimates were invalid - return a default with low confidence
         return CdAEstimate(
             cda=0.32,  # Default road bike CdA
@@ -168,60 +232,59 @@ def estimate_cda(
             estimates_by_segment=(),
         )
 
-    estimates_arr = np.array(segment_estimates)
-    weights_arr = np.array(segment_weights)
+    x_arr = np.array(x_values)
+    y_arr = np.array(y_values)
+    weights_arr = np.array(weights)
 
-    # Duration-weighted mean
-    weighted_mean = float(np.average(estimates_arr, weights=weights_arr))
+    # Weighted linear regression through origin: y = CdA * x
+    # CdA = sum(w * x * y) / sum(w * x^2)
+    numerator = np.sum(weights_arr * x_arr * y_arr)
+    denominator = np.sum(weights_arr * x_arr * x_arr)
 
-    # Calculate weighted standard deviation
-    variance = float(
-        np.average((estimates_arr - weighted_mean) ** 2, weights=weights_arr)
-    )
-    std_dev = np.sqrt(variance)
-
-    # Standard error of the weighted mean
-    n = len(estimates_arr)
-    std_error = std_dev / np.sqrt(n) if n > 1 else std_dev
-
-    # Calculate R² as a measure of consistency
-    # R² = 1 - SS_res / SS_tot where SS_tot is variance from the weighted mean
-    # Since we're measuring consistency of individual estimates, not fitting a model,
-    # we use the weighted variance relative to the overall weighted mean
-    ss_tot = float(np.sum(weights_arr * (estimates_arr - weighted_mean) ** 2))
-
-    # For estimation from repeated measurements, R² reflects how much variance
-    # is explained by the weighted mean. With perfect consistency, all estimates
-    # equal the mean and R² = 1.
-    if ss_tot > 0:
-        # Residuals are the deviations from weighted mean
-        # In this context, lower variance = higher R²
-        # We normalize by the variance of estimates around a naive mean (unweighted)
-        naive_mean = float(np.mean(estimates_arr))
-        ss_naive = float(np.sum((estimates_arr - naive_mean) ** 2))
-        if ss_naive > 0:
-            # Weighted mean should explain more variance than naive mean
-            ss_res_weighted = float(np.sum(weights_arr * (estimates_arr - weighted_mean) ** 2))
-            # Normalize both by number of segments for fair comparison
-            r_squared = max(0.0, 1.0 - (ss_res_weighted / np.sum(weights_arr)) / (ss_naive / n))
-        else:
-            r_squared = 1.0  # All estimates identical
+    if denominator <= 0:
+        cda = 0.32
     else:
-        r_squared = 1.0  # All estimates identical
+        cda = float(numerator / denominator)
 
-    # Also calculate CV for confidence tier determination
-    cv = std_dev / weighted_mean if weighted_mean > 0 else 1.0
+    # Calculate R² for regression through origin
+    # R² = 1 - SS_res / SS_tot
+    # where SS_tot = sum(w * y^2) for regression through origin
+    y_pred = cda * x_arr
+    ss_res = float(np.sum(weights_arr * (y_arr - y_pred) ** 2))
+    ss_tot = float(np.sum(weights_arr * y_arr ** 2))
+
+    if ss_tot > 0:
+        r_squared = max(0.0, 1.0 - ss_res / ss_tot)
+    else:
+        r_squared = 1.0
+
+    # Calculate standard error of CdA estimate
+    n = len(x_values)
+    if n > 1:
+        # Residual standard error
+        residual_var = ss_res / (n - 1)  # -1 for one parameter (CdA)
+        # Standard error of slope in weighted regression through origin
+        std_error = float(np.sqrt(residual_var / denominator)) if denominator > 0 else 0.1
+    else:
+        std_error = 0.1
 
     total_duration = float(np.sum(weights_arr))
 
+    # Calculate CV for confidence tier
+    estimates_arr = np.array(segment_estimates)
+    weighted_mean = float(np.average(estimates_arr, weights=weights_arr))
+    variance = float(np.average((estimates_arr - weighted_mean) ** 2, weights=weights_arr))
+    std_dev = np.sqrt(variance)
+    coefficient_of_variation = std_dev / weighted_mean if weighted_mean > 0 else 1.0
+
     # Determine confidence tier
-    confidence = confidence_tier(n, total_duration, cv)
+    confidence = confidence_tier(n, total_duration, coefficient_of_variation)
 
     return CdAEstimate(
-        cda=weighted_mean,
+        cda=cda,
         confidence=confidence,
-        std_error=float(std_error),
-        r_squared=float(r_squared),
+        std_error=std_error,
+        r_squared=r_squared,
         n_segments=n,
         total_duration_s=total_duration,
         estimates_by_segment=tuple(segment_estimates),
@@ -296,8 +359,8 @@ def inputs_from_segments(
 ) -> list[CalibrationInput]:
     """Create CalibrationInputs from segments and raw data.
 
-    Convenience function to extract segment data and create CalibrationInput
-    objects for the estimation function.
+    Extracts the array slices for each segment and creates CalibrationInput
+    objects with the raw data arrays for the estimation function.
 
     Args:
         segments: List of calibration segments.
@@ -309,21 +372,24 @@ def inputs_from_segments(
         crr: Rolling resistance coefficient.
 
     Returns:
-        List of CalibrationInput objects.
+        List of CalibrationInput objects with array data.
     """
     inputs: list[CalibrationInput] = []
 
     for seg in segments:
-        # Use segment means directly if available, or recalculate from arrays
+        # Extract array slices for this segment
+        seg_power = power[seg.start_idx : seg.end_idx]
+        seg_speed = speed[seg.start_idx : seg.end_idx]
+        seg_grade = grade[seg.start_idx : seg.end_idx]
+
         inputs.append(
             CalibrationInput(
-                power=seg.mean_power_w,
-                speed=seg.mean_speed_mps,
-                grade=seg.mean_grade_pct,
+                power=tuple(float(p) for p in seg_power),
+                speed=tuple(float(s) for s in seg_speed),
+                grade=tuple(float(g) for g in seg_grade),
                 air_density=air_density,
                 rider_mass=rider_mass,
                 crr=crr,
-                duration_s=seg.duration_s,
             )
         )
 

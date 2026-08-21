@@ -19,7 +19,7 @@ from trainingdash.domain.calibration_segments import (
     filter_drafting_segments,
     calculate_segment_quality,
 )
-from trainingdash.domain.physics import RiderParams, EnvironmentParams
+from trainingdash.domain.physics import power_required, RiderParams
 
 
 class TestCalibrationSegment:
@@ -203,98 +203,85 @@ class TestSelectCalibrationSegments:
 class TestSegmentQuality:
     """Tests for segment quality scoring."""
 
+    def _make_segment(
+        self,
+        mean_speed_mps: float = 11.0,
+        mean_grade_pct: float = 0.0,
+        power_cv: float = 0.05,
+        speed_cv: float = 0.02,
+        duration_s: float = 120.0,
+    ) -> CalibrationSegment:
+        """Create a segment with specified parameters."""
+        return CalibrationSegment(
+            start_idx=0,
+            end_idx=int(duration_s),
+            duration_s=duration_s,
+            mean_speed_mps=mean_speed_mps,
+            mean_power_w=200.0,
+            mean_grade_pct=mean_grade_pct,
+            power_cv=power_cv,
+            speed_cv=speed_cv,
+            quality_score=0.0,  # Will be calculated
+        )
+
     def test_higher_speed_higher_quality(self):
         """Higher speed should give higher quality score."""
-        q_slow = calculate_segment_quality(
-            mean_speed_mps=9.0,  # ~32 km/h
-            mean_grade_pct=0.0,
-            power_cv=0.05,
-            speed_cv=0.02,
-            duration_s=120.0,
-        )
-        q_fast = calculate_segment_quality(
-            mean_speed_mps=13.0,  # ~47 km/h
-            mean_grade_pct=0.0,
-            power_cv=0.05,
-            speed_cv=0.02,
-            duration_s=120.0,
-        )
+        seg_slow = self._make_segment(mean_speed_mps=9.0)  # ~32 km/h
+        seg_fast = self._make_segment(mean_speed_mps=13.0)  # ~47 km/h
+        
+        q_slow = calculate_segment_quality(seg_slow)
+        q_fast = calculate_segment_quality(seg_fast)
         assert q_fast > q_slow
 
     def test_flatter_grade_higher_quality(self):
         """Flatter grade should give higher quality score."""
-        q_hilly = calculate_segment_quality(
-            mean_speed_mps=11.0,
-            mean_grade_pct=1.5,
-            power_cv=0.05,
-            speed_cv=0.02,
-            duration_s=120.0,
-        )
-        q_flat = calculate_segment_quality(
-            mean_speed_mps=11.0,
-            mean_grade_pct=0.0,
-            power_cv=0.05,
-            speed_cv=0.02,
-            duration_s=120.0,
-        )
+        seg_hilly = self._make_segment(mean_grade_pct=1.5)
+        seg_flat = self._make_segment(mean_grade_pct=0.0)
+        
+        q_hilly = calculate_segment_quality(seg_hilly)
+        q_flat = calculate_segment_quality(seg_flat)
         assert q_flat > q_hilly
 
     def test_lower_cv_higher_quality(self):
         """Lower coefficient of variation should give higher quality."""
-        q_variable = calculate_segment_quality(
-            mean_speed_mps=11.0,
-            mean_grade_pct=0.0,
-            power_cv=0.12,
-            speed_cv=0.04,
-            duration_s=120.0,
-        )
-        q_steady = calculate_segment_quality(
-            mean_speed_mps=11.0,
-            mean_grade_pct=0.0,
-            power_cv=0.03,
-            speed_cv=0.01,
-            duration_s=120.0,
-        )
+        seg_variable = self._make_segment(power_cv=0.12, speed_cv=0.04)
+        seg_steady = self._make_segment(power_cv=0.03, speed_cv=0.01)
+        
+        q_variable = calculate_segment_quality(seg_variable)
+        q_steady = calculate_segment_quality(seg_steady)
         assert q_steady > q_variable
 
     def test_longer_duration_higher_quality(self):
         """Longer duration should give higher quality score."""
-        q_short = calculate_segment_quality(
-            mean_speed_mps=11.0,
-            mean_grade_pct=0.0,
-            power_cv=0.05,
-            speed_cv=0.02,
-            duration_s=70.0,
-        )
-        q_long = calculate_segment_quality(
-            mean_speed_mps=11.0,
-            mean_grade_pct=0.0,
-            power_cv=0.05,
-            speed_cv=0.02,
-            duration_s=180.0,
-        )
+        seg_short = self._make_segment(duration_s=70.0)
+        seg_long = self._make_segment(duration_s=180.0)
+        
+        q_short = calculate_segment_quality(seg_short)
+        q_long = calculate_segment_quality(seg_long)
         assert q_long > q_short
 
     def test_quality_score_range(self):
         """Quality score should be between 0 and 100."""
         # Best case
-        q_best = calculate_segment_quality(
+        seg_best = self._make_segment(
             mean_speed_mps=14.0,  # ~50 km/h
             mean_grade_pct=0.0,
             power_cv=0.0,
             speed_cv=0.0,
             duration_s=300.0,
         )
+        q_best = calculate_segment_quality(seg_best)
         assert 0 <= q_best <= 100
 
         # Worst case (within valid thresholds)
-        q_worst = calculate_segment_quality(
+        seg_worst = self._make_segment(
             mean_speed_mps=8.5,  # Just above 30 km/h
             mean_grade_pct=1.9,  # Near 2% limit
             power_cv=0.14,
             speed_cv=0.04,
             duration_s=65.0,
         )
+        q_worst = calculate_segment_quality(seg_worst)
         assert 0 <= q_worst <= 100
 
 
@@ -302,60 +289,56 @@ class TestDraftingDetection:
     """Tests for drafting detection."""
 
     @pytest.fixture
-    def standard_rider(self):
-        """Standard test rider."""
-        return RiderParams(mass_kg=83, cda=0.32, crr=0.004)
+    def standard_rider_params(self):
+        """Standard test rider parameters."""
+        return {"baseline_cda": 0.32, "rider_mass": 83}
 
-    def test_empty_data_returns_empty(self, standard_rider):
+    def test_empty_data_returns_empty(self, standard_rider_params):
         """Empty input should return empty array."""
         result = detect_drafting(
             power=np.array([]),
             speed=np.array([]),
-            grade=np.array([]),
-            rider=standard_rider,
+            **standard_rider_params,
         )
         assert len(result) == 0
 
-    def test_normal_riding_not_flagged(self, standard_rider):
+    def test_normal_riding_not_flagged(self, standard_rider_params):
         """Normal riding should not be flagged as drafting."""
         n = 100
         speed = np.full(n, 11.0)  # ~40 km/h
-        grade = np.zeros(n)
         
         # Calculate expected power and use it
-        from trainingdash.domain.physics import power_required
-        expected_power = power_required(11.0, 0.0, standard_rider)
+        rider = RiderParams(mass_kg=83, cda=0.32, crr=0.004)
+        expected_power = power_required(11.0, 0.0, rider)
         power = np.full(n, expected_power)
         
-        result = detect_drafting(power, speed, grade, standard_rider)
+        result = detect_drafting(power, speed, **standard_rider_params)
         
         # Should not flag normal riding
         assert np.sum(result) < n * 0.1  # Less than 10% flagged
 
-    def test_low_power_flagged_as_drafting(self, standard_rider):
+    def test_low_power_flagged_as_drafting(self, standard_rider_params):
         """Abnormally low power at high speed should be flagged."""
         n = 100
         speed = np.full(n, 11.0)  # ~40 km/h
-        grade = np.zeros(n)
         
         # Use only 50% of expected power (drafting)
-        from trainingdash.domain.physics import power_required
-        expected_power = power_required(11.0, 0.0, standard_rider)
+        rider = RiderParams(mass_kg=83, cda=0.32, crr=0.004)
+        expected_power = power_required(11.0, 0.0, rider)
         power = np.full(n, expected_power * 0.5)
         
-        result = detect_drafting(power, speed, grade, standard_rider, threshold=0.70)
+        result = detect_drafting(power, speed, **standard_rider_params, threshold=0.70)
         
         # Should flag most samples
         assert np.sum(result) > n * 0.8
 
-    def test_stationary_not_flagged(self, standard_rider):
+    def test_stationary_not_flagged(self, standard_rider_params):
         """Stationary samples should not be flagged."""
         n = 100
         speed = np.full(n, 0.0)
-        grade = np.zeros(n)
         power = np.full(n, 0.0)
         
-        result = detect_drafting(power, speed, grade, standard_rider)
+        result = detect_drafting(power, speed, **standard_rider_params)
         
         # Nothing flagged when not moving
         assert np.sum(result) == 0
@@ -365,10 +348,10 @@ class TestFilterDraftingSegments:
     """Tests for filtering segments with drafting."""
 
     @pytest.fixture
-    def standard_rider(self):
-        return RiderParams(mass_kg=83, cda=0.32, crr=0.004)
+    def standard_rider_params(self):
+        return {"baseline_cda": 0.32, "rider_mass": 83}
 
-    def test_filters_drafting_segments(self, standard_rider):
+    def test_filters_drafting_segments(self, standard_rider_params):
         """Should filter out segments with significant drafting."""
         # Create two segments
         seg1 = CalibrationSegment(
@@ -383,22 +366,20 @@ class TestFilterDraftingSegments:
         )
         
         # Create data where second segment has drafting
-        from trainingdash.domain.physics import power_required
-        expected_power = power_required(11.0, 0.0, standard_rider)
+        rider = RiderParams(mass_kg=83, cda=0.32, crr=0.004)
+        expected_power = power_required(11.0, 0.0, rider)
         
         power = np.concatenate([
             np.full(100, expected_power),  # Normal
             np.full(100, expected_power * 0.5),  # Drafting
         ])
         speed = np.full(200, 11.0)
-        grade = np.zeros(200)
         
         filtered, rejected = filter_drafting_segments(
             segments=[seg1, seg2],
             power=power,
             speed=speed,
-            grade=grade,
-            rider=standard_rider,
+            **standard_rider_params,
         )
         
         # First segment should pass, second should be rejected

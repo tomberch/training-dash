@@ -28,60 +28,58 @@ class TestCalibrationInput:
     """Tests for CalibrationInput dataclass."""
 
     def test_create_input(self):
-        """Should create a valid calibration input."""
+        """Should create a valid calibration input with arrays."""
         inp = CalibrationInput(
-            power=250.0,
-            speed=11.0,
-            grade=0.0,
+            power=(250.0, 251.0, 249.0),
+            speed=(11.0, 11.1, 10.9),
+            grade=(0.0, 0.1, -0.1),
             air_density=1.225,
             rider_mass=83.0,
             crr=0.004,
-            duration_s=120.0,
         )
-        assert inp.power == 250.0
-        assert inp.speed == 11.0
-        assert inp.duration_s == 120.0
+        assert inp.power == (250.0, 251.0, 249.0)
+        assert inp.speed == (11.0, 11.1, 10.9)
+        assert inp.duration_s == 3.0  # Length of arrays
 
-    def test_default_duration(self):
-        """Should have default duration of 1.0."""
+    def test_mean_properties(self):
+        """Should calculate mean values from arrays."""
         inp = CalibrationInput(
-            power=250.0,
-            speed=11.0,
-            grade=0.0,
+            power=(250.0, 260.0, 240.0),
+            speed=(11.0, 12.0, 10.0),
+            grade=(0.0, 1.0, -1.0),
             air_density=1.225,
             rider_mass=83.0,
             crr=0.004,
         )
-        assert inp.duration_s == 1.0
+        assert inp.mean_power == 250.0
+        assert inp.mean_speed == 11.0
+        assert inp.mean_grade == 0.0
 
 
 class TestSingleSegmentEstimation:
     """Tests for _estimate_cda_single_segment function."""
 
-    def test_zero_speed_returns_zero(self):
-        """Zero speed should return zero CdA."""
-        inp = CalibrationInput(
-            power=250.0,
-            speed=0.0,
-            grade=0.0,
+    def _make_input(self, power: float, speed: float, grade: float = 0.0, n_samples: int = 100) -> CalibrationInput:
+        """Create a CalibrationInput with repeated values."""
+        return CalibrationInput(
+            power=tuple([power] * n_samples),
+            speed=tuple([speed] * n_samples),
+            grade=tuple([grade] * n_samples),
             air_density=1.225,
             rider_mass=83.0,
             crr=0.004,
         )
+
+    def test_zero_speed_returns_zero(self):
+        """Zero speed should return zero CdA."""
+        inp = self._make_input(power=250.0, speed=0.0)
         assert _estimate_cda_single_segment(inp) == 0.0
 
     def test_reasonable_cda_estimate(self):
         """Should estimate reasonable CdA from synthetic data."""
         # Create input matching a known CdA
         # At 40 km/h (11.11 m/s) flat, with CdA=0.32, power ~315W
-        inp = CalibrationInput(
-            power=315.0,
-            speed=11.11,
-            grade=0.0,
-            air_density=1.225,
-            rider_mass=83.0,
-            crr=0.004,
-        )
+        inp = self._make_input(power=315.0, speed=11.11)
         cda = _estimate_cda_single_segment(inp)
         
         # Should be close to 0.32
@@ -89,22 +87,8 @@ class TestSingleSegmentEstimation:
 
     def test_higher_power_higher_cda(self):
         """Higher power at same speed implies higher CdA."""
-        inp_low = CalibrationInput(
-            power=250.0,
-            speed=11.0,
-            grade=0.0,
-            air_density=1.225,
-            rider_mass=83.0,
-            crr=0.004,
-        )
-        inp_high = CalibrationInput(
-            power=350.0,
-            speed=11.0,
-            grade=0.0,
-            air_density=1.225,
-            rider_mass=83.0,
-            crr=0.004,
-        )
+        inp_low = self._make_input(power=250.0, speed=11.0)
+        inp_high = self._make_input(power=350.0, speed=11.0)
         
         cda_low = _estimate_cda_single_segment(inp_low)
         cda_high = _estimate_cda_single_segment(inp_high)
@@ -115,22 +99,8 @@ class TestSingleSegmentEstimation:
         """Should account for grade in estimation."""
         # On a climb, same power at same speed implies lower CdA
         # (more power goes to gravity)
-        inp_flat = CalibrationInput(
-            power=300.0,
-            speed=10.0,
-            grade=0.0,
-            air_density=1.225,
-            rider_mass=83.0,
-            crr=0.004,
-        )
-        inp_climb = CalibrationInput(
-            power=300.0,
-            speed=10.0,
-            grade=1.0,  # 1% grade
-            air_density=1.225,
-            rider_mass=83.0,
-            crr=0.004,
-        )
+        inp_flat = self._make_input(power=300.0, speed=10.0, grade=0.0)
+        inp_climb = self._make_input(power=300.0, speed=10.0, grade=1.0)
         
         cda_flat = _estimate_cda_single_segment(inp_flat)
         cda_climb = _estimate_cda_single_segment(inp_climb)
@@ -142,6 +112,17 @@ class TestSingleSegmentEstimation:
 class TestEstimateCda:
     """Tests for estimate_cda function."""
 
+    def _make_input(self, power: float, speed: float, grade: float = 0.0, n_samples: int = 100) -> CalibrationInput:
+        """Create a CalibrationInput with repeated values."""
+        return CalibrationInput(
+            power=tuple([power] * n_samples),
+            speed=tuple([speed] * n_samples),
+            grade=tuple([grade] * n_samples),
+            air_density=1.225,
+            rider_mass=83.0,
+            crr=0.004,
+        )
+
     def test_empty_inputs_raises(self):
         """Empty inputs should raise ValueError."""
         with pytest.raises(ValueError, match="No calibration inputs"):
@@ -149,15 +130,7 @@ class TestEstimateCda:
 
     def test_single_segment_estimation(self):
         """Should estimate CdA from single segment."""
-        inp = CalibrationInput(
-            power=315.0,
-            speed=11.11,
-            grade=0.0,
-            air_density=1.225,
-            rider_mass=83.0,
-            crr=0.004,
-            duration_s=120.0,
-        )
+        inp = self._make_input(power=315.0, speed=11.11, n_samples=120)
         
         result = estimate_cda([inp])
         
@@ -169,21 +142,9 @@ class TestEstimateCda:
     def test_multiple_segments_averaged(self):
         """Should average CdA across multiple segments."""
         inputs = [
-            CalibrationInput(
-                power=315.0, speed=11.11, grade=0.0,
-                air_density=1.225, rider_mass=83.0, crr=0.004,
-                duration_s=100.0,
-            ),
-            CalibrationInput(
-                power=280.0, speed=10.5, grade=0.0,
-                air_density=1.225, rider_mass=83.0, crr=0.004,
-                duration_s=100.0,
-            ),
-            CalibrationInput(
-                power=350.0, speed=11.5, grade=0.0,
-                air_density=1.225, rider_mass=83.0, crr=0.004,
-                duration_s=100.0,
-            ),
+            self._make_input(power=315.0, speed=11.11, n_samples=100),
+            self._make_input(power=280.0, speed=10.5, n_samples=100),
+            self._make_input(power=350.0, speed=11.5, n_samples=100),
         ]
         
         result = estimate_cda(inputs)
@@ -195,17 +156,9 @@ class TestEstimateCda:
     def test_duration_weighted_averaging(self):
         """Longer segments should have more weight."""
         # Short segment with different CdA
-        short_inp = CalibrationInput(
-            power=400.0, speed=11.0, grade=0.0,  # Higher power → higher CdA estimate
-            air_density=1.225, rider_mass=83.0, crr=0.004,
-            duration_s=60.0,
-        )
+        short_inp = self._make_input(power=400.0, speed=11.0, n_samples=60)  # Higher power → higher CdA
         # Long segment with typical CdA
-        long_inp = CalibrationInput(
-            power=315.0, speed=11.11, grade=0.0,
-            air_density=1.225, rider_mass=83.0, crr=0.004,
-            duration_s=240.0,
-        )
+        long_inp = self._make_input(power=315.0, speed=11.11, n_samples=240)
         
         result = estimate_cda([short_inp, long_inp])
         
@@ -219,17 +172,9 @@ class TestEstimateCda:
     def test_invalid_estimates_filtered(self):
         """Should filter out clearly invalid CdA estimates."""
         # One reasonable input
-        good_inp = CalibrationInput(
-            power=315.0, speed=11.11, grade=0.0,
-            air_density=1.225, rider_mass=83.0, crr=0.004,
-            duration_s=120.0,
-        )
+        good_inp = self._make_input(power=315.0, speed=11.11, n_samples=120)
         # One that would give invalid CdA (very low power)
-        bad_inp = CalibrationInput(
-            power=50.0, speed=11.0, grade=0.0,  # Too low → CdA would be negative/tiny
-            air_density=1.225, rider_mass=83.0, crr=0.004,
-            duration_s=120.0,
-        )
+        bad_inp = self._make_input(power=50.0, speed=11.0, n_samples=120)  # Too low → CdA would be tiny
         
         result = estimate_cda([good_inp, bad_inp])
         
@@ -240,14 +185,8 @@ class TestEstimateCda:
         """All invalid estimates should return default CdA."""
         # All inputs would give invalid CdA
         bad_inputs = [
-            CalibrationInput(
-                power=30.0, speed=11.0, grade=0.0,
-                air_density=1.225, rider_mass=83.0, crr=0.004,
-            ),
-            CalibrationInput(
-                power=20.0, speed=10.0, grade=0.0,
-                air_density=1.225, rider_mass=83.0, crr=0.004,
-            ),
+            self._make_input(power=30.0, speed=11.0, n_samples=100),
+            self._make_input(power=20.0, speed=10.0, n_samples=100),
         ]
         
         result = estimate_cda(bad_inputs)
@@ -255,6 +194,18 @@ class TestEstimateCda:
         assert result.cda == 0.32  # Default
         assert result.confidence == "low"
         assert result.n_segments == 0
+
+    def test_crr_fixed_parameter(self):
+        """Should use crr_fixed when provided."""
+        inp = self._make_input(power=315.0, speed=11.11, n_samples=100)
+        
+        # Same input, different fixed Crr should give different CdA
+        result_low_crr = estimate_cda([inp], crr_fixed=0.003)
+        result_high_crr = estimate_cda([inp], crr_fixed=0.006)
+        
+        # Higher Crr means more power goes to rolling resistance,
+        # leaving less for aero, so CdA estimate should be lower
+        assert result_high_crr.cda < result_low_crr.cda
 
 
 class TestConfidenceTier:
@@ -349,7 +300,7 @@ class TestInputsFromSegments:
     """Tests for inputs_from_segments helper."""
 
     def test_creates_inputs_from_segments(self):
-        """Should create CalibrationInputs from segments."""
+        """Should create CalibrationInputs from segments with array data."""
         segments = [
             CalibrationSegment(
                 start_idx=0, end_idx=100, duration_s=100.0,
@@ -363,10 +314,10 @@ class TestInputsFromSegments:
             ),
         ]
         
-        # Dummy arrays (not actually used since we use segment means)
-        power = np.zeros(200)
-        speed = np.zeros(200)
-        grade = np.zeros(200)
+        # Create actual arrays with data
+        power = np.concatenate([np.full(100, 250.0), np.full(100, 230.0)])
+        speed = np.concatenate([np.full(100, 11.0), np.full(100, 10.5)])
+        grade = np.concatenate([np.full(100, 0.5), np.full(100, 0.0)])
         
         inputs = inputs_from_segments(
             segments=segments,
@@ -379,7 +330,11 @@ class TestInputsFromSegments:
         )
         
         assert len(inputs) == 2
-        assert inputs[0].power == 250.0
-        assert inputs[0].speed == 11.0
+        # First segment
+        assert len(inputs[0].power) == 100
+        assert inputs[0].mean_power == 250.0
+        assert inputs[0].mean_speed == 11.0
         assert inputs[0].duration_s == 100.0
-        assert inputs[1].power == 230.0
+        # Second segment
+        assert len(inputs[1].power) == 100
+        assert inputs[1].mean_power == 230.0

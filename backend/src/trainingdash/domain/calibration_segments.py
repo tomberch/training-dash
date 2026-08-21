@@ -24,7 +24,7 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
-from .physics import EnvironmentParams, RiderParams, power_required
+from .physics import RiderParams, power_required
 
 
 def calculate_grade(
@@ -122,13 +122,7 @@ def _coefficient_of_variation(arr: NDArray[np.floating]) -> float:
     return float(np.std(arr) / mean)
 
 
-def calculate_segment_quality(
-    mean_speed_mps: float,
-    mean_grade_pct: float,
-    power_cv: float,
-    speed_cv: float,
-    duration_s: float,
-) -> float:
+def calculate_segment_quality(segment: CalibrationSegment) -> float:
     """Score segment quality for CdA estimation (0-100).
 
     Factors (weighted):
@@ -137,28 +131,34 @@ def calculate_segment_quality(
     - Lower power CV = better (steadier data) - 20 points
     - Lower speed CV = better (steadier data) - 15 points
     - Longer duration = better (more samples) - 15 points
+
+    Args:
+        segment: CalibrationSegment to score.
+
+    Returns:
+        Quality score from 0-100.
     """
     score = 0.0
 
     # Speed score (30 points): 30 km/h = 0, 50 km/h = 30
     # 30 km/h = 8.33 m/s, 50 km/h = 13.89 m/s
-    speed_score = min(30.0, max(0.0, (mean_speed_mps - 8.33) / (13.89 - 8.33) * 30))
+    speed_score = min(30.0, max(0.0, (segment.mean_speed_mps - 8.33) / (13.89 - 8.33) * 30))
     score += speed_score
 
     # Grade score (20 points): 0% = 20, 2% = 0
-    grade_score = max(0.0, 20.0 - abs(mean_grade_pct) * 10)
+    grade_score = max(0.0, 20.0 - abs(segment.mean_grade_pct) * 10)
     score += grade_score
 
     # Power CV score (20 points): 0% CV = 20, 15% CV = 0
-    power_cv_score = max(0.0, 20.0 - power_cv / 0.15 * 20)
+    power_cv_score = max(0.0, 20.0 - segment.power_cv / 0.15 * 20)
     score += power_cv_score
 
     # Speed CV score (15 points): 0% CV = 15, 5% CV = 0
-    speed_cv_score = max(0.0, 15.0 - speed_cv / 0.05 * 15)
+    speed_cv_score = max(0.0, 15.0 - segment.speed_cv / 0.05 * 15)
     score += speed_cv_score
 
     # Duration score (15 points): 60s = 0, 180s+ = 15
-    duration_score = min(15.0, max(0.0, (duration_s - 60) / 120 * 15))
+    duration_score = min(15.0, max(0.0, (segment.duration_s - 60) / 120 * 15))
     score += duration_score
 
     return score
@@ -263,12 +263,23 @@ def select_calibration_segments(
             reject("speed_unsteady")
             continue
 
-        # Calculate quality score
-        quality = calculate_segment_quality(
-            mean_speed, mean_grade, power_cv, speed_cv, duration
+        # Create segment (quality_score will be set after)
+        segment = CalibrationSegment(
+            start_idx=int(start_idx),
+            end_idx=int(end_idx),
+            duration_s=float(duration),
+            mean_speed_mps=mean_speed,
+            mean_power_w=mean_power,
+            mean_grade_pct=mean_grade,
+            power_cv=power_cv,
+            speed_cv=speed_cv,
+            quality_score=0.0,  # Temporary
         )
 
-        # Create segment
+        # Calculate quality score using the segment
+        quality = calculate_segment_quality(segment)
+
+        # Create final segment with quality score
         segment = CalibrationSegment(
             start_idx=int(start_idx),
             end_idx=int(end_idx),
@@ -295,9 +306,8 @@ def select_calibration_segments(
 def detect_drafting(
     power: NDArray[np.floating],
     speed: NDArray[np.floating],
-    grade: NDArray[np.floating],
-    rider: RiderParams,
-    env: EnvironmentParams | None = None,
+    baseline_cda: float,
+    rider_mass: float,
     threshold: float = 0.70,
 ) -> NDArray[np.bool_]:
     """Flag samples where rider is likely drafting.
@@ -312,9 +322,8 @@ def detect_drafting(
     Args:
         power: Power readings in watts.
         speed: Speed readings in m/s.
-        grade: Road gradient as percentage.
-        rider: Rider parameters including CdA estimate.
-        env: Environment parameters (defaults to sea level, no wind).
+        baseline_cda: Baseline CdA estimate for comparison.
+        rider_mass: Total mass (rider + bike) in kg.
         threshold: Fraction of expected power below which to flag as drafting.
             Default 0.70 means flag if actual < 70% of expected.
 
@@ -324,12 +333,15 @@ def detect_drafting(
     if len(power) == 0:
         return np.array([], dtype=bool)
 
-    n = min(len(power), len(speed), len(grade))
+    n = min(len(power), len(speed))
 
-    # Calculate expected power for each sample
+    # Create rider params for power calculation
+    rider = RiderParams(mass_kg=rider_mass, cda=baseline_cda, crr=0.004)
+
+    # Calculate expected power for each sample (assume flat ground)
     expected_power = np.array(
         [
-            power_required(float(speed[i]), float(grade[i]), rider, env)
+            power_required(float(speed[i]), 0.0, rider, None)
             for i in range(n)
         ]
     )
@@ -352,9 +364,8 @@ def filter_drafting_segments(
     segments: list[CalibrationSegment],
     power: NDArray[np.floating],
     speed: NDArray[np.floating],
-    grade: NDArray[np.floating],
-    rider: RiderParams,
-    env: EnvironmentParams | None = None,
+    baseline_cda: float,
+    rider_mass: float,
     max_drafting_fraction: float = 0.1,
 ) -> tuple[list[CalibrationSegment], int]:
     """Filter out segments with significant drafting.
@@ -363,16 +374,15 @@ def filter_drafting_segments(
         segments: Calibration segments to filter.
         power: Full power array.
         speed: Full speed array.
-        grade: Full grade array.
-        rider: Rider parameters.
-        env: Environment parameters.
+        baseline_cda: Baseline CdA estimate for comparison.
+        rider_mass: Total mass (rider + bike) in kg.
         max_drafting_fraction: Maximum fraction of samples in a segment
             that can be flagged as drafting (default 10%).
 
     Returns:
         Tuple of (filtered segments, count of rejected segments).
     """
-    drafting_mask = detect_drafting(power, speed, grade, rider, env)
+    drafting_mask = detect_drafting(power, speed, baseline_cda, rider_mass)
 
     filtered: list[CalibrationSegment] = []
     rejected_count = 0

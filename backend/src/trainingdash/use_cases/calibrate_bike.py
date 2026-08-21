@@ -32,15 +32,11 @@ from trainingdash.domain.calibration_segments import (
     select_calibration_segments,
 )
 from trainingdash.domain.cda_estimation import (
-    CalibrationInput,
     CdAEstimate,
     estimate_cda,
+    inputs_from_segments,
 )
-from trainingdash.domain.physics import (
-    EnvironmentParams,
-    RiderParams,
-    air_density_from_altitude,
-)
+from trainingdash.domain.physics import air_density_from_altitude
 from trainingdash.repositories.protocols import ActivityRepo, BikeRepo, RecordRepo
 
 logger = logging.getLogger(__name__)
@@ -221,15 +217,15 @@ class CalibrateFromActivities:
 
         # Step 3: Process each activity to extract calibration segments
         all_segments: list[CalibrationSegment] = []
-        all_inputs: list[CalibrationInput] = []
         total_rejection_reasons: dict[str, int] = {}
         activities_with_segments = 0
 
-        # Track arrays for drafting detection across all activities
+        # Track arrays for calibration inputs and drafting detection
         all_power: list[float] = []
         all_speed: list[float] = []
         all_grade: list[float] = []
         segment_offset = 0  # Track offset for segment indices
+        avg_air_density = 1.225  # Default, will be updated
 
         for activity in activities:
             # Skip activities without power data
@@ -290,27 +286,13 @@ class CalibrateFromActivities:
                 all_segments.extend(adjusted_segments)
                 activities_with_segments += 1
 
-                # Accumulate arrays for drafting detection
+                # Accumulate arrays for drafting detection and calibration
                 all_power.extend(power.tolist())
                 all_speed.extend(speed.tolist())
                 all_grade.extend(grade.tolist())
 
-                # Calculate air density from average altitude
-                air_density = air_density_from_altitude(avg_altitude)
-
-                # Create calibration inputs for each segment
-                for seg in result.segments:
-                    all_inputs.append(
-                        CalibrationInput(
-                            power=seg.mean_power_w,
-                            speed=seg.mean_speed_mps,
-                            grade=seg.mean_grade_pct,
-                            air_density=air_density,
-                            rider_mass=total_mass,
-                            crr=crr,
-                            duration_s=seg.duration_s,
-                        )
-                    )
+                # Calculate air density from average altitude (use last activity's value)
+                avg_air_density = air_density_from_altitude(avg_altitude)
 
             segment_offset += len(power)
 
@@ -324,12 +306,6 @@ class CalibrateFromActivities:
         # Step 5: Filter out segments with drafting
         # Use current CdA estimate (or default) for drafting detection
         current_cda = previous_cda if previous_cda else BIKE_TYPE_DEFAULTS[bike.bike_type]["cda"]
-        rider_params = RiderParams(
-            mass_kg=total_mass,
-            cda=current_cda,
-            crr=crr,
-        )
-        env_params = EnvironmentParams()  # Default sea level
 
         power_arr = np.array(all_power)
         speed_arr = np.array(all_speed)
@@ -339,34 +315,33 @@ class CalibrateFromActivities:
             segments=all_segments,
             power=power_arr,
             speed=speed_arr,
-            grade=grade_arr,
-            rider=rider_params,
-            env=env_params,
+            baseline_cda=current_cda,
+            rider_mass=total_mass,
         )
 
         if drafting_rejected > 0:
             total_rejection_reasons["drafting_detected"] = drafting_rejected
             warnings.append(f"{drafting_rejected} segment(s) excluded due to likely drafting")
 
-        # Rebuild inputs list to match filtered segments
-        # Map from segment to its input by matching duration (segments are unique)
-        segment_to_input = {
-            (inp.power, inp.speed, inp.duration_s): inp for inp in all_inputs
-        }
-        filtered_inputs = [
-            segment_to_input[(seg.mean_power_w, seg.mean_speed_mps, seg.duration_s)]
-            for seg in filtered_segments
-            if (seg.mean_power_w, seg.mean_speed_mps, seg.duration_s) in segment_to_input
-        ]
-
-        if not filtered_inputs:
+        if not filtered_segments:
             raise InsufficientDataError(
                 "No valid calibration segments remaining after drafting filter. "
                 "Calibration requires solo riding without drafting."
             )
 
-        # Step 6: Run CdA estimation
-        estimate: CdAEstimate = estimate_cda(filtered_inputs)
+        # Build CalibrationInputs from filtered segments using array data
+        filtered_inputs = inputs_from_segments(
+            segments=filtered_segments,
+            power=power_arr,
+            speed=speed_arr,
+            grade=grade_arr,
+            air_density=avg_air_density,
+            rider_mass=total_mass,
+            crr=crr,
+        )
+
+        # Step 6: Run CdA estimation with fixed Crr
+        estimate: CdAEstimate = estimate_cda(filtered_inputs, crr_fixed=crr)
 
         # Step 7: Determine if we should update the bike
         confidence_order = {"low": 0, "medium": 1, "high": 2}
