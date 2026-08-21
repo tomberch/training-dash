@@ -13,7 +13,6 @@ from trainingdash.repositories.postgres.models import (
     Activity,
     ActivityPeakPower,
     FitnessHistory,
-    Record,
     Route,
 )
 
@@ -362,7 +361,7 @@ class TestRecordsEndpoint:
             route = Route(
                 user_id=seed_user.id,
                 ride_count=1,
-                simplified_polyline=f"LINESTRING({i} {i}, {i+1} {i+1})",
+                simplified_polyline=f"LINESTRING({i} {i}, {i + 1} {i + 1})",
             )
             db_session.add(route)
             await db_session.flush()

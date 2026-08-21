@@ -131,7 +131,7 @@ class TestActivityTypeConstants:
     def test_all_types_defined(self):
         """All expected activity types are in ACTIVITY_TYPES."""
         expected = {"road", "gravel", "mtb", "virtual", "indoor", "commute", "ebike", "other"}
-        assert ACTIVITY_TYPES == expected
+        assert expected == ACTIVITY_TYPES
 
     def test_calibration_eligible_subset(self):
         """Calibration eligible types are a subset of all types."""
@@ -140,8 +140,7 @@ class TestActivityTypeConstants:
     def test_calibration_eligible_types(self):
         """Calibration eligible types are the outdoor ones."""
         expected = {"road", "gravel", "mtb", "commute"}
-        assert CALIBRATION_ELIGIBLE_TYPES == expected
-
+        assert expected == CALIBRATION_ELIGIBLE_TYPES
 
 
 class TestValidateActivityType:

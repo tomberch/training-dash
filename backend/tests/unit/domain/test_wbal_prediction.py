@@ -1,5 +1,7 @@
 """Unit tests for W'bal prediction functions."""
 
+from dataclasses import FrozenInstanceError
+
 import numpy as np
 import pytest
 
@@ -202,7 +204,7 @@ class TestWbalPredictionDataclass:
             time_in_deficit=0,
             final_wbal=19000,
         )
-        with pytest.raises(Exception):  # FrozenInstanceError
+        with pytest.raises(FrozenInstanceError):
             prediction.min_wbal = 0
 
     def test_dataclass_fields(self):

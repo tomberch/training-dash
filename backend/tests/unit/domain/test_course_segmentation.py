@@ -6,9 +6,9 @@ import pytest
 from trainingdash.domain.course_segmentation import (
     Climb,
     CourseSegment,
+    _categorize_climb,
     detect_climbs,
     segment_course,
-    _categorize_climb,
 )
 
 
@@ -108,9 +108,7 @@ class TestSegmentCourse:
         grades = np.array([0.08, 0.08, -0.06])
         elevations = np.array([100, 140, 110])
 
-        segments = segment_course(
-            distances, grades, elevations, grade_threshold_pct=5.0, min_segment_m=200
-        )
+        segments = segment_course(distances, grades, elevations, grade_threshold_pct=5.0, min_segment_m=200)
 
         # Find climbing and descending segments
         climbing = [s for s in segments if s.avg_grade_pct > 0]

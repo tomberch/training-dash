@@ -7,9 +7,10 @@ Usage:
 
 import asyncio
 import sys
+
 sys.path.insert(0, "src")
 
-from sqlalchemy import select, text
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -38,10 +39,10 @@ async def compute_bearings():
                       AND lon IS NOT NULL
                     ORDER BY timestamp
                 """),
-                {"activity_id": activity_id}
+                {"activity_id": activity_id},
             )
             rows = result.fetchall()
-            
+
             if not rows:
                 print(f"Activity {activity_id}: No GPS data")
                 continue
@@ -61,10 +62,10 @@ async def compute_bearings():
                     SET direction_bearing = :b25, direction_bearing_75 = :b50
                     WHERE id = :id
                 """),
-                {"b25": bearings.bearing_25, "b50": bearings.bearing_75, "id": activity_id}
+                {"b25": bearings.bearing_25, "b50": bearings.bearing_75, "id": activity_id},
             )
             await session.commit()
-            print(f"  Updated!")
+            print("  Updated!")
 
     await engine.dispose()
 

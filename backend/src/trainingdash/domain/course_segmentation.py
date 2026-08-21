@@ -4,8 +4,8 @@ This module provides utilities for splitting a course into segments
 based on grade changes, and detecting/categorizing climbs.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 import numpy as np
 
@@ -95,9 +95,7 @@ def segment_course(
         if should_split or is_last_point:
             # Finalize current segment
             end_idx = i if should_split else i + 1
-            segment = _create_segment(
-                distances, grades, elevations, segment_start_idx, end_idx
-            )
+            segment = _create_segment(distances, grades, elevations, segment_start_idx, end_idx)
             if segment.length_m > 0:
                 segments.append(segment)
 
@@ -146,9 +144,7 @@ def _create_segment(
     )
 
 
-def _merge_short_segments(
-    segments: list[CourseSegment], min_length_m: float
-) -> list[CourseSegment]:
+def _merge_short_segments(segments: list[CourseSegment], min_length_m: float) -> list[CourseSegment]:
     """Merge segments shorter than minimum length with neighbors."""
     if len(segments) <= 1:
         return segments
@@ -179,9 +175,7 @@ def _merge_two_segments(seg1: CourseSegment, seg2: CourseSegment) -> CourseSegme
 
     # Weighted average grade
     if total_length > 0:
-        avg_grade = (
-            seg1.avg_grade_pct * seg1.length_m + seg2.avg_grade_pct * seg2.length_m
-        ) / total_length
+        avg_grade = (seg1.avg_grade_pct * seg1.length_m + seg2.avg_grade_pct * seg2.length_m) / total_length
     else:
         avg_grade = 0.0
 

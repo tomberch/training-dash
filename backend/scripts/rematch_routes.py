@@ -39,9 +39,7 @@ async def rematch_all_routes():
 
         # Clear route assignments and delete routes
         logger.info("Clearing existing route assignments...")
-        await session.execute(
-            update(Activity).values(route_id=None, direction_bearing=None, direction_bearing_75=None)
-        )
+        await session.execute(update(Activity).values(route_id=None, direction_bearing=None, direction_bearing_75=None))
         await session.execute(text("DELETE FROM routes"))
         await session.commit()
         logger.info("Cleared all route data")

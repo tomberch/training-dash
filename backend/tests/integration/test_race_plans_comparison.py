@@ -9,7 +9,6 @@ from geoalchemy2 import WKTElement
 
 from trainingdash.repositories.postgres.models import (
     Activity,
-    Bike,
     RaceCourse,
     RacePlan,
     Record,
@@ -139,33 +138,39 @@ async def activity_with_records(db_session, comparison_activity):
 
     # Segment 0 (0-2000m): power ~205W
     for i in range(20):
-        records.append(Record(
-            activity_id=comparison_activity.id,
-            timestamp=start_time + timedelta(seconds=i * 15),
-            distance_m=i * 100,
-            power_w=205 + (i % 3) - 1,  # Small variation
-            speed_mps=6.5,
-        ))
+        records.append(
+            Record(
+                activity_id=comparison_activity.id,
+                timestamp=start_time + timedelta(seconds=i * 15),
+                distance_m=i * 100,
+                power_w=205 + (i % 3) - 1,  # Small variation
+                speed_mps=6.5,
+            )
+        )
 
     # Segment 1 (2000-4000m): power ~235W
     for i in range(20):
-        records.append(Record(
-            activity_id=comparison_activity.id,
-            timestamp=start_time + timedelta(seconds=300 + i * 17),
-            distance_m=2000 + i * 100,
-            power_w=235 + (i % 5) - 2,
-            speed_mps=5.5,
-        ))
+        records.append(
+            Record(
+                activity_id=comparison_activity.id,
+                timestamp=start_time + timedelta(seconds=300 + i * 17),
+                distance_m=2000 + i * 100,
+                power_w=235 + (i % 5) - 2,
+                speed_mps=5.5,
+            )
+        )
 
     # Segment 2 (4000-6000m): power ~185W
     for i in range(20):
-        records.append(Record(
-            activity_id=comparison_activity.id,
-            timestamp=start_time + timedelta(seconds=640 + i * 12),
-            distance_m=4000 + i * 100,
-            power_w=185 + (i % 4) - 2,
-            speed_mps=8.2,
-        ))
+        records.append(
+            Record(
+                activity_id=comparison_activity.id,
+                timestamp=start_time + timedelta(seconds=640 + i * 12),
+                distance_m=4000 + i * 100,
+                power_w=185 + (i % 4) - 2,
+                speed_mps=8.2,
+            )
+        )
 
     db_session.add_all(records)
     await db_session.commit()
@@ -176,9 +181,7 @@ class TestCompareExecution:
     """Tests for POST /api/race-plans/{plan_id}/compare endpoint."""
 
     @pytest.mark.asyncio
-    async def test_compare_returns_correct_structure(
-        self, auth_client, comparison_plan, activity_with_records
-    ):
+    async def test_compare_returns_correct_structure(self, auth_client, comparison_plan, activity_with_records):
         """Compare endpoint returns complete response structure."""
         response = await auth_client.post(
             f"/api/race-plans/{comparison_plan.id}/compare",
@@ -204,9 +207,7 @@ class TestCompareExecution:
         assert "insights" in data
 
     @pytest.mark.asyncio
-    async def test_compare_segment_comparisons(
-        self, auth_client, comparison_plan, activity_with_records
-    ):
+    async def test_compare_segment_comparisons(self, auth_client, comparison_plan, activity_with_records):
         """Segment comparisons contain expected fields."""
         response = await auth_client.post(
             f"/api/race-plans/{comparison_plan.id}/compare",
@@ -229,9 +230,7 @@ class TestCompareExecution:
         assert "time_delta_s" in seg
 
     @pytest.mark.asyncio
-    async def test_compare_pacing_consistency(
-        self, auth_client, comparison_plan, activity_with_records
-    ):
+    async def test_compare_pacing_consistency(self, auth_client, comparison_plan, activity_with_records):
         """Pacing consistency is calculated correctly."""
         response = await auth_client.post(
             f"/api/race-plans/{comparison_plan.id}/compare",
@@ -246,9 +245,7 @@ class TestCompareExecution:
         assert data["pacing_consistency"] > 80
 
     @pytest.mark.asyncio
-    async def test_compare_generates_insights(
-        self, auth_client, comparison_plan, activity_with_records
-    ):
+    async def test_compare_generates_insights(self, auth_client, comparison_plan, activity_with_records):
         """Insights are generated based on pacing patterns."""
         response = await auth_client.post(
             f"/api/race-plans/{comparison_plan.id}/compare",
@@ -281,9 +278,7 @@ class TestCompareExecution:
         assert "not found" in response.json()["detail"].lower()
 
     @pytest.mark.asyncio
-    async def test_compare_activity_no_records(
-        self, auth_client, comparison_plan, comparison_activity
-    ):
+    async def test_compare_activity_no_records(self, auth_client, comparison_plan, comparison_activity):
         """Returns 400 when activity has no records."""
         # comparison_activity has no records (activity_with_records fixture adds them)
         response = await auth_client.post(
@@ -294,9 +289,7 @@ class TestCompareExecution:
         assert "no records" in response.json()["detail"].lower()
 
     @pytest.mark.asyncio
-    async def test_compare_time_delta_formatted(
-        self, auth_client, comparison_plan, activity_with_records
-    ):
+    async def test_compare_time_delta_formatted(self, auth_client, comparison_plan, activity_with_records):
         """Time delta is properly formatted with sign."""
         response = await auth_client.post(
             f"/api/race-plans/{comparison_plan.id}/compare",
@@ -317,21 +310,15 @@ class TestMatchingActivities:
     @pytest.mark.asyncio
     async def test_matching_activities_empty(self, auth_client, comparison_plan):
         """Returns empty list when no matching activities."""
-        response = await auth_client.get(
-            f"/api/race-plans/{comparison_plan.id}/matching-activities"
-        )
+        response = await auth_client.get(f"/api/race-plans/{comparison_plan.id}/matching-activities")
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data, list)
 
     @pytest.mark.asyncio
-    async def test_matching_activities_returns_with_power(
-        self, auth_client, comparison_plan, activity_with_records
-    ):
+    async def test_matching_activities_returns_with_power(self, auth_client, comparison_plan, activity_with_records):
         """Returns activities that have power data."""
-        response = await auth_client.get(
-            f"/api/race-plans/{comparison_plan.id}/matching-activities"
-        )
+        response = await auth_client.get(f"/api/race-plans/{comparison_plan.id}/matching-activities")
         assert response.status_code == 200
         data = response.json()
 
@@ -341,13 +328,9 @@ class TestMatchingActivities:
         assert str(activity_with_records.id) in activity_ids
 
     @pytest.mark.asyncio
-    async def test_matching_activities_structure(
-        self, auth_client, comparison_plan, activity_with_records
-    ):
+    async def test_matching_activities_structure(self, auth_client, comparison_plan, activity_with_records):
         """Activity list items have correct structure."""
-        response = await auth_client.get(
-            f"/api/race-plans/{comparison_plan.id}/matching-activities"
-        )
+        response = await auth_client.get(f"/api/race-plans/{comparison_plan.id}/matching-activities")
         assert response.status_code == 200
         data = response.json()
 
@@ -363,9 +346,7 @@ class TestMatchingActivities:
     @pytest.mark.asyncio
     async def test_matching_activities_plan_not_found(self, auth_client):
         """Returns 404 when plan not found."""
-        response = await auth_client.get(
-            "/api/race-plans/99999/matching-activities"
-        )
+        response = await auth_client.get("/api/race-plans/99999/matching-activities")
         assert response.status_code == 404
         assert "not found" in response.json()["detail"].lower()
 
@@ -385,7 +366,5 @@ class TestComparisonAuth:
     @pytest.mark.asyncio
     async def test_matching_activities_requires_auth(self, app_client, comparison_plan):
         """Matching activities endpoint requires authentication."""
-        response = await app_client.get(
-            f"/api/race-plans/{comparison_plan.id}/matching-activities"
-        )
+        response = await app_client.get(f"/api/race-plans/{comparison_plan.id}/matching-activities")
         assert response.status_code == 401

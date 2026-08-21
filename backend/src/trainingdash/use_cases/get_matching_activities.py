@@ -111,6 +111,4 @@ class GetMatchingActivities:
             return False
         if activity.total_distance_m is None:
             return False
-        if abs(activity.total_distance_m - course_distance) > distance_tolerance:
-            return False
-        return True
+        return abs(activity.total_distance_m - course_distance) <= distance_tolerance

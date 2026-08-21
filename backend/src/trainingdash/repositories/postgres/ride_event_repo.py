@@ -75,15 +75,11 @@ class PostgresRideEventRepo:
 
         # Unlink activities from this event (SET NULL handled by FK, but explicit for clarity)
         await self._session.execute(
-            Activity.__table__.update()
-            .where(Activity.ride_event_id == event_id)
-            .values(ride_event_id=None)
+            Activity.__table__.update().where(Activity.ride_event_id == event_id).values(ride_event_id=None)
         )
 
         # Delete the event (cascades journal entries, media, links)
-        await self._session.execute(
-            delete(RideEvent).where(RideEvent.id == event_id)
-        )
+        await self._session.execute(delete(RideEvent).where(RideEvent.id == event_id))
         await self._session.commit()
         return True
 
@@ -109,9 +105,7 @@ class PostgresJournalEntryRepo:
     async def list_for_event(self, event_id: UUID) -> list[JournalEntry]:
         """List journal entries for an event, ordered by entry_date ascending."""
         result = await self._session.execute(
-            select(JournalEntry)
-            .where(JournalEntry.ride_event_id == event_id)
-            .order_by(JournalEntry.entry_date.asc())
+            select(JournalEntry).where(JournalEntry.ride_event_id == event_id).order_by(JournalEntry.entry_date.asc())
         )
         return list(result.scalars().all())
 
@@ -128,9 +122,7 @@ class PostgresJournalEntryRepo:
         if entry is None:
             return False
 
-        await self._session.execute(
-            delete(JournalEntry).where(JournalEntry.id == entry_id)
-        )
+        await self._session.execute(delete(JournalEntry).where(JournalEntry.id == entry_id))
         await self._session.commit()
         return True
 
@@ -144,9 +136,7 @@ class PostgresRideEventMediaRepo:
     async def get_by_id(self, media_id: UUID, user_id: int) -> RideEventMedia | None:
         """Fetch media by ID, scoped to user via event/entry ownership."""
         # First, just fetch the media record
-        result = await self._session.execute(
-            select(RideEventMedia).where(RideEventMedia.id == media_id)
-        )
+        result = await self._session.execute(select(RideEventMedia).where(RideEventMedia.id == media_id))
         media = result.scalar_one_or_none()
         if media is None:
             return None
@@ -206,9 +196,7 @@ class PostgresRideEventMediaRepo:
         if media is None:
             return False
 
-        await self._session.execute(
-            delete(RideEventMedia).where(RideEventMedia.id == media_id)
-        )
+        await self._session.execute(delete(RideEventMedia).where(RideEventMedia.id == media_id))
         await self._session.commit()
         return True
 
@@ -221,9 +209,7 @@ class PostgresRideEventLinkRepo:
 
     async def get_by_id(self, link_id: UUID, user_id: int) -> RideEventLink | None:
         """Fetch link by ID, scoped to user via event/entry ownership."""
-        result = await self._session.execute(
-            select(RideEventLink).where(RideEventLink.id == link_id)
-        )
+        result = await self._session.execute(select(RideEventLink).where(RideEventLink.id == link_id))
         link = result.scalar_one_or_none()
         if link is None:
             return None
@@ -283,9 +269,7 @@ class PostgresRideEventLinkRepo:
         if link is None:
             return False
 
-        await self._session.execute(
-            delete(RideEventLink).where(RideEventLink.id == link_id)
-        )
+        await self._session.execute(delete(RideEventLink).where(RideEventLink.id == link_id))
         await self._session.commit()
         return True
 

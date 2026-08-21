@@ -108,13 +108,15 @@ class TestFakeBikeRepo:
     @pytest.mark.asyncio
     async def test_get_default_for_user_excludes_retired(self, repo: FakeBikeRepo) -> None:
         """get_default_for_user() returns None if default is retired."""
-        await repo.save(Bike(
-            user_id=1,
-            name="Default",
-            bike_type="road",
-            is_default=True,
-            retired_at=datetime.now(),
-        ))
+        await repo.save(
+            Bike(
+                user_id=1,
+                name="Default",
+                bike_type="road",
+                is_default=True,
+                retired_at=datetime.now(),
+            )
+        )
 
         default = await repo.get_default_for_user(user_id=1)
 
@@ -205,12 +207,14 @@ class TestFakeBikeRepo:
     @pytest.mark.asyncio
     async def test_retire_idempotent(self, repo: FakeBikeRepo) -> None:
         """retire() returns True if already retired."""
-        bike = await repo.save(Bike(
-            user_id=1,
-            name="Test",
-            bike_type="road",
-            retired_at=datetime.now(),
-        ))
+        bike = await repo.save(
+            Bike(
+                user_id=1,
+                name="Test",
+                bike_type="road",
+                retired_at=datetime.now(),
+            )
+        )
 
         result = await repo.retire(bike.id, user_id=1)
 

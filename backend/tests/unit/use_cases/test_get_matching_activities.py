@@ -6,15 +6,14 @@ from uuid import uuid4
 
 import pytest
 
+from tests.fakes.activity_repo import FakeActivityRepo
+from tests.fakes.course_repo import FakeCourseRepo
+from tests.fakes.race_plan_repo import FakeRacePlanRepo
 from trainingdash.repositories.postgres.models import Activity, RaceCourse, RacePlan
 from trainingdash.use_cases.get_matching_activities import (
     GetMatchingActivities,
     MatchingActivity,
 )
-from tests.fakes.activity_repo import FakeActivityRepo
-from tests.fakes.course_repo import FakeCourseRepo
-from tests.fakes.race_plan_repo import FakeRacePlanRepo
-
 
 # =============================================================================
 # Test Fixtures
@@ -234,7 +233,7 @@ class TestPlanNotFound:
         activity_repo: FakeActivityRepo,
     ):
         """Raises ValueError when plan not found."""
-        with pytest.raises(ValueError, match="Plan .* not found"):
+        with pytest.raises(ValueError, match=r"Plan .* not found"):
             await use_case.execute(user_id=1, plan_id=999)
 
     @pytest.mark.asyncio
@@ -245,7 +244,7 @@ class TestPlanNotFound:
         activity_repo: FakeActivityRepo,
     ):
         """Cannot access another user's plan."""
-        with pytest.raises(ValueError, match="Plan .* not found"):
+        with pytest.raises(ValueError, match=r"Plan .* not found"):
             await use_case.execute(user_id=2, plan_id=sample_plan.id)
 
 
@@ -277,7 +276,7 @@ class TestCourseNotFound:
 
         use_case = GetMatchingActivities(plan_repo, activity_repo, course_repo)
 
-        with pytest.raises(ValueError, match="Course .* not found"):
+        with pytest.raises(ValueError, match=r"Course .* not found"):
             await use_case.execute(user_id=1, plan_id=saved_plan.id)
 
 
@@ -298,15 +297,11 @@ class TestDistanceTolerance:
         activity_repo._activities[(1, activity.id)] = activity
 
         # With default 20% tolerance - should not match
-        result_20 = await use_case.execute(
-            user_id=1, plan_id=sample_plan.id, distance_tolerance_pct=0.2
-        )
+        result_20 = await use_case.execute(user_id=1, plan_id=sample_plan.id, distance_tolerance_pct=0.2)
         assert len(result_20) == 0
 
         # With 40% tolerance - should match
-        result_40 = await use_case.execute(
-            user_id=1, plan_id=sample_plan.id, distance_tolerance_pct=0.4
-        )
+        result_40 = await use_case.execute(user_id=1, plan_id=sample_plan.id, distance_tolerance_pct=0.4)
         assert len(result_40) == 1
 
 

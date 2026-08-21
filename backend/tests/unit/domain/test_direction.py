@@ -9,7 +9,6 @@ from trainingdash.domain.direction import (
     compute_direction_bearings,
 )
 
-
 # =============================================================================
 # Test compute_direction_bearing
 # =============================================================================
@@ -95,9 +94,7 @@ class TestComputeDirectionBearing:
     def test_returns_none_for_short_distance(self):
         """Should return None if total distance < min_distance_m."""
         # 10 points but very close together (< 1km total)
-        points = [
-            (0.0, 0.0, i * 50.0) for i in range(10)
-        ]
+        points = [(0.0, 0.0, i * 50.0) for i in range(10)]
         # Add lat/lon values that are very close
         points = [(0.0 + i * 0.00001, 0.0, i * 50.0) for i in range(10)]
         bearing = compute_direction_bearing(points, min_distance_m=1000)
@@ -134,10 +131,7 @@ class TestComputeDirectionBearings:
     def long_route(self) -> list[tuple[float, float, float]]:
         """A longer route for dual bearing calculation."""
         # 20 points heading northeast
-        return [
-            (i * 0.005, i * 0.005, i * 700.0)
-            for i in range(20)
-        ]
+        return [(i * 0.005, i * 0.005, i * 700.0) for i in range(20)]
 
     def test_returns_direction_bearings(self, long_route):
         """Should return DirectionBearings with both values."""
@@ -270,10 +264,7 @@ class TestEdgeCases:
     def test_point_to_point_route(self):
         """Point-to-point route should have consistent bearings."""
         # Straight line NE
-        p2p_route = [
-            (i * 0.005, i * 0.005, i * 700.0)
-            for i in range(15)
-        ]
+        p2p_route = [(i * 0.005, i * 0.005, i * 700.0) for i in range(15)]
 
         bearings = compute_direction_bearings(p2p_route, min_distance_m=500)
 

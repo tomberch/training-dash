@@ -135,15 +135,11 @@ class CompareExecution:
         course_segments = course.segments or []
 
         # 5. Match records to segments and compute comparisons
-        segment_comparisons = self._compute_segment_comparisons(
-            segment_targets, course_segments, records
-        )
+        segment_comparisons = self._compute_segment_comparisons(segment_targets, course_segments, records)
 
         # 6. Compute summary stats
         total_planned_time = sum(t.get("time_s", 0) for t in segment_targets)
-        total_actual_time = sum(
-            c.actual_time_s for c in segment_comparisons if c.actual_time_s is not None
-        )
+        total_actual_time = sum(c.actual_time_s for c in segment_comparisons if c.actual_time_s is not None)
         time_delta = total_actual_time - total_planned_time
         time_delta_pct = (time_delta / total_planned_time * 100) if total_planned_time > 0 else 0
 
@@ -151,7 +147,9 @@ class CompareExecution:
         avg_power_planned = plan.avg_power_w
 
         actual_powers = [c.actual_power_w for c in segment_comparisons if c.actual_power_w is not None]
-        actual_times = [c.actual_time_s for c in segment_comparisons if c.actual_time_s is not None and c.actual_power_w is not None]
+        actual_times = [
+            c.actual_time_s for c in segment_comparisons if c.actual_time_s is not None and c.actual_power_w is not None
+        ]
 
         if actual_powers and actual_times:
             # Time-weighted average
@@ -162,9 +160,7 @@ class CompareExecution:
             avg_power_actual = None
 
         # Pacing consistency and over/under counts
-        pacing_consistency, over_count, under_count, no_power_count = self._compute_pacing_stats(
-            segment_comparisons
-        )
+        pacing_consistency, over_count, under_count, no_power_count = self._compute_pacing_stats(segment_comparisons)
 
         # 7. Generate insights
         insights = generate_insights(segment_comparisons, segment_targets, course_segments)
@@ -364,9 +360,13 @@ def generate_insights(
     if early_segments:
         early_avg_delta = np.mean([c.power_delta_pct for c in early_segments])
         if early_avg_delta > 8:
-            insights.append(f"Started too fast: first {early_count} segments averaged {early_avg_delta:.0f}% over target")
+            insights.append(
+                f"Started too fast: first {early_count} segments averaged {early_avg_delta:.0f}% over target"
+            )
         elif early_avg_delta < -8:
-            insights.append(f"Started conservatively: first {early_count} segments averaged {abs(early_avg_delta):.0f}% under target")
+            insights.append(
+                f"Started conservatively: first {early_count} segments averaged {abs(early_avg_delta):.0f}% under target"
+            )
 
     # Check final portion (last 25% of segments)
     late_count = max(1, n_segments // 4)
@@ -388,7 +388,9 @@ def generate_insights(
             # Check if consistently over or under
             climb_over = sum(1 for c in climb_comparisons if c.power_delta_pct and c.power_delta_pct > 5)
             if climb_over > len(climb_comparisons) * 0.6:
-                insights.append(f"Pushed too hard on climbs: averaged {np.mean([c.power_delta_pct for c in climb_comparisons]):.0f}% over target")
+                insights.append(
+                    f"Pushed too hard on climbs: averaged {np.mean([c.power_delta_pct for c in climb_comparisons]):.0f}% over target"
+                )
 
     # Overall summary
     all_deltas = [c.power_delta_pct for c in comparisons if c.power_delta_pct is not None]

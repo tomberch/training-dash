@@ -369,9 +369,9 @@ class TestSolverPerformance:
             power_back = power_required(speed, grade, reference_rider)
 
             # If solver converged properly, round-trip should be accurate
-            assert power_back == pytest.approx(
-                power, abs=0.01
-            ), f"Failed for {power}W @ {grade}%: got {power_back:.2f}W back"
+            assert power_back == pytest.approx(power, abs=0.01), (
+                f"Failed for {power}W @ {grade}%: got {power_back:.2f}W back"
+            )
 
 
 class TestPhysicalRelationships:

@@ -92,9 +92,7 @@ class TestMatchRoute:
         assert activity.route_id is not None
 
         # Check route was created
-        route_result = await db_session.execute(
-            select(Route).where(Route.id == activity.route_id)
-        )
+        route_result = await db_session.execute(select(Route).where(Route.id == activity.route_id))
         route = route_result.scalar_one()
         assert route.ride_count >= 1
 

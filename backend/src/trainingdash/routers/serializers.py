@@ -148,7 +148,6 @@ def recalculation_job_response(job: RecalculationJob) -> dict[str, Any]:
     }
 
 
-
 def bike_response(bike: Bike) -> dict[str, Any]:
     """Return a dict of bike info for API responses."""
     return {

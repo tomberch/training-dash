@@ -33,12 +33,12 @@ async def compute_bearings():
     async with async_session() as session:
         for activity_id in activity_ids:
             print(f"Processing {activity_id}...")
-            
+
             # Stream GPS data in batches to reduce memory
             gps_points = []
             offset = 0
             batch_size = 2000
-            
+
             while True:
                 result = await session.execute(
                     text("""
@@ -50,19 +50,19 @@ async def compute_bearings():
                         ORDER BY timestamp
                         LIMIT :limit OFFSET :offset
                     """),
-                    {"activity_id": activity_id, "limit": batch_size, "offset": offset}
+                    {"activity_id": activity_id, "limit": batch_size, "offset": offset},
                 )
                 rows = result.fetchall()
-                
+
                 if not rows:
                     break
-                    
+
                 gps_points.extend((row[0], row[1], row[2]) for row in rows)
                 offset += batch_size
                 print(f"  Loaded {len(gps_points)} points...")
-            
+
             if not gps_points:
-                print(f"  No GPS data")
+                print("  No GPS data")
                 continue
 
             bearings = compute_direction_bearings(gps_points)
@@ -79,10 +79,10 @@ async def compute_bearings():
                     SET direction_bearing = :b25, direction_bearing_75 = :b50
                     WHERE id = :id
                 """),
-                {"b25": bearings.bearing_25, "b50": bearings.bearing_75, "id": activity_id}
+                {"b25": bearings.bearing_25, "b50": bearings.bearing_75, "id": activity_id},
             )
             await session.commit()
-            print(f"  Updated!")
+            print("  Updated!")
 
     await engine.dispose()
 

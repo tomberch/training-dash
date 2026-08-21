@@ -17,7 +17,6 @@ from trainingdash.domain.physics import (
     time_for_segment,
 )
 
-
 # =============================================================================
 # Test RiderParams
 # =============================================================================
@@ -356,9 +355,9 @@ class TestSpeedFromPower:
         """Should converge for reasonable inputs."""
         # Test edge cases that might cause convergence issues
         test_cases = [
-            (50, 0),     # Low power, flat
-            (400, 0),    # High power, flat
-            (200, 12),   # Moderate power, steep climb
+            (50, 0),  # Low power, flat
+            (400, 0),  # High power, flat
+            (200, 12),  # Moderate power, steep climb
             (150, -10),  # Low power, steep descent
         ]
 

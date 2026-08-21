@@ -6,6 +6,10 @@ from uuid import uuid4
 
 import pytest
 
+from tests.fakes.activity_repo import FakeActivityRepo
+from tests.fakes.course_repo import FakeCourseRepo
+from tests.fakes.race_plan_repo import FakeRacePlanRepo
+from tests.fakes.record_repo import FakeRecordRepo
 from trainingdash.repositories.postgres.models import (
     Activity,
     RaceCourse,
@@ -18,11 +22,6 @@ from trainingdash.use_cases.compare_execution import (
     SegmentComparison,
     generate_insights,
 )
-from tests.fakes.activity_repo import FakeActivityRepo
-from tests.fakes.course_repo import FakeCourseRepo
-from tests.fakes.race_plan_repo import FakeRacePlanRepo
-from tests.fakes.record_repo import FakeRecordRepo
-
 
 # =============================================================================
 # Test Fixtures
@@ -196,10 +195,10 @@ class TestCompareExecution:
             sample_activity.id,
             sample_activity.started_at,
             [
-                (0, 2000, 205),      # Segment 0: +5W
-                (2000, 4000, 235),   # Segment 1: -5W
-                (4000, 6000, 185),   # Segment 2: +5W
-                (6000, 8000, 225),   # Segment 3: +5W
+                (0, 2000, 205),  # Segment 0: +5W
+                (2000, 4000, 235),  # Segment 1: -5W
+                (4000, 6000, 185),  # Segment 2: +5W
+                (6000, 8000, 225),  # Segment 3: +5W
                 (8000, 10000, 195),  # Segment 4: -5W
             ],
         )
@@ -233,10 +232,10 @@ class TestCompareExecution:
             sample_activity.id,
             sample_activity.started_at,
             [
-                (0, 2000, 220),      # +20W = +10%
-                (2000, 4000, 240),   # 0W = 0%
-                (4000, 6000, 162),   # -18W = -10%
-                (6000, 8000, 220),   # 0W = 0%
+                (0, 2000, 220),  # +20W = +10%
+                (2000, 4000, 240),  # 0W = 0%
+                (4000, 6000, 162),  # -18W = -10%
+                (6000, 8000, 220),  # 0W = 0%
                 (8000, 10000, 200),  # 0W = 0%
             ],
         )
@@ -259,13 +258,13 @@ class TestCompareExecution:
     @pytest.mark.asyncio
     async def test_plan_not_found_raises(self, use_case: CompareExecution, sample_activity: Activity):
         """Raises ValueError when plan not found."""
-        with pytest.raises(ValueError, match="Plan .* not found"):
+        with pytest.raises(ValueError, match=r"Plan .* not found"):
             await use_case.execute(user_id=1, plan_id=999, activity_id=sample_activity.id)
 
     @pytest.mark.asyncio
     async def test_activity_not_found_raises(self, use_case: CompareExecution, sample_plan: RacePlan):
         """Raises ValueError when activity not found."""
-        with pytest.raises(ValueError, match="Activity .* not found"):
+        with pytest.raises(ValueError, match=r"Activity .* not found"):
             await use_case.execute(user_id=1, plan_id=sample_plan.id, activity_id=uuid4())
 
     @pytest.mark.asyncio
@@ -300,10 +299,10 @@ class TestCompareExecution:
             sample_activity.id,
             sample_activity.started_at,
             [
-                (0, 2000, 230),      # +30W = +15% OVER
-                (2000, 4000, 276),   # +36W = +15% OVER
-                (4000, 6000, 153),   # -27W = -15% UNDER
-                (6000, 8000, 187),   # -33W = -15% UNDER
+                (0, 2000, 230),  # +30W = +15% OVER
+                (2000, 4000, 276),  # +36W = +15% OVER
+                (4000, 6000, 153),  # -27W = -15% UNDER
+                (6000, 8000, 187),  # -33W = -15% UNDER
                 (8000, 10000, 200),  # 0W = 0% ON TARGET
             ],
         )
@@ -333,24 +332,28 @@ class TestCompareExecution:
 
         # Segment 0: has power
         for i in range(10):
-            record_repo.add(Record(
-                activity_id=sample_activity.id,
-                timestamp=current_time,
-                distance_m=i * 200,
-                power_w=200,
-                speed_mps=6.0,
-            ))
+            record_repo.add(
+                Record(
+                    activity_id=sample_activity.id,
+                    timestamp=current_time,
+                    distance_m=i * 200,
+                    power_w=200,
+                    speed_mps=6.0,
+                )
+            )
             current_time += timedelta(seconds=30)
 
         # Segment 1: no power (power_w=None)
         for i in range(10):
-            record_repo.add(Record(
-                activity_id=sample_activity.id,
-                timestamp=current_time,
-                distance_m=2000 + i * 200,
-                power_w=None,  # No power data
-                speed_mps=5.0,
-            ))
+            record_repo.add(
+                Record(
+                    activity_id=sample_activity.id,
+                    timestamp=current_time,
+                    distance_m=2000 + i * 200,
+                    power_w=None,  # No power data
+                    speed_mps=5.0,
+                )
+            )
             current_time += timedelta(seconds=40)
 
         result = await use_case.execute(
@@ -375,32 +378,36 @@ class TestCompareExecution:
     ):
         """Cannot access other user's plans or activities."""
         # Create plan for user 1
-        course = course_repo.add(RaceCourse(
-            user_id=1,
-            name="User 1 Course",
-            source_type="gpx",
-            distance_m=5000,
-            elevation_gain_m=100,
-            elevation_loss_m=100,
-            geometry="LINESTRING(0 0 0, 1 1 100)",
-            segments=[{"start_m": 0, "end_m": 5000, "distance_m": 5000, "avg_grade_pct": 0}],
-        ))
+        course = course_repo.add(
+            RaceCourse(
+                user_id=1,
+                name="User 1 Course",
+                source_type="gpx",
+                distance_m=5000,
+                elevation_gain_m=100,
+                elevation_loss_m=100,
+                geometry="LINESTRING(0 0 0, 1 1 100)",
+                segments=[{"start_m": 0, "end_m": 5000, "distance_m": 5000, "avg_grade_pct": 0}],
+            )
+        )
 
-        plan = plan_repo.add(RacePlan(
-            user_id=1,
-            course_id=course.id,
-            rider_weight_kg=Decimal("75.0"),
-            ftp_watts=250,
-            cda=Decimal("0.32"),
-            crr=Decimal("0.004"),
-            total_time_s=600,
-            total_distance_m=5000,
-            avg_power_w=200,
-            segment_targets=[{"segment_idx": 0, "power_w": 200, "time_s": 600, "speed_mps": 8.33}],
-        ))
+        plan = plan_repo.add(
+            RacePlan(
+                user_id=1,
+                course_id=course.id,
+                rider_weight_kg=Decimal("75.0"),
+                ftp_watts=250,
+                cda=Decimal("0.32"),
+                crr=Decimal("0.004"),
+                total_time_s=600,
+                total_distance_m=5000,
+                avg_power_w=200,
+                segment_targets=[{"segment_idx": 0, "power_w": 200, "time_s": 600, "speed_mps": 8.33}],
+            )
+        )
 
         # User 2 tries to access
-        with pytest.raises(ValueError, match="Plan .* not found"):
+        with pytest.raises(ValueError, match=r"Plan .* not found"):
             await use_case.execute(user_id=2, plan_id=plan.id, activity_id=uuid4())
 
 
@@ -456,10 +463,10 @@ class TestPacingConsistency:
             sample_activity.id,
             sample_activity.started_at,
             [
-                (0, 2000, 260),      # +30%
-                (2000, 4000, 168),   # -30%
-                (4000, 6000, 234),   # +30%
-                (6000, 8000, 154),   # -30%
+                (0, 2000, 260),  # +30%
+                (2000, 4000, 168),  # -30%
+                (4000, 6000, 234),  # +30%
+                (6000, 8000, 154),  # -30%
                 (8000, 10000, 260),  # +30%
             ],
         )

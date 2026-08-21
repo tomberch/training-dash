@@ -1,6 +1,6 @@
 """Integration tests for Ride Events CRUD API."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -42,7 +42,6 @@ class TestEventsAPI:
         assert len(data["events"]) == 1
         assert data["events"][0]["title"] == "Alps Tour 2026"
 
-
     @pytest.mark.asyncio
     async def test_list_filter_by_event_type(self, auth_client):
         """List filters events by type."""
@@ -67,7 +66,7 @@ class TestEventsAPI:
         for i in range(5):
             await auth_client.post(
                 "/api/events",
-                json={"title": f"Event {i}", "event_type": "race", "start_date": f"2026-0{i+1}-01"},
+                json={"title": f"Event {i}", "event_type": "race", "start_date": f"2026-0{i + 1}-01"},
             )
 
         resp = await auth_client.get("/api/events?per_page=2&page=1")
@@ -96,7 +95,6 @@ class TestEventsAPI:
         assert data["event_type"] == "gran_fondo"
         assert data["start_date"] == "2026-09-15"
         assert "id" in data
-
 
     @pytest.mark.asyncio
     async def test_create_event_minimal(self, auth_client):
@@ -145,7 +143,6 @@ class TestEventsAPI:
         fake_id = str(uuid4())
         resp = await auth_client.get(f"/api/events/{fake_id}")
         assert resp.status_code == 404
-
 
     # --- Update Event ---
 
@@ -199,7 +196,6 @@ class TestEventsAPI:
         assert resp.status_code == 404
 
 
-
 class TestJournalEntriesAPI:
     """Test journal entries CRUD endpoints."""
 
@@ -230,12 +226,8 @@ class TestJournalEntriesAPI:
         )
         event_id = resp.json()["id"]
 
-        await auth_client.post(
-            f"/api/events/{event_id}/entries", json={"entry_date": "2026-07-02"}
-        )
-        await auth_client.post(
-            f"/api/events/{event_id}/entries", json={"entry_date": "2026-07-01"}
-        )
+        await auth_client.post(f"/api/events/{event_id}/entries", json={"entry_date": "2026-07-02"})
+        await auth_client.post(f"/api/events/{event_id}/entries", json={"entry_date": "2026-07-01"})
 
         resp = await auth_client.get(f"/api/events/{event_id}/entries")
         assert resp.status_code == 200
@@ -244,7 +236,6 @@ class TestJournalEntriesAPI:
         # Should be sorted by date ascending
         assert entries[0]["entry_date"] == "2026-07-01"
         assert entries[1]["entry_date"] == "2026-07-02"
-
 
     @pytest.mark.asyncio
     async def test_get_journal_entry(self, auth_client):
@@ -278,9 +269,7 @@ class TestJournalEntriesAPI:
         )
         event_id = resp.json()["id"]
 
-        resp = await auth_client.post(
-            f"/api/events/{event_id}/entries", json={"entry_date": "2026-07-01"}
-        )
+        resp = await auth_client.post(f"/api/events/{event_id}/entries", json={"entry_date": "2026-07-01"})
         entry_id = resp.json()["id"]
 
         resp = await auth_client.patch(
@@ -299,9 +288,7 @@ class TestJournalEntriesAPI:
         )
         event_id = resp.json()["id"]
 
-        resp = await auth_client.post(
-            f"/api/events/{event_id}/entries", json={"entry_date": "2026-07-01"}
-        )
+        resp = await auth_client.post(f"/api/events/{event_id}/entries", json={"entry_date": "2026-07-01"})
         entry_id = resp.json()["id"]
 
         resp = await auth_client.delete(f"/api/events/entries/{entry_id}")
@@ -309,7 +296,6 @@ class TestJournalEntriesAPI:
 
         resp = await auth_client.get(f"/api/events/entries/{entry_id}")
         assert resp.status_code == 404
-
 
 
 class TestEventLinksAPI:
@@ -342,9 +328,7 @@ class TestEventLinksAPI:
         )
         event_id = resp.json()["id"]
 
-        resp = await auth_client.post(
-            f"/api/events/{event_id}/entries", json={"entry_date": "2026-07-01"}
-        )
+        resp = await auth_client.post(f"/api/events/{event_id}/entries", json={"entry_date": "2026-07-01"})
         entry_id = resp.json()["id"]
 
         resp = await auth_client.post(
@@ -394,7 +378,6 @@ class TestEventLinksAPI:
         assert resp.status_code == 204
 
 
-
 class TestActivityLinkingAPI:
     """Test activity linking endpoints."""
 
@@ -412,9 +395,7 @@ class TestActivityLinkingAPI:
         )
         event_id = resp.json()["id"]
 
-        resp = await auth_client.post(
-            f"/api/events/{event_id}/entries", json={"entry_date": "2026-07-01"}
-        )
+        resp = await auth_client.post(f"/api/events/{event_id}/entries", json={"entry_date": "2026-07-01"})
         entry_id = resp.json()["id"]
 
         return {"event_id": event_id, "entry_id": entry_id}
@@ -451,7 +432,6 @@ class TestActivityLinkingAPI:
         assert data["activity_id"] == str(activity_in_range.id)
         assert data["journal_entry_id"] == entry_id
 
-
     @pytest.mark.asyncio
     async def test_unlink_activity(self, auth_client, event_with_entry, activity_in_range):
         """Unlink an activity from a journal entry."""
@@ -462,9 +442,7 @@ class TestActivityLinkingAPI:
             json={"activity_id": str(activity_in_range.id)},
         )
 
-        resp = await auth_client.delete(
-            f"/api/events/entries/{entry_id}/activities/{activity_in_range.id}"
-        )
+        resp = await auth_client.delete(f"/api/events/entries/{entry_id}/activities/{activity_in_range.id}")
         assert resp.status_code == 204
 
     @pytest.mark.asyncio
@@ -492,9 +470,7 @@ class TestActivityLinkingAPI:
         assert data["activities"][0]["is_linked"] is False
 
     @pytest.mark.asyncio
-    async def test_available_activities_marks_linked(
-        self, auth_client, event_with_entry, activity_in_range
-    ):
+    async def test_available_activities_marks_linked(self, auth_client, event_with_entry, activity_in_range):
         """Available activities marks already-linked ones."""
         event_id = event_with_entry["event_id"]
         entry_id = event_with_entry["entry_id"]
@@ -509,7 +485,6 @@ class TestActivityLinkingAPI:
         assert resp.status_code == 200
         data = resp.json()
         assert data["activities"][0]["is_linked"] is True
-
 
 
 class TestEventStatsAPI:
@@ -529,9 +504,7 @@ class TestEventStatsAPI:
         )
         event_id = resp.json()["id"]
 
-        resp = await auth_client.post(
-            f"/api/events/{event_id}/entries", json={"entry_date": "2026-07-01"}
-        )
+        resp = await auth_client.post(f"/api/events/{event_id}/entries", json={"entry_date": "2026-07-01"})
         entry_id = resp.json()["id"]
 
         # Create activities
@@ -590,7 +563,6 @@ class TestEventStatsAPI:
         assert stats["total_tss"] == 430.0
 
 
-
 class TestEventsAuthentication:
     """Test authentication requirements."""
 
@@ -643,9 +615,7 @@ class TestCascadeDelete:
         )
         event_id = resp.json()["id"]
 
-        resp = await auth_client.post(
-            f"/api/events/{event_id}/entries", json={"entry_date": "2026-07-01"}
-        )
+        resp = await auth_client.post(f"/api/events/{event_id}/entries", json={"entry_date": "2026-07-01"})
         entry_id = resp.json()["id"]
 
         # Delete the event
@@ -677,7 +647,6 @@ class TestCascadeDelete:
         assert resp.status_code == 404
 
 
-
 class TestPhotoUploadAPI:
     """Test photo upload and media management endpoints."""
 
@@ -685,6 +654,7 @@ class TestPhotoUploadAPI:
     def sample_jpeg_bytes(self):
         """Create a minimal valid JPEG image."""
         from io import BytesIO
+
         from PIL import Image
 
         img = Image.new("RGB", (100, 100), color="red")
@@ -696,6 +666,7 @@ class TestPhotoUploadAPI:
     def sample_png_bytes(self):
         """Create a minimal valid PNG image."""
         from io import BytesIO
+
         from PIL import Image
 
         img = Image.new("RGBA", (100, 100), color="blue")
@@ -727,7 +698,6 @@ class TestPhotoUploadAPI:
         assert data["thumbnail_path"] is not None
         assert ".jpg" in data["storage_path"]
         assert "_thumb" in data["thumbnail_path"]
-
 
     @pytest.mark.asyncio
     async def test_upload_photo_with_caption(self, auth_client, event_for_photos, sample_jpeg_bytes):
@@ -783,7 +753,6 @@ class TestPhotoUploadAPI:
         assert data["journal_entry_id"] == entry_id
         assert "entries" in data["storage_path"]
 
-
     @pytest.mark.asyncio
     async def test_update_media_caption(self, auth_client, event_for_photos, sample_jpeg_bytes):
         """Update a media item's caption."""
@@ -794,9 +763,7 @@ class TestPhotoUploadAPI:
         )
         media_id = resp.json()["id"]
 
-        resp = await auth_client.patch(
-            f"/api/events/media/{media_id}?caption=Updated%20caption"
-        )
+        resp = await auth_client.patch(f"/api/events/media/{media_id}?caption=Updated%20caption")
         assert resp.status_code == 200
         assert resp.json()["caption"] == "Updated caption"
 
@@ -850,7 +817,6 @@ class TestPhotoUploadAPI:
         resp = await auth_client.delete(f"/api/events/{event_for_photos}/cover")
         assert resp.status_code == 204
 
-
     @pytest.mark.asyncio
     async def test_upload_requires_auth(self, app_client):
         """Photo upload requires authentication."""
@@ -880,9 +846,7 @@ class TestPhotoUploadAPI:
         assert data["media"][0]["media_type"] == "photo"
 
     @pytest.mark.asyncio
-    async def test_entry_photos_included_in_entry_detail(
-        self, auth_client, event_for_photos, sample_jpeg_bytes
-    ):
+    async def test_entry_photos_included_in_entry_detail(self, auth_client, event_for_photos, sample_jpeg_bytes):
         """Photos are included when fetching entry details."""
         # Create entry
         resp = await auth_client.post(
@@ -903,7 +867,6 @@ class TestPhotoUploadAPI:
         assert resp.status_code == 200
         data = resp.json()
         assert len(data["media"]) == 1
-
 
 
 class TestVideoEmbedAPI:
@@ -940,9 +903,7 @@ class TestVideoEmbedAPI:
         )
         event_id = resp.json()["id"]
 
-        resp = await auth_client.post(
-            f"/api/events/{event_id}/entries", json={"entry_date": "2026-07-01"}
-        )
+        resp = await auth_client.post(f"/api/events/{event_id}/entries", json={"entry_date": "2026-07-01"})
         entry_id = resp.json()["id"]
 
         resp = await auth_client.post(
@@ -990,9 +951,7 @@ class TestVideoEmbedAPI:
         )
         event_id = resp.json()["id"]
 
-        resp = await auth_client.post(
-            f"/api/events/{event_id}/entries", json={"entry_date": "2026-07-01"}
-        )
+        resp = await auth_client.post(f"/api/events/{event_id}/entries", json={"entry_date": "2026-07-01"})
         entry_id = resp.json()["id"]
 
         resp = await auth_client.post(
@@ -1289,8 +1248,9 @@ class TestBatchPhotoUploadAPI:
         event_id = resp.json()["id"]
 
         # Create test images
-        from PIL import Image
         from io import BytesIO
+
+        from PIL import Image
 
         files = []
         for i in range(3):
@@ -1319,8 +1279,9 @@ class TestBatchPhotoUploadAPI:
         )
         event_id = resp.json()["id"]
 
-        from PIL import Image
         from io import BytesIO
+
+        from PIL import Image
 
         # One valid, one invalid
         img = Image.new("RGB", (100, 100), color="red")
@@ -1352,13 +1313,12 @@ class TestBatchPhotoUploadAPI:
         )
         event_id = resp.json()["id"]
 
-        resp = await auth_client.post(
-            f"/api/events/{event_id}/entries", json={"entry_date": "2026-07-01"}
-        )
+        resp = await auth_client.post(f"/api/events/{event_id}/entries", json={"entry_date": "2026-07-01"})
         entry_id = resp.json()["id"]
 
-        from PIL import Image
         from io import BytesIO
+
+        from PIL import Image
 
         files = []
         for i in range(2):
@@ -1383,7 +1343,6 @@ class TestEventDeleteCleanup:
     @pytest.mark.asyncio
     async def test_delete_event_removes_upload_directory(self, auth_client, tmp_path, monkeypatch):
         """Deleting an event removes the uploads directory."""
-        import os
 
         # Set temp uploads dir
         uploads_dir = tmp_path / "uploads"

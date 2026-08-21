@@ -43,9 +43,7 @@ class FITParseError(Exception):
     pass
 
 
-def _haversine_distance(
-    lat1: float, lon1: float, lat2: float, lon2: float
-) -> float:
+def _haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Calculate distance between two GPS coordinates in meters.
 
     Uses the Haversine formula for great-circle distance.
@@ -57,10 +55,7 @@ def _haversine_distance(
     delta_phi = math.radians(lat2 - lat1)
     delta_lambda = math.radians(lon2 - lon1)
 
-    a = (
-        math.sin(delta_phi / 2) ** 2
-        + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2) ** 2
-    )
+    a = math.sin(delta_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2) ** 2
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
     return R * c
@@ -113,9 +108,7 @@ def parse_gpx(gpx_content: str | bytes) -> ParsedCourse:
         for point in segment.points:
             # Calculate distance from previous point
             if prev_lat is not None and prev_lon is not None:
-                segment_distance = _haversine_distance(
-                    prev_lat, prev_lon, point.latitude, point.longitude
-                )
+                segment_distance = _haversine_distance(prev_lat, prev_lon, point.latitude, point.longitude)
                 cumulative_distance += segment_distance
 
             elevation = point.elevation

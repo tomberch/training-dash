@@ -143,16 +143,12 @@ class CreateCourse:
         climbs = detect_climbs(segments)
 
         # Step 8: Calculate course metrics
-        elevation_gain, elevation_loss = self._calculate_elevation_metrics(
-            smoothed_elevations
-        )
+        elevation_gain, elevation_loss = self._calculate_elevation_metrics(smoothed_elevations)
         min_elevation = float(np.min(smoothed_elevations)) if len(smoothed_elevations) > 0 else None
         max_elevation = float(np.max(smoothed_elevations)) if len(smoothed_elevations) > 0 else None
 
         # Step 9: Build elevation profile (for charting)
-        elevation_profile = self._build_elevation_profile(
-            distances, smoothed_elevations, grades
-        )
+        elevation_profile = self._build_elevation_profile(distances, smoothed_elevations, grades)
 
         # Step 10: Build PostGIS geometry
         geometry = self._build_geometry(parsed.points, smoothed_elevations)
@@ -178,7 +174,7 @@ class CreateCourse:
 
         logger.info(
             f"Created course '{course_name}' for user {user_id}: "
-            f"{parsed.total_distance_m/1000:.1f}km, {elevation_gain:.0f}m gain, "
+            f"{parsed.total_distance_m / 1000:.1f}km, {elevation_gain:.0f}m gain, "
             f"{len(segments)} segments, {len(climbs)} climbs"
         )
 
@@ -205,10 +201,7 @@ class CreateCourse:
         if content.strip().startswith(b"<?xml") or b"<gpx" in content[:500]:
             return "gpx"
 
-        raise CourseCreationError(
-            f"Cannot determine file type for '{filename}'. "
-            "Supported formats: .gpx, .fit"
-        )
+        raise CourseCreationError(f"Cannot determine file type for '{filename}'. Supported formats: .gpx, .fit")
 
     def _parse_file(self, content: bytes, source_type: str) -> ParsedCourse:
         """Parse file content based on detected type."""
@@ -233,9 +226,7 @@ class CreateCourse:
         # Title case
         return name.title()
 
-    def _extract_elevations(
-        self, parsed: ParsedCourse, warnings: list[str]
-    ) -> np.ndarray:
+    def _extract_elevations(self, parsed: ParsedCourse, warnings: list[str]) -> np.ndarray:
         """Extract elevations from parsed course, handling missing data."""
         elevations = []
 
@@ -253,9 +244,7 @@ class CreateCourse:
 
         return np.array(elevations)
 
-    def _calculate_elevation_metrics(
-        self, elevations: np.ndarray
-    ) -> tuple[float, float]:
+    def _calculate_elevation_metrics(self, elevations: np.ndarray) -> tuple[float, float]:
         """Calculate total elevation gain and loss."""
         if len(elevations) < 2:
             return 0.0, 0.0
@@ -276,28 +265,24 @@ class CreateCourse:
         profile = []
 
         for i in range(len(distances)):
-            profile.append({
-                "distance_m": float(distances[i]),
-                "elevation_m": float(elevations[i]),
-                "grade_pct": float(grades[i] * 100),
-            })
+            profile.append(
+                {
+                    "distance_m": float(distances[i]),
+                    "elevation_m": float(elevations[i]),
+                    "grade_pct": float(grades[i] * 100),
+                }
+            )
 
         return profile
 
-    def _build_geometry(
-        self, points: list, smoothed_elevations: np.ndarray
-    ) -> WKTElement:
+    def _build_geometry(self, points: list, smoothed_elevations: np.ndarray) -> WKTElement:
         """Build PostGIS LineStringZ geometry from points."""
         if len(points) < 2:
             raise CourseCreationError("Course must have at least 2 points")
 
         coords = []
         for i, point in enumerate(points):
-            elevation = (
-                float(smoothed_elevations[i])
-                if i < len(smoothed_elevations)
-                else 0.0
-            )
+            elevation = float(smoothed_elevations[i]) if i < len(smoothed_elevations) else 0.0
             coords.append(f"{point.longitude} {point.latitude} {elevation}")
 
         wkt = f"LINESTRING Z({', '.join(coords)})"

@@ -9,7 +9,6 @@ Tests cover:
 - Round-trip consistency (power→speed→power)
 """
 
-
 import pytest
 
 from trainingdash.domain.physics import (

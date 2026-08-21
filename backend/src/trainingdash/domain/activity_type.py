@@ -100,7 +100,4 @@ def validate_activity_type(activity_type: str) -> str | None:
         return None
     if activity_type in ACTIVITY_TYPES:
         return activity_type
-    raise ValueError(
-        f"Invalid activity_type '{activity_type}'. "
-        f"Must be one of: {', '.join(sorted(ACTIVITY_TYPES))}"
-    )
+    raise ValueError(f"Invalid activity_type '{activity_type}'. Must be one of: {', '.join(sorted(ACTIVITY_TYPES))}")

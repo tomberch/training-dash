@@ -266,9 +266,7 @@ class TestCourseRepoUpdateProcessedData:
         ]
 
         repo = PostgresCourseRepo(db_session)
-        await repo.update_processed_data(
-            course_id, seed_user.id, elevation_profile, segments, climbs
-        )
+        await repo.update_processed_data(course_id, seed_user.id, elevation_profile, segments, climbs)
 
         # Re-fetch to verify (get_by_id uses populate_existing)
         updated = await repo.get_by_id(course_id, seed_user.id)

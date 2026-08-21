@@ -8,7 +8,6 @@ import httpx
 
 from trainingdash.config import settings
 
-
 # DEM API batch size limit
 DEM_BATCH_SIZE = 100
 

@@ -190,9 +190,7 @@ class CalibrateFromActivities:
             raise BikeNotFoundError(f"Bike {bike_id} not found or not owned by user")
 
         if not is_calibration_eligible_type(bike.bike_type):
-            raise BikeNotEligibleError(
-                f"Bike type '{bike.bike_type}' is not eligible for CdA calibration"
-            )
+            raise BikeNotEligibleError(f"Bike type '{bike.bike_type}' is not eligible for CdA calibration")
 
         # Get default Crr for bike type (we fix Crr and solve for CdA)
         crr = BIKE_TYPE_DEFAULTS[bike.bike_type]["crr"]
@@ -210,10 +208,7 @@ class CalibrateFromActivities:
         # Step 2: Get activities tagged to this bike
         activities = await self._activity_repo.list_by_bike(bike_id, user_id, max_activities)
         if not activities:
-            raise NoActivitiesError(
-                f"No activities found tagged to bike {bike_id}. "
-                "Tag some rides to this bike first."
-            )
+            raise NoActivitiesError(f"No activities found tagged to bike {bike_id}. Tag some rides to this bike first.")
 
         # Step 3: Process each activity to extract calibration segments
         all_segments: list[CalibrationSegment] = []
@@ -230,17 +225,13 @@ class CalibrateFromActivities:
         for activity in activities:
             # Skip activities without power data
             if activity.avg_power_w is None or activity.avg_power_w <= 0:
-                total_rejection_reasons["no_power_data"] = (
-                    total_rejection_reasons.get("no_power_data", 0) + 1
-                )
+                total_rejection_reasons["no_power_data"] = total_rejection_reasons.get("no_power_data", 0) + 1
                 continue
 
             # Load records for this activity
             records = await self._record_repo.list_for_activity(activity.id)
             if len(records) < 60:  # Need at least 60 samples for calibration
-                total_rejection_reasons["too_few_records"] = (
-                    total_rejection_reasons.get("too_few_records", 0) + 1
-                )
+                total_rejection_reasons["too_few_records"] = total_rejection_reasons.get("too_few_records", 0) + 1
                 continue
 
             # Extract arrays
@@ -263,9 +254,7 @@ class CalibrateFromActivities:
 
             # Accumulate rejection reasons
             for reason, count in result.rejection_reasons.items():
-                total_rejection_reasons[reason] = (
-                    total_rejection_reasons.get(reason, 0) + count
-                )
+                total_rejection_reasons[reason] = total_rejection_reasons.get(reason, 0) + count
 
             if result.segments:
                 # Adjust segment indices for global array and store
@@ -345,18 +334,14 @@ class CalibrateFromActivities:
 
         # Step 7: Determine if we should update the bike
         confidence_order = {"low": 0, "medium": 1, "high": 2}
-        should_update = (
-            confidence_order.get(estimate.confidence, 0)
-            >= confidence_order.get(min_confidence, 1)
-        )
+        should_update = confidence_order.get(estimate.confidence, 0) >= confidence_order.get(min_confidence, 1)
 
         if should_update:
             await self._bike_repo.update_calibration(bike_id, user_id, estimate.cda)
             updated = True
         else:
             warnings.append(
-                f"Confidence '{estimate.confidence}' is below minimum '{min_confidence}'. "
-                "Bike CdA not updated."
+                f"Confidence '{estimate.confidence}' is below minimum '{min_confidence}'. Bike CdA not updated."
             )
             updated = False
 
@@ -373,9 +358,7 @@ class CalibrateFromActivities:
             rejection_summary=total_rejection_reasons,
         )
 
-    def _extract_arrays(
-        self, records: list
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float]:
+    def _extract_arrays(self, records: list) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float]:
         """Extract numpy arrays from records.
 
         Returns:

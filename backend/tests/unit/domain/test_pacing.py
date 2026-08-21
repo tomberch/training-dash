@@ -7,7 +7,6 @@ from trainingdash.domain.course_segmentation import CourseSegment
 from trainingdash.domain.pacing import (
     PacingPlan,
     PacingTarget,
-    TERRAIN_POWER_MULTIPLIERS,
     calculate_intensity_factor,
     calculate_normalized_power,
     calculate_normalized_power_from_segments,
@@ -15,8 +14,7 @@ from trainingdash.domain.pacing import (
     generate_heuristic_pacing,
     get_terrain_multiplier,
 )
-from trainingdash.domain.physics import RiderParams, EnvironmentParams
-
+from trainingdash.domain.physics import EnvironmentParams, RiderParams
 
 # =============================================================================
 # Test Fixtures
@@ -307,14 +305,10 @@ class TestGenerateHeuristicPacing:
     def test_invalid_intensity_raises_error(self, flat_segments, rider_params):
         """Invalid target_intensity should raise ValueError."""
         with pytest.raises(ValueError, match="intensity"):
-            generate_heuristic_pacing(
-                flat_segments, rider_ftp=250, target_intensity=0, rider_params=rider_params
-            )
+            generate_heuristic_pacing(flat_segments, rider_ftp=250, target_intensity=0, rider_params=rider_params)
 
         with pytest.raises(ValueError, match="intensity"):
-            generate_heuristic_pacing(
-                flat_segments, rider_ftp=250, target_intensity=2.0, rider_params=rider_params
-            )
+            generate_heuristic_pacing(flat_segments, rider_ftp=250, target_intensity=2.0, rider_params=rider_params)
 
     def test_default_rider_params(self, flat_segments):
         """Should work with default rider params."""
@@ -370,13 +364,15 @@ class TestNormalizedPower:
         """For variable power, NP should be higher than average."""
         # 60s at 150W, then 60s at 250W, repeated - creates variability
         # that survives the 30s rolling average
-        powers = np.concatenate([
-            np.full(60, 150.0),
-            np.full(60, 250.0),
-            np.full(60, 150.0),
-            np.full(60, 250.0),
-            np.full(60, 150.0),
-        ])  # 300 samples, avg = 190W
+        powers = np.concatenate(
+            [
+                np.full(60, 150.0),
+                np.full(60, 250.0),
+                np.full(60, 150.0),
+                np.full(60, 250.0),
+                np.full(60, 150.0),
+            ]
+        )  # 300 samples, avg = 190W
         np_power = calculate_normalized_power(powers, sample_rate_hz=1.0)
         avg_power = np.mean(powers)
 
@@ -399,12 +395,14 @@ class TestNormalizedPower:
         """Test against a known NP calculation."""
         # Create a simple pattern that we can calculate manually
         # 60 seconds at 200W, 60 seconds at 300W, repeated
-        powers = np.concatenate([
-            np.full(60, 200.0),
-            np.full(60, 300.0),
-            np.full(60, 200.0),
-            np.full(60, 300.0),
-        ])
+        powers = np.concatenate(
+            [
+                np.full(60, 200.0),
+                np.full(60, 300.0),
+                np.full(60, 200.0),
+                np.full(60, 300.0),
+            ]
+        )
         np_power = calculate_normalized_power(powers, sample_rate_hz=1.0)
 
         # Average is 250W, NP should be higher due to variability
@@ -550,9 +548,7 @@ class TestEdgeCases:
             ),
         ]
 
-        plan = generate_heuristic_pacing(
-            segments, rider_ftp=250, rider_params=rider_params
-        )
+        plan = generate_heuristic_pacing(segments, rider_ftp=250, rider_params=rider_params)
 
         assert len(plan.targets) == 1
         assert plan.total_distance_m == 10000
@@ -572,9 +568,7 @@ class TestEdgeCases:
             for i in range(10)
         ]
 
-        plan = generate_heuristic_pacing(
-            segments, rider_ftp=250, rider_params=rider_params
-        )
+        plan = generate_heuristic_pacing(segments, rider_ftp=250, rider_params=rider_params)
 
         assert len(plan.targets) == 10
         assert plan.total_distance_m == 1000
@@ -602,9 +596,7 @@ class TestEdgeCases:
             ),
         ]
 
-        plan = generate_heuristic_pacing(
-            segments, rider_ftp=250, rider_params=rider_params
-        )
+        plan = generate_heuristic_pacing(segments, rider_ftp=250, rider_params=rider_params)
 
         # All targets should be at or near FTP
         for target in plan.targets:
@@ -634,9 +626,7 @@ class TestEdgeCases:
             ),
         ]
 
-        plan = generate_heuristic_pacing(
-            segments, rider_ftp=250, rider_params=rider_params
-        )
+        plan = generate_heuristic_pacing(segments, rider_ftp=250, rider_params=rider_params)
 
         # Speeds should be high on descents
         for target in plan.targets:

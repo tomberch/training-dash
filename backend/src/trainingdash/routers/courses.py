@@ -211,15 +211,9 @@ async def get_course(
         )
 
     # Parse JSONB data into response models
-    segments = [
-        SegmentDetail(**s) for s in (course.segments or [])
-    ]
-    climbs = [
-        ClimbDetail(**c) for c in (course.climbs or [])
-    ]
-    elevation_profile = [
-        ElevationPoint(**p) for p in (course.elevation_profile or [])
-    ]
+    segments = [SegmentDetail(**s) for s in (course.segments or [])]
+    climbs = [ClimbDetail(**c) for c in (course.climbs or [])]
+    elevation_profile = [ElevationPoint(**p) for p in (course.elevation_profile or [])]
 
     return CourseDetailResponse(
         id=course.id,

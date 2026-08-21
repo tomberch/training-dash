@@ -9,11 +9,10 @@ from trainingdash.domain.gpx import (
     FITParseError,
     GPXParseError,
     ParsedCourse,
+    _haversine_distance,
     parse_fit_course,
     parse_gpx,
-    _haversine_distance,
 )
-
 
 FIXTURES_DIR = Path(__file__).parent.parent.parent / "fixtures" / "courses"
 

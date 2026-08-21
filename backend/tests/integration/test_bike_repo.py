@@ -1,11 +1,9 @@
 """Integration tests for PostgresBikeRepo."""
 
-from decimal import Decimal
-
 import pytest
 
 from trainingdash.repositories.postgres.bike_repo import PostgresBikeRepo
-from trainingdash.repositories.postgres.models import Bike, User
+from trainingdash.repositories.postgres.models import Bike
 
 
 class TestPostgresBikeRepo:
@@ -86,12 +84,14 @@ class TestPostgresBikeRepo:
         repo = PostgresBikeRepo(db_session)
 
         await repo.save(Bike(user_id=seed_user.id, name="Active", bike_type="road"))
-        await repo.save(Bike(
-            user_id=seed_user.id,
-            name="Retired",
-            bike_type="road",
-            retired_at=datetime.now(),
-        ))
+        await repo.save(
+            Bike(
+                user_id=seed_user.id,
+                name="Retired",
+                bike_type="road",
+                retired_at=datetime.now(),
+            )
+        )
 
         bikes = await repo.get_by_user(seed_user.id, include_retired=True)
         assert len(bikes) == 2

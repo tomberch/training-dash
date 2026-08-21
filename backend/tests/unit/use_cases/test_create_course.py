@@ -11,7 +11,6 @@ from trainingdash.use_cases.create_course import (
     CreateCourseResult,
 )
 
-
 # Path to test fixtures
 FIXTURES_DIR = Path(__file__).parent.parent.parent / "fixtures" / "courses"
 
@@ -60,9 +59,7 @@ class TestCreateCourseWithGPX:
     """Tests for GPX file processing."""
 
     @pytest.mark.asyncio
-    async def test_gpx_with_elevation_creates_course(
-        self, use_case, course_repo, gpx_with_elevation
-    ):
+    async def test_gpx_with_elevation_creates_course(self, use_case, course_repo, gpx_with_elevation):
         """GPX file with elevation data creates a course successfully."""
         result = await use_case.execute(
             user_id=1,
@@ -85,9 +82,7 @@ class TestCreateCourseWithGPX:
         assert saved is not None
 
     @pytest.mark.asyncio
-    async def test_gpx_without_elevation_adds_warning(
-        self, use_case, gpx_no_elevation
-    ):
+    async def test_gpx_without_elevation_adds_warning(self, use_case, gpx_no_elevation):
         """GPX file without elevation data creates course with warning."""
         result = await use_case.execute(
             user_id=1,
@@ -112,9 +107,7 @@ class TestCreateCourseWithGPX:
         assert result.course.name in ["Test Course With Elevation", "Morning Ride"]
 
     @pytest.mark.asyncio
-    async def test_gpx_uses_provided_name_over_parsed(
-        self, use_case, gpx_with_elevation
-    ):
+    async def test_gpx_uses_provided_name_over_parsed(self, use_case, gpx_with_elevation):
         """Provided name takes precedence over parsed name."""
         result = await use_case.execute(
             user_id=1,
@@ -382,9 +375,7 @@ class TestMultipleUsers:
     """Tests for multi-user scenarios."""
 
     @pytest.mark.asyncio
-    async def test_courses_scoped_to_user(
-        self, use_case, course_repo, gpx_with_elevation
-    ):
+    async def test_courses_scoped_to_user(self, use_case, course_repo, gpx_with_elevation):
         """Courses are scoped to the creating user."""
         # Create course for user 1
         result1 = await use_case.execute(

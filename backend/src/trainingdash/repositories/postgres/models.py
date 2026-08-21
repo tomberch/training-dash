@@ -504,9 +504,7 @@ class JournalEntry(Base):
     """
 
     __tablename__ = "journal_entries"
-    __table_args__ = (
-        UniqueConstraint("ride_event_id", "entry_date", name="uq_journal_entry_event_date"),
-    )
+    __table_args__ = (UniqueConstraint("ride_event_id", "entry_date", name="uq_journal_entry_event_date"),)
 
     id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True, default=uuid4)
     ride_event_id: Mapped[UUID] = mapped_column(
@@ -529,9 +527,7 @@ class JournalEntryActivity(Base):
     """
 
     __tablename__ = "journal_entry_activities"
-    __table_args__ = (
-        UniqueConstraint("journal_entry_id", "activity_id", name="uq_journal_entry_activity"),
-    )
+    __table_args__ = (UniqueConstraint("journal_entry_id", "activity_id", name="uq_journal_entry_activity"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     journal_entry_id: Mapped[UUID] = mapped_column(
@@ -618,7 +614,6 @@ class RideEventLink(Base):
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
 
 
-
 # =============================================================================
 # Race Planner Models
 # =============================================================================
@@ -656,9 +651,7 @@ class RaceCourse(Base):
     max_elevation_m: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     # Geometry (PostGIS) - LineStringZ includes elevation
-    geometry: Mapped[object] = mapped_column(
-        Geometry("LINESTRINGZ", srid=4326, spatial_index=True), nullable=False
-    )
+    geometry: Mapped[object] = mapped_column(Geometry("LINESTRINGZ", srid=4326, spatial_index=True), nullable=False)
 
     # Processed data (JSONB)
     # elevation_profile: [{distance_m, elevation_m, grade_pct}, ...]
@@ -674,7 +667,6 @@ class RaceCourse(Base):
 
     # Relationships
     user: Mapped["User"] = relationship("User", lazy="select")
-
 
 
 class RacePlan(Base):
@@ -698,9 +690,7 @@ class RacePlan(Base):
     course_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("race_courses.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    bike_id: Mapped[int | None] = mapped_column(
-        BigInteger, ForeignKey("bikes.id", ondelete="SET NULL"), nullable=True
-    )
+    bike_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("bikes.id", ondelete="SET NULL"), nullable=True)
 
     # Plan metadata
     name: Mapped[str | None] = mapped_column(String(200), nullable=True)

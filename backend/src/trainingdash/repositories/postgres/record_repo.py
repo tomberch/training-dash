@@ -33,8 +33,6 @@ class PostgresRecordRepo:
             List of Record objects ordered by timestamp ascending
         """
         result = await self._session.execute(
-            select(Record)
-            .where(Record.activity_id == activity_id)
-            .order_by(Record.timestamp)
+            select(Record).where(Record.activity_id == activity_id).order_by(Record.timestamp)
         )
         return list(result.scalars().all())

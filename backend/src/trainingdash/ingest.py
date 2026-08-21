@@ -8,13 +8,13 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from trainingdash.activity_pipeline import ActivityPipeline
+from trainingdash.domain.activity_type import detect_activity_type
 from trainingdash.domain.fitness import fit_cp_model
 from trainingdash.domain.metrics import (
     compute_intensity_factor,
     compute_normalized_power,
     compute_tss,
 )
-from trainingdash.domain.activity_type import detect_activity_type
 from trainingdash.domain.polyline import generate_map_polyline
 from trainingdash.domain.wbal import compute_wbal_series
 from trainingdash.domain.zones import compute_zone_times

@@ -69,11 +69,7 @@ class FakeActivityRepo:
         limit: int = 50,
     ) -> list[Activity]:
         """List activities tagged to a specific bike for a user."""
-        results = [
-            a
-            for (uid, _), a in self._activities.items()
-            if uid == user_id and a.bike_id == bike_id
-        ]
+        results = [a for (uid, _), a in self._activities.items() if uid == user_id and a.bike_id == bike_id]
         results.sort(key=lambda a: a.started_at or 0, reverse=True)
         return results[:limit]
 

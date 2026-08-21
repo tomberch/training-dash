@@ -62,12 +62,12 @@ class PacingPlan:
 # These adjust power relative to base (FTP × target_intensity)
 # Values derived from pacing research and cycling coach recommendations
 TERRAIN_POWER_MULTIPLIERS = {
-    "steep_descent": 0.55,    # < -6%: mostly coasting, light pedaling
-    "descent": 0.70,          # -6% to -2%: soft pedaling, stay aero
-    "flat": 1.00,             # -2% to 2%: base power
-    "false_flat": 1.07,       # 2% to 4%: slight increase
-    "climb": 1.12,            # 4% to 8%: push harder
-    "steep_climb": 1.18,      # > 8%: near FTP but not over
+    "steep_descent": 0.55,  # < -6%: mostly coasting, light pedaling
+    "descent": 0.70,  # -6% to -2%: soft pedaling, stay aero
+    "flat": 1.00,  # -2% to 2%: base power
+    "false_flat": 1.07,  # 2% to 4%: slight increase
+    "climb": 1.12,  # 4% to 8%: push harder
+    "steep_climb": 1.18,  # > 8%: near FTP but not over
 }
 
 
@@ -254,9 +254,7 @@ def calculate_normalized_power_from_segments(targets: list[PacingTarget]) -> flo
         return 0.0
 
     # Time-weighted 4th power mean
-    weighted_4th_power = sum(
-        t.target_power_w**4 * t.estimated_time_s for t in targets
-    ) / total_time
+    weighted_4th_power = sum(t.target_power_w**4 * t.estimated_time_s for t in targets) / total_time
 
     return weighted_4th_power**0.25
 

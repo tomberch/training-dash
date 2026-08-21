@@ -334,7 +334,6 @@ class TestDeleteActivity:
         assert deleted_route is None
 
 
-
 class TestActivityType:
     """Tests for activity_type field and filtering."""
 

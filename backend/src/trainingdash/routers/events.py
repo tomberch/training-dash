@@ -291,13 +291,12 @@ async def list_events(
 
     # Collect all event IDs for batch queries
     event_ids = [e.id for e in events]
-    
+
     # Batch fetch cover images
     cover_images: dict[UUID, str] = {}
     if event_ids:
         result = await db.execute(
-            select(RideEventMedia.ride_event_id, RideEventMedia.storage_path)
-            .where(
+            select(RideEventMedia.ride_event_id, RideEventMedia.storage_path).where(
                 RideEventMedia.id.in_(
                     select(RideEvent.cover_image_id)
                     .where(RideEvent.id.in_(event_ids))
@@ -307,7 +306,7 @@ async def list_events(
         )
         for row in result.all():
             cover_images[row[0]] = row[1]
-    
+
     # Batch fetch photo counts per event
     photo_counts: dict[UUID, int] = {}
     if event_ids:
@@ -319,7 +318,7 @@ async def list_events(
         )
         for row in result.all():
             photo_counts[row[0]] = row[1]
-    
+
     # Batch fetch activity stats per event via journal entries
     activity_stats: dict[UUID, dict] = {eid: {"count": 0, "distance": None, "elevation": None} for eid in event_ids}
     if event_ids:
@@ -411,13 +410,11 @@ async def get_event(
     activity_link_repo = await _get_activity_link_repo(db)
     all_activity_links = await activity_link_repo.list_for_event(event_id)
     activity_ids = [link.activity_id for link in all_activity_links]
-    
+
     # Batch fetch all activities for this event
     activities_map: dict[UUID, Activity] = {}
     if activity_ids:
-        result = await db.execute(
-            select(Activity).where(Activity.id.in_(activity_ids))
-        )
+        result = await db.execute(select(Activity).where(Activity.id.in_(activity_ids)))
         for activity in result.scalars().all():
             activities_map[activity.id] = activity
 
@@ -428,15 +425,14 @@ async def get_event(
         entry_links = await link_repo.list_for_entry(entry.id)
         entry_activities = await activity_link_repo.list_for_entry(entry.id)
 
-        entries_data.append({
-            **serialize_journal_entry(entry),
-            "media": [serialize_media(m) for m in entry_media],
-            "links": [serialize_link(l) for l in entry_links],
-            "activities": [
-                serialize_activity_link(a, activities_map.get(a.activity_id))
-                for a in entry_activities
-            ],
-        })
+        entries_data.append(
+            {
+                **serialize_journal_entry(entry),
+                "media": [serialize_media(m) for m in entry_media],
+                "links": [serialize_link(link) for link in entry_links],
+                "activities": [serialize_activity_link(a, activities_map.get(a.activity_id)) for a in entry_activities],
+            }
+        )
 
     # Calculate aggregate stats (activity_ids already collected above)
     stats = {
@@ -468,7 +464,7 @@ async def get_event(
         **serialize_event(event),
         "entries": entries_data,
         "media": [serialize_media(m) for m in event_media],
-        "links": [serialize_link(l) for l in event_links],
+        "links": [serialize_link(link) for link in event_links],
         "stats": stats,
     }
 
@@ -584,7 +580,7 @@ async def get_journal_entry(
     return {
         **serialize_journal_entry(entry),
         "media": [serialize_media(m) for m in entry_media],
-        "links": [serialize_link(l) for l in entry_links],
+        "links": [serialize_link(link) for link in entry_links],
         "activities": [serialize_activity_link(a) for a in entry_activities],
     }
 
@@ -986,14 +982,16 @@ async def list_available_activities(
     # Mark which are already linked
     activities_data = []
     for a in activities:
-        activities_data.append({
-            "id": str(a.id),
-            "title": a.title,
-            "started_at": a.started_at.isoformat() if a.started_at else None,
-            "distance_km": round(a.total_distance_m / 1000, 1) if a.total_distance_m else None,
-            "duration_seconds": a.moving_time_s,
-            "is_linked": a.id in linked_ids,
-        })
+        activities_data.append(
+            {
+                "id": str(a.id),
+                "title": a.title,
+                "started_at": a.started_at.isoformat() if a.started_at else None,
+                "distance_km": round(a.total_distance_m / 1000, 1) if a.total_distance_m else None,
+                "duration_seconds": a.moving_time_s,
+                "is_linked": a.id in linked_ids,
+            }
+        )
 
     return {
         "activities": activities_data,
@@ -1116,7 +1114,6 @@ def _generate_thumbnail(image_bytes: bytes, content_type: str) -> bytes:
     return output.getvalue()
 
 
-
 # =============================================================================
 # Photo Upload Endpoints
 # =============================================================================
@@ -1168,7 +1165,6 @@ async def upload_event_photo(
     with open(thumb_filepath, "wb") as f:
         f.write(thumbnail_bytes)
 
-
     # Create media record
     storage_path = f"/uploads/events/{event_id}/{filename}"
     thumbnail_path = f"/uploads/events/{event_id}/{thumb_filename}"
@@ -1185,13 +1181,13 @@ async def upload_event_photo(
 
     repo = await _get_media_repo(db)
     saved = await repo.save(media)
-    
+
     # Auto-set as cover if event doesn't have one
     if event.cover_image_id is None:
         event.cover_image_id = saved.id
         event_repo = await _get_event_repo(db)
         await event_repo.save(event)
-    
+
     return serialize_media(saved)
 
 
@@ -1315,7 +1311,6 @@ async def upload_entry_photo(
     thumb_filepath = uploads_dir / thumb_filename
     with open(thumb_filepath, "wb") as f:
         f.write(thumbnail_bytes)
-
 
     # Create media record
     storage_path = f"/uploads/events/{entry.ride_event_id}/entries/{filename}"

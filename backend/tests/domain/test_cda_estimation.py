@@ -11,17 +11,17 @@ Tests cover:
 import numpy as np
 import pytest
 
+from trainingdash.domain.calibration_segments import CalibrationSegment
 from trainingdash.domain.cda_estimation import (
-    CdAEstimate,
     CalibrationInput,
-    estimate_cda,
+    CdAEstimate,
     _estimate_cda_single_segment,
     confidence_tier,
-    get_default_crr,
+    estimate_cda,
     get_default_cda,
+    get_default_crr,
     inputs_from_segments,
 )
-from trainingdash.domain.calibration_segments import CalibrationSegment
 
 
 class TestCalibrationInput:
@@ -81,7 +81,7 @@ class TestSingleSegmentEstimation:
         # At 40 km/h (11.11 m/s) flat, with CdA=0.32, power ~315W
         inp = self._make_input(power=315.0, speed=11.11)
         cda = _estimate_cda_single_segment(inp)
-        
+
         # Should be close to 0.32
         assert 0.28 < cda < 0.36
 
@@ -89,10 +89,10 @@ class TestSingleSegmentEstimation:
         """Higher power at same speed implies higher CdA."""
         inp_low = self._make_input(power=250.0, speed=11.0)
         inp_high = self._make_input(power=350.0, speed=11.0)
-        
+
         cda_low = _estimate_cda_single_segment(inp_low)
         cda_high = _estimate_cda_single_segment(inp_high)
-        
+
         assert cda_high > cda_low
 
     def test_accounts_for_grade(self):
@@ -101,10 +101,10 @@ class TestSingleSegmentEstimation:
         # (more power goes to gravity)
         inp_flat = self._make_input(power=300.0, speed=10.0, grade=0.0)
         inp_climb = self._make_input(power=300.0, speed=10.0, grade=1.0)
-        
+
         cda_flat = _estimate_cda_single_segment(inp_flat)
         cda_climb = _estimate_cda_single_segment(inp_climb)
-        
+
         # On climb, less power available for aero → lower CdA estimate
         assert cda_climb < cda_flat
 
@@ -131,9 +131,9 @@ class TestEstimateCda:
     def test_single_segment_estimation(self):
         """Should estimate CdA from single segment."""
         inp = self._make_input(power=315.0, speed=11.11, n_samples=120)
-        
+
         result = estimate_cda([inp])
-        
+
         assert isinstance(result, CdAEstimate)
         assert 0.1 < result.cda < 0.8
         assert result.n_segments == 1
@@ -146,9 +146,9 @@ class TestEstimateCda:
             self._make_input(power=280.0, speed=10.5, n_samples=100),
             self._make_input(power=350.0, speed=11.5, n_samples=100),
         ]
-        
+
         result = estimate_cda(inputs)
-        
+
         assert result.n_segments == 3
         assert result.total_duration_s == 300.0
         assert len(result.estimates_by_segment) == 3
@@ -159,13 +159,13 @@ class TestEstimateCda:
         short_inp = self._make_input(power=400.0, speed=11.0, n_samples=60)  # Higher power → higher CdA
         # Long segment with typical CdA
         long_inp = self._make_input(power=315.0, speed=11.11, n_samples=240)
-        
+
         result = estimate_cda([short_inp, long_inp])
-        
+
         # Result should be closer to the long segment's estimate
         long_only = estimate_cda([long_inp])
         short_only = estimate_cda([short_inp])
-        
+
         # Weighted average should be between them, closer to long
         assert abs(result.cda - long_only.cda) < abs(result.cda - short_only.cda)
 
@@ -175,9 +175,9 @@ class TestEstimateCda:
         good_inp = self._make_input(power=315.0, speed=11.11, n_samples=120)
         # One that would give invalid CdA (very low power)
         bad_inp = self._make_input(power=50.0, speed=11.0, n_samples=120)  # Too low → CdA would be tiny
-        
+
         result = estimate_cda([good_inp, bad_inp])
-        
+
         # Should only use the good estimate
         assert result.n_segments == 1
 
@@ -188,9 +188,9 @@ class TestEstimateCda:
             self._make_input(power=30.0, speed=11.0, n_samples=100),
             self._make_input(power=20.0, speed=10.0, n_samples=100),
         ]
-        
+
         result = estimate_cda(bad_inputs)
-        
+
         assert result.cda == 0.32  # Default
         assert result.confidence == "low"
         assert result.n_segments == 0
@@ -198,11 +198,11 @@ class TestEstimateCda:
     def test_crr_fixed_parameter(self):
         """Should use crr_fixed when provided."""
         inp = self._make_input(power=315.0, speed=11.11, n_samples=100)
-        
+
         # Same input, different fixed Crr should give different CdA
         result_low_crr = estimate_cda([inp], crr_fixed=0.003)
         result_high_crr = estimate_cda([inp], crr_fixed=0.006)
-        
+
         # Higher Crr means more power goes to rolling resistance,
         # leaving less for aero, so CdA estimate should be lower
         assert result_high_crr.cda < result_low_crr.cda
@@ -303,22 +303,34 @@ class TestInputsFromSegments:
         """Should create CalibrationInputs from segments with array data."""
         segments = [
             CalibrationSegment(
-                start_idx=0, end_idx=100, duration_s=100.0,
-                mean_speed_mps=11.0, mean_power_w=250.0, mean_grade_pct=0.5,
-                power_cv=0.05, speed_cv=0.02, quality_score=80.0,
+                start_idx=0,
+                end_idx=100,
+                duration_s=100.0,
+                mean_speed_mps=11.0,
+                mean_power_w=250.0,
+                mean_grade_pct=0.5,
+                power_cv=0.05,
+                speed_cv=0.02,
+                quality_score=80.0,
             ),
             CalibrationSegment(
-                start_idx=100, end_idx=200, duration_s=100.0,
-                mean_speed_mps=10.5, mean_power_w=230.0, mean_grade_pct=0.0,
-                power_cv=0.04, speed_cv=0.02, quality_score=85.0,
+                start_idx=100,
+                end_idx=200,
+                duration_s=100.0,
+                mean_speed_mps=10.5,
+                mean_power_w=230.0,
+                mean_grade_pct=0.0,
+                power_cv=0.04,
+                speed_cv=0.02,
+                quality_score=85.0,
             ),
         ]
-        
+
         # Create actual arrays with data
         power = np.concatenate([np.full(100, 250.0), np.full(100, 230.0)])
         speed = np.concatenate([np.full(100, 11.0), np.full(100, 10.5)])
         grade = np.concatenate([np.full(100, 0.5), np.full(100, 0.0)])
-        
+
         inputs = inputs_from_segments(
             segments=segments,
             power=power,
@@ -328,7 +340,7 @@ class TestInputsFromSegments:
             rider_mass=83.0,
             crr=0.004,
         )
-        
+
         assert len(inputs) == 2
         # First segment
         assert len(inputs[0].power) == 100

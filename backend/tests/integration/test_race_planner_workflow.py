@@ -26,7 +26,6 @@ import pytest
 
 from trainingdash.repositories.postgres.models import Activity, Bike, Record
 
-
 FIXTURES_DIR = Path(__file__).parent.parent / "fixtures" / "courses"
 
 
@@ -72,7 +71,9 @@ def hilly_gpx() -> bytes:
         else:
             elevation = 137.5 - (i - 75) * 0.5  # Gradual descent
 
-        points.append(f'      <trkpt lat="{lat:.6f}" lon="{lon:.6f}">\n        <ele>{elevation:.1f}</ele>\n      </trkpt>')
+        points.append(
+            f'      <trkpt lat="{lat:.6f}" lon="{lon:.6f}">\n        <ele>{elevation:.1f}</ele>\n      </trkpt>'
+        )
 
     gpx_content = f"""<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="test" xmlns="http://www.topografix.com/GPX/1/1">
@@ -110,9 +111,7 @@ class TestFullWorkflow:
     """Test complete race planner workflows end-to-end."""
 
     @pytest.mark.asyncio
-    async def test_upload_generate_compare_workflow(
-        self, auth_client, db_session, seed_user, hilly_gpx
-    ):
+    async def test_upload_generate_compare_workflow(self, auth_client, db_session, seed_user, hilly_gpx):
         """
         Full workflow test:
         1. Upload GPX course
@@ -239,9 +238,7 @@ class TestFullWorkflow:
         assert len(comparison["insights"]) > 0
 
     @pytest.mark.asyncio
-    async def test_workflow_with_bike(
-        self, auth_client, gpx_with_elevation, test_bike
-    ):
+    async def test_workflow_with_bike(self, auth_client, gpx_with_elevation, test_bike):
         """Test workflow using a calibrated bike for the plan."""
         # Upload course
         upload_response = await auth_client.post(
@@ -375,9 +372,7 @@ class TestPlanGenerationVariations:
         assert "comparison" in plan
 
     @pytest.mark.asyncio
-    async def test_regenerate_plan_with_different_params(
-        self, auth_client, gpx_with_elevation
-    ):
+    async def test_regenerate_plan_with_different_params(self, auth_client, gpx_with_elevation):
         """Regenerate plan with updated parameters creates new plan."""
         # Upload course
         upload_response = await auth_client.post(
@@ -426,9 +421,7 @@ class TestPerformance:
         assert elapsed < 5.0, f"Course processing took {elapsed:.2f}s (expected < 5s)"
 
     @pytest.mark.asyncio
-    async def test_plan_generation_heuristic_performance(
-        self, auth_client, hilly_gpx
-    ):
+    async def test_plan_generation_heuristic_performance(self, auth_client, hilly_gpx):
         """Heuristic plan generation should be fast."""
         # Upload course first
         upload_response = await auth_client.post(
@@ -452,9 +445,7 @@ class TestPerformance:
         assert elapsed < 2.0, f"Plan generation took {elapsed:.2f}s (expected < 2s)"
 
     @pytest.mark.asyncio
-    async def test_plan_generation_optimized_performance(
-        self, auth_client, hilly_gpx
-    ):
+    async def test_plan_generation_optimized_performance(self, auth_client, hilly_gpx):
         """Optimized plan generation should complete within timeout."""
         # Upload course first
         upload_response = await auth_client.post(
@@ -486,9 +477,7 @@ class TestEdgeCases:
     """Test edge cases and error handling."""
 
     @pytest.mark.asyncio
-    async def test_delete_course_cascades_to_plans(
-        self, auth_client, gpx_with_elevation
-    ):
+    async def test_delete_course_cascades_to_plans(self, auth_client, gpx_with_elevation):
         """Deleting a course should delete associated plans."""
         # Upload course and create plan
         upload_response = await auth_client.post(
@@ -516,9 +505,7 @@ class TestEdgeCases:
         assert get_plan_after.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_list_plans_for_deleted_course(
-        self, auth_client, gpx_with_elevation
-    ):
+    async def test_list_plans_for_deleted_course(self, auth_client, gpx_with_elevation):
         """Listing plans after course deletion returns empty for that course."""
         # Upload course and create plan
         upload_response = await auth_client.post(

@@ -3,7 +3,7 @@
 import pytest
 from geoalchemy2 import WKTElement
 
-from trainingdash.repositories.postgres.models import Bike, RaceCourse, RacePlan
+from trainingdash.repositories.postgres.models import Bike, RaceCourse
 
 
 @pytest.fixture
@@ -437,9 +437,7 @@ class TestRacePlansIsolation:
     """Tests for multi-user plan isolation."""
 
     @pytest.mark.asyncio
-    async def test_plans_scoped_to_user(
-        self, auth_client, app_client, test_course, db_session
-    ):
+    async def test_plans_scoped_to_user(self, auth_client, app_client, test_course, db_session):
         """User cannot see another user's plans."""
         # Create plan as test user
         create_response = await auth_client.post(

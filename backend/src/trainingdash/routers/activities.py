@@ -563,9 +563,7 @@ async def link_activity_to_event(
     activity = await _get_owned_activity(repo, user, activity_id)
 
     # Verify user owns the event
-    result = await db.execute(
-        select(RideEvent).where(RideEvent.id == request.event_id, RideEvent.user_id == user.id)
-    )
+    result = await db.execute(select(RideEvent).where(RideEvent.id == request.event_id, RideEvent.user_id == user.id))
     event = result.scalar_one_or_none()
     if event is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")

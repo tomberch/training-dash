@@ -1,7 +1,6 @@
 """Unit tests for grade calculation module."""
 
 import numpy as np
-import pytest
 
 from trainingdash.domain.grade import (
     calculate_grade,

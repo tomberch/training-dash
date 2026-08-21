@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pytest
 
-
 # Path to test fixtures
 FIXTURES_DIR = Path(__file__).parent.parent / "fixtures" / "courses"
 
@@ -72,9 +71,7 @@ class TestCoursesAPI:
         assert response.json()["name"] == "My Custom Course"
 
     @pytest.mark.asyncio
-    async def test_upload_gpx_without_elevation_returns_warning(
-        self, auth_client, gpx_no_elevation
-    ):
+    async def test_upload_gpx_without_elevation_returns_warning(self, auth_client, gpx_no_elevation):
         """Upload GPX without elevation data returns warning."""
         response = await auth_client.post(
             "/api/courses",
@@ -174,9 +171,7 @@ class TestCoursesAPI:
         assert isinstance(data["elevation_profile"], list)
 
     @pytest.mark.asyncio
-    async def test_get_course_returns_elevation_profile(
-        self, auth_client, gpx_with_elevation
-    ):
+    async def test_get_course_returns_elevation_profile(self, auth_client, gpx_with_elevation):
         """Get course returns elevation profile with correct structure."""
         create_response = await auth_client.post(
             "/api/courses",
@@ -244,9 +239,7 @@ class TestCourseIsolation:
     """Tests for multi-user course isolation."""
 
     @pytest.mark.asyncio
-    async def test_courses_scoped_to_user(
-        self, auth_client, app_client, gpx_with_elevation, db_session
-    ):
+    async def test_courses_scoped_to_user(self, auth_client, app_client, gpx_with_elevation, db_session):
         """User cannot see another user's courses."""
         # Create course as test user (auth_client)
         create_response = await auth_client.post(

@@ -251,7 +251,7 @@ def estimate_cda(
     # where SS_tot = sum(w * y^2) for regression through origin
     y_pred = cda * x_arr
     ss_res = float(np.sum(weights_arr * (y_arr - y_pred) ** 2))
-    ss_tot = float(np.sum(weights_arr * y_arr ** 2))
+    ss_tot = float(np.sum(weights_arr * y_arr**2))
 
     if ss_tot > 0:
         r_squared = max(0.0, 1.0 - ss_res / ss_tot)

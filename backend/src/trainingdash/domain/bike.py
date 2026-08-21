@@ -22,11 +22,11 @@ CALIBRATION_ELIGIBLE_BIKE_TYPES = frozenset({"road", "tt", "gravel", "mtb"})
 # - CdA: Coefficient of drag * frontal area (rider + bike combined)
 # - Crr: Coefficient of rolling resistance (tire/surface dependent)
 BIKE_TYPE_DEFAULTS: dict[str, dict[str, float]] = {
-    "road": {"cda": 0.32, "crr": 0.004},    # Drops position, slick tires
-    "tt": {"cda": 0.24, "crr": 0.003},      # Aero position, TT tires
+    "road": {"cda": 0.32, "crr": 0.004},  # Drops position, slick tires
+    "tt": {"cda": 0.24, "crr": 0.003},  # Aero position, TT tires
     "gravel": {"cda": 0.35, "crr": 0.006},  # Relaxed position, wider tires
-    "mtb": {"cda": 0.45, "crr": 0.012},     # Upright position, knobby tires
-    "ebike": {"cda": 0.35, "crr": 0.005},   # Similar to gravel geometry
+    "mtb": {"cda": 0.45, "crr": 0.012},  # Upright position, knobby tires
+    "ebike": {"cda": 0.35, "crr": 0.005},  # Similar to gravel geometry
 }
 
 

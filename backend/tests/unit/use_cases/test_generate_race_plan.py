@@ -4,15 +4,15 @@ from decimal import Decimal
 
 import pytest
 
+from tests.fakes.bike_repo import FakeBikeRepo
+from tests.fakes.course_repo import FakeCourseRepo
+from tests.fakes.race_plan_repo import FakeRacePlanRepo
+from tests.fakes.user_repo import FakeUserRepo
 from trainingdash.repositories.postgres.models import Bike, RaceCourse, User
 from trainingdash.use_cases.generate_race_plan import (
     GeneratePlanRequest,
     GenerateRacePlan,
 )
-from tests.fakes.bike_repo import FakeBikeRepo
-from tests.fakes.course_repo import FakeCourseRepo
-from tests.fakes.race_plan_repo import FakeRacePlanRepo
-from tests.fakes.user_repo import FakeUserRepo
 
 
 @pytest.fixture

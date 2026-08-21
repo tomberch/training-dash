@@ -218,11 +218,7 @@ def select_calibration_segments(
 
     # Step 1: Create a validity mask for individual samples
     # Each sample must meet basic thresholds
-    valid_mask = (
-        (speed >= min_speed_mps)
-        & (np.abs(grade) <= max_grade_pct)
-        & (power >= min_power_w)
-    )
+    valid_mask = (speed >= min_speed_mps) & (np.abs(grade) <= max_grade_pct) & (power >= min_power_w)
 
     # Step 2: Find contiguous runs of valid samples
     # Add False at boundaries to detect edges
@@ -339,12 +335,7 @@ def detect_drafting(
     rider = RiderParams(mass_kg=rider_mass, cda=baseline_cda, crr=0.004)
 
     # Calculate expected power for each sample (assume flat ground)
-    expected_power = np.array(
-        [
-            power_required(float(speed[i]), 0.0, rider, None)
-            for i in range(n)
-        ]
-    )
+    expected_power = np.array([power_required(float(speed[i]), 0.0, rider, None) for i in range(n)])
 
     # Flag as drafting if actual power is significantly below expected
     # Only consider samples where we're actually moving and pedaling
@@ -353,9 +344,7 @@ def detect_drafting(
 
     # Where expected power is positive and we're moving
     valid_compare = moving_mask & (expected_power > 0)
-    drafting_mask[valid_compare] = power[:n][valid_compare] < (
-        threshold * expected_power[valid_compare]
-    )
+    drafting_mask[valid_compare] = power[:n][valid_compare] < (threshold * expected_power[valid_compare])
 
     return drafting_mask
 

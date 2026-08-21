@@ -6,7 +6,7 @@ This module provides utilities for:
 3. Calculating grade (slope) from distance and elevation data
 """
 
-from typing import Sequence
+from collections.abc import Sequence
 
 import numpy as np
 from scipy.signal import savgol_filter

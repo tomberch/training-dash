@@ -50,7 +50,7 @@ async def update_bearings():
             activity.direction_bearing = bearings.bearing_25
             activity.direction_bearing_75 = bearings.bearing_75
             await session.commit()
-            print(f"  Updated!")
+            print("  Updated!")
 
     await engine.dispose()
 

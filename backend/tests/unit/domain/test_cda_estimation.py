@@ -3,17 +3,16 @@
 import numpy as np
 import pytest
 
+from trainingdash.domain.calibration_segments import CalibrationSegment
 from trainingdash.domain.cda_estimation import (
-    CdAEstimate,
     CalibrationInput,
+    CdAEstimate,
     confidence_tier,
     estimate_cda,
     get_default_cda,
     get_default_crr,
     inputs_from_segments,
 )
-from trainingdash.domain.calibration_segments import CalibrationSegment
-
 
 # =============================================================================
 # Test CalibrationInput
@@ -454,7 +453,7 @@ class TestCdaEstimationIntegration:
         inputs = [
             CalibrationInput(
                 power=tuple([350.0] * 60),  # Higher power
-                speed=tuple([12.0] * 60),   # ~43 km/h
+                speed=tuple([12.0] * 60),  # ~43 km/h
                 grade=tuple([0.0] * 60),
                 air_density=1.225,
                 rider_mass=75,

@@ -4,7 +4,7 @@ This module provides utilities for calculating road grade from
 smoothed elevation data using distance-based windowing for stability.
 """
 
-from typing import Sequence
+from collections.abc import Sequence
 
 import numpy as np
 

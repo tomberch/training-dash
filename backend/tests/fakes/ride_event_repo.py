@@ -1,6 +1,5 @@
 """In-memory fake implementations of RideEvent repositories for testing."""
 
-from datetime import date
 from uuid import UUID
 
 from trainingdash.repositories.postgres.models import (
@@ -222,13 +221,13 @@ class FakeRideEventLinkRepo:
         return link
 
     async def list_for_event(self, event_id: UUID) -> list[RideEventLink]:
-        links = [l for l in self._links.values() if l.ride_event_id == event_id]
-        links.sort(key=lambda l: l.sort_order)
+        links = [lnk for lnk in self._links.values() if lnk.ride_event_id == event_id]
+        links.sort(key=lambda lnk: lnk.sort_order)
         return links
 
     async def list_for_entry(self, entry_id: UUID) -> list[RideEventLink]:
-        links = [l for l in self._links.values() if l.journal_entry_id == entry_id]
-        links.sort(key=lambda l: l.sort_order)
+        links = [lnk for lnk in self._links.values() if lnk.journal_entry_id == entry_id]
+        links.sort(key=lambda lnk: lnk.sort_order)
         return links
 
     async def save(self, link: RideEventLink) -> RideEventLink:
@@ -265,15 +264,15 @@ class FakeJournalEntryActivityRepo:
         self._entry_event_map = entry_event_map
 
     async def list_for_entry(self, entry_id: UUID) -> list[JournalEntryActivity]:
-        links = [l for l in self._links if l.journal_entry_id == entry_id]
-        links.sort(key=lambda l: l.sort_order)
+        links = [lnk for lnk in self._links if lnk.journal_entry_id == entry_id]
+        links.sort(key=lambda lnk: lnk.sort_order)
         return links
 
     async def list_for_event(self, event_id: UUID) -> list[JournalEntryActivity]:
         # Get all entries for this event
         entry_ids = {eid for eid, evid in self._entry_event_map.items() if evid == event_id}
-        links = [l for l in self._links if l.journal_entry_id in entry_ids]
-        links.sort(key=lambda l: l.sort_order)
+        links = [lnk for lnk in self._links if lnk.journal_entry_id in entry_ids]
+        links.sort(key=lambda lnk: lnk.sort_order)
         return links
 
     async def link(self, entry_id: UUID, activity_id: UUID, sort_order: int = 0) -> JournalEntryActivity:

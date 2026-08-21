@@ -61,8 +61,7 @@ def upgrade() -> None:
     op.create_index("idx_bikes_user", "bikes", ["user_id"])
     # Unique partial index: only one default bike per user (among non-retired bikes)
     op.execute(
-        "CREATE UNIQUE INDEX idx_bikes_default ON bikes (user_id) "
-        "WHERE is_default = TRUE AND retired_at IS NULL"
+        "CREATE UNIQUE INDEX idx_bikes_default ON bikes (user_id) WHERE is_default = TRUE AND retired_at IS NULL"
     )
 
     # Add bike_id to activities

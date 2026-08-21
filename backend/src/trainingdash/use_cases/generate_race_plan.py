@@ -229,10 +229,13 @@ class GenerateRacePlan:
             # Comparison: constant power baseline
             constant_power = ftp * request.target_intensity
             constant_time_s = sum(
-                seg.length_m / max(0.1, self._speed_at_power(constant_power, seg.avg_grade_pct, rider_params, env_params))
+                seg.length_m
+                / max(0.1, self._speed_at_power(constant_power, seg.avg_grade_pct, rider_params, env_params))
                 for seg in segments
             )
-            improvement_vs_constant = (constant_time_s - total_time_s) / constant_time_s * 100 if constant_time_s > 0 else 0
+            improvement_vs_constant = (
+                (constant_time_s - total_time_s) / constant_time_s * 100 if constant_time_s > 0 else 0
+            )
 
             comparison = {
                 "constant_time_s": constant_time_s,

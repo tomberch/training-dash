@@ -2,8 +2,6 @@
 
 import pytest
 
-from trainingdash.repositories.postgres.models import Bike
-
 
 class TestBikesAPI:
     """Tests for /api/bikes endpoints."""

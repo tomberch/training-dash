@@ -106,27 +106,27 @@ def _compute_segment_times(
     _cache: dict | None = None,
 ) -> np.ndarray:
     """Compute time for each segment given power distribution.
-    
+
     Optionally uses a cache keyed by (power, grade) tuples.
     """
     times = np.zeros(len(segments))
     for i, seg in enumerate(segments):
         power = powers[i]
         grade = seg.avg_grade_pct
-        
+
         # Check cache
         if _cache is not None:
             cache_key = (round(power, 1), round(grade, 2))
             if cache_key in _cache:
                 times[i] = seg.length_m / _cache[cache_key]
                 continue
-        
+
         speed = speed_from_power(power, grade, rider_params, env_params)
-        
+
         # Store in cache
         if _cache is not None:
             _cache[cache_key] = speed
-            
+
         times[i] = seg.length_m / speed if speed > 0 else 1e6
     return times
 
@@ -288,9 +288,7 @@ def optimize_pacing(
     ]
 
     # Calculate baseline times for comparison
-    constant_power_guess = target_energy_j / sum(
-        seg.length_m / 8.0 for seg in segments
-    )
+    constant_power_guess = target_energy_j / sum(seg.length_m / 8.0 for seg in segments)
     constant_power_guess = np.clip(constant_power_guess, min_power, max_power)
     constant_powers = np.full(n_segments, constant_power_guess)
     constant_time = objective(constant_powers)
@@ -324,30 +322,18 @@ def optimize_pacing(
     avg_power = total_energy_j_actual / total_time if total_time > 0 else 0
 
     # NP approximation (time-weighted 4th power mean)
-    weighted_4th = sum(
-        t.target_power_w**4 * t.estimated_time_s for t in targets
-    ) / total_time
+    weighted_4th = sum(t.target_power_w**4 * t.estimated_time_s for t in targets) / total_time
     np_power = weighted_4th**0.25
 
     intensity_factor = np_power / rider_ftp if rider_ftp > 0 else 0
 
     # W'bal check using accurate method for final result
     times = np.array([t.estimated_time_s for t in targets])
-    _, wbal_min = check_wbal_feasibility(
-        optimized_powers, times, rider_cp, rider_w_prime
-    )
+    _, wbal_min = check_wbal_feasibility(optimized_powers, times, rider_cp, rider_w_prime)
 
     # Calculate improvements
-    improvement_vs_constant = (
-        (constant_time - total_time) / constant_time * 100
-        if constant_time > 0
-        else 0
-    )
-    improvement_vs_heuristic = (
-        (heuristic_time - total_time) / heuristic_time * 100
-        if heuristic_time > 0
-        else 0
-    )
+    improvement_vs_constant = (constant_time - total_time) / constant_time * 100 if constant_time > 0 else 0
+    improvement_vs_heuristic = (heuristic_time - total_time) / heuristic_time * 100 if heuristic_time > 0 else 0
 
     return OptimizedPlan(
         targets=targets,

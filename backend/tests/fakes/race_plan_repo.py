@@ -23,19 +23,13 @@ class FakeRacePlanRepo:
         return self._plans.get((user_id, plan_id))
 
     async def get_by_course(self, course_id: int, user_id: int) -> list[RacePlan]:
-        course_plans = [
-            p for (uid, _), p in self._plans.items()
-            if uid == user_id and p.course_id == course_id
-        ]
+        course_plans = [p for (uid, _), p in self._plans.items() if uid == user_id and p.course_id == course_id]
         # Sort by created_at descending
         course_plans.sort(key=lambda p: p.created_at or datetime.min, reverse=True)
         return course_plans
 
     async def get_by_user(self, user_id: int, limit: int = 20) -> list[RacePlan]:
-        user_plans = [
-            p for (uid, _), p in self._plans.items()
-            if uid == user_id
-        ]
+        user_plans = [p for (uid, _), p in self._plans.items() if uid == user_id]
         # Sort by created_at descending
         user_plans.sort(key=lambda p: p.created_at or datetime.min, reverse=True)
         return user_plans[:limit]

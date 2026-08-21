@@ -69,10 +69,7 @@ class PostgresRacePlanRepo:
             List of RacePlan objects
         """
         result = await self._session.execute(
-            select(RacePlan)
-            .where(RacePlan.user_id == user_id)
-            .order_by(RacePlan.created_at.desc())
-            .limit(limit)
+            select(RacePlan).where(RacePlan.user_id == user_id).order_by(RacePlan.created_at.desc()).limit(limit)
         )
         return list(result.scalars().all())
 

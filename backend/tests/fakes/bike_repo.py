@@ -24,8 +24,7 @@ class FakeBikeRepo:
 
     async def get_by_user(self, user_id: int, include_retired: bool = False) -> list[Bike]:
         user_bikes = [
-            b for (uid, _), b in self._bikes.items()
-            if uid == user_id and (include_retired or b.retired_at is None)
+            b for (uid, _), b in self._bikes.items() if uid == user_id and (include_retired or b.retired_at is None)
         ]
         # Sort by name
         user_bikes.sort(key=lambda b: b.name or "")

@@ -204,7 +204,6 @@ async def retire_bike(
     return bike_response(bike)
 
 
-
 # =============================================================================
 # Calibration Endpoints
 # =============================================================================
@@ -351,9 +350,7 @@ async def get_calibration_status(
     # Count activities with power data tagged to this bike
     # Use list_by_bike and filter - simple read operation
     activities = await activity_repo.list_by_bike(bike_id, user.id, limit=100)
-    n_activities = sum(
-        1 for a in activities if a.avg_power_w is not None and a.avg_power_w > 0
-    )
+    n_activities = sum(1 for a in activities if a.avg_power_w is not None and a.avg_power_w > 0)
 
     # Determine eligibility and estimated confidence
     if n_activities == 0:

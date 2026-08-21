@@ -327,9 +327,7 @@ async def get_plan(
         )
 
     # Parse segment targets from JSONB
-    segment_targets = [
-        SegmentTargetSchema(**st) for st in (plan.segment_targets or [])
-    ]
+    segment_targets = [SegmentTargetSchema(**st) for st in (plan.segment_targets or [])]
 
     return RacePlanDetailResponse(
         id=plan.id,
@@ -408,18 +406,10 @@ async def regenerate_plan(
 
     # Merge existing values with updates (updates take precedence if not None)
     bike_id = updates.bike_id if updates.bike_id is not None else existing_plan.bike_id
-    weight = (
-        updates.rider_weight_kg
-        if updates.rider_weight_kg is not None
-        else float(existing_plan.rider_weight_kg)
-    )
+    weight = updates.rider_weight_kg if updates.rider_weight_kg is not None else float(existing_plan.rider_weight_kg)
     ftp = updates.ftp_watts if updates.ftp_watts is not None else existing_plan.ftp_watts
     cp = updates.cp_watts if updates.cp_watts is not None else existing_plan.cp_watts
-    w_prime = (
-        updates.w_prime_joules
-        if updates.w_prime_joules is not None
-        else existing_plan.w_prime_joules
-    )
+    w_prime = updates.w_prime_joules if updates.w_prime_joules is not None else existing_plan.w_prime_joules
     intensity = (
         updates.target_intensity
         if updates.target_intensity is not None
@@ -470,7 +460,6 @@ async def regenerate_plan(
     )
 
 
-
 # =============================================================================
 # Comparison Endpoints
 # =============================================================================
@@ -495,9 +484,7 @@ async def compare_execution(
     use_case = CompareExecution(plan_repo, activity_repo, record_repo, course_repo)
 
     try:
-        result = await use_case.execute(
-            current_user.id, plan_id, request.activity_id
-        )
+        result = await use_case.execute(current_user.id, plan_id, request.activity_id)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

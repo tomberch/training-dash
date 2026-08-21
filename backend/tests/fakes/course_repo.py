@@ -23,10 +23,7 @@ class FakeCourseRepo:
         return self._courses.get((user_id, course_id))
 
     async def get_by_user(self, user_id: int) -> list[RaceCourse]:
-        user_courses = [
-            c for (uid, _), c in self._courses.items()
-            if uid == user_id
-        ]
+        user_courses = [c for (uid, _), c in self._courses.items() if uid == user_id]
         # Sort by created_at descending
         user_courses.sort(key=lambda c: c.created_at or datetime.min, reverse=True)
         return user_courses

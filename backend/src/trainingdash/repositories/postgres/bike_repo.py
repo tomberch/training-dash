@@ -109,9 +109,7 @@ class PostgresBikeRepo:
         """
         # Clear existing default
         await self._session.execute(
-            update(Bike)
-            .where(Bike.user_id == user_id, Bike.is_default.is_(True))
-            .values(is_default=False)
+            update(Bike).where(Bike.user_id == user_id, Bike.is_default.is_(True)).values(is_default=False)
         )
 
         # Set new default
@@ -131,9 +129,7 @@ class PostgresBikeRepo:
         Clear the user's default bike (no bike is default).
         """
         await self._session.execute(
-            update(Bike)
-            .where(Bike.user_id == user_id, Bike.is_default.is_(True))
-            .values(is_default=False)
+            update(Bike).where(Bike.user_id == user_id, Bike.is_default.is_(True)).values(is_default=False)
         )
         await self._session.commit()
 

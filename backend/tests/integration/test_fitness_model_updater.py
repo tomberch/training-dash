@@ -36,8 +36,7 @@ def make_activity(user_id: int, started_at: datetime) -> Activity:
 def make_peak_powers(activity_id, powers: dict[int, int]) -> list[ActivityPeakPower]:
     """Create peak power records for an activity."""
     return [
-        ActivityPeakPower(activity_id=activity_id, duration_seconds=dur, watts=watts)
-        for dur, watts in powers.items()
+        ActivityPeakPower(activity_id=activity_id, duration_seconds=dur, watts=watts) for dur, watts in powers.items()
     ]
 
 
@@ -56,14 +55,17 @@ class TestFitnessModelUpdater:
         await db_session.flush()
 
         # Typical power profile: short high power, longer lower power
-        peaks1 = make_peak_powers(activity1.id, {
-            5: 900,     # 5s peak power
-            60: 450,    # 1 min
-            120: 380,   # 2 min - in CP fitting range
-            300: 320,   # 5 min - in CP fitting range
-            600: 290,   # 10 min - in CP fitting range
-            1200: 270,  # 20 min
-        })
+        peaks1 = make_peak_powers(
+            activity1.id,
+            {
+                5: 900,  # 5s peak power
+                60: 450,  # 1 min
+                120: 380,  # 2 min - in CP fitting range
+                300: 320,  # 5 min - in CP fitting range
+                600: 290,  # 10 min - in CP fitting range
+                1200: 270,  # 20 min
+            },
+        )
         for p in peaks1:
             db_session.add(p)
         await db_session.flush()
@@ -73,9 +75,7 @@ class TestFitnessModelUpdater:
         await updater.execute(seed_user.id)
 
         # Check FitnessHistory was created
-        result = await db_session.execute(
-            select(FitnessHistory).where(FitnessHistory.user_id == seed_user.id)
-        )
+        result = await db_session.execute(select(FitnessHistory).where(FitnessHistory.user_id == seed_user.id))
         fitness = result.scalar_one_or_none()
 
         assert fitness is not None
@@ -90,9 +90,7 @@ class TestFitnessModelUpdater:
         updater = FitnessModelUpdater(db_session)
         await updater.execute(seed_user.id)
 
-        result = await db_session.execute(
-            select(FitnessHistory).where(FitnessHistory.user_id == seed_user.id)
-        )
+        result = await db_session.execute(select(FitnessHistory).where(FitnessHistory.user_id == seed_user.id))
         assert result.scalar_one_or_none() is None
 
     @pytest.mark.asyncio
@@ -105,9 +103,7 @@ class TestFitnessModelUpdater:
         updater = FitnessModelUpdater(db_session)
         await updater.execute(seed_user.id)
 
-        result = await db_session.execute(
-            select(FitnessHistory).where(FitnessHistory.user_id == seed_user.id)
-        )
+        result = await db_session.execute(select(FitnessHistory).where(FitnessHistory.user_id == seed_user.id))
         assert result.scalar_one_or_none() is None
 
     @pytest.mark.asyncio
@@ -130,14 +126,17 @@ class TestFitnessModelUpdater:
         await db_session.flush()
 
         # Power profile suggesting CP around 280W (much higher than FTP of 200)
-        peaks = make_peak_powers(activity.id, {
-            5: 1000,
-            60: 500,
-            120: 400,
-            300: 340,
-            600: 310,
-            1200: 290,
-        })
+        peaks = make_peak_powers(
+            activity.id,
+            {
+                5: 1000,
+                60: 500,
+                120: 400,
+                300: 340,
+                600: 310,
+                1200: 290,
+            },
+        )
         for p in peaks:
             db_session.add(p)
         await db_session.flush()
@@ -183,14 +182,17 @@ class TestFitnessModelUpdater:
         await db_session.flush()
 
         # Power profile suggesting CP around 280W
-        peaks = make_peak_powers(activity.id, {
-            5: 1000,
-            60: 500,
-            120: 400,
-            300: 340,
-            600: 310,
-            1200: 290,
-        })
+        peaks = make_peak_powers(
+            activity.id,
+            {
+                5: 1000,
+                60: 500,
+                120: 400,
+                300: 340,
+                600: 310,
+                1200: 290,
+            },
+        )
         for p in peaks:
             db_session.add(p)
         await db_session.flush()
@@ -215,12 +217,15 @@ class TestFitnessModelUpdater:
         db_session.add(activity)
         await db_session.flush()
 
-        peaks = make_peak_powers(activity.id, {
-            5: 1000,
-            120: 400,
-            300: 340,
-            600: 310,
-        })
+        peaks = make_peak_powers(
+            activity.id,
+            {
+                5: 1000,
+                120: 400,
+                300: 340,
+                600: 310,
+            },
+        )
         for p in peaks:
             db_session.add(p)
         await db_session.flush()
@@ -265,13 +270,16 @@ class TestFitnessModelUpdater:
         db_session.add(activity)
         await db_session.flush()
 
-        peaks = make_peak_powers(activity.id, {
-            5: 1000,
-            120: 400,
-            300: 340,
-            600: 310,
-            1200: 290,
-        })
+        peaks = make_peak_powers(
+            activity.id,
+            {
+                5: 1000,
+                120: 400,
+                300: 340,
+                600: 310,
+                1200: 290,
+            },
+        )
         for p in peaks:
             db_session.add(p)
         await db_session.flush()
@@ -324,13 +332,16 @@ class TestFitnessModelUpdater:
         db_session.add(activity)
         await db_session.flush()
 
-        peaks = make_peak_powers(activity.id, {
-            5: 1000,
-            120: 400,
-            300: 340,
-            600: 310,
-            1200: 290,
-        })
+        peaks = make_peak_powers(
+            activity.id,
+            {
+                5: 1000,
+                120: 400,
+                300: 340,
+                600: 310,
+                1200: 290,
+            },
+        )
         for p in peaks:
             db_session.add(p)
         await db_session.flush()
@@ -363,11 +374,14 @@ class TestFitnessModelUpdater:
         db_session.add(activity1)
         await db_session.flush()
 
-        peaks1 = make_peak_powers(activity1.id, {
-            5: 1100,   # Best 5s
-            120: 350,
-            300: 300,
-        })
+        peaks1 = make_peak_powers(
+            activity1.id,
+            {
+                5: 1100,  # Best 5s
+                120: 350,
+                300: 300,
+            },
+        )
         for p in peaks1:
             db_session.add(p)
 
@@ -376,12 +390,15 @@ class TestFitnessModelUpdater:
         db_session.add(activity2)
         await db_session.flush()
 
-        peaks2 = make_peak_powers(activity2.id, {
-            5: 900,
-            120: 400,   # Best 2min
-            300: 340,   # Best 5min
-            600: 300,   # Only 10min
-        })
+        peaks2 = make_peak_powers(
+            activity2.id,
+            {
+                5: 900,
+                120: 400,  # Best 2min
+                300: 340,  # Best 5min
+                600: 300,  # Only 10min
+            },
+        )
         for p in peaks2:
             db_session.add(p)
         await db_session.flush()
@@ -389,9 +406,7 @@ class TestFitnessModelUpdater:
         updater = FitnessModelUpdater(db_session)
         await updater.execute(seed_user.id)
 
-        result = await db_session.execute(
-            select(FitnessHistory).where(FitnessHistory.user_id == seed_user.id)
-        )
+        result = await db_session.execute(select(FitnessHistory).where(FitnessHistory.user_id == seed_user.id))
         fitness = result.scalar_one()
 
         # Peak power should use the best 5s from activity1
@@ -413,11 +428,14 @@ class TestFitnessModelUpdater:
         db_session.add(other_activity)
         await db_session.flush()
 
-        peaks = make_peak_powers(other_activity.id, {
-            5: 1200,
-            120: 500,
-            300: 400,
-        })
+        peaks = make_peak_powers(
+            other_activity.id,
+            {
+                5: 1200,
+                120: 500,
+                300: 400,
+            },
+        )
         for p in peaks:
             db_session.add(p)
         await db_session.flush()
@@ -426,8 +444,6 @@ class TestFitnessModelUpdater:
         updater = FitnessModelUpdater(db_session)
         await updater.execute(seed_user.id)
 
-        result = await db_session.execute(
-            select(FitnessHistory).where(FitnessHistory.user_id == seed_user.id)
-        )
+        result = await db_session.execute(select(FitnessHistory).where(FitnessHistory.user_id == seed_user.id))
         # Should have no fitness history (no activities for seed_user)
         assert result.scalar_one_or_none() is None

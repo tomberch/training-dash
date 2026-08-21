@@ -113,9 +113,7 @@ class TestRaceCourseModel:
 
         await db_session.commit()
 
-        result = await db_session.execute(
-            select(RaceCourse).where(RaceCourse.user_id == seed_user.id)
-        )
+        result = await db_session.execute(select(RaceCourse).where(RaceCourse.user_id == seed_user.id))
         courses = result.scalars().all()
         assert len(courses) >= 3
 
@@ -193,9 +191,7 @@ class TestRaceCourseGeometry:
         await db_session.refresh(course)
 
         # Query geometry as text
-        result = await db_session.execute(
-            select(ST_AsText(RaceCourse.geometry)).where(RaceCourse.id == course.id)
-        )
+        result = await db_session.execute(select(ST_AsText(RaceCourse.geometry)).where(RaceCourse.id == course.id))
         geom_text = result.scalar_one()
 
         # Check that geometry contains expected coordinates

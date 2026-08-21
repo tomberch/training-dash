@@ -2,8 +2,6 @@
 
 from decimal import Decimal
 
-import pytest
-
 from trainingdash.domain.bike import (
     BIKE_TYPE_DEFAULTS,
     BIKE_TYPES,
@@ -21,7 +19,7 @@ class TestBikeTypeConstants:
     def test_all_types_defined(self):
         """All expected bike types are in BIKE_TYPES."""
         expected = {"road", "tt", "gravel", "mtb", "ebike"}
-        assert BIKE_TYPES == expected
+        assert expected == BIKE_TYPES
 
     def test_calibration_eligible_subset(self):
         """Calibration eligible types are a subset of all types."""
@@ -30,7 +28,7 @@ class TestBikeTypeConstants:
     def test_calibration_eligible_excludes_ebike(self):
         """Calibration eligible types exclude ebike."""
         expected = {"road", "tt", "gravel", "mtb"}
-        assert CALIBRATION_ELIGIBLE_BIKE_TYPES == expected
+        assert expected == CALIBRATION_ELIGIBLE_BIKE_TYPES
         assert "ebike" not in CALIBRATION_ELIGIBLE_BIKE_TYPES
 
     def test_defaults_defined_for_all_types(self):

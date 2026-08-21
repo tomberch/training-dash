@@ -46,9 +46,7 @@ class PostgresCourseRepo:
             List of RaceCourse objects
         """
         result = await self._session.execute(
-            select(RaceCourse)
-            .where(RaceCourse.user_id == user_id)
-            .order_by(RaceCourse.created_at.desc())
+            select(RaceCourse).where(RaceCourse.user_id == user_id).order_by(RaceCourse.created_at.desc())
         )
         return list(result.scalars().all())
 

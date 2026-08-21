@@ -156,15 +156,18 @@ class TestFetchDemElevation:
 
             # Create a mock response object with sync .json() method
             from unittest.mock import Mock
+
             mock_response_obj = Mock()
             mock_response_obj.json.return_value = mock_response
             mock_response_obj.raise_for_status = Mock()
             mock_instance.get.return_value = mock_response_obj
 
-            result = await fetch_dem_elevation([
-                (37.7749, -122.4194),
-                (37.7759, -122.4184),
-            ])
+            result = await fetch_dem_elevation(
+                [
+                    (37.7749, -122.4194),
+                    (37.7759, -122.4184),
+                ]
+            )
 
         assert result == [100.5, 150.2]
 
@@ -178,10 +181,12 @@ class TestFetchDemElevation:
             mock_client.return_value.__aenter__.return_value = mock_instance
             mock_instance.get.side_effect = httpx.HTTPError("Network error")
 
-            result = await fetch_dem_elevation([
-                (37.7749, -122.4194),
-                (37.7759, -122.4184),
-            ])
+            result = await fetch_dem_elevation(
+                [
+                    (37.7749, -122.4194),
+                    (37.7759, -122.4184),
+                ]
+            )
 
         assert result == [None, None]
 

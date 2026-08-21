@@ -12,9 +12,8 @@ from trainingdash.domain.pacing_optimizer import (
     OptimizedPlan,
     optimize_pacing,
 )
-from trainingdash.domain.physics import EnvironmentParams, RiderParams
+from trainingdash.domain.physics import RiderParams
 from trainingdash.domain.wbal import check_wbal_feasibility
-
 
 # =============================================================================
 # Test Fixtures

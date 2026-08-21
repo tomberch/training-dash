@@ -428,7 +428,6 @@ class TestFakeEventRepo:
         assert new_id == 1
 
 
-
 class TestFakeBikeRepo:
     """Demonstrates FakeBikeRepo usage."""
 

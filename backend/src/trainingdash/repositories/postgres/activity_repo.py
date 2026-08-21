@@ -68,9 +68,7 @@ class PostgresActivityRepo:
         query = select(Activity).where(Activity.user_id == user_id)
         query = _apply_activity_type_filter(query, activity_type)
 
-        result = await self._session.execute(
-            query.order_by(Activity.started_at.desc()).offset(offset).limit(limit)
-        )
+        result = await self._session.execute(query.order_by(Activity.started_at.desc()).offset(offset).limit(limit))
         return list(result.scalars().all())
 
     async def count_for_user(self, user_id: int, activity_type: str | None = None) -> int:

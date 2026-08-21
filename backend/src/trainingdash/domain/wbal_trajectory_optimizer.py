@@ -20,7 +20,7 @@ import numpy as np
 from scipy.optimize import minimize
 
 from trainingdash.domain.course_segmentation import CourseSegment
-from trainingdash.domain.pacing import PacingTarget, generate_heuristic_pacing
+from trainingdash.domain.pacing import generate_heuristic_pacing
 from trainingdash.domain.pacing_optimizer import (
     OptimizationConfig,
     OptimizedPlan,
@@ -205,21 +205,15 @@ def optimize_with_trajectory(
 
         The finish empty penalty encourages depleting W' by the end.
         """
-        times = _compute_segment_times(
-            powers, segments, rider_params, env_params, speed_cache
-        )
+        times = _compute_segment_times(powers, segments, rider_params, env_params, speed_cache)
         total_time = np.sum(times)
 
         # W'bal trajectory
-        min_wbal, final_wbal, wbal_series = _compute_wbal_trajectory(
-            powers, times, rider_cp, rider_w_prime
-        )
+        min_wbal, final_wbal, wbal_series = _compute_wbal_trajectory(powers, times, rider_cp, rider_w_prime)
 
         # Penalty for not finishing empty (leftover W' = wasted potential)
         # Quadratic penalty encourages final_wbal → target_final_wbal
-        finish_penalty = config.finish_empty_weight * (
-            (final_wbal - target_final_wbal) ** 2
-        )
+        finish_penalty = config.finish_empty_weight * ((final_wbal - target_final_wbal) ** 2)
 
         # Optional: bonus for strategic depletion before recovery
         # This rewards depleting W' right before a descent
@@ -231,25 +225,19 @@ def optimize_with_trajectory(
                     # Lower W'bal before recovery = better
                     # Normalize by W' so it's scale-independent
                     depletion_ratio = 1.0 - (wbal / rider_w_prime)
-                    strategic_bonus -= (
-                        config.strategic_depletion_weight * depletion_ratio * mask
-                    )
+                    strategic_bonus -= config.strategic_depletion_weight * depletion_ratio * mask
 
         return total_time + finish_penalty + strategic_bonus
 
     # Energy equality constraint
     def energy_constraint(powers: np.ndarray) -> float:
-        times = _compute_segment_times(
-            powers, segments, rider_params, env_params, speed_cache
-        )
+        times = _compute_segment_times(powers, segments, rider_params, env_params, speed_cache)
         total_energy = np.sum(powers * times)
         return total_energy - target_energy_j
 
     # W'bal feasibility constraint (still need W'bal >= 0)
     def wbal_constraint(powers: np.ndarray) -> float:
-        times = _compute_segment_times(
-            powers, segments, rider_params, env_params, speed_cache
-        )
+        times = _compute_segment_times(powers, segments, rider_params, env_params, speed_cache)
         min_wbal = _compute_wbal_min_fast(powers, times, rider_cp, rider_w_prime)
         return min_wbal - config.wbal_min_threshold
 
@@ -262,9 +250,7 @@ def optimize_with_trajectory(
     constant_power = target_energy_j / sum(seg.length_m / 8.0 for seg in segments)
     constant_power = np.clip(constant_power, min_power, max_power)
     constant_powers = np.full(n_segments, constant_power)
-    constant_times = _compute_segment_times(
-        constant_powers, segments, rider_params, env_params
-    )
+    constant_times = _compute_segment_times(constant_powers, segments, rider_params, env_params)
     constant_time = np.sum(constant_times)
     heuristic_time = initial_guess.total_time_s
 
@@ -291,24 +277,16 @@ def optimize_with_trajectory(
     total_energy_j_actual = sum(t.target_power_w * t.estimated_time_s for t in targets)
     avg_power = total_energy_j_actual / total_time if total_time > 0 else 0
 
-    weighted_4th = (
-        sum(t.target_power_w**4 * t.estimated_time_s for t in targets) / total_time
-    )
+    weighted_4th = sum(t.target_power_w**4 * t.estimated_time_s for t in targets) / total_time
     np_power = weighted_4th**0.25
     intensity_factor = np_power / rider_ftp if rider_ftp > 0 else 0
 
     # Final W'bal check
     times_arr = np.array([t.estimated_time_s for t in targets])
-    _, wbal_min = check_wbal_feasibility(
-        optimized_powers, times_arr, rider_cp, rider_w_prime
-    )
+    _, wbal_min = check_wbal_feasibility(optimized_powers, times_arr, rider_cp, rider_w_prime)
 
-    improvement_vs_constant = (
-        (constant_time - total_time) / constant_time * 100 if constant_time > 0 else 0
-    )
-    improvement_vs_heuristic = (
-        (heuristic_time - total_time) / heuristic_time * 100 if heuristic_time > 0 else 0
-    )
+    improvement_vs_constant = (constant_time - total_time) / constant_time * 100 if constant_time > 0 else 0
+    improvement_vs_heuristic = (heuristic_time - total_time) / heuristic_time * 100 if heuristic_time > 0 else 0
 
     return OptimizedPlan(
         targets=targets,

@@ -413,7 +413,7 @@ class TestFakeRideEventLinkRepo:
 
         links = await repo.list_for_event(event_id)
         assert len(links) == 3
-        assert [l.sort_order for l in links] == [0, 1, 2]
+        assert [lnk.sort_order for lnk in links] == [0, 1, 2]
 
     async def test_delete_link(self, repo: FakeRideEventLinkRepo, event_id):
         link_id = uuid4()

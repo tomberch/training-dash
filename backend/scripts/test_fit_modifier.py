@@ -24,11 +24,11 @@ async def main():
 
     # Apply modifications (Edge 840 = 4062)
     modifications = FitModifications(device_product_id=4062)
-    
+
     try:
         modified_fit = modify_fit(original_fit, modifications)
         print(f"Modified FIT: {len(modified_fit)} bytes", file=sys.stderr)
-        
+
         # Write output
         if len(sys.argv) > 2:
             output_path = Path(sys.argv[2])
@@ -37,7 +37,7 @@ async def main():
         else:
             # Write to stdout
             sys.stdout.buffer.write(modified_fit)
-            
+
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
