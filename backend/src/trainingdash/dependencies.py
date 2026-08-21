@@ -35,6 +35,7 @@ from trainingdash.repositories.postgres.oauth_link_repo import PostgresOAuthLink
 from trainingdash.repositories.postgres.recalculation_job_repo import (
     PostgresRecalculationJobRepo,
 )
+from trainingdash.repositories.postgres.record_repo import PostgresRecordRepo
 from trainingdash.repositories.postgres.saved_filter_repo import PostgresSavedFilterRepo
 from trainingdash.repositories.postgres.settings_repo import PostgresAppSettingsRepo
 from trainingdash.repositories.postgres.threshold_repo import PostgresThresholdRepo
@@ -51,6 +52,7 @@ from trainingdash.repositories.protocols import (
     NotificationRepo,
     OAuthLinkRepo,
     RecalculationJobRepo,
+    RecordRepo,
     SavedFilterRepo,
     ThresholdRepo,
     UserRepo,
@@ -133,6 +135,11 @@ async def get_saved_filter_repo(db: DbSession) -> SavedFilterRepo:
     return PostgresSavedFilterRepo(db)
 
 
+async def get_record_repo(db: DbSession) -> RecordRepo:
+    """Create a RecordRepo bound to the current session."""
+    return PostgresRecordRepo(db)
+
+
 def get_geocoding_service(db: DbSession) -> GeocodingService:
     """Wire a GeocodingService with a Postgres cache repo.
 
@@ -160,6 +167,7 @@ RecalculationJobRepoD = Annotated[RecalculationJobRepo, Depends(get_recalculatio
 OAuthLinkRepoD = Annotated[OAuthLinkRepo, Depends(get_oauth_link_repo)]
 ThresholdRepoD = Annotated[ThresholdRepo, Depends(get_threshold_repo)]
 SavedFilterRepoD = Annotated[SavedFilterRepo, Depends(get_saved_filter_repo)]
+RecordRepoD = Annotated[RecordRepo, Depends(get_record_repo)]
 
 
 # --- Use Cases ---

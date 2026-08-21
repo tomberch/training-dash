@@ -22,6 +22,15 @@ Example:
 """
 
 from trainingdash.use_cases.breakthrough_evaluator import BreakthroughEvaluator
+from trainingdash.use_cases.calibrate_bike import (
+    BikeNotEligibleError,
+    BikeNotFoundError,
+    CalibrateFromActivities,
+    CalibrationError,
+    CalibrationResult,
+    InsufficientDataError,
+    NoActivitiesError,
+)
 from trainingdash.use_cases.delete_activity import DeleteActivity
 from trainingdash.use_cases.ensure_default_thresholds import EnsureDefaultThresholds
 from trainingdash.use_cases.fitness_model_updater import FitnessModelUpdater
@@ -38,13 +47,20 @@ from trainingdash.use_cases.upload_to_provider import (
 )
 
 __all__ = [
+    "BikeNotEligibleError",
+    "BikeNotFoundError",
     "BreakthroughEvaluator",
+    "CalibrateFromActivities",
+    "CalibrationError",
+    "CalibrationResult",
     "DeleteActivity",
     "EnsureDefaultThresholds",
     "FitnessModelUpdater",
     "HourlySyncScheduler",
     "IngestActivity",
+    "InsufficientDataError",
     "MatchRoute",
+    "NoActivitiesError",
     "Provider",
     "RecalcAfterDelete",
     "RecalculateMetrics",

@@ -94,6 +94,25 @@ class ActivityRepo(Protocol):
         """
         ...
 
+    async def list_by_bike(
+        self,
+        bike_id: int,
+        user_id: int,
+        limit: int = 50,
+    ) -> list[Activity]:
+        """
+        List activities tagged to a specific bike for a user.
+
+        Args:
+            bike_id: Bike ID to filter by
+            user_id: Owner's user ID
+            limit: Maximum number of activities to return
+
+        Returns:
+            List of Activity objects ordered by started_at descending
+        """
+        ...
+
 
 class UserRepo(Protocol):
     """
@@ -969,6 +988,47 @@ class BikeRepo(Protocol):
         """
         ...
 
+    async def update_calibration(
+        self,
+        bike_id: int,
+        user_id: int,
+        cda: float,
+    ) -> bool:
+        """
+        Update a bike's CdA from calibration.
+
+        Sets cda, cda_source='calibrated', and calibrated_at timestamp.
+
+        Args:
+            bike_id: Bike ID
+            user_id: Owner's user ID (for security scoping)
+            cda: New CdA value in m²
+
+        Returns:
+            True if updated, False if bike not found.
+        """
+        ...
+
+
+class RecordRepo(Protocol):
+    """
+    Repository protocol for activity Record entities.
+
+    Records are per-second data points within an activity (power, speed, etc.).
+    """
+
+    async def list_for_activity(self, activity_id: "UUID") -> list["Record"]:
+        """
+        List all records for an activity, ordered by timestamp.
+
+        Args:
+            activity_id: Activity UUID
+
+        Returns:
+            List of Record objects ordered by timestamp ascending
+        """
+        ...
+
 
 # Import types for type hints (avoid circular import at runtime)
 from datetime import date, datetime
@@ -989,6 +1049,7 @@ if TYPE_CHECKING:
         Notification,
         RaceCourse,
         RecalculationJob,
+        Record,
         RideEvent,
         RideEventLink,
         RideEventMedia,

@@ -1,15 +1,24 @@
 """Bikes endpoints: CRUD for user bikes/equipment."""
 
-from typing import Any
+from datetime import datetime
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from trainingdash.auth import CurrentUser
-from trainingdash.dependencies import BikeRepoD
-from trainingdash.domain.bike import BIKE_TYPES, validate_bike_type
+from trainingdash.dependencies import ActivityRepoD, BikeRepoD, RecordRepoD
+from trainingdash.domain.bike import BIKE_TYPES, is_calibration_eligible_type, validate_bike_type
 from trainingdash.repositories.postgres.models import Bike
 from trainingdash.routers.serializers import bike_response
+from trainingdash.use_cases.calibrate_bike import (
+    BikeNotEligibleError,
+    BikeNotFoundError,
+    CalibrateFromActivities,
+    CalibrationError,
+    InsufficientDataError,
+    NoActivitiesError,
+)
 
 router = APIRouter(prefix="/api/bikes", tags=["bikes"])
 
@@ -193,3 +202,182 @@ async def retire_bike(
 
     bike = await bike_repo.get_by_id(bike_id, user.id)
     return bike_response(bike)
+
+
+
+# =============================================================================
+# Calibration Endpoints
+# =============================================================================
+
+
+class CalibrationResponse(BaseModel):
+    """Response body for calibration result."""
+
+    bike_id: int
+    cda: float
+    confidence: Literal["low", "medium", "high"]
+    n_activities_used: int
+    n_segments_used: int
+    total_duration_s: float
+    previous_cda: float | None
+    updated: bool
+    warnings: list[str]
+    rejection_summary: dict[str, int]
+
+
+class CalibrationStatusResponse(BaseModel):
+    """Response body for calibration status check."""
+
+    eligible: bool
+    n_activities: int
+    estimated_confidence: Literal["low", "medium", "high"]
+    last_calibrated: datetime | None
+    reason: str | None = None
+
+
+class CalibrateRequest(BaseModel):
+    """Request body for calibration."""
+
+    min_confidence: Literal["low", "medium", "high"] = "medium"
+    rider_mass_kg: float | None = Field(None, gt=30, le=200, description="Rider mass in kg")
+
+
+@router.post("/{bike_id}/calibrate", response_model=CalibrationResponse)
+async def calibrate_bike(
+    bike_id: int,
+    user: CurrentUser,
+    bike_repo: BikeRepoD,
+    activity_repo: ActivityRepoD,
+    record_repo: RecordRepoD,
+    request: CalibrateRequest | None = None,
+) -> CalibrationResponse:
+    """
+    Trigger CdA calibration for a bike.
+
+    Analyzes recent activities tagged to this bike and estimates CdA
+    using steady-state segments at speed (>30 km/h on flat terrain).
+
+    The bike's CdA will be updated if the confidence level meets or exceeds
+    the min_confidence threshold. If not, the result is returned but the
+    bike is not modified.
+
+    Requirements for calibration:
+    - Bike must not be an e-bike (motor assistance skews data)
+    - Activities must be tagged to this bike
+    - Rides must have power data
+    - Needs steady-state segments: speed >30 km/h, flat (<2% grade),
+      consistent power (CV <15%) and speed (CV <5%), minimum 60s duration
+    """
+    # Verify bike exists and is owned by user
+    bike = await bike_repo.get_by_id(bike_id, user.id)
+    if bike is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bike not found")
+
+    # Check eligibility
+    if not is_calibration_eligible_type(bike.bike_type):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Bike type '{bike.bike_type}' is not eligible for calibration",
+        )
+
+    # Parse request
+    min_confidence = "medium"
+    rider_mass_kg = None
+    if request:
+        min_confidence = request.min_confidence
+        rider_mass_kg = request.rider_mass_kg
+
+    # Run calibration
+    use_case = CalibrateFromActivities(activity_repo, bike_repo, record_repo)
+    try:
+        result = await use_case.execute(
+            user_id=user.id,
+            bike_id=bike_id,
+            min_confidence=min_confidence,
+            rider_mass_kg=rider_mass_kg,
+        )
+    except BikeNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bike not found")
+    except BikeNotEligibleError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except NoActivitiesError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except InsufficientDataError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except CalibrationError as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+    return CalibrationResponse(
+        bike_id=result.bike_id,
+        cda=result.cda,
+        confidence=result.confidence,  # type: ignore
+        n_activities_used=result.n_activities_used,
+        n_segments_used=result.n_segments_used,
+        total_duration_s=result.total_calibration_duration_s,
+        previous_cda=result.previous_cda,
+        updated=result.updated,
+        warnings=result.warnings,
+        rejection_summary=result.rejection_summary,
+    )
+
+
+@router.get("/{bike_id}/calibration-status", response_model=CalibrationStatusResponse)
+async def get_calibration_status(
+    bike_id: int,
+    user: CurrentUser,
+    bike_repo: BikeRepoD,
+    activity_repo: ActivityRepoD,
+) -> CalibrationStatusResponse:
+    """
+    Check if a bike has enough data for calibration.
+
+    Returns eligibility status, number of activities available,
+    estimated confidence level, and last calibration timestamp.
+    """
+    bike = await bike_repo.get_by_id(bike_id, user.id)
+    if bike is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bike not found")
+
+    # Check type eligibility
+    if not is_calibration_eligible_type(bike.bike_type):
+        return CalibrationStatusResponse(
+            eligible=False,
+            n_activities=0,
+            estimated_confidence="low",
+            last_calibrated=bike.calibrated_at,
+            reason=f"Bike type '{bike.bike_type}' is not eligible for calibration",
+        )
+
+    # Count activities with power data tagged to this bike
+    # Use list_by_bike and filter - simple read operation
+    activities = await activity_repo.list_by_bike(bike_id, user.id, limit=100)
+    n_activities = sum(
+        1 for a in activities if a.avg_power_w is not None and a.avg_power_w > 0
+    )
+
+    # Determine eligibility and estimated confidence
+    if n_activities == 0:
+        return CalibrationStatusResponse(
+            eligible=False,
+            n_activities=0,
+            estimated_confidence="low",
+            last_calibrated=bike.calibrated_at,
+            reason="No activities with power data are tagged to this bike",
+        )
+
+    # Estimate confidence based on activity count
+    # (actual confidence depends on segment selection during calibration)
+    if n_activities >= 10:
+        estimated_confidence = "high"
+    elif n_activities >= 5:
+        estimated_confidence = "medium"
+    else:
+        estimated_confidence = "low"
+
+    return CalibrationStatusResponse(
+        eligible=True,
+        n_activities=n_activities,
+        estimated_confidence=estimated_confidence,  # type: ignore
+        last_calibrated=bike.calibrated_at,
+        reason=None,
+    )

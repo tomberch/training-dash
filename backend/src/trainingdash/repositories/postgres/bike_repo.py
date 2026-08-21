@@ -161,3 +161,28 @@ class PostgresBikeRepo:
         bike.retired_at = datetime.now()
         await self._session.commit()
         return True
+
+    async def update_calibration(
+        self,
+        bike_id: int,
+        user_id: int,
+        cda: float,
+    ) -> bool:
+        """
+        Update a bike's CdA from calibration.
+
+        Sets cda, cda_source='calibrated', and calibrated_at timestamp.
+
+        Returns True if updated, False if bike not found.
+        """
+        from decimal import Decimal
+
+        bike = await self.get_by_id(bike_id, user_id)
+        if bike is None:
+            return False
+
+        bike.cda = Decimal(str(round(cda, 3)))
+        bike.cda_source = "calibrated"
+        bike.calibrated_at = datetime.now()
+        await self._session.commit()
+        return True

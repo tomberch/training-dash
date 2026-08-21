@@ -160,3 +160,20 @@ class PostgresActivityRepo:
 
         result = await self._session.execute(query.order_by(Activity.started_at.desc()))
         return list(result.scalars().all())
+
+    async def list_by_bike(
+        self,
+        bike_id: int,
+        user_id: int,
+        limit: int = 50,
+    ) -> list[Activity]:
+        """
+        List activities tagged to a specific bike for a user.
+        """
+        result = await self._session.execute(
+            select(Activity)
+            .where(Activity.bike_id == bike_id, Activity.user_id == user_id)
+            .order_by(Activity.started_at.desc())
+            .limit(limit)
+        )
+        return list(result.scalars().all())
