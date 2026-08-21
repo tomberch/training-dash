@@ -137,7 +137,6 @@ def estimate_w_prime(
     return max(5000, min(w_prime, 50000))  # Clamp to realistic range (5-50 kJ)
 
 
-
 def predict_wbal_for_plan(
     powers: np.ndarray,
     times: np.ndarray,
@@ -239,8 +238,6 @@ def predict_wbal_for_plan(
         time_in_deficit=time_in_deficit,
         final_wbal=final_wbal,
     )
-
-
 
 
 def check_wbal_feasibility(
