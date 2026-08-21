@@ -14,12 +14,13 @@ from tests.fakes import (
     FakeActivityRepo,
     FakeAppSettingsRepo,
     FakeAuditLogRepo,
+    FakeBikeRepo,
     FakeEventRepo,
     FakeOAuthLinkRepo,
     FakeUserRepo,
     FakeXertCredentialsRepo,
 )
-from trainingdash.repositories.postgres.models import Activity, User
+from trainingdash.repositories.postgres.models import Activity, Bike, User
 
 
 class TestFakeUserRepo:
@@ -425,3 +426,339 @@ class TestFakeEventRepo:
         # ID counter resets
         new_id = await event_repo.log(event_type="new.event", outcome="success")
         assert new_id == 1
+
+
+
+class TestFakeBikeRepo:
+    """Demonstrates FakeBikeRepo usage."""
+
+    @pytest.fixture
+    def bike_repo(self):
+        return FakeBikeRepo()
+
+    async def test_save_and_get_bike(self, bike_repo: FakeBikeRepo):
+        bike = Bike(
+            name="Canyon Aeroad",
+            bike_type="road",
+            user_id=1,
+            weight_kg=7.5,
+        )
+
+        saved = await bike_repo.save(bike)
+        assert saved.id == 1
+
+        found = await bike_repo.get_by_id(1, user_id=1)
+        assert found is not None
+        assert found.name == "Canyon Aeroad"
+        assert found.bike_type == "road"
+
+    async def test_get_by_user_excludes_retired(self, bike_repo: FakeBikeRepo):
+        active = Bike(name="Active Bike", bike_type="road", user_id=1)
+        retired = Bike(name="Retired Bike", bike_type="road", user_id=1, retired_at=datetime.now())
+
+        await bike_repo.save(active)
+        await bike_repo.save(retired)
+
+        # Without include_retired
+        bikes = await bike_repo.get_by_user(1)
+        assert len(bikes) == 1
+        assert bikes[0].name == "Active Bike"
+
+        # With include_retired
+        bikes = await bike_repo.get_by_user(1, include_retired=True)
+        assert len(bikes) == 2
+
+    async def test_get_by_user_sorted_by_name(self, bike_repo: FakeBikeRepo):
+        await bike_repo.save(Bike(name="Zebra Bike", bike_type="road", user_id=1))
+        await bike_repo.save(Bike(name="Alpha Bike", bike_type="road", user_id=1))
+        await bike_repo.save(Bike(name="Middle Bike", bike_type="road", user_id=1))
+
+        bikes = await bike_repo.get_by_user(1)
+        names = [b.name for b in bikes]
+        assert names == ["Alpha Bike", "Middle Bike", "Zebra Bike"]
+
+    async def test_get_default_for_user(self, bike_repo: FakeBikeRepo):
+        non_default = Bike(name="Not Default", bike_type="road", user_id=1, is_default=False)
+        default = Bike(name="Default Bike", bike_type="road", user_id=1, is_default=True)
+
+        await bike_repo.save(non_default)
+        await bike_repo.save(default)
+
+        found = await bike_repo.get_default_for_user(1)
+        assert found is not None
+        assert found.name == "Default Bike"
+
+    async def test_get_default_excludes_retired(self, bike_repo: FakeBikeRepo):
+        retired_default = Bike(
+            name="Retired Default",
+            bike_type="road",
+            user_id=1,
+            is_default=True,
+            retired_at=datetime.now(),
+        )
+        await bike_repo.save(retired_default)
+
+        found = await bike_repo.get_default_for_user(1)
+        assert found is None
+
+    async def test_update_distance(self, bike_repo: FakeBikeRepo):
+        bike = Bike(name="Test Bike", bike_type="road", user_id=1, total_distance_m=1000.0)
+        await bike_repo.save(bike)
+
+        await bike_repo.update_distance(bike_id=1, user_id=1, delta_m=500.0)
+
+        updated = await bike_repo.get_by_id(1, user_id=1)
+        assert updated.total_distance_m == 1500.0
+
+    async def test_update_distance_from_none(self, bike_repo: FakeBikeRepo):
+        bike = Bike(name="Test Bike", bike_type="road", user_id=1, total_distance_m=None)
+        await bike_repo.save(bike)
+
+        await bike_repo.update_distance(bike_id=1, user_id=1, delta_m=500.0)
+
+        updated = await bike_repo.get_by_id(1, user_id=1)
+        assert updated.total_distance_m == 500.0
+
+    async def test_set_default_clears_previous(self, bike_repo: FakeBikeRepo):
+        bike1 = Bike(name="Bike 1", bike_type="road", user_id=1, is_default=True)
+        bike2 = Bike(name="Bike 2", bike_type="road", user_id=1, is_default=False)
+
+        await bike_repo.save(bike1)
+        await bike_repo.save(bike2)
+
+        # Set bike2 as default
+        await bike_repo.set_default(user_id=1, bike_id=2)
+
+        # Check bike1 is no longer default
+        b1 = await bike_repo.get_by_id(1, user_id=1)
+        assert b1.is_default is False
+
+        # Check bike2 is now default
+        b2 = await bike_repo.get_by_id(2, user_id=1)
+        assert b2.is_default is True
+
+    async def test_set_default_ignores_retired_bike(self, bike_repo: FakeBikeRepo):
+        bike = Bike(
+            name="Retired Bike",
+            bike_type="road",
+            user_id=1,
+            is_default=False,
+            retired_at=datetime.now(),
+        )
+        await bike_repo.save(bike)
+
+        await bike_repo.set_default(user_id=1, bike_id=1)
+
+        found = await bike_repo.get_by_id(1, user_id=1)
+        assert found.is_default is False
+
+    async def test_clear_default(self, bike_repo: FakeBikeRepo):
+        bike = Bike(name="Default Bike", bike_type="road", user_id=1, is_default=True)
+        await bike_repo.save(bike)
+
+        await bike_repo.clear_default(user_id=1)
+
+        found = await bike_repo.get_by_id(1, user_id=1)
+        assert found.is_default is False
+
+    async def test_retire_bike(self, bike_repo: FakeBikeRepo):
+        bike = Bike(name="Active Bike", bike_type="road", user_id=1, is_default=True)
+        await bike_repo.save(bike)
+
+        result = await bike_repo.retire(bike_id=1, user_id=1)
+        assert result is True
+
+        found = await bike_repo.get_by_id(1, user_id=1)
+        assert found.retired_at is not None
+        assert found.is_default is False  # Retiring clears default
+
+    async def test_retire_already_retired(self, bike_repo: FakeBikeRepo):
+        bike = Bike(
+            name="Retired Bike",
+            bike_type="road",
+            user_id=1,
+            retired_at=datetime.now(),
+        )
+        await bike_repo.save(bike)
+
+        result = await bike_repo.retire(bike_id=1, user_id=1)
+        assert result is True  # Idempotent
+
+    async def test_retire_nonexistent_bike(self, bike_repo: FakeBikeRepo):
+        result = await bike_repo.retire(bike_id=999, user_id=1)
+        assert result is False
+
+    async def test_update_calibration(self, bike_repo: FakeBikeRepo):
+        bike = Bike(
+            name="TT Bike",
+            bike_type="road",
+            user_id=1,
+            cda=0.30,
+            cda_source="default",
+        )
+        await bike_repo.save(bike)
+
+        result = await bike_repo.update_calibration(bike_id=1, user_id=1, cda=0.25)
+        assert result is True
+
+        updated = await bike_repo.get_by_id(1, user_id=1)
+        assert updated.cda == 0.25
+        assert updated.cda_source == "calibrated"
+        assert updated.calibrated_at is not None
+
+    async def test_update_calibration_nonexistent_bike(self, bike_repo: FakeBikeRepo):
+        result = await bike_repo.update_calibration(bike_id=999, user_id=1, cda=0.25)
+        assert result is False
+
+    async def test_user_isolation(self, bike_repo: FakeBikeRepo):
+        user1_bike = Bike(name="User 1 Bike", bike_type="road", user_id=1)
+        user2_bike = Bike(name="User 2 Bike", bike_type="road", user_id=2)
+
+        await bike_repo.save(user1_bike)
+        await bike_repo.save(user2_bike)
+
+        # User 1 can't see User 2's bike
+        found = await bike_repo.get_by_id(2, user_id=1)
+        assert found is None
+
+        # Each user only sees their bikes
+        user1_bikes = await bike_repo.get_by_user(1)
+        assert len(user1_bikes) == 1
+        assert user1_bikes[0].name == "User 1 Bike"
+
+    async def test_helper_add_sync(self, bike_repo: FakeBikeRepo):
+        """Test synchronous add helper for test setup."""
+        bike = Bike(name="Sync Added", bike_type="road", user_id=1)
+        added = bike_repo.add(bike)
+
+        assert added.id == 1
+        assert len(bike_repo.all()) == 1
+
+    async def test_helper_clear(self, bike_repo: FakeBikeRepo):
+        await bike_repo.save(Bike(name="Bike 1", bike_type="road", user_id=1))
+        await bike_repo.save(Bike(name="Bike 2", bike_type="road", user_id=1))
+
+        bike_repo.clear()
+
+        assert len(bike_repo.all()) == 0
+        # ID counter resets
+        new_bike = await bike_repo.save(Bike(name="New Bike", bike_type="road", user_id=1))
+        assert new_bike.id == 1
+
+
+class TestFakeActivityRepoEdgeCases:
+    """Additional edge case tests for FakeActivityRepo."""
+
+    @pytest.fixture
+    def activity_repo(self):
+        return FakeActivityRepo()
+
+    async def test_list_by_route_excludes_specified_activity(self, activity_repo: FakeActivityRepo):
+        now = datetime.now(UTC).replace(tzinfo=None)
+        activity1 = Activity(id=uuid4(), user_id=1, route_id=10, source="test", source_ref="1", started_at=now)
+        activity2 = Activity(id=uuid4(), user_id=1, route_id=10, source="test", source_ref="2", started_at=now)
+
+        await activity_repo.save(activity1)
+        await activity_repo.save(activity2)
+
+        # List excluding activity1
+        results = await activity_repo.list_by_route(route_id=10, user_id=1, exclude_activity_id=activity1.id)
+        assert len(results) == 1
+        assert results[0].id == activity2.id
+
+    async def test_list_by_route_empty_when_no_matches(self, activity_repo: FakeActivityRepo):
+        now = datetime.now(UTC).replace(tzinfo=None)
+        activity = Activity(id=uuid4(), user_id=1, route_id=10, source="test", source_ref="1", started_at=now)
+        await activity_repo.save(activity)
+
+        # Different route
+        results = await activity_repo.list_by_route(route_id=99, user_id=1)
+        assert len(results) == 0
+
+        # Different user
+        results = await activity_repo.list_by_route(route_id=10, user_id=2)
+        assert len(results) == 0
+
+    async def test_list_by_bike(self, activity_repo: FakeActivityRepo):
+        now = datetime.now(UTC).replace(tzinfo=None)
+        bike1_activity = Activity(id=uuid4(), user_id=1, bike_id=1, source="test", source_ref="1", started_at=now)
+        bike2_activity = Activity(id=uuid4(), user_id=1, bike_id=2, source="test", source_ref="2", started_at=now)
+        no_bike_activity = Activity(id=uuid4(), user_id=1, bike_id=None, source="test", source_ref="3", started_at=now)
+
+        await activity_repo.save(bike1_activity)
+        await activity_repo.save(bike2_activity)
+        await activity_repo.save(no_bike_activity)
+
+        # List activities for bike 1
+        results = await activity_repo.list_by_bike(bike_id=1, user_id=1)
+        assert len(results) == 1
+        assert results[0].bike_id == 1
+
+    async def test_list_by_bike_user_isolation(self, activity_repo: FakeActivityRepo):
+        now = datetime.now(UTC).replace(tzinfo=None)
+        user1_activity = Activity(id=uuid4(), user_id=1, bike_id=1, source="test", source_ref="1", started_at=now)
+        user2_activity = Activity(id=uuid4(), user_id=2, bike_id=1, source="test", source_ref="2", started_at=now)
+
+        await activity_repo.save(user1_activity)
+        await activity_repo.save(user2_activity)
+
+        # User 1 shouldn't see user 2's activities even with same bike_id
+        results = await activity_repo.list_by_bike(bike_id=1, user_id=1)
+        assert len(results) == 1
+        assert results[0].user_id == 1
+
+    async def test_list_by_bike_respects_limit(self, activity_repo: FakeActivityRepo):
+        now = datetime.now(UTC).replace(tzinfo=None)
+        for i in range(10):
+            activity = Activity(
+                id=uuid4(),
+                user_id=1,
+                bike_id=1,
+                source="test",
+                source_ref=str(i),
+                started_at=now,
+            )
+            await activity_repo.save(activity)
+
+        results = await activity_repo.list_by_bike(bike_id=1, user_id=1, limit=5)
+        assert len(results) == 5
+
+    async def test_list_for_user_pagination(self, activity_repo: FakeActivityRepo):
+        now = datetime.now(UTC).replace(tzinfo=None)
+        for i in range(5):
+            activity = Activity(
+                id=uuid4(),
+                user_id=1,
+                source="test",
+                source_ref=str(i),
+                started_at=now.replace(minute=i),
+            )
+            await activity_repo.save(activity)
+
+        # First page
+        page1 = await activity_repo.list_for_user(1, limit=2, offset=0)
+        assert len(page1) == 2
+
+        # Second page
+        page2 = await activity_repo.list_for_user(1, limit=2, offset=2)
+        assert len(page2) == 2
+
+        # Different activities
+        page1_ids = {a.id for a in page1}
+        page2_ids = {a.id for a in page2}
+        assert page1_ids.isdisjoint(page2_ids)
+
+    async def test_save_requires_user_id(self, activity_repo: FakeActivityRepo):
+        activity = Activity(id=uuid4(), user_id=None, source="test", source_ref="1")
+
+        with pytest.raises(ValueError, match="user_id"):
+            await activity_repo.save(activity)
+
+    async def test_helper_clear(self, activity_repo: FakeActivityRepo):
+        now = datetime.now(UTC).replace(tzinfo=None)
+        await activity_repo.save(Activity(id=uuid4(), user_id=1, source="test", source_ref="1", started_at=now))
+
+        activity_repo.clear()
+
+        assert len(activity_repo.all()) == 0
+        assert await activity_repo.count_for_user(1) == 0

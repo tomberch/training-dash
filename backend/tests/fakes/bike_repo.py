@@ -83,6 +83,21 @@ class FakeBikeRepo:
         bike.retired_at = datetime.now()
         return True
 
+    async def update_calibration(
+        self,
+        bike_id: int,
+        user_id: int,
+        cda: float,
+    ) -> bool:
+        """Update bike's CdA from calibration."""
+        bike = self._bikes.get((user_id, bike_id))
+        if bike is None:
+            return False
+        bike.cda = cda
+        bike.cda_source = "calibrated"
+        bike.calibrated_at = datetime.now()
+        return True
+
     # --- Test helper methods ---
 
     def clear(self) -> None:
