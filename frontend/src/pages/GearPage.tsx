@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { BikeCard } from "@/components/BikeCard";
@@ -25,8 +24,6 @@ interface GearPageProps {
 }
 
 export function GearPage({ unitSystem }: GearPageProps) {
-  const navigate = useNavigate();
-
   // Data state
   const [bikes, setBikes] = useState<Bike[]>([]);
   const [loading, setLoading] = useState(true);
@@ -106,21 +103,10 @@ export function GearPage({ unitSystem }: GearPageProps) {
 
   return (
     <div className="p-8">
-      <div className="flex items-center gap-4 mb-2">
-        <button
-          onClick={() => navigate("/settings")}
-          className="text-muted-foreground hover:text-foreground transition-colors"
-          aria-label="Back to settings"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-        <PageHeader
-          title="Gear"
-          subtitle="Manage your bikes and equipment"
-        />
-      </div>
+      <PageHeader
+        title="Gear"
+        subtitle="Manage your bikes and equipment"
+      />
 
       {/* Add bike button */}
       <div className="flex justify-end mb-6">

@@ -331,67 +331,70 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
         )}
 
 
-        <div className="text-body-secondary mt-2 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <span>{formatActivityDate(activity.started_at, activity.utc_offset_minutes, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}{" · "}{formatActivityTime(activity.started_at, activity.utc_offset_minutes)}{" - "}{formatActivityTime(activityEndTimeIso(activity.started_at, activity.elapsed_time_s), activity.utc_offset_minutes)}</span>
-            <span className="text-border">·</span>
-            <DropdownMenu>
-              <DropdownMenuTrigger>
-                <button
-                  disabled={isUpdatingType}
-                  className="flex items-center gap-1.5 px-2 py-1 text-sm rounded-md hover:bg-muted transition disabled:opacity-50"
-                >
-                  {isUpdatingType ? (
-                    <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                  ) : (
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z" />
-                    </svg>
-                  )}
-                  <span className="capitalize">{activityType ?? "Unclassified"}</span>
-                  <svg className="w-3.5 h-3.5 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                <DropdownMenuItem onClick={() => handleActivityTypeChange(null)} className={activityType === null ? "bg-muted" : ""}>
-                  Unclassified
-                </DropdownMenuItem>
-                {ACTIVITY_TYPES.map((type) => (
-                  <DropdownMenuItem
-                    key={type}
-                    onClick={() => handleActivityTypeChange(type)}
-                    className={activityType === type ? "bg-muted" : ""}
-                  >
-                    {ACTIVITY_TYPE_LABELS[type]}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <span className="text-border">·</span>
-            <BikePicker
-              selectedBike={activity.bike}
-              defaultBike={defaultBike}
-              onChange={handleBikeChange}
-            />
+        <div className="text-body-secondary mt-2">
+          <div className="mb-2">
+            {formatActivityDate(activity.started_at, activity.utc_offset_minutes, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}{" · "}{formatActivityTime(activity.started_at, activity.utc_offset_minutes)}{" - "}{formatActivityTime(activityEndTimeIso(activity.started_at, activity.elapsed_time_s), activity.utc_offset_minutes)}
           </div>
-          <div className="flex items-center gap-2">
-            <Link to={`/analyze?activity=${activityId}`} className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-muted/50 hover:bg-muted text-foreground transition">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>Analyze
-            </Link>
-            {sameRoute && sameRoute.route_id !== null && sameRoute.activities.length > 0 && (
-              <Link to={`/compare?base=${activityId}`} className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-muted/50 hover:bg-muted text-foreground transition">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>Compare
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <DropdownMenu>
+                <DropdownMenuTrigger>
+                  <button
+                    disabled={isUpdatingType}
+                    className="flex items-center gap-1.5 px-2 py-1 text-sm rounded-md hover:bg-muted transition disabled:opacity-50"
+                  >
+                    {isUpdatingType ? (
+                      <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                    ) : (
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z" />
+                      </svg>
+                    )}
+                    <span className="capitalize">{activityType ?? "Unclassified"}</span>
+                    <svg className="w-3.5 h-3.5 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuItem onClick={() => handleActivityTypeChange(null)} className={activityType === null ? "bg-muted" : ""}>
+                    Unclassified
+                  </DropdownMenuItem>
+                  {ACTIVITY_TYPES.map((type) => (
+                    <DropdownMenuItem
+                      key={type}
+                      onClick={() => handleActivityTypeChange(type)}
+                      className={activityType === type ? "bg-muted" : ""}
+                    >
+                      {ACTIVITY_TYPE_LABELS[type]}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <span className="text-border">·</span>
+              <BikePicker
+                selectedBike={activity.bike}
+                defaultBike={defaultBike}
+                onChange={handleBikeChange}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Link to={`/analyze?activity=${activityId}`} className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-muted/50 hover:bg-muted text-foreground transition">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>Analyze
               </Link>
-            )}
-            <ActivityActions onUploadToProvider={handleUploadToProvider} onExportFit={handleExportFit} hasConnectedProviders={hasConnectedProviders} />
-            <button onClick={() => setShowDeleteDialog(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-destructive/10 hover:bg-destructive/20 text-destructive transition">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>Delete
-            </button>
+              {sameRoute && sameRoute.route_id !== null && sameRoute.activities.length > 0 && (
+                <Link to={`/compare?base=${activityId}`} className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-muted/50 hover:bg-muted text-foreground transition">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>Compare
+                </Link>
+              )}
+              <ActivityActions onUploadToProvider={handleUploadToProvider} onExportFit={handleExportFit} hasConnectedProviders={hasConnectedProviders} />
+              <button onClick={() => setShowDeleteDialog(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-destructive/10 hover:bg-destructive/20 text-destructive transition">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>Delete
+              </button>
+            </div>
           </div>
         </div>
       </div>
