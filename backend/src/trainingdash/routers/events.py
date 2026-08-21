@@ -510,7 +510,7 @@ async def delete_event(
     event = await _get_owned_event(db, user, event_id)
 
     # Delete uploaded files directory for this event
-    uploads_dir = _get_uploads_dir() / "events" / str(event_id)
+    uploads_dir = _get_safe_event_uploads_dir(event_id)
     if uploads_dir.exists():
         import shutil
 
@@ -1026,6 +1026,72 @@ def _get_uploads_dir() -> Path:
     return Path(os.environ.get("TRAININGDASH_UPLOADS_DIR", "/app/uploads"))
 
 
+def _get_safe_event_uploads_dir(event_id: UUID) -> Path:
+    """
+    Get uploads directory for an event with path traversal protection.
+
+    While UUID validation by FastAPI/Pydantic prevents traversal attacks,
+    this provides defense in depth against path injection.
+
+    Args:
+        event_id: Event UUID (already validated by FastAPI)
+
+    Returns:
+        Safe path to event uploads directory
+
+    Raises:
+        HTTPException: If path validation fails (should never happen with valid UUID)
+    """
+    base_dir = _get_uploads_dir() / "events"
+    # Convert UUID to string - UUID format guarantees no path separators
+    event_id_str = str(event_id)
+    target_dir = base_dir / event_id_str
+
+    # Defense in depth: verify the resolved path stays within base
+    resolved = target_dir.resolve()
+    base_resolved = base_dir.resolve()
+
+    # Check that target is under base directory
+    try:
+        resolved.relative_to(base_resolved)
+    except ValueError:
+        # Path escapes base directory - should never happen with valid UUID
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid event ID",
+        )
+
+    return target_dir
+
+
+def _get_safe_entry_uploads_dir(event_id: UUID) -> Path:
+    """
+    Get uploads directory for journal entry files with path traversal protection.
+
+    Args:
+        event_id: Event UUID (already validated by FastAPI)
+
+    Returns:
+        Safe path to entry uploads directory
+    """
+    base_dir = _get_uploads_dir() / "events"
+    event_id_str = str(event_id)
+    target_dir = base_dir / event_id_str / "entries"
+
+    resolved = target_dir.resolve()
+    base_resolved = base_dir.resolve()
+
+    try:
+        resolved.relative_to(base_resolved)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid event ID",
+        )
+
+    return target_dir
+
+
 def _generate_thumbnail(image_bytes: bytes, content_type: str) -> bytes:
     """Generate a thumbnail from image bytes."""
     img = Image.open(BytesIO(image_bytes))
@@ -1088,7 +1154,7 @@ async def upload_event_photo(
     thumb_filename = f"{media_id}_thumb{ext}"
 
     # Ensure directories exist
-    uploads_dir = _get_uploads_dir() / "events" / str(event_id)
+    uploads_dir = _get_safe_event_uploads_dir(event_id)
     uploads_dir.mkdir(parents=True, exist_ok=True)
 
     # Save original image
@@ -1236,7 +1302,7 @@ async def upload_entry_photo(
     thumb_filename = f"{media_id}_thumb{ext}"
 
     # Ensure directories exist (use event_id for organization)
-    uploads_dir = _get_uploads_dir() / "events" / str(entry.ride_event_id) / "entries"
+    uploads_dir = _get_safe_entry_uploads_dir(entry.ride_event_id)
     uploads_dir.mkdir(parents=True, exist_ok=True)
 
     # Save original image
@@ -1302,7 +1368,7 @@ async def upload_entry_photos_batch(
         thumb_filename = f"{media_id}_thumb{ext}"
 
         # Ensure directories exist
-        uploads_dir = _get_uploads_dir() / "events" / str(entry.ride_event_id) / "entries"
+        uploads_dir = _get_safe_entry_uploads_dir(entry.ride_event_id)
         uploads_dir.mkdir(parents=True, exist_ok=True)
 
         # Save original image

@@ -145,7 +145,8 @@ class GarminClient:
                 prompt_mfa=self._mfa_callback,
             )
             self._client.login()
-            logger.info("Garmin login successful for %s", _mask_email(email))
+            # Note: Only masked email is logged, never the password
+            logger.info("Garmin login successful for %s", _sanitize_log_value(_mask_email(email)))
             return True
         except GarminMFARequired:
             # Re-raise our own exception
