@@ -141,8 +141,10 @@ class GenerateRacePlan:
                 rider_weight_kg = 75.0  # Default
                 warnings.append("No rider weight specified, using 75kg default")
 
-        # Total mass includes bike
-        total_mass_kg = rider_weight_kg + (bike_weight_kg or 8.0)
+        # Total mass includes bike + gear (bottles, clothes, shoes, etc.)
+        # Gear weight is typically 2-4 kg for road cycling
+        gear_weight_kg = 3.0
+        total_mass_kg = rider_weight_kg + (bike_weight_kg or 8.0) + gear_weight_kg
 
         # 4. Build parameters
         rider_params = RiderParams(mass_kg=total_mass_kg, cda=cda, crr=crr)

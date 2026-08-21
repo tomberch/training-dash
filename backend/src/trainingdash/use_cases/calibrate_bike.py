@@ -230,7 +230,9 @@ class CalibrateFromActivities:
             warnings.append("Using default rider mass of 75kg")
 
         bike_weight = float(bike.weight_kg) if bike.weight_kg else 8.0
-        total_mass = rider_mass_kg + bike_weight
+        # Add gear weight (bottles, clothes, shoes, etc.) - typically 2-4 kg
+        gear_weight = 3.0
+        total_mass = rider_mass_kg + bike_weight + gear_weight
 
         # Step 2: Get activities tagged to this bike
         activities = await self._activity_repo.list_by_bike(bike_id, user_id, max_activities)
