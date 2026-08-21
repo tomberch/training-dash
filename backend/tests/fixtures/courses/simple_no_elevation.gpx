@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="test"
+  xmlns="http://www.topografix.com/GPX/1/1">
+  <trk>
+    <name>Flat Course</name>
+    <trkseg>
+      <trkpt lat="40.7128" lon="-74.0060"/>
+      <trkpt lat="40.7138" lon="-74.0050"/>
+      <trkpt lat="40.7148" lon="-74.0040"/>
+    </trkseg>
+  </trk>
+</gpx>

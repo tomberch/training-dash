@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="test"
+  xmlns="http://www.topografix.com/GPX/1/1">
+  <metadata>
+    <name>Test Course With Elevation</name>
+  </metadata>
+  <trk>
+    <name>Morning Ride</name>
+    <trkseg>
+      <trkpt lat="37.7749" lon="-122.4194">
+        <ele>10.0</ele>
+      </trkpt>
+      <trkpt lat="37.7759" lon="-122.4184">
+        <ele>15.0</ele>
+      </trkpt>
+      <trkpt lat="37.7769" lon="-122.4174">
+        <ele>25.0</ele>
+      </trkpt>
+      <trkpt lat="37.7779" lon="-122.4164">
+        <ele>20.0</ele>
+      </trkpt>
+    </trkseg>
+  </trk>
+</gpx>
