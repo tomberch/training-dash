@@ -87,14 +87,18 @@ class FakeBikeRepo:
         bike_id: int,
         user_id: int,
         cda: float,
+        crr: float | None = None,
     ) -> bool:
-        """Update bike's CdA from calibration."""
+        """Update bike's CdA and optionally Crr from calibration."""
         bike = self._bikes.get((user_id, bike_id))
         if bike is None:
             return False
         bike.cda = cda
         bike.cda_source = "calibrated"
         bike.calibrated_at = datetime.now()
+        if crr is not None:
+            bike.crr = crr
+            bike.crr_source = "calibrated"
         return True
 
     # --- Test helper methods ---

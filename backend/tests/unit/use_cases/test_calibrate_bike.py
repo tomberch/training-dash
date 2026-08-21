@@ -189,6 +189,92 @@ def make_variable_power_records(activity_id, num_seconds: int = 100) -> list[Rec
     return records
 
 
+def make_varied_terrain_records(
+    activity_id,
+    num_seconds: int = 300,
+    base_power: float = 200.0,
+) -> list[Record]:
+    """
+    Create records with varied terrain suitable for physics-based calibration.
+
+    Physics calibration needs:
+    - Data from multiple grade bins (-4% to +15%)
+    - At least 30 seconds per grade bin
+    - Power > 30W, speed > 1.5 m/s
+
+    Creates a profile: flat section, climb section, descent section, flat section.
+    """
+    records = []
+    base_time = datetime(2025, 1, 15, 10, 0, 0)
+    distance = 0.0
+    altitude = 100.0
+
+    np.random.seed(42)
+
+    # Define terrain segments with (grade_pct, duration_fraction, power_multiplier)
+    # Total adds up to 1.0
+    terrain_segments = [
+        (0.0, 0.25, 1.0),   # Flat: 0% grade, base power
+        (5.0, 0.30, 1.4),   # Climb: 5% grade, higher power
+        (8.0, 0.15, 1.6),   # Steeper climb: 8% grade
+        (-2.0, 0.15, 0.6),  # Gentle descent: -2% grade
+        (0.0, 0.15, 1.0),   # Flat finish
+    ]
+
+    total_mass = 104.0  # rider + bike
+    crr = 0.005
+    cda = 0.35
+    rho = 1.225
+
+    idx = 0
+    for grade_pct, duration_fraction, power_mult in terrain_segments:
+        segment_duration = int(num_seconds * duration_fraction)
+        for _ in range(segment_duration):
+            power = base_power * power_mult + np.random.uniform(-5, 5)
+
+            # Calculate realistic speed from physics
+            # P = (mg*sin(θ) + mg*Crr*cos(θ) + 0.5*ρ*CdA*v²) * v / η
+            # Simplified: solve for v given P and grade
+            theta = np.arctan(grade_pct / 100.0)
+            g = 9.81
+            eta = 0.97
+
+            # Iterative speed solve (simplified)
+            v = 8.0  # Initial guess
+            for _ in range(20):
+                f_grav = total_mass * g * np.sin(theta)
+                f_roll = total_mass * g * crr * np.cos(theta)
+                f_aero = 0.5 * rho * cda * v * v
+                p_req = max(0.1, (f_grav + f_roll + f_aero) * v / eta)
+                dp_dv = (f_grav + f_roll + 3 * f_aero) / eta
+                if abs(dp_dv) < 0.01:
+                    dp_dv = 0.1
+                v = v - (p_req - power) / dp_dv
+                v = max(1.5, min(20.0, v))
+
+            speed = v + np.random.uniform(-0.2, 0.2)
+            speed = max(1.5, speed)
+
+            # Update altitude based on grade and distance
+            delta_dist = speed  # 1 second
+            delta_alt = delta_dist * (grade_pct / 100.0)
+            altitude += delta_alt
+            distance += delta_dist
+
+            record = Record(
+                activity_id=activity_id,
+                timestamp=base_time + timedelta(seconds=idx),
+                power_w=power,
+                speed_mps=speed,
+                altitude_m=altitude,
+                distance_m=distance,
+            )
+            records.append(record)
+            idx += 1
+
+    return records
+
+
 # =============================================================================
 # Bike Validation Tests
 # =============================================================================
@@ -547,7 +633,9 @@ class TestConfidenceLevels:
         # Single activity - likely low confidence
         activity = make_activity()
         await activity_repo.save(activity)
-        records = make_calibration_records(activity.id, num_seconds=100)
+        # Use varied terrain records for physics-based calibration
+        # Need 300s minimum to have 30s per grade bin across 5 segments
+        records = make_varied_terrain_records(activity.id, num_seconds=300)
         record_repo.add_many(records)
 
         result = await use_case.execute(
@@ -575,7 +663,8 @@ class TestConfidenceLevels:
 
         activity = make_activity()
         await activity_repo.save(activity)
-        records = make_calibration_records(activity.id, num_seconds=200)
+        # Use varied terrain records for physics-based calibration
+        records = make_varied_terrain_records(activity.id, num_seconds=300)
         record_repo.add_many(records)
 
         result = await use_case.execute(

@@ -1,15 +1,22 @@
 """
-CalibrateFromActivities use case — orchestrates CdA calibration from ride history.
+CalibrateFromActivities use case — orchestrates CdA/Crr calibration from ride history.
 
 This use case handles the complete flow of calibrating a bike's aerodynamic
-drag coefficient (CdA) from the user's ride data:
+drag coefficient (CdA) and rolling resistance (Crr) from the user's ride data.
+
+Two calibration methods are supported:
+1. Physics-based (default): Fits CdA and Crr simultaneously using data from all
+   terrain types. More accurate for race planning as it uses the full physics model.
+2. Segment-based (legacy): Uses flat, high-speed segments only. Requires 30+ km/h
+   riding which some riders don't have.
+
+Pipeline:
 1. Validate bike eligibility (not e-bike, owned by user)
 2. Fetch recent activities tagged to the bike
 3. For each activity, load power/speed/elevation records
-4. Select valid calibration segments
-5. Filter out segments with drafting
-6. Estimate CdA using linear regression
-7. Optionally update the bike if confidence meets threshold
+4. Aggregate data by grade bins OR select calibration segments
+5. Fit physics model to data OR use linear regression
+6. Optionally update bike if confidence meets threshold
 
 The use case can be called by HTTP routers or background workers.
 """
@@ -37,6 +44,11 @@ from trainingdash.domain.cda_estimation import (
     inputs_from_segments,
 )
 from trainingdash.domain.physics import air_density_from_altitude
+from trainingdash.domain.physics_calibration import (
+    CalibrationDataPoint,
+    aggregate_records_to_data_points,
+    calibrate_from_data_points,
+)
 from trainingdash.repositories.protocols import ActivityRepo, BikeRepo, RecordRepo
 
 logger = logging.getLogger(__name__)
@@ -74,31 +86,37 @@ class InsufficientDataError(CalibrationError):
 
 @dataclass(frozen=True, slots=True)
 class CalibrationResult:
-    """Result of CdA calibration.
+    """Result of CdA/Crr calibration.
 
     Attributes:
         bike_id: ID of the calibrated bike.
         cda: Estimated CdA value in m².
+        crr: Estimated Crr value (only set for physics-based calibration).
         confidence: Confidence tier ('high', 'medium', 'low').
         n_activities_used: Number of activities that contributed data.
-        n_segments_used: Number of valid calibration segments.
+        n_segments_used: Number of valid calibration segments or data points.
         total_calibration_duration_s: Total duration of all segments.
         previous_cda: Previous CdA value (None if using default).
+        previous_crr: Previous Crr value (None if using default).
         warnings: List of warning messages.
         updated: Whether the bike record was actually updated.
         rejection_summary: Summary of why segments were rejected.
+        method: Calibration method used ('physics' or 'segment').
     """
 
     bike_id: int
     cda: float
+    crr: float | None
     confidence: str
     n_activities_used: int
     n_segments_used: int
     total_calibration_duration_s: float
     previous_cda: float | None
+    previous_crr: float | None
     warnings: list[str]
     updated: bool
     rejection_summary: dict[str, int]
+    method: str = "segment"
 
 
 class CalibrateFromActivities:
@@ -147,9 +165,174 @@ class CalibrateFromActivities:
         max_activities: int = 50,
         min_confidence: str = "medium",
         rider_mass_kg: float | None = None,
+        method: str = "physics",
     ) -> CalibrationResult:
         """
-        Calibrate CdA for a bike from user's ride history.
+        Calibrate CdA and Crr for a bike from user's ride history.
+
+        Two methods are available:
+        - 'physics' (default): Uses full physics model to fit CdA and Crr
+          simultaneously from all terrain data. More accurate for race planning.
+        - 'segment': Legacy method requiring 30+ km/h flat segments. Only fits CdA.
+
+        Args:
+            user_id: User ID (for ownership validation).
+            bike_id: Bike ID to calibrate.
+            max_activities: Maximum number of recent activities to analyze.
+            min_confidence: Minimum confidence to update bike ('low', 'medium', 'high').
+            rider_mass_kg: Rider mass in kg (if None, uses default 75kg).
+            method: Calibration method ('physics' or 'segment').
+
+        Returns:
+            CalibrationResult with the estimated CdA/Crr and diagnostics.
+
+        Raises:
+            BikeNotFoundError: If bike not found or not owned by user.
+            BikeNotEligibleError: If bike type is not eligible (e.g., e-bike).
+            NoActivitiesError: If no activities are tagged to the bike.
+            InsufficientDataError: If not enough valid data found.
+        """
+        if method == "physics":
+            return await self._execute_physics_based(
+                user_id, bike_id, max_activities, min_confidence, rider_mass_kg
+            )
+        else:
+            return await self._execute_segment_based(
+                user_id, bike_id, max_activities, min_confidence, rider_mass_kg
+            )
+
+    async def _execute_physics_based(
+        self,
+        user_id: int,
+        bike_id: int,
+        max_activities: int,
+        min_confidence: str,
+        rider_mass_kg: float | None,
+    ) -> CalibrationResult:
+        """Physics-based calibration using full terrain data."""
+        warnings: list[str] = []
+        rejection_reasons: dict[str, int] = {}
+
+        # Step 1: Get and validate bike
+        bike = await self._bike_repo.get_by_id(bike_id, user_id)
+        if bike is None:
+            raise BikeNotFoundError(f"Bike {bike_id} not found or not owned by user")
+
+        if not is_calibration_eligible_type(bike.bike_type):
+            raise BikeNotEligibleError(f"Bike type '{bike.bike_type}' is not eligible for calibration")
+
+        previous_cda = float(bike.cda) if bike.cda is not None else None
+        previous_crr = float(bike.crr) if bike.crr is not None else None
+
+        # Use provided rider mass or default
+        if rider_mass_kg is None:
+            rider_mass_kg = 75.0
+            warnings.append("Using default rider mass of 75kg")
+
+        bike_weight = float(bike.weight_kg) if bike.weight_kg else 8.0
+        total_mass = rider_mass_kg + bike_weight
+
+        # Step 2: Get activities tagged to this bike
+        activities = await self._activity_repo.list_by_bike(bike_id, user_id, max_activities)
+        if not activities:
+            raise NoActivitiesError(f"No activities found tagged to bike {bike_id}")
+
+        # Step 3: Collect data points from all activities
+        all_data_points: list[CalibrationDataPoint] = []
+        activities_with_data = 0
+
+        for activity in activities:
+            if activity.avg_power_w is None or activity.avg_power_w <= 0:
+                rejection_reasons["no_power_data"] = rejection_reasons.get("no_power_data", 0) + 1
+                continue
+
+            records = await self._record_repo.list_for_activity(activity.id)
+            if len(records) < 60:
+                rejection_reasons["too_few_records"] = rejection_reasons.get("too_few_records", 0) + 1
+                continue
+
+            power, speed, grade, timestamps, avg_altitude = self._extract_arrays(records)
+
+            if len(power) < 60:
+                rejection_reasons["insufficient_valid_data"] = (
+                    rejection_reasons.get("insufficient_valid_data", 0) + 1
+                )
+                continue
+
+            air_density = air_density_from_altitude(avg_altitude)
+
+            data_points = aggregate_records_to_data_points(
+                power=power,
+                speed=speed,
+                grade=grade,
+                timestamps=timestamps,
+                air_density=air_density,
+            )
+
+            if data_points:
+                all_data_points.extend(data_points)
+                activities_with_data += 1
+
+        if len(all_data_points) < 3:
+            raise InsufficientDataError(
+                "Insufficient data for physics-based calibration. "
+                "Need data from varied terrain (flat and climbs). "
+                f"Found only {len(all_data_points)} grade bins with data."
+            )
+
+        # Step 4: Run physics-based calibration
+        try:
+            result = calibrate_from_data_points(
+                data_points=all_data_points,
+                total_mass_kg=total_mass,
+            )
+        except ValueError as e:
+            raise InsufficientDataError(str(e))
+
+        warnings.extend(result.warnings)
+
+        # Calculate total duration
+        total_duration = sum(dp.duration_s for dp in all_data_points)
+
+        # Step 5: Determine if we should update
+        confidence_order = {"low": 0, "medium": 1, "high": 2}
+        should_update = confidence_order.get(result.confidence, 0) >= confidence_order.get(min_confidence, 1)
+
+        if should_update:
+            await self._bike_repo.update_calibration(bike_id, user_id, result.cda, result.crr)
+            updated = True
+        else:
+            warnings.append(
+                f"Confidence '{result.confidence}' is below minimum '{min_confidence}'. Bike not updated."
+            )
+            updated = False
+
+        return CalibrationResult(
+            bike_id=bike_id,
+            cda=result.cda,
+            crr=result.crr,
+            confidence=result.confidence,
+            n_activities_used=activities_with_data,
+            n_segments_used=result.n_data_points,
+            total_calibration_duration_s=total_duration,
+            previous_cda=previous_cda,
+            previous_crr=previous_crr,
+            warnings=warnings,
+            updated=updated,
+            rejection_summary=rejection_reasons,
+            method="physics",
+        )
+
+    async def _execute_segment_based(
+        self,
+        user_id: int,
+        bike_id: int,
+        max_activities: int,
+        min_confidence: str,
+        rider_mass_kg: float | None,
+    ) -> CalibrationResult:
+        """
+        Legacy segment-based CdA calibration.
 
         Pipeline:
         1. Get bike to find type (for default Crr)
@@ -348,14 +531,17 @@ class CalibrateFromActivities:
         return CalibrationResult(
             bike_id=bike_id,
             cda=estimate.cda,
+            crr=None,  # Segment method doesn't fit Crr
             confidence=estimate.confidence,
             n_activities_used=activities_with_segments,
             n_segments_used=estimate.n_segments,
             total_calibration_duration_s=estimate.total_duration_s,
             previous_cda=previous_cda,
+            previous_crr=None,
             warnings=warnings,
             updated=updated,
             rejection_summary=total_rejection_reasons,
+            method="segment",
         )
 
     def _extract_arrays(self, records: list) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float]:

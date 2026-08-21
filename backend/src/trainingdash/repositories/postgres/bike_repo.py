@@ -163,11 +163,13 @@ class PostgresBikeRepo:
         bike_id: int,
         user_id: int,
         cda: float,
+        crr: float | None = None,
     ) -> bool:
         """
-        Update a bike's CdA from calibration.
+        Update a bike's CdA and optionally Crr from calibration.
 
         Sets cda, cda_source='calibrated', and calibrated_at timestamp.
+        If crr is provided, also sets crr and crr_source='calibrated'.
 
         Returns True if updated, False if bike not found.
         """
@@ -180,5 +182,10 @@ class PostgresBikeRepo:
         bike.cda = Decimal(str(round(cda, 3)))
         bike.cda_source = "calibrated"
         bike.calibrated_at = datetime.now()
+
+        if crr is not None:
+            bike.crr = Decimal(str(round(crr, 5)))
+            bike.crr_source = "calibrated"
+
         await self._session.commit()
         return True

@@ -993,16 +993,19 @@ class BikeRepo(Protocol):
         bike_id: int,
         user_id: int,
         cda: float,
+        crr: float | None = None,
     ) -> bool:
         """
-        Update a bike's CdA from calibration.
+        Update a bike's CdA and optionally Crr from calibration.
 
         Sets cda, cda_source='calibrated', and calibrated_at timestamp.
+        If crr is provided, also sets crr and crr_source='calibrated'.
 
         Args:
             bike_id: Bike ID
             user_id: Owner's user ID (for security scoping)
             cda: New CdA value in m²
+            crr: New Crr value (optional)
 
         Returns:
             True if updated, False if bike not found.
