@@ -39,7 +39,8 @@ e2e/
 │   ├── J005-breakthrough.spec.ts
 │   ├── J006-admin-approval.spec.ts
 │   ├── J007-upload-to-provider.spec.ts
-│   └── J008-events.spec.ts
+│   ├── J008-events.spec.ts
+│   └── J009-race-planner.spec.ts
 ├── views/              # Page-specific tests
 │   ├── activity-list.spec.ts
 │   ├── activity-detail.spec.ts
@@ -114,6 +115,18 @@ Create event → View list → Filter by type → View details → Edit (links, 
 - Markdown description rendering
 - Journal entry management
 - Event filtering by type (race, tour, bikepacking, event)
+
+### J009: Race Planner
+```
+Navigate → Upload GPX → View course → Generate plan → View plan → Browse lists → Delete
+```
+- Sidebar navigation to Race Planner
+- GPX course upload workflow
+- Course detail with segments
+- Plan generation with FTP input
+- Plan detail with segment targets
+- Course and plan list views
+- Delete with confirmation dialogs
 
 ## Journey Dependency Map
 
