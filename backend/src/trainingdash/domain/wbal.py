@@ -6,6 +6,20 @@ W'bal tracks the depletion and recovery of anaerobic work capacity (W') during e
 
 import math
 from collections.abc import Sequence
+from dataclasses import dataclass
+
+import numpy as np
+
+
+@dataclass(frozen=True)
+class WbalPrediction:
+    """Result of W'bal prediction for a power plan."""
+
+    wbal_series: np.ndarray  # W'bal at each point in joules
+    min_wbal: float  # Minimum W'bal reached during the effort
+    min_wbal_distance_m: float  # Distance where minimum occurs
+    time_in_deficit: float  # Seconds where W'bal < threshold (default 0)
+    final_wbal: float  # W'bal at finish
 
 
 def compute_wbal_series(
@@ -121,3 +135,135 @@ def estimate_w_prime(
         w_prime = (w_prime + w_prime_5) // 2
 
     return max(5000, min(w_prime, 50000))  # Clamp to realistic range (5-50 kJ)
+
+
+
+def predict_wbal_for_plan(
+    powers: np.ndarray,
+    times: np.ndarray,
+    cp: float,
+    w_prime: float,
+    method: str = "differential",
+    distances: np.ndarray | None = None,
+    deficit_threshold: float = 0.0,
+) -> WbalPrediction:
+    """
+    Predict W'bal trajectory for a power plan.
+
+    Uses existing W'bal calculation but runs forward prediction
+    instead of analyzing recorded data.
+
+    Args:
+        powers: Array of power values in watts for each segment
+        times: Array of time durations in seconds for each segment
+        cp: Critical Power in watts
+        w_prime: W' (anaerobic work capacity) in joules
+        method: Calculation method - 'differential' (default) or 'integral'
+        distances: Optional array of distances in meters for each segment
+        deficit_threshold: W'bal threshold for counting time in deficit (default 0)
+
+    Returns:
+        WbalPrediction with trajectory and summary statistics
+
+    Per #530: Use differential model for optimizer (faster to compute).
+    """
+    if len(powers) == 0 or len(times) == 0:
+        return WbalPrediction(
+            wbal_series=np.array([]),
+            min_wbal=w_prime,
+            min_wbal_distance_m=0.0,
+            time_in_deficit=0.0,
+            final_wbal=w_prime,
+        )
+
+    if len(powers) != len(times):
+        raise ValueError("powers and times arrays must have same length")
+
+    # Expand segments into per-second power array for compute_wbal_series
+    # Each segment's power is held constant for its duration
+    power_series: list[float] = []
+    distance_at_second: list[float] = []
+    cumulative_distance = 0.0
+
+    for i, (power, duration) in enumerate(zip(powers, times, strict=True)):
+        duration_int = max(1, int(round(duration)))
+        power_series.extend([float(power)] * duration_int)
+
+        # Track distance at each second
+        if distances is not None and i < len(distances):
+            segment_distance = float(distances[i])
+            distance_per_second = segment_distance / duration_int if duration_int > 0 else 0
+            for _ in range(duration_int):
+                cumulative_distance += distance_per_second
+                distance_at_second.append(cumulative_distance)
+        else:
+            # No distance info - use time as proxy
+            for _ in range(duration_int):
+                cumulative_distance += 1.0  # 1 meter per second placeholder
+                distance_at_second.append(cumulative_distance)
+
+    # Use existing compute_wbal_series with differential method
+    # Note: method parameter reserved for future integral implementation
+    result = compute_wbal_series(
+        power_array=power_series,
+        cp_watts=int(cp),
+        w_prime_joules=int(w_prime),
+        sample_rate_hz=1.0,
+    )
+
+    if not result["series"]:
+        return WbalPrediction(
+            wbal_series=np.array([]),
+            min_wbal=w_prime,
+            min_wbal_distance_m=0.0,
+            time_in_deficit=0.0,
+            final_wbal=w_prime,
+        )
+
+    wbal_series = np.array(result["series"], dtype=float)
+
+    # Find minimum and its location
+    min_idx = int(result["min_wbal_index"]) if result["min_wbal_index"] is not None else 0
+    min_wbal = float(result["min_wbal"]) if result["min_wbal"] is not None else w_prime
+    min_wbal_distance = distance_at_second[min_idx] if min_idx < len(distance_at_second) else 0.0
+
+    # Calculate time in deficit (seconds where W'bal < threshold)
+    time_in_deficit = float(np.sum(wbal_series < deficit_threshold))
+
+    final_wbal = float(wbal_series[-1]) if len(wbal_series) > 0 else w_prime
+
+    return WbalPrediction(
+        wbal_series=wbal_series,
+        min_wbal=min_wbal,
+        min_wbal_distance_m=min_wbal_distance,
+        time_in_deficit=time_in_deficit,
+        final_wbal=final_wbal,
+    )
+
+
+
+
+def check_wbal_feasibility(
+    powers: np.ndarray,
+    times: np.ndarray,
+    cp: float,
+    w_prime: float,
+    min_wbal_threshold: float = 0.0,
+) -> tuple[bool, float]:
+    """
+    Check if power plan is feasible (W'bal stays above threshold).
+
+    Args:
+        powers: Array of power values in watts for each segment
+        times: Array of time durations in seconds for each segment
+        cp: Critical Power in watts
+        w_prime: W' (anaerobic work capacity) in joules
+        min_wbal_threshold: Minimum acceptable W'bal (default 0)
+
+    Returns:
+        Tuple of (is_feasible, min_wbal_reached)
+        - is_feasible: True if W'bal never drops below threshold
+        - min_wbal_reached: The minimum W'bal value during the plan
+    """
+    prediction = predict_wbal_for_plan(powers, times, cp, w_prime)
+    return prediction.min_wbal >= min_wbal_threshold, prediction.min_wbal
