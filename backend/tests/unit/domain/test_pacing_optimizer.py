@@ -529,10 +529,7 @@ class TestPerformance:
     """Performance benchmarks."""
 
     def test_100_segments_under_5_seconds(self, large_course, rider_params):
-        """Optimization should complete in reasonable time for 100-segment course."""
-        # Use limited iterations for performance - the heuristic is already good
-        config = OptimizationConfig(max_iterations=100)
-
+        """Optimization should complete in <5s for 100-segment course."""
         start_time = time.time()
 
         plan = optimize_pacing(
@@ -540,16 +537,13 @@ class TestPerformance:
             rider_ftp=250,
             rider_cp=240,
             rider_w_prime=20000,
-            target_energy_kj=600,  # Feasible for 50km course
+            target_energy_kj=600,
             rider_params=rider_params,
-            config=config,
         )
 
         elapsed = time.time() - start_time
 
-        # Performance target: <10s for 100 segments with limited iterations
-        # This is acceptable for an optimization that runs once per plan generation
-        assert elapsed < 10.0, f"Optimization took {elapsed:.2f}s, should be <10s"
+        assert elapsed < 5.0, f"Optimization took {elapsed:.2f}s, should be <5s"
         assert len(plan.targets) == 100
 
     def test_reports_iteration_count(self, flat_course, rider_params):
@@ -575,8 +569,8 @@ class TestOptimizationConfig:
         config = OptimizationConfig()
 
         assert config.method == "SLSQP"
-        assert config.max_iterations == 200
-        assert config.tolerance == 1e-4
+        assert config.max_iterations == 1000
+        assert config.tolerance == 1e-6
         assert config.power_bounds_pct == (0.5, 1.2)
         assert config.wbal_min_threshold == 0.0
 

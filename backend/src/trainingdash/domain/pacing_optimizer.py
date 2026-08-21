@@ -52,15 +52,15 @@ class OptimizationConfig:
 
     Attributes:
         method: Scipy optimization method. Default 'SLSQP'.
-        max_iterations: Maximum optimizer iterations. Default 200.
-        tolerance: Convergence tolerance. Default 1e-4.
+        max_iterations: Maximum optimizer iterations. Default 1000.
+        tolerance: Convergence tolerance. Default 1e-6.
         power_bounds_pct: Min/max power as fraction of FTP. Default (0.5, 1.2).
         wbal_min_threshold: Minimum W'bal to maintain (joules). Default 0.
     """
 
     method: str = "SLSQP"
-    max_iterations: int = 200
-    tolerance: float = 1e-4
+    max_iterations: int = 1000
+    tolerance: float = 1e-6
     power_bounds_pct: tuple[float, float] = (0.5, 1.2)
     wbal_min_threshold: float = 0.0
 
