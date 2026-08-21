@@ -9,7 +9,7 @@
  * - Climbs summary (if any)
  */
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ComposedChart,
@@ -24,7 +24,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { fetchRacePlan, fetchCourse, deleteRacePlan } from "@/api/race-plans";
+import { fetchRacePlan, fetchCourse, deleteRacePlan, regenerateRacePlan } from "@/api/race-plans";
+import { ParameterSliders, type UpdatedParams } from "@/components/race-planner";
+import type { PlanResult } from "@/lib/physics";
 import type {
   RacePlanDetail,
   CourseDetail,
@@ -138,6 +140,16 @@ function buildChartData(
     power_w: targetMap.get(segmentAtDistance(point.distance_m)) ?? null,
     grade_pct: point.grade_pct,
   }));
+}
+
+// Helper to find segment index at a given distance
+function segmentAtDistanceHelper(segments: CourseSegment[], distance_m: number): number {
+  for (let i = 0; i < segments.length; i++) {
+    if (distance_m >= segments[i].start_m && distance_m < segments[i].end_m) {
+      return i;
+    }
+  }
+  return segments.length - 1;
 }
 
 // =============================================================================
@@ -348,6 +360,11 @@ export function PlanDetail() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Parameter sliders state
+  const [showSliders, setShowSliders] = useState(false);
+  const [recalcResult, setRecalcResult] = useState<PlanResult | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
   useEffect(() => {
     if (!planId) return;
     setIsLoading(true);
@@ -368,6 +385,55 @@ export function PlanDetail() {
     if (!plan || !course) return [];
     return buildChartData(course.elevation_profile, course.segments, plan.segment_targets);
   }, [plan, course]);
+
+  // Build chart data with recalculated power values when sliders are active
+  const displayChartData = useMemo(() => {
+    if (!recalcResult || !course) return chartData;
+
+    // Create a map of segment index to recalculated power
+    const recalcPowerMap = new Map<number, number>();
+    for (const seg of recalcResult.segments) {
+      recalcPowerMap.set(seg.segmentIdx, seg.powerW);
+    }
+
+    // Update chart data with recalculated power
+    return chartData.map((point) => {
+      const segIdx = segmentAtDistanceHelper(course.segments, point.distance_km * 1000);
+      const recalcPower = recalcPowerMap.get(segIdx);
+      return {
+        ...point,
+        power_w: recalcPower ?? point.power_w,
+      };
+    });
+  }, [chartData, recalcResult, course]);
+
+  // Handle recalculation from sliders
+  const handleRecalculate = useCallback((result: PlanResult) => {
+    setRecalcResult(result);
+  }, []);
+
+  // Handle save (regenerate plan with new parameters)
+  const handleSave = useCallback(async (params: UpdatedParams) => {
+    if (!plan || !planId) return;
+
+    setIsSaving(true);
+    try {
+      const newPlan = await regenerateRacePlan(Number(planId), {
+        ftp_watts: params.ftpWatts,
+        rider_weight_kg: params.weightKg,
+        target_intensity: params.targetIntensity,
+        // Note: CdA changes would require bike update, which is out of scope
+      });
+
+      // Navigate to the new plan
+      toast.success("Plan regenerated with new parameters");
+      navigate(`/race-planner/plans/${newPlan.id}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to regenerate plan");
+    } finally {
+      setIsSaving(false);
+    }
+  }, [plan, planId, navigate]);
 
   const handleDelete = async () => {
     if (!planId) return;
@@ -436,6 +502,22 @@ export function PlanDetail() {
           </button>
 
           <div className="flex items-center gap-2">
+            <Button
+              variant={showSliders ? "default" : "outline"}
+              size="sm"
+              onClick={() => setShowSliders(!showSliders)}
+              title="Adjust parameters"
+            >
+              <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
+                />
+              </svg>
+              Adjust
+            </Button>
             <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
               <AlertDialogTrigger asChild>
                 <Button
@@ -510,6 +592,22 @@ export function PlanDetail() {
         </div>
       </div>
 
+      {/* Parameter Sliders Panel */}
+      {showSliders && (
+        <div className="mb-8">
+          <ParameterSliders
+            riderParams={plan.rider_params}
+            bikeParams={plan.bike_params}
+            segmentTargets={plan.segment_targets}
+            courseSegments={course.segments}
+            originalTotalTimeS={plan.total_time_s}
+            onRecalculate={handleRecalculate}
+            onSave={handleSave}
+            isSaving={isSaving}
+          />
+        </div>
+      )}
+
       {/* Warnings */}
       {plan.warnings.length > 0 && (
         <div className="bg-warning/10 border border-warning/20 rounded-lg p-4 mb-8">
@@ -525,7 +623,7 @@ export function PlanDetail() {
       {/* Elevation/Power Chart */}
       <div className="bg-card border border-border rounded-xl p-4 mb-8">
         <h2 className="text-card-title mb-4">Elevation & Power Profile</h2>
-        <ElevationPowerChart data={chartData} />
+        <ElevationPowerChart data={displayChartData} />
       </div>
 
       {/* Segment Table */}
