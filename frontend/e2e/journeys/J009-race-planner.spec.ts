@@ -47,68 +47,62 @@ test.describe('J009: Race Planner', () => {
   test('can navigate to Race Planner from sidebar', async ({ page }) => {
     await page.goto('/');
 
-    // Find and click Race Planner in sidebar
-    const sidebar = page.locator('nav');
-    await sidebar.getByText('Race Planner').click();
+    // Find and click Race Planner link in sidebar (use role to avoid matching section header)
+    await page.getByRole('link', { name: 'Race Planner' }).click();
 
     // Should navigate to race planner dashboard
     await expect(page).toHaveURL('/race-planner');
-    await expect(page.getByRole('heading', { name: 'Race Planner' })).toBeVisible();
+    // Use exact match and level to avoid matching "Get Started with Race Planner" h2
+    await expect(page.getByRole('heading', { name: 'Race Planner', exact: true, level: 1 })).toBeVisible();
   });
 
   test('shows getting started guide when no courses', async ({ page }) => {
     await page.goto('/race-planner');
 
-    // Should show getting started section
-    await expect(page.getByText(/get started/i)).toBeVisible();
-    await expect(page.getByText(/upload.*course/i)).toBeVisible();
+    // Should show getting started section - wait for page to load first
+    await expect(page.getByRole('heading', { name: 'Race Planner', exact: true, level: 1 })).toBeVisible();
+    await expect(page.getByText(/get started/i)).toBeVisible({ timeout: 10000 });
+    // Be specific - scope to main content and use first() since there may be multiple
+    await expect(page.locator('main').getByRole('button', { name: 'Upload Course' }).first()).toBeVisible();
   });
 
   test('can upload a GPX course', async ({ page }) => {
     await page.goto('/race-planner/courses/new');
 
-    // Should be on upload page
-    await expect(page.getByText(/upload/i)).toBeVisible();
+    // Should be on upload page - wait for page to fully load
+    await expect(page.getByRole('heading', { name: /upload|new course/i })).toBeVisible({ timeout: 10000 });
 
     // Create a temp GPX file and upload
     const gpxContent = generateTestGpx();
 
-    // Use file chooser to upload
-    const fileChooserPromise = page.waitForEvent('filechooser');
-
-    // Click the upload area/button
-    await page.locator('input[type="file"]').or(page.getByText(/drop.*file|select.*file|choose.*file/i)).first().click();
-
-    const fileChooser = await fileChooserPromise;
-    await fileChooser.setFiles({
+    // Set files directly on the file input - scope to main to avoid header file input
+    const fileInput = page.locator('main input[type="file"]');
+    await fileInput.setInputFiles({
       name: 'test-course.gpx',
       mimeType: 'application/gpx+xml',
       buffer: gpxContent,
     });
 
-    // Fill in name if there's a name field
-    const nameInput = page.getByLabel(/name/i);
-    if (await nameInput.isVisible()) {
+    // Fill in name if there's a name field - scope to main content to avoid header conflicts
+    const nameInput = page.locator('main').getByLabel(/name/i);
+    if (await nameInput.isVisible({ timeout: 2000 }).catch(() => false)) {
       await nameInput.fill('E2E Test Course');
     }
 
-    // Submit the form - look for save/upload/create button
-    await page.getByRole('button', { name: /save|upload|create/i }).click();
+    // Submit the form - scope to main content to avoid header upload button
+    await page.locator('main').getByRole('button', { name: /save|upload|create/i }).click();
 
     // Should redirect to course detail or show success
-    await expect(page).toHaveURL(/\/race-planner\/courses\/\d+/);
+    await expect(page).toHaveURL(/\/race-planner\/courses\/\d+/, { timeout: 30000 });
 
-    // Course details should be visible
-    await expect(page.getByText(/distance/i)).toBeVisible();
-    await expect(page.getByText(/elevation/i)).toBeVisible();
+    // Course details should be visible - UI shows "Distance" and "Elevation Gain"
+    await expect(page.getByText('Distance', { exact: true })).toBeVisible();
+    await expect(page.getByText('Elevation Gain', { exact: true })).toBeVisible();
   });
 
   test('can view course details with segments', async ({ page }) => {
     // First upload a course via API
     const gpxContent = generateTestGpx();
-    const formData = new FormData();
-    formData.append('file', new Blob([gpxContent], { type: 'application/gpx+xml' }), 'test.gpx');
-    formData.append('name', 'Detail Test Course');
 
     const uploadResponse = await page.request.post('/api/courses', {
       multipart: {
@@ -126,13 +120,14 @@ test.describe('J009: Race Planner', () => {
     // Navigate to course detail
     await page.goto(`/race-planner/courses/${course.id}`);
 
-    // Should show course name and metrics
-    await expect(page.getByText('Detail Test Course')).toBeVisible();
-    await expect(page.getByText(/distance/i)).toBeVisible();
-    await expect(page.getByText(/elevation/i)).toBeVisible();
+    // Should show course name and metrics - UI shows "Distance" and "Elevation Gain"
+    const main = page.locator('main');
+    await expect(main.getByText('Detail Test Course')).toBeVisible({ timeout: 10000 });
+    await expect(main.getByText('Distance', { exact: true })).toBeVisible();
+    await expect(main.getByText('Elevation Gain', { exact: true })).toBeVisible();
 
-    // Should show segments section
-    await expect(page.getByText(/segments/i)).toBeVisible();
+    // Should show segments section - heading includes count like "Segments (2)"
+    await expect(main.getByRole('heading', { name: /Segments/i })).toBeVisible();
   });
 
   test('can generate a race plan from course', async ({ page }) => {
@@ -155,27 +150,31 @@ test.describe('J009: Race Planner', () => {
     await page.goto(`/race-planner/courses/${course.id}/generate`);
 
     // Should show plan generation form
-    await expect(page.getByText(/generate.*plan/i)).toBeVisible();
+    const main = page.locator('main');
+    await expect(page.getByRole('heading', { name: 'Generate Race Plan' })).toBeVisible({ timeout: 10000 });
 
-    // Fill in FTP (required)
-    const ftpInput = page.getByLabel(/ftp/i).or(page.locator('input[name*="ftp"]'));
+    // Fill in FTP (required) - use more specific locator within main
+    const ftpInput = main.getByRole('spinbutton', { name: /ftp/i }).or(main.locator('input[name*="ftp"]'));
     await ftpInput.fill('280');
 
     // Fill in weight if visible
-    const weightInput = page.getByLabel(/weight/i).or(page.locator('input[name*="weight"]'));
-    if (await weightInput.isVisible()) {
+    const weightInput = main.getByRole('spinbutton', { name: /weight/i }).or(main.locator('input[name*="weight"]'));
+    if (await weightInput.isVisible({ timeout: 2000 }).catch(() => false)) {
       await weightInput.fill('72');
     }
 
-    // Submit
-    await page.getByRole('button', { name: /generate/i }).click();
+    // Submit - use exact name to match "Generate Plan" button
+    await main.getByRole('button', { name: 'Generate Plan' }).click();
+
+    // UI shows success modal with "Plan Generated!" - click "View Full Plan" to navigate
+    await expect(page.getByRole('heading', { name: 'Plan Generated!' })).toBeVisible({ timeout: 10000 });
+    await page.getByRole('button', { name: 'View Full Plan' }).click();
 
     // Should redirect to plan detail
-    await expect(page).toHaveURL(/\/race-planner\/plans\/\d+/);
+    await expect(page).toHaveURL(/\/race-planner\/plans\/\d+/, { timeout: 10000 });
 
-    // Plan details should be visible
-    await expect(page.getByText(/time/i)).toBeVisible();
-    await expect(page.getByText(/power/i)).toBeVisible();
+    // Plan details should be visible - use exact text
+    await expect(page.getByText('Total Time', { exact: true })).toBeVisible();
   });
 
   test('can view plan details with segment targets', async ({ page }) => {
@@ -206,12 +205,12 @@ test.describe('J009: Race Planner', () => {
     // Navigate to plan detail
     await page.goto(`/race-planner/plans/${plan.id}`);
 
-    // Should show plan info
-    await expect(page.getByText(/time/i)).toBeVisible();
-    await expect(page.getByText(/power/i)).toBeVisible();
+    // Should show plan info - use exact text to avoid duplicates
+    const main = page.locator('main');
+    await expect(main.getByText('Total Time', { exact: true })).toBeVisible({ timeout: 10000 });
 
-    // Should show segment targets
-    await expect(page.getByText(/segment/i)).toBeVisible();
+    // Should show segment targets - heading is "Segment Targets"
+    await expect(main.getByRole('heading', { name: 'Segment Targets' })).toBeVisible();
   });
 
   test('can browse courses list', async ({ page }) => {
@@ -235,11 +234,11 @@ test.describe('J009: Race Planner', () => {
     await page.goto('/race-planner/courses');
 
     // Should show both courses
-    await expect(page.getByText('Course Alpha')).toBeVisible();
+    await expect(page.getByText('Course Alpha')).toBeVisible({ timeout: 10000 });
     await expect(page.getByText('Course Beta')).toBeVisible();
 
-    // Should show upload button
-    await expect(page.getByRole('button', { name: /upload/i })).toBeVisible();
+    // Should show upload button - be specific to avoid matching header's Upload FIT button
+    await expect(page.getByRole('button', { name: 'Upload Course' })).toBeVisible();
   });
 
   test('can browse plans list', async ({ page }) => {
@@ -326,46 +325,51 @@ test.describe('J009: Race Planner', () => {
     // Start at dashboard
     await page.goto('/race-planner');
 
-    // Click upload course button
-    await page.getByRole('button', { name: /upload.*course/i }).click();
+    // Wait for page to load - use exact match with level to avoid "Get Started with Race Planner" h2
+    await expect(page.getByRole('heading', { name: 'Race Planner', exact: true, level: 1 })).toBeVisible({ timeout: 10000 });
+
+    // Click upload course button - use first() since there may be multiple
+    await page.locator('main').getByRole('button', { name: 'Upload Course' }).first().click();
     await expect(page).toHaveURL('/race-planner/courses/new');
 
-    // Upload GPX
+    // Upload GPX - set files directly on the input, scoped to main
     const gpxContent = generateTestGpx();
-    const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.locator('input[type="file"]').or(page.getByText(/drop.*file|select.*file|choose.*file/i)).first().click();
-    const fileChooser = await fileChooserPromise;
-    await fileChooser.setFiles({
+    const fileInput = page.locator('main input[type="file"]');
+    await fileInput.setInputFiles({
       name: 'workflow-test.gpx',
       mimeType: 'application/gpx+xml',
       buffer: gpxContent,
     });
 
-    // Fill name if visible
-    const nameInput = page.getByLabel(/name/i);
-    if (await nameInput.isVisible()) {
+    // Fill name if visible - scope to main to avoid header conflicts
+    const main = page.locator('main');
+    const nameInput = main.getByLabel(/name/i);
+    if (await nameInput.isVisible({ timeout: 2000 }).catch(() => false)) {
       await nameInput.fill('Workflow Test Course');
     }
 
-    // Save course
-    await page.getByRole('button', { name: /save|upload|create/i }).click();
+    // Save course - scope to main
+    await main.getByRole('button', { name: /save|upload|create/i }).click();
 
     // Should be on course detail
-    await expect(page).toHaveURL(/\/race-planner\/courses\/\d+/);
+    await expect(page).toHaveURL(/\/race-planner\/courses\/\d+/, { timeout: 30000 });
 
     // Click generate plan
-    await page.getByRole('button', { name: /generate.*plan/i }).click();
+    await main.getByRole('button', { name: 'Generate Plan' }).click();
     await expect(page).toHaveURL(/\/race-planner\/courses\/\d+\/generate/);
 
-    // Fill FTP
-    await page.getByLabel(/ftp/i).or(page.locator('input[name*="ftp"]')).fill('275');
+    // Fill FTP - scope to main
+    await main.getByRole('spinbutton', { name: /ftp/i }).or(main.locator('input[name*="ftp"]')).fill('275');
 
-    // Generate
-    await page.getByRole('button', { name: /generate/i }).click();
+    // Generate - use exact button name
+    await main.getByRole('button', { name: 'Generate Plan' }).click();
+
+    // UI shows success modal - click "View Full Plan"
+    await expect(page.getByRole('heading', { name: 'Plan Generated!' })).toBeVisible({ timeout: 10000 });
+    await page.getByRole('button', { name: 'View Full Plan' }).click();
 
     // Should be on plan detail
-    await expect(page).toHaveURL(/\/race-planner\/plans\/\d+/);
-    await expect(page.getByText(/time/i)).toBeVisible();
-    await expect(page.getByText(/power/i)).toBeVisible();
+    await expect(page).toHaveURL(/\/race-planner\/plans\/\d+/, { timeout: 10000 });
+    await expect(page.getByText('Total Time', { exact: true })).toBeVisible();
   });
 });

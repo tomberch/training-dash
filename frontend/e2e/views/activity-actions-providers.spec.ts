@@ -102,12 +102,13 @@ test.describe.serial('Activity Actions - Provider Awareness', () => {
     // Click on Connections tab to see integrations
     await page.getByRole('tab', { name: 'Connections' }).click();
     
-    // Wait for connection state to fully render
-    await page.waitForTimeout(500);
+    // Wait for connection state to load
+    await expect(
+      page.getByTestId('xert-connect').or(page.getByTestId('xert-disconnect'))
+    ).toBeVisible({ timeout: 10000 });
     
     // Check if already connected by looking for disconnect button
-    const disconnectButton = page.getByTestId('xert-disconnect');
-    const isConnected = await disconnectButton.isVisible().catch(() => false);
+    const isConnected = await page.getByTestId('xert-disconnect').isVisible().catch(() => false);
     
     if (!isConnected) {
       // Not connected yet, need to connect

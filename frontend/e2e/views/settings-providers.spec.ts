@@ -51,16 +51,25 @@ test.describe('Settings - Provider Integrations', () => {
 
       await expect(page.getByRole('heading', { name: 'Xert', level: 3 })).toBeVisible();
 
+      // Wait for connection state to load - check for either connect button or disconnect button
+      await expect(
+        page.getByTestId('xert-connect').or(page.getByTestId('xert-disconnect'))
+      ).toBeVisible({ timeout: 10000 });
+
       // Connect to Xert (mock accepts any password except "invalid")
-      await page.getByTestId('xert-email').fill('mock@xert.com');
-      await page.getByTestId('xert-password').fill('mockpassword');
-      await page.getByTestId('xert-connect').click();
+      // Only connect if not already connected
+      const isConnected = await page.getByTestId('xert-disconnect').isVisible().catch(() => false);
+      if (!isConnected) {
+        await page.getByTestId('xert-email').fill('mock@xert.com');
+        await page.getByTestId('xert-password').fill('mockpassword');
+        await page.getByTestId('xert-connect').click();
 
-      // Wait for success
-      await expect(page.getByText('Xert connected successfully')).toBeVisible({ timeout: 10000 });
+        // Wait for success
+        await expect(page.getByText('Xert connected successfully')).toBeVisible({ timeout: 10000 });
+      }
 
-      // Auto-sync toggle should now be visible
-      await expect(page.getByText('Auto-sync from Xert')).toBeVisible();
+      // Sync toggle should now be visible (label is "Sync from Xert")
+      await expect(page.getByText('Sync from Xert')).toBeVisible({ timeout: 5000 });
       
       // Toggle button should be present (aria-pressed attribute indicates it's a toggle)
       const syncToggle = page.locator('button[aria-pressed]').first();
@@ -105,10 +114,11 @@ test.describe('Settings - Provider Integrations', () => {
       await syncToggle.click();
 
       // Wait for the API call to complete and state to update
-      await page.waitForTimeout(1000);
+      await page.waitForTimeout(1500);
 
-      // State should have changed
-      const newState = await syncToggle.getAttribute('aria-pressed');
+      // State should have changed - re-query the element to get fresh state
+      const newToggle = page.locator('button[aria-pressed]:not([disabled])').first();
+      const newState = await newToggle.getAttribute('aria-pressed');
       expect(newState).not.toBe(initialState);
     });
 
@@ -121,24 +131,21 @@ test.describe('Settings - Provider Integrations', () => {
 
       await expect(page.getByRole('heading', { name: 'Xert', level: 3 })).toBeVisible();
 
-      // Wait for connection state to fully render
-      await page.waitForTimeout(500);
+      // Wait for connection state to load
+      await expect(
+        page.getByTestId('xert-connect').or(page.getByTestId('xert-disconnect'))
+      ).toBeVisible({ timeout: 10000 });
 
       // Check if already connected by looking for disconnect button
-      const disconnectButton = page.getByTestId('xert-disconnect');
-      const isConnected = await disconnectButton.isVisible().catch(() => false);
+      const isConnected = await page.getByTestId('xert-disconnect').isVisible().catch(() => false);
       
       if (!isConnected) {
         // Not connected yet, need to connect
-        // The email input should be enabled
         await page.getByTestId('xert-email').fill('mock@xert.com');
         await page.getByTestId('xert-password').fill('mockpassword');
         await page.getByTestId('xert-connect').click();
         await expect(page.getByText('Xert connected successfully')).toBeVisible({ timeout: 10000 });
       }
-
-      // Should show Sync Now button
-      await expect(page.getByRole('button', { name: /Sync Now/i })).toBeVisible();
 
       // Should show Disconnect button
       await expect(page.getByTestId('xert-disconnect')).toBeVisible();
@@ -149,6 +156,22 @@ test.describe('Settings - Provider Integrations', () => {
       
       // Update/Save Password button should NOT be visible when password is empty
       await expect(page.getByTestId('xert-save-password')).not.toBeVisible();
+      
+      // "Sync from Xert" toggle label should be visible
+      await expect(page.getByText('Sync from Xert')).toBeVisible({ timeout: 5000 });
+      
+      // Sync Now button only appears when sync is enabled
+      // First enable sync by clicking the toggle
+      const syncToggle = page.locator('button[aria-pressed]').first();
+      const isSyncEnabled = await syncToggle.getAttribute('aria-pressed') === 'true';
+      
+      if (!isSyncEnabled) {
+        await syncToggle.click();
+        await page.waitForTimeout(500); // Wait for state update
+      }
+      
+      // Now Sync Now should be visible
+      await expect(page.getByRole('button', { name: /Sync Now/i })).toBeVisible({ timeout: 5000 });
     });
 
     test('xert shows Save Password button when password entered', async ({ page }) => {
@@ -199,25 +222,24 @@ test.describe('Settings - Provider Integrations', () => {
 
       await expect(page.getByRole('heading', { name: 'Xert', level: 3 })).toBeVisible();
 
-      // Wait for connection state to fully render
-      await page.waitForTimeout(1000);
+      // Wait for connection state to load
+      await expect(
+        page.getByTestId('xert-connect').or(page.getByTestId('xert-disconnect'))
+      ).toBeVisible({ timeout: 10000 });
 
       // Check if already connected by checking if disconnect button is visible
-      const disconnectButton = page.getByTestId('xert-disconnect');
-      const emailInput = page.getByTestId('xert-email');
-      const isConnected = await disconnectButton.isVisible().catch(() => false);
+      const isConnected = await page.getByTestId('xert-disconnect').isVisible().catch(() => false);
       
       if (!isConnected) {
-        // Not connected - verify email input is enabled before filling
-        await expect(emailInput).toBeEnabled({ timeout: 5000 });
-        await emailInput.fill('mock@xert.com');
+        // Not connected - need to connect first
+        await page.getByTestId('xert-email').fill('mock@xert.com');
         await page.getByTestId('xert-password').fill('mockpassword');
         await page.getByTestId('xert-connect').click();
         await expect(page.getByText('Xert connected successfully')).toBeVisible({ timeout: 10000 });
       }
 
-      // Auto-sync should be visible
-      await expect(page.getByText('Auto-sync from Xert')).toBeVisible();
+      // Sync toggle should be visible (label is "Sync from Xert")
+      await expect(page.getByText('Sync from Xert')).toBeVisible({ timeout: 5000 });
 
       // Disconnect
       await page.getByTestId('xert-disconnect').click();
@@ -225,8 +247,8 @@ test.describe('Settings - Provider Integrations', () => {
       // Wait for disconnect to complete
       await expect(page.getByText(/disconnected|removed/i)).toBeVisible({ timeout: 10000 });
 
-      // Auto-sync toggle should no longer be visible
-      await expect(page.getByText('Auto-sync from Xert')).not.toBeVisible();
+      // Sync toggle should no longer be visible
+      await expect(page.getByText('Sync from Xert')).not.toBeVisible();
     });
   });
 

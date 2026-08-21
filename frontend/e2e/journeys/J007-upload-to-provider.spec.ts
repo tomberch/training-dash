@@ -147,7 +147,9 @@ test.describe.serial('J007: Upload to Provider Flow', () => {
   });
 
   test('upload option hidden when no credentials configured', async ({ page, request }) => {
-    // First disconnect Xert
+    // This test checks that the Upload to Provider option is hidden when
+    // no providers are connected. We need to ensure BOTH Xert and Garmin are disconnected.
+    
     await loginViaApi(page, testUser);
     await page.goto('/settings');
     
@@ -155,31 +157,50 @@ test.describe.serial('J007: Upload to Provider Flow', () => {
     await page.getByRole('tab', { name: 'Connections' }).click();
     
     // Wait for connection state to fully render
-    await page.waitForTimeout(500);
-    
     await expect(page.getByRole('heading', { name: 'Xert', level: 3 })).toBeVisible();
     
-    // Disconnect if connected
-    const disconnectButton = page.getByTestId('xert-disconnect');
-    if (await disconnectButton.isVisible().catch(() => false)) {
-      await disconnectButton.click();
+    // Wait a moment for API response
+    await page.waitForTimeout(1000);
+    
+    // Disconnect Xert if connected
+    const xertDisconnectButton = page.getByTestId('xert-disconnect');
+    if (await xertDisconnectButton.isVisible().catch(() => false)) {
+      await xertDisconnectButton.click();
       await expect(page.getByText(/disconnected|removed/i)).toBeVisible({ timeout: 10000 });
-      // Wait for disconnect to be reflected in backend
-      await page.waitForTimeout(500);
+      // Wait for toast to dismiss
+      await page.waitForTimeout(1000);
+    }
+    
+    // Scroll to Garmin section if needed and check
+    await page.getByRole('heading', { name: 'Garmin', level: 3 }).scrollIntoViewIfNeeded();
+    
+    // Also check Garmin - disconnect if connected
+    const garminDisconnectButton = page.getByTestId('garmin-disconnect');
+    if (await garminDisconnectButton.isVisible().catch(() => false)) {
+      await garminDisconnectButton.click();
+      await expect(page.getByText(/disconnected|removed/i)).toBeVisible({ timeout: 10000 });
+      // Wait for toast to dismiss
+      await page.waitForTimeout(1000);
     }
 
-    // Now go to activity - use a fresh page load to avoid cached state
+    // Verify Xert is now showing connect state (not disconnect)
+    await expect(page.getByTestId('xert-connect')).toBeVisible({ timeout: 5000 });
+
+    // Now go to activity - use hard reload to bypass any frontend cache
     await page.goto(`/activities/${activityId}`);
     await expect(page.getByRole('button', { name: 'Back' })).toBeVisible({ timeout: 15000 });
     
-    // Wait for provider status to be fetched
-    await page.waitForTimeout(500);
+    // Wait for provider status API call to complete
+    await page.waitForLoadState('networkidle');
 
     // Open Actions menu
     await page.getByRole('button', { name: /Actions/i }).click();
+    
+    // Wait for dropdown to fully render
+    await page.waitForTimeout(500);
 
     // Upload to Provider should be hidden when no providers are connected
-    await expect(page.getByText('Upload to Provider')).not.toBeVisible();
+    await expect(page.getByText('Upload to Provider')).not.toBeVisible({ timeout: 5000 });
     
     // Export FIT File should still be visible
     await expect(page.getByText('Export FIT File')).toBeVisible();
