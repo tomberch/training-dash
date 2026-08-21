@@ -402,6 +402,20 @@ export interface CourseDetail {
   elevation_profile: ElevationPoint[];
 }
 
+export interface CourseUploadResponse {
+  id: number;
+  name: string;
+  source_type: string;
+  source_filename: string | null;
+  distance_m: number;
+  elevation_gain_m: number;
+  elevation_loss_m: number;
+  min_elevation_m: number | null;
+  max_elevation_m: number | null;
+  created_at: string;
+  warnings: string[];
+}
+
 
 
 // ============================================================================

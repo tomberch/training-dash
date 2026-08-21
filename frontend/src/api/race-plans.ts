@@ -9,6 +9,7 @@ import type {
   GeneratePlanRequest,
   CourseDetail,
   CourseListItem,
+  CourseUploadResponse,
   ExecutionComparison,
   MatchingActivity,
 } from "./types";
@@ -78,6 +79,46 @@ export async function fetchCourse(courseId: number): Promise<CourseDetail> {
  */
 export async function fetchCourses(): Promise<CourseListItem[]> {
   return apiGet<CourseListItem[]>("/courses");
+}
+
+/**
+ * Upload a GPX or FIT file to create a new course.
+ */
+export async function uploadCourse(
+  file: File,
+  name?: string
+): Promise<CourseUploadResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  if (name) {
+    formData.append("name", name);
+  }
+
+  const res = await fetch("/api/courses", {
+    method: "POST",
+    credentials: "include",
+    body: formData,
+  });
+
+  if (!res.ok) {
+    let detail = "Failed to upload course";
+    try {
+      const body = await res.json();
+      detail = body.detail || detail;
+    } catch {
+      detail = res.statusText || detail;
+    }
+    throw new Error(detail);
+  }
+
+  return res.json();
+}
+
+/**
+ * Delete a course.
+ */
+export async function deleteCourse(courseId: number): Promise<void> {
+  return apiDelete(`/courses/${courseId}`, "Failed to delete course");
 }
 
 
