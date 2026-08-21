@@ -34,6 +34,9 @@ const EventDetailPage = lazy(() => import("./pages/EventDetailPage").then(m => (
 const EventFormPage = lazy(() => import("./pages/EventFormPage").then(m => ({ default: m.EventFormPage })));
 const EventEditPage = lazy(() => import("./pages/EventEditPage").then(m => ({ default: m.EventEditPage })));
 const GearPage = lazy(() => import("./pages/GearPage").then(m => ({ default: m.GearPage })));
+const RacePlannerDashboard = lazy(() => import("./pages/RacePlanner").then(m => ({ default: m.RacePlannerDashboard })));
+const CourseList = lazy(() => import("./pages/RacePlanner").then(m => ({ default: m.CourseList })));
+const PlanList = lazy(() => import("./pages/RacePlanner").then(m => ({ default: m.PlanList })));
 const PlanDetail = lazy(() => import("./pages/RacePlanner").then(m => ({ default: m.PlanDetail })));
 const GeneratePlan = lazy(() => import("./pages/RacePlanner").then(m => ({ default: m.GeneratePlan })));
 const PlanComparison = lazy(() => import("./pages/RacePlanner").then(m => ({ default: m.PlanComparison })));
@@ -175,6 +178,9 @@ function AppLayout({ user, onLogout, onUserUpdate }: {
                 path="/settings/gear" 
                 element={<GearPage unitSystem={user.unit_system} />} 
               />
+              <Route path="/race-planner" element={<RacePlannerDashboard />} />
+              <Route path="/race-planner/courses" element={<CourseList />} />
+              <Route path="/race-planner/plans" element={<PlanList />} />
               <Route path="/race-planner/plans/:planId" element={<PlanDetail />} />
               <Route path="/race-planner/plans/:planId/compare/:activityId?" element={<PlanComparison />} />
               <Route path="/race-planner/courses/new" element={<CourseUpload />} />
