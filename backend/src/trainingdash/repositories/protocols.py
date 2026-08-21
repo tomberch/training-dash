@@ -1030,6 +1030,65 @@ class RecordRepo(Protocol):
         ...
 
 
+class RacePlanRepo(Protocol):
+    """
+    Repository protocol for RacePlan entities.
+
+    Race plans store generated pacing strategies for courses with
+    rider/bike parameters, optimization settings, and segment targets.
+    """
+
+    async def get_by_id(self, plan_id: int, user_id: int) -> "RacePlan | None":
+        """
+        Fetch a race plan by ID, scoped to user.
+
+        Returns None if not found or not owned by user.
+        """
+        ...
+
+    async def get_by_course(self, course_id: int, user_id: int) -> list["RacePlan"]:
+        """
+        List race plans for a course, ordered by created_at descending.
+
+        Args:
+            course_id: Course ID
+            user_id: Owner's user ID
+
+        Returns:
+            List of RacePlan objects
+        """
+        ...
+
+    async def get_by_user(self, user_id: int, limit: int = 20) -> list["RacePlan"]:
+        """
+        List race plans for a user, ordered by created_at descending.
+
+        Args:
+            user_id: Owner's user ID
+            limit: Maximum number of plans to return
+
+        Returns:
+            List of RacePlan objects
+        """
+        ...
+
+    async def save(self, plan: "RacePlan") -> "RacePlan":
+        """
+        Persist a race plan (insert or update).
+
+        Returns the saved plan with any DB-generated fields populated.
+        """
+        ...
+
+    async def delete(self, plan_id: int, user_id: int) -> bool:
+        """
+        Delete a race plan.
+
+        Returns True if deleted, False if not found.
+        """
+        ...
+
+
 # Import types for type hints (avoid circular import at runtime)
 from datetime import date, datetime
 from typing import TYPE_CHECKING, Any
@@ -1048,6 +1107,7 @@ if TYPE_CHECKING:
         JournalEntryActivity,
         Notification,
         RaceCourse,
+        RacePlan,
         RecalculationJob,
         Record,
         RideEvent,

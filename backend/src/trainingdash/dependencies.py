@@ -32,6 +32,7 @@ from trainingdash.repositories.postgres.event_repo import PostgresEventRepo
 from trainingdash.repositories.postgres.geocoding_cache_repo import PostgresGeocodingCacheRepo
 from trainingdash.repositories.postgres.notification_repo import PostgresNotificationRepo
 from trainingdash.repositories.postgres.oauth_link_repo import PostgresOAuthLinkRepo
+from trainingdash.repositories.postgres.race_plan_repo import PostgresRacePlanRepo
 from trainingdash.repositories.postgres.recalculation_job_repo import (
     PostgresRecalculationJobRepo,
 )
@@ -51,6 +52,7 @@ from trainingdash.repositories.protocols import (
     GarminCredentialsRepo,
     NotificationRepo,
     OAuthLinkRepo,
+    RacePlanRepo,
     RecalculationJobRepo,
     RecordRepo,
     SavedFilterRepo,
@@ -135,6 +137,11 @@ async def get_saved_filter_repo(db: DbSession) -> SavedFilterRepo:
     return PostgresSavedFilterRepo(db)
 
 
+async def get_race_plan_repo(db: DbSession) -> RacePlanRepo:
+    """Create a RacePlanRepo bound to the current session."""
+    return PostgresRacePlanRepo(db)
+
+
 async def get_record_repo(db: DbSession) -> RecordRepo:
     """Create a RecordRepo bound to the current session."""
     return PostgresRecordRepo(db)
@@ -165,6 +172,7 @@ AuditLogRepoD = Annotated[AuditLogRepo, Depends(get_audit_log_repo)]
 EventRepoD = Annotated[EventRepo, Depends(get_event_repo)]
 RecalculationJobRepoD = Annotated[RecalculationJobRepo, Depends(get_recalculation_job_repo)]
 OAuthLinkRepoD = Annotated[OAuthLinkRepo, Depends(get_oauth_link_repo)]
+RacePlanRepoD = Annotated[RacePlanRepo, Depends(get_race_plan_repo)]
 ThresholdRepoD = Annotated[ThresholdRepo, Depends(get_threshold_repo)]
 SavedFilterRepoD = Annotated[SavedFilterRepo, Depends(get_saved_filter_repo)]
 RecordRepoD = Annotated[RecordRepo, Depends(get_record_repo)]

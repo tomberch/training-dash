@@ -674,3 +674,69 @@ class RaceCourse(Base):
 
     # Relationships
     user: Mapped["User"] = relationship("User", lazy="select")
+
+
+
+class RacePlan(Base):
+    """A generated race plan with power targets for each course segment.
+
+    Plans store the rider and bike parameters used at generation time,
+    along with optimization settings and results. Segment targets are
+    stored as JSONB for flexible retrieval.
+    """
+
+    __tablename__ = "race_plans"
+    __table_args__ = (
+        sa.CheckConstraint(
+            "optimization_method IN ('heuristic', 'optimized') OR optimization_method IS NULL",
+            name="valid_optimization_method",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    course_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("race_courses.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    bike_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("bikes.id", ondelete="SET NULL"), nullable=True
+    )
+
+    # Plan metadata
+    name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
+
+    # Rider parameters used
+    rider_weight_kg: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
+    ftp_watts: Mapped[int] = mapped_column(Integer, nullable=False)
+    cp_watts: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    w_prime_joules: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # Bike parameters used
+    bike_weight_kg: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
+    cda: Mapped[Decimal] = mapped_column(Numeric(4, 3), nullable=False)
+    crr: Mapped[Decimal] = mapped_column(Numeric(5, 4), nullable=False)
+
+    # Plan configuration
+    target_intensity: Mapped[Decimal | None] = mapped_column(Numeric(3, 2), nullable=True)  # e.g., 0.85 for 85% IF
+    optimization_method: Mapped[str | None] = mapped_column(String(20), nullable=True)  # heuristic, optimized
+
+    # Results
+    total_time_s: Mapped[float] = mapped_column(Float, nullable=False)
+    total_distance_m: Mapped[float] = mapped_column(Float, nullable=False)
+    avg_power_w: Mapped[float] = mapped_column(Float, nullable=False)
+    normalized_power_w: Mapped[float | None] = mapped_column(Float, nullable=True)
+    intensity_factor: Mapped[Decimal | None] = mapped_column(Numeric(3, 2), nullable=True)
+
+    # Segment targets (JSONB)
+    # [{segment_idx, power_w, time_s, speed_mps}, ...]
+    segment_targets: Mapped[list] = mapped_column(JSONB, nullable=False)
+
+    # W'bal prediction
+    wbal_min: Mapped[float | None] = mapped_column(Float, nullable=True)
+    wbal_min_distance_m: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Relationships
+    user: Mapped["User"] = relationship("User", lazy="select")
+    course: Mapped["RaceCourse"] = relationship("RaceCourse", lazy="select")
+    bike: Mapped["Bike | None"] = relationship("Bike", lazy="select")
