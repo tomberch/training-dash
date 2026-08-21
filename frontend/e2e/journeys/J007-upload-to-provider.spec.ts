@@ -146,7 +146,7 @@ test.describe.serial('J007: Upload to Provider Flow', () => {
     expect(download.suggestedFilename()).toMatch(/\.fit$/);
   });
 
-  test('upload option hidden when no credentials configured', async ({ page, request }) => {
+  test('upload option hidden when no credentials configured', async ({ page }) => {
     // This test checks that the Upload to Provider option is hidden when
     // no providers are connected. We need to ensure BOTH Xert and Garmin are disconnected.
     

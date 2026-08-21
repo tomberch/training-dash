@@ -299,11 +299,7 @@ test.describe('Settings - Provider Integrations', () => {
       const autoSyncLabel = page.getByText('Auto-sync from Garmin');
       
       if (await autoSyncLabel.isVisible().catch(() => false)) {
-        // Already connected - verify toggle is present
-        const syncToggle = page.locator('button[aria-pressed]').filter({ 
-          has: page.locator('..').filter({ hasText: 'Auto-sync from Garmin' }) 
-        });
-        // Just verify the auto-sync section exists
+        // Already connected - verify toggle is present (auto-sync section exists)
         await expect(autoSyncLabel).toBeVisible();
       } else {
         // Not connected - this is expected for a fresh user

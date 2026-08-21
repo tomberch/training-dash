@@ -1,7 +1,5 @@
-import { test, expect, Page } from '@playwright/test';
-import { createAndLoginUser, TestUser } from '../fixtures';
-import * as path from 'path';
-import * as fs from 'fs';
+import { test, expect } from '@playwright/test';
+import { createAndLoginUser } from '../fixtures';
 
 /**
  * E2E tests for Race Planner feature.
@@ -38,10 +36,8 @@ function generateTestGpx(): Buffer {
 }
 
 test.describe('J009: Race Planner', () => {
-  let user: TestUser;
-
   test.beforeEach(async ({ page }) => {
-    user = await createAndLoginUser(page, 'raceplanner');
+    await createAndLoginUser(page, 'raceplanner');
   });
 
   test('can navigate to Race Planner from sidebar', async ({ page }) => {
@@ -270,13 +266,12 @@ test.describe('J009: Race Planner', () => {
   test('can delete a course', async ({ page }) => {
     // Create a course via API
     const gpxContent = generateTestGpx();
-    const courseResponse = await page.request.post('/api/courses', {
+    await page.request.post('/api/courses', {
       multipart: {
         file: { name: 'delete-test.gpx', mimeType: 'application/gpx+xml', buffer: gpxContent },
         name: 'Course To Delete',
       },
     });
-    const course = await courseResponse.json();
 
     // Navigate to courses list
     await page.goto('/race-planner/courses');
