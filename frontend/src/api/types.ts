@@ -10,10 +10,10 @@ export interface PeakPower {
   is_pr: boolean;
 }
 
-export type ActivityType = "road" | "gravel" | "mtb" | "virtual" | "indoor" | "commute" | "ebike" | "other";
+export type ActivityType = "road" | "gravel" | "mtb" | "virtual" | "indoor" | "commute" | "other";
 
 /** All valid activity types as an array for iteration */
-export const ACTIVITY_TYPES: readonly ActivityType[] = ["road", "gravel", "mtb", "virtual", "indoor", "commute", "ebike", "other"] as const;
+export const ACTIVITY_TYPES: readonly ActivityType[] = ["road", "gravel", "mtb", "virtual", "indoor", "commute", "other"] as const;
 
 /** Activity type display labels */
 export const ACTIVITY_TYPE_LABELS: Record<ActivityType, string> = {
@@ -23,7 +23,6 @@ export const ACTIVITY_TYPE_LABELS: Record<ActivityType, string> = {
   virtual: "Virtual",
   indoor: "Indoor",
   commute: "Commute",
-  ebike: "E-bike",
   other: "Other",
 };
 

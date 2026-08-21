@@ -58,16 +58,16 @@ class TestDetectActivityType:
         """Unknown sub_sport defaults to road."""
         assert detect_activity_type("cycling", "unknown_type") == "road"
 
-    def test_ebike_detection(self):
-        """E-bike activity types map to ebike."""
-        # Sport field detection
-        assert detect_activity_type("e_biking", None) == "ebike"
-        assert detect_activity_type("e_biking", "road") == "ebike"
-        # Sub_sport field detection
-        assert detect_activity_type("cycling", "e_biking") == "ebike"
-        assert detect_activity_type("cycling", "ebike") == "ebike"
-        assert detect_activity_type("cycling", "e_bike") == "ebike"
-        assert detect_activity_type("cycling", "electric") == "ebike"
+    def test_ebike_sport_defaults_to_road(self):
+        """E-bike sport is treated as cycling and defaults to road.
+        
+        E-bike exclusion from analysis is handled via bike_type, not activity_type.
+        """
+        assert detect_activity_type("e_biking", None) == "road"
+        assert detect_activity_type("e_biking", "road") == "road"
+        # E-bike sub_sport also defaults to road (not a special activity type)
+        assert detect_activity_type("cycling", "e_biking") == "road"
+        assert detect_activity_type("cycling", "ebike") == "road"
 
     def test_non_cycling_sport_returns_other(self):
         """Non-cycling sports return other."""
@@ -107,10 +107,6 @@ class TestIsCalibrationEligible:
         assert is_calibration_eligible("virtual") is False
         assert is_calibration_eligible("indoor") is False
 
-    def test_ebike_not_eligible(self):
-        """E-bike types are not eligible for calibration."""
-        assert is_calibration_eligible("ebike") is False
-
     def test_other_not_eligible(self):
         """Other/unknown types are not eligible."""
         assert is_calibration_eligible("other") is False
@@ -129,8 +125,11 @@ class TestActivityTypeConstants:
     """Tests for activity type constants."""
 
     def test_all_types_defined(self):
-        """All expected activity types are in ACTIVITY_TYPES."""
-        expected = {"road", "gravel", "mtb", "virtual", "indoor", "commute", "ebike", "other"}
+        """All expected activity types are in ACTIVITY_TYPES.
+        
+        Note: ebike is NOT an activity type. E-bike exclusion is via bike_type.
+        """
+        expected = {"road", "gravel", "mtb", "virtual", "indoor", "commute", "other"}
         assert expected == ACTIVITY_TYPES
 
     def test_calibration_eligible_subset(self):
@@ -154,7 +153,6 @@ class TestValidateActivityType:
         assert validate_activity_type("virtual") == "virtual"
         assert validate_activity_type("indoor") == "indoor"
         assert validate_activity_type("commute") == "commute"
-        assert validate_activity_type("ebike") == "ebike"
         assert validate_activity_type("other") == "other"
 
     def test_empty_string_returns_none(self):
@@ -169,3 +167,5 @@ class TestValidateActivityType:
             validate_activity_type("bike")
         with pytest.raises(ValueError, match="Invalid activity_type"):
             validate_activity_type("ROAD")  # Case-sensitive
+        with pytest.raises(ValueError, match="Invalid activity_type"):
+            validate_activity_type("ebike")  # ebike is a bike type, not activity type

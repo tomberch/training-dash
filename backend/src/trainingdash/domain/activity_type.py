@@ -1,15 +1,19 @@
 """Activity type detection from FIT file sport/sub_sport fields.
 
-Supports: road, gravel, mtb, virtual, indoor, commute, ebike, other.
+Supports: road, gravel, mtb, virtual, indoor, commute, other.
 
 Used for:
 - Filtering activity list by type
-- Excluding indoor/virtual/ebike from CdA/Crr calibration
+- Excluding indoor/virtual from CdA/Crr calibration
 - Analytics segmentation
+
+Note: E-bike is a bike type, not an activity type. Activities ridden on an
+e-bike are excluded from race planner input via the bike_type check, not
+activity_type.
 """
 
 # Valid activity types
-ACTIVITY_TYPES = frozenset({"road", "gravel", "mtb", "virtual", "indoor", "commute", "ebike", "other"})
+ACTIVITY_TYPES = frozenset({"road", "gravel", "mtb", "virtual", "indoor", "commute", "other"})
 
 # Types eligible for CdA/Crr calibration (outdoor rides only)
 CALIBRATION_ELIGIBLE_TYPES = frozenset({"road", "gravel", "mtb", "commute"})
@@ -23,24 +27,23 @@ def detect_activity_type(sport: str | None, sub_sport: str | None) -> str:
         sub_sport: FIT sub_sport field (e.g., "virtual_activity", "indoor_cycling")
 
     Returns:
-        Activity type string: road, gravel, mtb, virtual, indoor, commute, ebike, or other.
+        Activity type string: road, gravel, mtb, virtual, indoor, commute, or other.
         Defaults to "road" for cycling activities without specific sub_sport.
 
     Note:
         The garmin-fit-sdk returns these as lowercase strings when using
         convert_types_to_strings=True.
+
+        E-bike activities (sport="e_biking") are classified as "road" by default.
+        E-bike exclusion from analysis is handled via bike_type, not activity_type.
     """
     # Normalize inputs
     sport = (sport or "").lower().strip()
     sub_sport = (sub_sport or "").lower().strip()
 
-    # Non-cycling activities (but e_biking is cycling-related)
+    # Non-cycling activities (e_biking is cycling-related, treat as cycling)
     if sport and sport not in ("cycling", "e_biking"):
         return "other"
-
-    # E-bike detection (check sport first, then sub_sport)
-    if sport == "e_biking" or sub_sport in ("e_biking", "ebike", "e_bike", "electric"):
-        return "ebike"
 
     # Virtual/indoor detection (most specific, check first)
     if sub_sport in ("virtual_activity", "virtual"):
