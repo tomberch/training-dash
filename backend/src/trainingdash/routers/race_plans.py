@@ -335,16 +335,43 @@ async def regenerate_plan(
 
     # Build new request from existing plan + updates
     updates = updates or PlanUpdateSchema()
+
+    # Merge existing values with updates (updates take precedence if not None)
+    bike_id = updates.bike_id if updates.bike_id is not None else existing_plan.bike_id
+    weight = (
+        updates.rider_weight_kg
+        if updates.rider_weight_kg is not None
+        else float(existing_plan.rider_weight_kg)
+    )
+    ftp = updates.ftp_watts if updates.ftp_watts is not None else existing_plan.ftp_watts
+    cp = updates.cp_watts if updates.cp_watts is not None else existing_plan.cp_watts
+    w_prime = (
+        updates.w_prime_joules
+        if updates.w_prime_joules is not None
+        else existing_plan.w_prime_joules
+    )
+    intensity = (
+        updates.target_intensity
+        if updates.target_intensity is not None
+        else (float(existing_plan.target_intensity) if existing_plan.target_intensity else 0.85)
+    )
+    use_opt = (
+        updates.use_optimizer
+        if updates.use_optimizer is not None
+        else (existing_plan.optimization_method == "optimized")
+    )
+    name = updates.name if updates.name is not None else existing_plan.name
+
     new_request = GeneratePlanRequest(
         course_id=existing_plan.course_id,
-        bike_id=updates.bike_id if updates.bike_id is not None else existing_plan.bike_id,
-        rider_weight_kg=updates.rider_weight_kg if updates.rider_weight_kg is not None else float(existing_plan.rider_weight_kg),
-        ftp_watts=updates.ftp_watts if updates.ftp_watts is not None else existing_plan.ftp_watts,
-        cp_watts=updates.cp_watts if updates.cp_watts is not None else existing_plan.cp_watts,
-        w_prime_joules=updates.w_prime_joules if updates.w_prime_joules is not None else existing_plan.w_prime_joules,
-        target_intensity=updates.target_intensity if updates.target_intensity is not None else float(existing_plan.target_intensity) if existing_plan.target_intensity else 0.85,
-        use_optimizer=updates.use_optimizer if updates.use_optimizer is not None else (existing_plan.optimization_method == "optimized"),
-        name=updates.name if updates.name is not None else existing_plan.name,
+        bike_id=bike_id,
+        rider_weight_kg=weight,
+        ftp_watts=ftp,
+        cp_watts=cp,
+        w_prime_joules=w_prime,
+        target_intensity=intensity,
+        use_optimizer=use_opt,
+        name=name,
     )
 
     # Generate new plan

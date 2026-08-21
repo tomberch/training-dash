@@ -474,16 +474,128 @@ class TestPacingConsistency:
         assert result.pacing_consistency < 80
 
 
+class TestActivityLengthVariations:
+    """Tests for activities shorter or longer than the course."""
+
+    @pytest.mark.asyncio
+    async def test_activity_shorter_than_course(
+        self,
+        use_case: CompareExecution,
+        sample_plan: RacePlan,
+        sample_course: RaceCourse,
+        activity_repo: FakeActivityRepo,
+        record_repo: FakeRecordRepo,
+    ):
+        """Handles activity that ends before completing the course."""
+        # Create activity that only covers 6km of a 10km course
+        short_activity = Activity(
+            id=uuid4(),
+            user_id=1,
+            source="test",
+            source_ref="test-short",
+            started_at=datetime.now(),
+            total_distance_m=6000,  # Only 6km
+            moving_time_s=1000,
+            elapsed_time_s=1050,
+            elevation_gain_m=150,
+            avg_speed_mps=6.0,
+            avg_power_w=210,
+        )
+        activity_repo._activities[(short_activity.user_id, short_activity.id)] = short_activity
+
+        # Create records only for first 3 segments (0-6km)
+        create_records_for_activity(
+            record_repo,
+            short_activity.id,
+            short_activity.started_at,
+            [
+                (0, 2000, 200),
+                (2000, 4000, 240),
+                (4000, 6000, 180),
+            ],
+        )
+
+        result = await use_case.execute(
+            user_id=1,
+            plan_id=sample_plan.id,
+            activity_id=short_activity.id,
+        )
+
+        # Should still return 5 segment comparisons (plan has 5 segments)
+        assert len(result.segment_comparisons) == 5
+        # First 3 should have actual data
+        assert result.segment_comparisons[0].actual_power_w is not None
+        assert result.segment_comparisons[1].actual_power_w is not None
+        assert result.segment_comparisons[2].actual_power_w is not None
+        # Last 2 should have None (no records for those segments)
+        assert result.segment_comparisons[3].actual_power_w is None
+        assert result.segment_comparisons[4].actual_power_w is None
+
+    @pytest.mark.asyncio
+    async def test_activity_longer_than_course(
+        self,
+        use_case: CompareExecution,
+        sample_plan: RacePlan,
+        sample_course: RaceCourse,
+        activity_repo: FakeActivityRepo,
+        record_repo: FakeRecordRepo,
+    ):
+        """Handles activity that continues beyond the course end."""
+        # Create activity that covers 12km of a 10km course
+        long_activity = Activity(
+            id=uuid4(),
+            user_id=1,
+            source="test",
+            source_ref="test-long",
+            started_at=datetime.now(),
+            total_distance_m=12000,  # 12km, 2km beyond course
+            moving_time_s=2200,
+            elapsed_time_s=2300,
+            elevation_gain_m=250,
+            avg_speed_mps=5.5,
+            avg_power_w=205,
+        )
+        activity_repo._activities[(long_activity.user_id, long_activity.id)] = long_activity
+
+        # Create records for all 5 segments plus extra beyond course
+        create_records_for_activity(
+            record_repo,
+            long_activity.id,
+            long_activity.started_at,
+            [
+                (0, 2000, 200),
+                (2000, 4000, 240),
+                (4000, 6000, 180),
+                (6000, 8000, 220),
+                (8000, 10000, 200),
+                (10000, 12000, 190),  # Beyond course end
+            ],
+        )
+
+        result = await use_case.execute(
+            user_id=1,
+            plan_id=sample_plan.id,
+            activity_id=long_activity.id,
+        )
+
+        # Should only compare the 5 course segments
+        assert len(result.segment_comparisons) == 5
+        # All segments should have data
+        for comp in result.segment_comparisons:
+            assert comp.actual_power_w is not None
+        # Extra records beyond course should be ignored (not cause errors)
+
+
 class TestGenerateInsights:
     """Tests for insight generation."""
 
     def test_started_too_fast_insight(self):
         """Detects starting too fast pattern."""
         comparisons = [
-            SegmentComparison(0, 200, 240, 40, 20.0, 300, 280, -20, 6.67, 7.1, 2000, 0.0),
-            SegmentComparison(1, 240, 280, 40, 16.7, 400, 370, -30, 5.0, 5.4, 2000, 5.0),
-            SegmentComparison(2, 180, 180, 0, 0.0, 250, 250, 0, 8.0, 8.0, 2000, -5.0),
-            SegmentComparison(3, 220, 220, 0, 0.0, 350, 350, 0, 5.71, 5.71, 2000, 3.0),
+            SegmentComparison(0, 200, 240, 40, 20.0, 300, 280, -20, 6.67, 7.1, 0.43, 2000, 0.0),
+            SegmentComparison(1, 240, 280, 40, 16.7, 400, 370, -30, 5.0, 5.4, 0.4, 2000, 5.0),
+            SegmentComparison(2, 180, 180, 0, 0.0, 250, 250, 0, 8.0, 8.0, 0.0, 2000, -5.0),
+            SegmentComparison(3, 220, 220, 0, 0.0, 350, 350, 0, 5.71, 5.71, 0.0, 2000, 3.0),
         ]
         segment_targets = [
             {"segment_idx": 0, "power_w": 200},
@@ -505,10 +617,10 @@ class TestGenerateInsights:
     def test_faded_insight(self):
         """Detects fading at end pattern."""
         comparisons = [
-            SegmentComparison(0, 200, 200, 0, 0.0, 300, 300, 0, 6.67, 6.67, 2000, 0.0),
-            SegmentComparison(1, 240, 240, 0, 0.0, 400, 400, 0, 5.0, 5.0, 2000, 5.0),
-            SegmentComparison(2, 180, 180, 0, 0.0, 250, 250, 0, 8.0, 8.0, 2000, -5.0),
-            SegmentComparison(3, 220, 176, -44, -20.0, 350, 400, 50, 5.71, 5.0, 2000, 3.0),
+            SegmentComparison(0, 200, 200, 0, 0.0, 300, 300, 0, 6.67, 6.67, 0.0, 2000, 0.0),
+            SegmentComparison(1, 240, 240, 0, 0.0, 400, 400, 0, 5.0, 5.0, 0.0, 2000, 5.0),
+            SegmentComparison(2, 180, 180, 0, 0.0, 250, 250, 0, 8.0, 8.0, 0.0, 2000, -5.0),
+            SegmentComparison(3, 220, 176, -44, -20.0, 350, 400, 50, 5.71, 5.0, -0.71, 2000, 3.0),
         ]
         segment_targets = [{"segment_idx": i, "power_w": [200, 240, 180, 220][i]} for i in range(4)]
         course_segments = [{"avg_grade_pct": g} for g in [0, 5, -5, 3]]
@@ -520,9 +632,9 @@ class TestGenerateInsights:
     def test_good_climb_pacing_insight(self):
         """Detects good climb pacing."""
         comparisons = [
-            SegmentComparison(0, 200, 200, 0, 0.0, 300, 300, 0, 6.67, 6.67, 2000, 0.0),
-            SegmentComparison(1, 240, 242, 2, 0.8, 400, 398, -2, 5.0, 5.0, 2000, 6.0),  # Climb, on target
-            SegmentComparison(2, 260, 258, -2, -0.8, 500, 502, 2, 4.0, 4.0, 2000, 8.0),  # Climb, on target
+            SegmentComparison(0, 200, 200, 0, 0.0, 300, 300, 0, 6.67, 6.67, 0.0, 2000, 0.0),
+            SegmentComparison(1, 240, 242, 2, 0.8, 400, 398, -2, 5.0, 5.0, 0.0, 2000, 6.0),
+            SegmentComparison(2, 260, 258, -2, -0.8, 500, 502, 2, 4.0, 4.0, 0.0, 2000, 8.0),
         ]
         segment_targets = [{"segment_idx": i, "power_w": [200, 240, 260][i]} for i in range(3)]
         course_segments = [{"avg_grade_pct": g} for g in [0, 6, 8]]
@@ -541,8 +653,8 @@ class TestGenerateInsights:
     def test_no_power_returns_message(self):
         """Comparisons with no power data returns appropriate message."""
         comparisons = [
-            SegmentComparison(0, 200, None, None, None, 300, 300, 0, 6.67, 6.67, 2000, 0.0),
-            SegmentComparison(1, 240, None, None, None, 400, 400, 0, 5.0, 5.0, 2000, 5.0),
+            SegmentComparison(0, 200, None, None, None, 300, 300, 0, 6.67, 6.67, None, 2000, 0.0),
+            SegmentComparison(1, 240, None, None, None, 400, 400, 0, 5.0, 5.0, None, 2000, 5.0),
         ]
 
         insights = generate_insights(comparisons, [], [])
@@ -552,8 +664,8 @@ class TestGenerateInsights:
     def test_time_comparison_insight(self):
         """Generates time comparison insight."""
         comparisons = [
-            SegmentComparison(0, 200, 210, 10, 5.0, 300, 280, -20, 6.67, 7.1, 2000, 0.0),
-            SegmentComparison(1, 240, 250, 10, 4.2, 400, 370, -30, 5.0, 5.4, 2000, 5.0),
+            SegmentComparison(0, 200, 210, 10, 5.0, 300, 280, -20, 6.67, 7.1, 0.43, 2000, 0.0),
+            SegmentComparison(1, 240, 250, 10, 4.2, 400, 370, -30, 5.0, 5.4, 0.4, 2000, 5.0),
         ]
         segment_targets = [{"segment_idx": 0, "power_w": 200}, {"segment_idx": 1, "power_w": 240}]
         course_segments = [{"avg_grade_pct": 0}, {"avg_grade_pct": 5}]

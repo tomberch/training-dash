@@ -31,6 +31,7 @@ class SegmentComparison:
     time_delta_s: float | None
     planned_speed_mps: float
     actual_speed_mps: float | None
+    speed_delta_mps: float | None
     distance_m: float
     grade_pct: float
 
@@ -283,6 +284,7 @@ class CompareExecution:
                     time_delta_s=time_delta,
                     planned_speed_mps=planned_speed,
                     actual_speed_mps=actual_speed,
+                    speed_delta_mps=(actual_speed - planned_speed) if actual_speed is not None else None,
                     distance_m=distance_m,
                     grade_pct=grade_pct,
                 )
