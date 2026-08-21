@@ -9,6 +9,7 @@
  * - Quick preview after generation
  */
 
+import type { JSX } from "react";
 import { useState, useEffect, useContext } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -55,7 +56,7 @@ interface CourseSelectorProps {
   loading: boolean;
 }
 
-function CourseSelector({ courses, selectedCourseId, onSelect, loading }: CourseSelectorProps) {
+function CourseSelector({ courses, selectedCourseId, onSelect, loading }: CourseSelectorProps): JSX.Element {
   if (loading) {
     return <Skeleton className="h-10 w-full" />;
   }
@@ -98,7 +99,7 @@ interface BikeSelectorProps {
   loading: boolean;
 }
 
-function BikeSelector({ bikes, selectedBikeId, onSelect, loading }: BikeSelectorProps) {
+function BikeSelector({ bikes, selectedBikeId, onSelect, loading }: BikeSelectorProps): JSX.Element {
   if (loading) {
     return <Skeleton className="h-10 w-full" />;
   }
@@ -134,7 +135,7 @@ function BikeSelector({ bikes, selectedBikeId, onSelect, loading }: BikeSelector
   );
 }
 
-function BikeDetails({ bike }: { bike: Bike | undefined }) {
+function BikeDetails({ bike }: { bike: Bike | undefined }): JSX.Element | null {
   if (!bike) return null;
 
   return (
@@ -156,14 +157,31 @@ interface IntensitySliderProps {
   value: number;
   onChange: (value: number) => void;
   ftp: number;
+  courseDistanceM?: number;
 }
 
-function IntensitySlider({ value, onChange, ftp }: IntensitySliderProps) {
+function IntensitySlider({ value, onChange, ftp, courseDistanceM }: IntensitySliderProps): JSX.Element {
   const avgPower = Math.round(ftp * value);
   const intensityLabel = value <= 0.75 ? "Recovery" :
     value <= 0.85 ? "Endurance" :
     value <= 0.95 ? "Tempo" :
     value <= 1.05 ? "Threshold" : "VO2max";
+
+  // Estimate time based on power (simple model: ~30 km/h at 200W on flat)
+  // Speed roughly proportional to cube root of power for aerodynamic drag
+  const estimatedSpeedKmh = 30 * Math.pow(avgPower / 200, 0.33);
+  const estimatedTimeMin = courseDistanceM
+    ? Math.round((courseDistanceM / 1000) / estimatedSpeedKmh * 60)
+    : null;
+
+  const formatEstimatedTime = (minutes: number): string => {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    if (hours > 0) {
+      return `${hours}h ${mins}m`;
+    }
+    return `${mins}m`;
+  };
 
   return (
     <div className="space-y-3">
@@ -186,6 +204,11 @@ function IntensitySlider({ value, onChange, ftp }: IntensitySliderProps) {
         <span>100%</span>
         <span>110%</span>
       </div>
+      {estimatedTimeMin && (
+        <div className="text-sm text-muted-foreground text-center">
+          Estimated time: ~{formatEstimatedTime(estimatedTimeMin)}
+        </div>
+      )}
     </div>
   );
 }
@@ -200,7 +223,7 @@ interface QuickPreviewProps {
   onGenerateAnother: () => void;
 }
 
-function QuickPreview({ result, onViewPlan, onGenerateAnother }: QuickPreviewProps) {
+function QuickPreview({ result, onViewPlan, onGenerateAnother }: QuickPreviewProps): JSX.Element {
   const improvementText = result.comparison.improvement_vs_constant_pct
     ? `${result.comparison.improvement_vs_constant_pct.toFixed(1)}% faster than constant power`
     : null;
@@ -259,7 +282,7 @@ function QuickPreview({ result, onViewPlan, onGenerateAnother }: QuickPreviewPro
 // Main Component
 // =============================================================================
 
-export function GeneratePlan() {
+export function GeneratePlan(): JSX.Element {
   const { courseId: courseIdParam } = useParams<{ courseId?: string }>();
   const navigate = useNavigate();
   const userContext = useContext(UserContext);
@@ -365,8 +388,9 @@ export function GeneratePlan() {
 
     if (selectedBikeId) request.bike_id = selectedBikeId;
     if (weight) request.rider_weight_kg = parseFloat(weight);
-    if (cp) request.cp_watts = parseInt(cp);
-    if (wPrime) request.w_prime_joules = parseInt(wPrime);
+    // Apply defaults for CP and W' when not specified
+    request.cp_watts = cp ? parseInt(cp) : Math.round(ftpValue * 0.95);
+    request.w_prime_joules = wPrime ? parseInt(wPrime) : 20000;
     if (planName.trim()) request.name = planName.trim();
 
     try {
@@ -554,6 +578,7 @@ export function GeneratePlan() {
                 value={targetIntensity}
                 onChange={setTargetIntensity}
                 ftp={parseInt(ftp) || 250}
+                courseDistanceM={selectedCourse?.distance_m}
               />
             </div>
 

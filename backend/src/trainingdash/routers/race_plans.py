@@ -20,6 +20,7 @@ from trainingdash.use_cases.generate_race_plan import (
     GeneratePlanRequest,
     GenerateRacePlan,
 )
+from trainingdash.use_cases.get_matching_activities import GetMatchingActivities
 
 router = APIRouter(prefix="/api/race-plans", tags=["race-plans"])
 
@@ -547,47 +548,26 @@ async def get_matching_activities(
 
     Returns activities that:
     - Have power data
-    - Match approximate distance of the course
+    - Match approximate distance of the course (within 20%)
     """
-    # Get the plan
-    plan = await plan_repo.get_by_id(plan_id, current_user.id)
-    if plan is None:
+    use_case = GetMatchingActivities(plan_repo, activity_repo, course_repo)
+
+    try:
+        results = await use_case.execute(current_user.id, plan_id)
+    except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Race plan not found",
+            detail=str(e),
         )
-
-    # Get the course for distance reference
-    course = await course_repo.get_by_id(plan.course_id, current_user.id)
-    if course is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Course not found",
-        )
-
-    # List recent activities with power data
-    activities = await activity_repo.list_for_user(current_user.id, limit=50)
-
-    # Filter to activities with power data and similar distance (within 20%)
-    course_distance = course.distance_m
-    distance_tolerance = course_distance * 0.2
-
-    matching_activities = [
-        a for a in activities
-        if a.avg_power_w is not None
-        and a.avg_power_w > 0
-        and a.total_distance_m is not None
-        and abs(a.total_distance_m - course_distance) <= distance_tolerance
-    ]
 
     return [
         ActivityListItem(
             id=a.id,
             name=a.title,
             started_at=a.started_at,
-            total_distance_m=a.total_distance_m or 0,
-            moving_time_s=a.moving_time_s or 0,
+            total_distance_m=a.total_distance_m,
+            moving_time_s=a.moving_time_s,
             avg_power_w=a.avg_power_w,
         )
-        for a in matching_activities[:20]  # Limit to 20
+        for a in results
     ]
