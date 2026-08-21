@@ -23,18 +23,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { fetchRacePlans, deleteRacePlan } from "@/api/race-plans";
 import type { RacePlanListItem } from "@/api/types";
-
-// =============================================================================
-// Helper Functions
-// =============================================================================
-
-function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
+import { formatDateFull } from "./utils";
 
 // =============================================================================
 // Sort Types
@@ -43,6 +32,22 @@ function formatDate(dateString: string): string {
 type SortField = "name" | "time" | "power" | "created";
 type SortDirection = "asc" | "desc";
 
+// =============================================================================
+// Sort Indicator Component
+// =============================================================================
+
+function SortIndicator({
+  field,
+  sortField,
+  sortDirection,
+}: {
+  field: SortField;
+  sortField: SortField;
+  sortDirection: SortDirection;
+}) {
+  if (sortField !== field) return null;
+  return <span className="ml-1">{sortDirection === "asc" ? "↑" : "↓"}</span>;
+}
 
 // =============================================================================
 // Main Component
@@ -109,11 +114,6 @@ export function PlanList() {
     }
   };
 
-  const SortIndicator = ({ field }: { field: SortField }) => {
-    if (sortField !== field) return null;
-    return <span className="ml-1">{sortDirection === "asc" ? "↑" : "↓"}</span>;
-  };
-
 
   if (isLoading) {
     return (
@@ -177,19 +177,19 @@ export function PlanList() {
                     className="text-left py-3 px-4 font-medium text-muted-foreground cursor-pointer hover:text-foreground"
                     onClick={() => handleSort("name")}
                   >
-                    Name <SortIndicator field="name" />
+                    Name <SortIndicator field="name" sortField={sortField} sortDirection={sortDirection} />
                   </th>
                   <th
                     className="text-right py-3 px-4 font-medium text-muted-foreground cursor-pointer hover:text-foreground"
                     onClick={() => handleSort("time")}
                   >
-                    Time <SortIndicator field="time" />
+                    Time <SortIndicator field="time" sortField={sortField} sortDirection={sortDirection} />
                   </th>
                   <th
                     className="text-right py-3 px-4 font-medium text-muted-foreground cursor-pointer hover:text-foreground"
                     onClick={() => handleSort("power")}
                   >
-                    Avg Power <SortIndicator field="power" />
+                    Avg Power <SortIndicator field="power" sortField={sortField} sortDirection={sortDirection} />
                   </th>
                   <th className="text-left py-3 px-4 font-medium text-muted-foreground">
                     Method
@@ -198,7 +198,7 @@ export function PlanList() {
                     className="text-left py-3 px-4 font-medium text-muted-foreground cursor-pointer hover:text-foreground"
                     onClick={() => handleSort("created")}
                   >
-                    Created <SortIndicator field="created" />
+                    Created <SortIndicator field="created" sortField={sortField} sortDirection={sortDirection} />
                   </th>
                   <th className="text-right py-3 px-4 font-medium text-muted-foreground">
                     Actions
@@ -229,7 +229,7 @@ export function PlanList() {
                       {plan.optimization_method || "heuristic"}
                     </td>
                     <td className="py-3 px-4 text-muted-foreground">
-                      {formatDate(plan.created_at)}
+                      {formatDateFull(plan.created_at)}
                     </td>
                     <td className="py-3 px-4 text-right">
                       <div className="flex items-center justify-end gap-2">

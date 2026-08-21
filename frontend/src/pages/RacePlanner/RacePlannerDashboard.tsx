@@ -14,28 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchCourses, fetchRacePlans } from "@/api/race-plans";
 import type { CourseListItem, RacePlanListItem } from "@/api/types";
-
-// =============================================================================
-// Helper Functions
-// =============================================================================
-
-function formatDistance(meters: number): string {
-  if (meters >= 1000) {
-    return `${(meters / 1000).toFixed(1)} km`;
-  }
-  return `${Math.round(meters)} m`;
-}
-
-function formatElevation(meters: number): string {
-  return `${Math.round(meters)} m`;
-}
-
-function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
-}
+import { formatDistance, formatElevation, formatDateShort } from "./utils";
 
 
 // =============================================================================
@@ -94,7 +73,7 @@ function RecentCourseCard({ course }: { course: CourseListItem }) {
           </div>
         </div>
       </div>
-      <span className="text-xs text-muted-foreground">{formatDate(course.created_at)}</span>
+      <span className="text-xs text-muted-foreground">{formatDateShort(course.created_at)}</span>
     </Link>
   );
 }
@@ -123,7 +102,7 @@ function RecentPlanCard({ plan }: { plan: RacePlanListItem }) {
           </div>
         </div>
       </div>
-      <span className="text-xs text-muted-foreground">{formatDate(plan.created_at)}</span>
+      <span className="text-xs text-muted-foreground">{formatDateShort(plan.created_at)}</span>
     </Link>
   );
 }

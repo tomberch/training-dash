@@ -23,29 +23,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { fetchCourses, deleteCourse } from "@/api/race-plans";
 import type { CourseListItem } from "@/api/types";
-
-// =============================================================================
-// Helper Functions
-// =============================================================================
-
-function formatDistance(meters: number): string {
-  if (meters >= 1000) {
-    return `${(meters / 1000).toFixed(1)} km`;
-  }
-  return `${Math.round(meters)} m`;
-}
-
-function formatElevation(meters: number): string {
-  return `${Math.round(meters)} m`;
-}
-
-function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
+import { formatDistance, formatElevation, formatDateFull } from "./utils";
 
 
 // =============================================================================
@@ -54,6 +32,23 @@ function formatDate(dateString: string): string {
 
 type SortField = "name" | "distance" | "elevation" | "created";
 type SortDirection = "asc" | "desc";
+
+// =============================================================================
+// Sort Indicator Component
+// =============================================================================
+
+function SortIndicator({
+  field,
+  sortField,
+  sortDirection,
+}: {
+  field: SortField;
+  sortField: SortField;
+  sortDirection: SortDirection;
+}) {
+  if (sortField !== field) return null;
+  return <span className="ml-1">{sortDirection === "asc" ? "↑" : "↓"}</span>;
+}
 
 // =============================================================================
 // Main Component
@@ -120,11 +115,6 @@ export function CourseList() {
     }
   };
 
-  const SortIndicator = ({ field }: { field: SortField }) => {
-    if (sortField !== field) return null;
-    return <span className="ml-1">{sortDirection === "asc" ? "↑" : "↓"}</span>;
-  };
-
 
   if (isLoading) {
     return (
@@ -188,19 +178,19 @@ export function CourseList() {
                     className="text-left py-3 px-4 font-medium text-muted-foreground cursor-pointer hover:text-foreground"
                     onClick={() => handleSort("name")}
                   >
-                    Name <SortIndicator field="name" />
+                    Name <SortIndicator field="name" sortField={sortField} sortDirection={sortDirection} />
                   </th>
                   <th
                     className="text-right py-3 px-4 font-medium text-muted-foreground cursor-pointer hover:text-foreground"
                     onClick={() => handleSort("distance")}
                   >
-                    Distance <SortIndicator field="distance" />
+                    Distance <SortIndicator field="distance" sortField={sortField} sortDirection={sortDirection} />
                   </th>
                   <th
                     className="text-right py-3 px-4 font-medium text-muted-foreground cursor-pointer hover:text-foreground"
                     onClick={() => handleSort("elevation")}
                   >
-                    Elevation <SortIndicator field="elevation" />
+                    Elevation <SortIndicator field="elevation" sortField={sortField} sortDirection={sortDirection} />
                   </th>
                   <th className="text-left py-3 px-4 font-medium text-muted-foreground">
                     Source
@@ -209,7 +199,7 @@ export function CourseList() {
                     className="text-left py-3 px-4 font-medium text-muted-foreground cursor-pointer hover:text-foreground"
                     onClick={() => handleSort("created")}
                   >
-                    Created <SortIndicator field="created" />
+                    Created <SortIndicator field="created" sortField={sortField} sortDirection={sortDirection} />
                   </th>
                   <th className="text-right py-3 px-4 font-medium text-muted-foreground">
                     Actions
@@ -240,7 +230,7 @@ export function CourseList() {
                       {course.source_type}
                     </td>
                     <td className="py-3 px-4 text-muted-foreground">
-                      {formatDate(course.created_at)}
+                      {formatDateFull(course.created_at)}
                     </td>
                     <td className="py-3 px-4 text-right">
                       <div className="flex items-center justify-end gap-2">
