@@ -85,14 +85,14 @@ class TestParseGPX:
             assert point.elevation_m is None
 
     def test_parse_gpx_multiple_tracks(self):
-        """Parse a GPX file with multiple tracks (should merge)."""
+        """Parse a GPX file with multiple tracks (uses first track only)."""
         gpx_path = FIXTURES_DIR / "multiple_tracks.gpx"
         gpx_content = gpx_path.read_text()
 
         result = parse_gpx(gpx_content)
 
-        # Should have points from both tracks
-        assert len(result.points) == 4
+        # Should only have points from first track
+        assert len(result.points) == 2
         assert result.has_elevation is True
         # Name comes from metadata
         assert result.name == "Multi-Track Course"
@@ -136,6 +136,24 @@ class TestParseGPX:
 
 class TestParseFITCourse:
     """Tests for FIT course parsing."""
+
+    def test_parse_fit_activity_as_course(self):
+        """Parse a FIT activity file as a course."""
+        fit_path = FIXTURES_DIR / "activity_as_course.fit"
+        fit_content = fit_path.read_bytes()
+
+        result = parse_fit_course(fit_content)
+
+        # Should have extracted points from record_mesgs
+        assert len(result.points) > 0
+        assert result.total_distance_m > 0
+        # Activity files typically have elevation
+        assert result.has_elevation is True
+
+        # Check first point has valid coordinates
+        first_point = result.points[0]
+        assert -90 <= first_point.latitude <= 90
+        assert -180 <= first_point.longitude <= 180
 
     def test_parse_fit_invalid_content(self):
         """Invalid FIT content should raise FITParseError."""

@@ -83,7 +83,7 @@ def parse_gpx(gpx_content: str | bytes) -> ParsedCourse:
         - Extracts track points with lat/lon/elevation
         - Calculates cumulative distance using Haversine
         - Handles missing elevation gracefully
-        - If multiple tracks exist, merges all segments
+        - If multiple tracks exist, uses only the first track
     """
     if isinstance(gpx_content, bytes):
         gpx_content = gpx_content.decode("utf-8")
@@ -93,43 +93,46 @@ def parse_gpx(gpx_content: str | bytes) -> ParsedCourse:
     except Exception as e:
         raise GPXParseError(f"Failed to parse GPX: {e}") from e
 
-    # Extract name from GPX metadata or first track
-    name = gpx.name
-    if not name and gpx.tracks:
-        name = gpx.tracks[0].name
+    if not gpx.tracks:
+        raise GPXParseError("GPX file contains no tracks")
 
-    # Collect all track points from all tracks and segments
+    # Use only the first track (multiple tracks may be non-contiguous)
+    track = gpx.tracks[0]
+
+    # Extract name from GPX metadata or track
+    name = gpx.name or track.name
+
+    # Collect all track points from all segments in the first track
     points: list[CoursePoint] = []
     cumulative_distance = 0.0
     has_elevation = False
     prev_lat: float | None = None
     prev_lon: float | None = None
 
-    for track in gpx.tracks:
-        for segment in track.segments:
-            for point in segment.points:
-                # Calculate distance from previous point
-                if prev_lat is not None and prev_lon is not None:
-                    segment_distance = _haversine_distance(
-                        prev_lat, prev_lon, point.latitude, point.longitude
-                    )
-                    cumulative_distance += segment_distance
-
-                elevation = point.elevation
-                if elevation is not None:
-                    has_elevation = True
-
-                points.append(
-                    CoursePoint(
-                        latitude=point.latitude,
-                        longitude=point.longitude,
-                        elevation_m=elevation,
-                        distance_m=cumulative_distance,
-                    )
+    for segment in track.segments:
+        for point in segment.points:
+            # Calculate distance from previous point
+            if prev_lat is not None and prev_lon is not None:
+                segment_distance = _haversine_distance(
+                    prev_lat, prev_lon, point.latitude, point.longitude
                 )
+                cumulative_distance += segment_distance
 
-                prev_lat = point.latitude
-                prev_lon = point.longitude
+            elevation = point.elevation
+            if elevation is not None:
+                has_elevation = True
+
+            points.append(
+                CoursePoint(
+                    latitude=point.latitude,
+                    longitude=point.longitude,
+                    elevation_m=elevation,
+                    distance_m=cumulative_distance,
+                )
+            )
+
+            prev_lat = point.latitude
+            prev_lon = point.longitude
 
     if not points:
         raise GPXParseError("GPX file contains no track points")
