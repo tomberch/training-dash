@@ -4,3 +4,4 @@
 
 export { PlanDetail } from "./PlanDetail";
 export { GeneratePlan } from "./GeneratePlan";
+export { PlanComparison } from "./PlanComparison";

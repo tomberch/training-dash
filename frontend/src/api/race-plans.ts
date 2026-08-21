@@ -9,6 +9,8 @@ import type {
   GeneratePlanRequest,
   CourseDetail,
   CourseListItem,
+  ExecutionComparison,
+  MatchingActivity,
 } from "./types";
 
 /**
@@ -76,4 +78,30 @@ export async function fetchCourse(courseId: number): Promise<CourseDetail> {
  */
 export async function fetchCourses(): Promise<CourseListItem[]> {
   return apiGet<CourseListItem[]>("/courses");
+}
+
+
+
+/**
+ * Compare an executed activity against a race plan.
+ */
+export async function compareExecution(
+  planId: number,
+  activityId: string
+): Promise<ExecutionComparison> {
+  return apiPost<ExecutionComparison>(
+    `/race-plans/${planId}/compare`,
+    { activity_id: activityId },
+    "Failed to compare execution"
+  );
+}
+
+/**
+ * Fetch activities that can be compared to a plan.
+ * Returns activities with power data and similar distance to the course.
+ */
+export async function fetchMatchingActivities(
+  planId: number
+): Promise<MatchingActivity[]> {
+  return apiGet<MatchingActivity[]>(`/race-plans/${planId}/matching-activities`);
 }

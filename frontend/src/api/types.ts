@@ -401,3 +401,47 @@ export interface CourseDetail {
   climbs: CourseClimb[];
   elevation_profile: ElevationPoint[];
 }
+
+
+
+// ============================================================================
+// Execution Comparison Types
+// ============================================================================
+
+export interface SegmentComparison {
+  segment_idx: number;
+  distance_m: number;
+  grade_pct: number;
+  planned_power_w: number;
+  actual_power_w: number | null;
+  power_delta_pct: number | null;
+  planned_time_s: number;
+  actual_time_s: number | null;
+  time_delta_s: number | null;
+}
+
+export interface ExecutionComparison {
+  plan_id: number;
+  activity_id: string;
+  total_planned_time_s: number;
+  total_planned_time_formatted: string;
+  total_actual_time_s: number;
+  total_actual_time_formatted: string;
+  time_delta_s: number;
+  time_delta_formatted: string;
+  time_delta_pct: number;
+  pacing_consistency: number;
+  segments_over_target: number;
+  segments_under_target: number;
+  segment_comparisons: SegmentComparison[];
+  insights: string[];
+}
+
+export interface MatchingActivity {
+  id: string;
+  name: string | null;
+  started_at: string;
+  total_distance_m: number;
+  moving_time_s: number;
+  avg_power_w: number | null;
+}
