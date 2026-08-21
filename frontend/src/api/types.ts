@@ -330,6 +330,7 @@ export interface GeneratePlanRequest {
   cp_watts?: number | null;
   w_prime_joules?: number | null;
   target_intensity?: number;
+  target_time_s?: number | null; // Target finish time in seconds (overrides intensity)
   use_optimizer?: boolean;
   name?: string | null;
 }

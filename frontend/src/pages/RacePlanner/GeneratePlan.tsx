@@ -45,6 +45,43 @@ function formatElevation(meters: number): string {
   return `${Math.round(meters)} m`;
 }
 
+/** Parse time string (H:MM:SS or M:SS or MM:SS) to seconds */
+function parseTimeToSeconds(timeStr: string): number | null {
+  const trimmed = timeStr.trim();
+  if (!trimmed) return null;
+
+  // Match H:MM:SS or M:SS or MM:SS patterns
+  const parts = trimmed.split(":").map((p) => parseInt(p, 10));
+
+  if (parts.some(isNaN)) return null;
+
+  if (parts.length === 3) {
+    // H:MM:SS
+    const [h, m, s] = parts;
+    if (m < 0 || m >= 60 || s < 0 || s >= 60) return null;
+    return h * 3600 + m * 60 + s;
+  } else if (parts.length === 2) {
+    // M:SS or MM:SS (treat first part as minutes)
+    const [m, s] = parts;
+    if (s < 0 || s >= 60) return null;
+    return m * 60 + s;
+  }
+
+  return null;
+}
+
+/** Format seconds as H:MM:SS or M:SS */
+function formatSecondsToTime(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.round(seconds % 60);
+
+  if (h > 0) {
+    return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  }
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
 // =============================================================================
 // Course Selector Component
 // =============================================================================
@@ -214,6 +251,128 @@ function IntensitySlider({ value, onChange, ftp, courseDistanceM }: IntensitySli
 }
 
 // =============================================================================
+// Target Time Input Component
+// =============================================================================
+
+interface TargetTimeInputProps {
+  value: string;
+  onChange: (value: string) => void;
+  ftp: number;
+  courseDistanceM?: number;
+}
+
+function TargetTimeInput({ value, onChange, ftp, courseDistanceM }: TargetTimeInputProps): JSX.Element {
+  const parsedSeconds = parseTimeToSeconds(value);
+  const isValid = parsedSeconds !== null && parsedSeconds >= 60;
+
+  // Estimate required average power for target time
+  let estimatedPower: number | null = null;
+  let intensityPct: number | null = null;
+  if (isValid && courseDistanceM && parsedSeconds) {
+    // Simple estimate: speed = distance/time, power ~ speed^3 scaled
+    const speedMps = courseDistanceM / parsedSeconds;
+    const speedKmh = speedMps * 3.6;
+    // Reverse of the intensity slider formula
+    estimatedPower = Math.round(200 * Math.pow(speedKmh / 30, 3));
+    intensityPct = ftp > 0 ? Math.round((estimatedPower / ftp) * 100) : null;
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-3 items-end">
+        <div className="flex-1 space-y-1.5">
+          <Label htmlFor="target-time">Target Finish Time</Label>
+          <Input
+            id="target-time"
+            type="text"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="1:30:00"
+            className={!value || isValid ? "" : "border-destructive"}
+          />
+        </div>
+        {isValid && parsedSeconds && (
+          <div className="text-sm text-muted-foreground pb-2">
+            = {formatSecondsToTime(parsedSeconds)}
+          </div>
+        )}
+      </div>
+      <p className="text-caption">
+        Enter as H:MM:SS (e.g. 1:30:00) or M:SS (e.g. 45:00)
+      </p>
+      {!value && (
+        <p className="text-caption text-muted-foreground">
+          The optimizer will calculate the power needed for each segment to hit your target time.
+        </p>
+      )}
+      {value && !isValid && (
+        <p className="text-caption text-destructive">
+          Invalid time format. Use H:MM:SS or M:SS (minimum 1 minute)
+        </p>
+      )}
+      {isValid && estimatedPower !== null && intensityPct !== null && (
+        <div className="p-3 bg-muted/50 rounded-lg text-sm">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Estimated avg power needed:</span>
+            <span className="font-medium">~{estimatedPower} W ({intensityPct}% of FTP)</span>
+          </div>
+          {intensityPct > 105 && (
+            <p className="text-warning text-xs mt-2">
+              This target may require sustained efforts above FTP
+            </p>
+          )}
+          {intensityPct > 120 && (
+            <p className="text-destructive text-xs mt-1">
+              Warning: This target may not be achievable - requires very high power
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// =============================================================================
+// Target Mode Toggle Component
+// =============================================================================
+
+type TargetMode = "intensity" | "time";
+
+interface TargetModeToggleProps {
+  mode: TargetMode;
+  onChange: (mode: TargetMode) => void;
+}
+
+function TargetModeToggle({ mode, onChange }: TargetModeToggleProps): JSX.Element {
+  return (
+    <div className="flex rounded-lg bg-muted p-1 mb-4">
+      <button
+        type="button"
+        onClick={() => onChange("intensity")}
+        className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+          mode === "intensity"
+            ? "bg-background text-foreground shadow-sm"
+            : "text-muted-foreground hover:text-foreground"
+        }`}
+      >
+        Target Intensity
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange("time")}
+        className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+          mode === "time"
+            ? "bg-background text-foreground shadow-sm"
+            : "text-muted-foreground hover:text-foreground"
+        }`}
+      >
+        Target Time
+      </button>
+    </div>
+  );
+}
+
+// =============================================================================
 // Quick Preview Component
 // =============================================================================
 
@@ -303,7 +462,9 @@ export function GeneratePlan(): JSX.Element {
   const [weight, setWeight] = useState<string>("");
   const [cp, setCp] = useState<string>("");
   const [wPrime, setWPrime] = useState<string>("");
+  const [targetMode, setTargetMode] = useState<TargetMode>("intensity");
   const [targetIntensity, setTargetIntensity] = useState(0.85);
+  const [targetTime, setTargetTime] = useState<string>("");
   const [useOptimizer, setUseOptimizer] = useState(false);
   const [planName, setPlanName] = useState("");
 
@@ -376,6 +537,16 @@ export function GeneratePlan(): JSX.Element {
       return;
     }
 
+    // Validate target time if in time mode
+    let targetTimeSeconds: number | null = null;
+    if (targetMode === "time") {
+      targetTimeSeconds = parseTimeToSeconds(targetTime);
+      if (targetTimeSeconds === null || targetTimeSeconds < 60) {
+        toast.error("Please enter a valid target time (minimum 1 minute)");
+        return;
+      }
+    }
+
     setGenerating(true);
     setResult(null);
 
@@ -385,6 +556,12 @@ export function GeneratePlan(): JSX.Element {
       target_intensity: targetIntensity,
       use_optimizer: useOptimizer,
     };
+
+    // If targeting time, add target_time_s and force optimizer on
+    if (targetMode === "time" && targetTimeSeconds) {
+      request.target_time_s = targetTimeSeconds;
+      // Note: target_time_s takes precedence on the backend
+    }
 
     if (selectedBikeId) request.bike_id = selectedBikeId;
     if (weight) request.rider_weight_kg = parseFloat(weight);
@@ -573,37 +750,59 @@ export function GeneratePlan(): JSX.Element {
             </div>
 
             <div>
-              <Label className="mb-3 block">Target Intensity</Label>
-              <IntensitySlider
-                value={targetIntensity}
-                onChange={setTargetIntensity}
-                ftp={parseInt(ftp) || 250}
-                courseDistanceM={selectedCourse?.distance_m}
-              />
+              <Label className="mb-3 block">Target</Label>
+              <TargetModeToggle mode={targetMode} onChange={setTargetMode} />
+
+              {targetMode === "intensity" ? (
+                <IntensitySlider
+                  value={targetIntensity}
+                  onChange={setTargetIntensity}
+                  ftp={parseInt(ftp) || 250}
+                  courseDistanceM={selectedCourse?.distance_m}
+                />
+              ) : (
+                <TargetTimeInput
+                  value={targetTime}
+                  onChange={setTargetTime}
+                  ftp={parseInt(ftp) || 250}
+                  courseDistanceM={selectedCourse?.distance_m}
+                />
+              )}
             </div>
 
-            <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
-              <div>
-                <Label htmlFor="optimizer" className="text-sm font-medium">
-                  Use Optimizer
-                </Label>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  More accurate, takes 10-30 seconds
+            {targetMode === "intensity" && (
+              <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+                <div>
+                  <Label htmlFor="optimizer" className="text-sm font-medium">
+                    Use Optimizer
+                  </Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    More accurate, takes 10-30 seconds
+                  </p>
+                </div>
+                <Switch
+                  id="optimizer"
+                  checked={useOptimizer}
+                  onCheckedChange={setUseOptimizer}
+                />
+              </div>
+            )}
+
+            {targetMode === "time" && (
+              <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg">
+                <p className="text-sm text-primary">
+                  Target time mode automatically uses the optimizer to calculate
+                  the power needed for each segment.
                 </p>
               </div>
-              <Switch
-                id="optimizer"
-                checked={useOptimizer}
-                onCheckedChange={setUseOptimizer}
-              />
-            </div>
+            )}
           </div>
         </section>
 
         {/* Generate Button */}
         <Button
           onClick={handleGenerate}
-          disabled={!selectedCourseId || generating}
+          disabled={!selectedCourseId || generating || (targetMode === "time" && !parseTimeToSeconds(targetTime))}
           className="w-full h-12 text-lg"
         >
           {generating ? (
@@ -612,10 +811,10 @@ export function GeneratePlan(): JSX.Element {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
-              {useOptimizer ? "Optimizing..." : "Generating..."}
+              {targetMode === "time" ? "Calculating watts for target..." : useOptimizer ? "Optimizing..." : "Generating..."}
             </span>
           ) : (
-            "Generate Plan"
+            targetMode === "time" ? "Calculate Power for Target Time" : "Generate Plan"
           )}
         </Button>
       </div>

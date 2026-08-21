@@ -31,7 +31,14 @@ router = APIRouter(prefix="/api/race-plans", tags=["race-plans"])
 
 
 class GeneratePlanRequestSchema(BaseModel):
-    """Request to generate a new race pacing plan."""
+    """Request to generate a new race pacing plan.
+
+    Two targeting modes:
+    1. Intensity mode (default): Set target_intensity as % of FTP
+    2. Time mode: Set target_time_s to specify desired finish time
+
+    If target_time_s is provided, optimizer calculates power to hit that time.
+    """
 
     course_id: int
     bike_id: int | None = None
@@ -40,6 +47,7 @@ class GeneratePlanRequestSchema(BaseModel):
     cp_watts: int | None = Field(None, ge=100, le=600)
     w_prime_joules: int | None = Field(None, ge=5000, le=50000)
     target_intensity: float = Field(0.85, ge=0.5, le=1.2)
+    target_time_s: float | None = Field(None, ge=60, le=86400)  # 1 min to 24 hours
     use_optimizer: bool = False
     name: str | None = Field(None, max_length=200)
 
@@ -53,6 +61,7 @@ class GeneratePlanRequestSchema(BaseModel):
             cp_watts=self.cp_watts,
             w_prime_joules=self.w_prime_joules,
             target_intensity=self.target_intensity,
+            target_time_s=self.target_time_s,
             use_optimizer=self.use_optimizer,
             name=self.name,
         )

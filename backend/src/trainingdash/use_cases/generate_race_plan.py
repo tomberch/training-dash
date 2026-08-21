@@ -11,7 +11,7 @@ from decimal import Decimal
 from trainingdash.domain.cda_estimation import get_default_cda, get_default_crr
 from trainingdash.domain.course_segmentation import CourseSegment
 from trainingdash.domain.pacing import generate_heuristic_pacing
-from trainingdash.domain.pacing_optimizer import optimize_pacing
+from trainingdash.domain.pacing_optimizer import optimize_pacing, optimize_pacing_for_time
 from trainingdash.domain.physics import EnvironmentParams, RiderParams
 from trainingdash.domain.wbal import predict_wbal_for_plan
 from trainingdash.repositories.postgres.models import RacePlan
@@ -20,7 +20,15 @@ from trainingdash.repositories.protocols import BikeRepo, CourseRepo, RacePlanRe
 
 @dataclass
 class GeneratePlanRequest:
-    """Request parameters for race plan generation."""
+    """Request parameters for race plan generation.
+
+    Two targeting modes are supported:
+    1. Intensity mode (default): Set target_intensity as % of FTP
+    2. Time mode: Set target_time_s to specify desired finish time
+
+    If target_time_s is provided, it takes precedence and the optimizer
+    will calculate the power distribution needed to achieve that time.
+    """
 
     course_id: int
     bike_id: int | None = None  # if None, use defaults
@@ -29,6 +37,7 @@ class GeneratePlanRequest:
     cp_watts: int | None = None  # if None, estimate from FTP
     w_prime_joules: int | None = None  # if None, use default 20kJ
     target_intensity: float = 0.85
+    target_time_s: float | None = None  # if set, optimizer calculates watts to hit this time
     use_optimizer: bool = False  # heuristic by default
     name: str | None = None
 
@@ -150,7 +159,52 @@ class GenerateRacePlan:
             warnings.append("W' using default: 20kJ")
 
         # 5. Generate pacing plan
-        if request.use_optimizer:
+        # Three modes:
+        # A) Target time mode: optimize power to hit specific finish time
+        # B) Optimizer mode: optimize power to minimize time given energy budget
+        # C) Heuristic mode: grade-based power targets
+
+        if request.target_time_s is not None:
+            # Mode A: Target time - find power to achieve specific finish time
+            optimized = optimize_pacing_for_time(
+                segments=segments,
+                rider_ftp=ftp,
+                rider_cp=cp,
+                rider_w_prime=w_prime,
+                target_time_s=request.target_time_s,
+                rider_params=rider_params,
+                env_params=env_params,
+            )
+
+            total_time_s = optimized.total_time_s
+            total_distance_m = optimized.total_distance_m
+            avg_power_w = optimized.avg_power_w
+            normalized_power_w = optimized.normalized_power_w
+            intensity_factor = optimized.intensity_factor
+            segment_targets = [
+                {
+                    "segment_idx": t.segment_idx,
+                    "power_w": t.target_power_w,
+                    "time_s": t.estimated_time_s,
+                    "speed_mps": t.estimated_speed_mps,
+                }
+                for t in optimized.targets
+            ]
+            wbal_min = optimized.wbal_min
+            optimization_method = "time_targeted"
+
+            # Comparison: show energy savings vs constant power
+            comparison = {
+                "target_time_s": request.target_time_s,
+                "achieved_time_s": optimized.total_time_s,
+                "energy_saving_vs_constant_pct": optimized.improvement_vs_constant_pct,
+            }
+
+            if not optimized.converged:
+                warnings.append("Optimizer did not fully converge - results may be approximate")
+
+        elif request.use_optimizer:
+            # Mode B: Energy budget optimization
             # Estimate energy budget from target intensity and estimated time
             estimated_time_s = sum(seg.length_m / 8.0 for seg in segments)
             target_avg_power = ftp * request.target_intensity
@@ -193,7 +247,7 @@ class GenerateRacePlan:
                 "improvement_vs_constant_pct": optimized.improvement_vs_constant_pct,
             }
         else:
-            # Heuristic pacing
+            # Mode C: Heuristic pacing
             heuristic = generate_heuristic_pacing(
                 segments=segments,
                 rider_ftp=ftp,
