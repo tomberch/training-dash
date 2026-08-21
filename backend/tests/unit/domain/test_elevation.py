@@ -6,11 +6,13 @@ import numpy as np
 import pytest
 
 from trainingdash.domain.elevation import (
-    DEM_BATCH_SIZE,
     air_density_from_altitude,
     calculate_grade,
-    fetch_dem_elevation,
     smooth_elevation,
+)
+from trainingdash.integrations.opentopodata import (
+    DEM_BATCH_SIZE,
+    fetch_dem_elevation,
 )
 
 
@@ -148,7 +150,7 @@ class TestFetchDemElevation:
             ],
         }
 
-        with patch("trainingdash.domain.elevation.httpx.AsyncClient") as mock_client:
+        with patch("trainingdash.integrations.opentopodata.httpx.AsyncClient") as mock_client:
             mock_instance = AsyncMock()
             mock_client.return_value.__aenter__.return_value = mock_instance
 
@@ -171,7 +173,7 @@ class TestFetchDemElevation:
         """API error should return None for failed points."""
         import httpx
 
-        with patch("trainingdash.domain.elevation.httpx.AsyncClient") as mock_client:
+        with patch("trainingdash.integrations.opentopodata.httpx.AsyncClient") as mock_client:
             mock_instance = AsyncMock()
             mock_client.return_value.__aenter__.return_value = mock_instance
             mock_instance.get.side_effect = httpx.HTTPError("Network error")
@@ -200,7 +202,7 @@ class TestFetchDemElevation:
             "results": [{"elevation": 200.0}] * 50,
         }
 
-        with patch("trainingdash.domain.elevation.httpx.AsyncClient") as mock_client:
+        with patch("trainingdash.integrations.opentopodata.httpx.AsyncClient") as mock_client:
             mock_instance = AsyncMock()
             mock_client.return_value.__aenter__.return_value = mock_instance
 
@@ -230,7 +232,7 @@ class TestFetchDemElevation:
             "results": [{"elevation": 100.0}],
         }
 
-        with patch("trainingdash.domain.elevation.httpx.AsyncClient") as mock_client:
+        with patch("trainingdash.integrations.opentopodata.httpx.AsyncClient") as mock_client:
             mock_instance = AsyncMock()
             mock_client.return_value.__aenter__.return_value = mock_instance
 
