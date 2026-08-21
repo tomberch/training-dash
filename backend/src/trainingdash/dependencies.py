@@ -37,6 +37,13 @@ from trainingdash.repositories.postgres.recalculation_job_repo import (
     PostgresRecalculationJobRepo,
 )
 from trainingdash.repositories.postgres.record_repo import PostgresRecordRepo
+from trainingdash.repositories.postgres.ride_event_repo import (
+    PostgresJournalEntryActivityRepo,
+    PostgresJournalEntryRepo,
+    PostgresRideEventLinkRepo,
+    PostgresRideEventMediaRepo,
+    PostgresRideEventRepo,
+)
 from trainingdash.repositories.postgres.saved_filter_repo import PostgresSavedFilterRepo
 from trainingdash.repositories.postgres.settings_repo import PostgresAppSettingsRepo
 from trainingdash.repositories.postgres.threshold_repo import PostgresThresholdRepo
@@ -50,11 +57,16 @@ from trainingdash.repositories.protocols import (
     CourseRepo,
     EventRepo,
     GarminCredentialsRepo,
+    JournalEntryActivityRepo,
+    JournalEntryRepo,
     NotificationRepo,
     OAuthLinkRepo,
     RacePlanRepo,
     RecalculationJobRepo,
     RecordRepo,
+    RideEventLinkRepo,
+    RideEventMediaRepo,
+    RideEventRepo,
     SavedFilterRepo,
     ThresholdRepo,
     UserRepo,
@@ -147,6 +159,31 @@ async def get_record_repo(db: DbSession) -> RecordRepo:
     return PostgresRecordRepo(db)
 
 
+async def get_ride_event_repo(db: DbSession) -> RideEventRepo:
+    """Create a RideEventRepo bound to the current session."""
+    return PostgresRideEventRepo(db)
+
+
+async def get_journal_entry_repo(db: DbSession) -> JournalEntryRepo:
+    """Create a JournalEntryRepo bound to the current session."""
+    return PostgresJournalEntryRepo(db)
+
+
+async def get_ride_event_media_repo(db: DbSession) -> RideEventMediaRepo:
+    """Create a RideEventMediaRepo bound to the current session."""
+    return PostgresRideEventMediaRepo(db)
+
+
+async def get_ride_event_link_repo(db: DbSession) -> RideEventLinkRepo:
+    """Create a RideEventLinkRepo bound to the current session."""
+    return PostgresRideEventLinkRepo(db)
+
+
+async def get_journal_entry_activity_repo(db: DbSession) -> JournalEntryActivityRepo:
+    """Create a JournalEntryActivityRepo bound to the current session."""
+    return PostgresJournalEntryActivityRepo(db)
+
+
 def get_geocoding_service(db: DbSession) -> GeocodingService:
     """Wire a GeocodingService with a Postgres cache repo.
 
@@ -156,6 +193,16 @@ def get_geocoding_service(db: DbSession) -> GeocodingService:
     ``routers/activities.py``.
     """
     return GeocodingService(PostgresGeocodingCacheRepo(db))
+
+
+# --- Services ---
+
+from trainingdash.services.media import MediaService
+
+
+def get_media_service() -> MediaService:
+    """Create a MediaService instance."""
+    return MediaService()
 
 
 # Annotated types for use in router function signatures
@@ -176,10 +223,17 @@ RacePlanRepoD = Annotated[RacePlanRepo, Depends(get_race_plan_repo)]
 ThresholdRepoD = Annotated[ThresholdRepo, Depends(get_threshold_repo)]
 SavedFilterRepoD = Annotated[SavedFilterRepo, Depends(get_saved_filter_repo)]
 RecordRepoD = Annotated[RecordRepo, Depends(get_record_repo)]
+RideEventRepoD = Annotated[RideEventRepo, Depends(get_ride_event_repo)]
+JournalEntryRepoD = Annotated[JournalEntryRepo, Depends(get_journal_entry_repo)]
+RideEventMediaRepoD = Annotated[RideEventMediaRepo, Depends(get_ride_event_media_repo)]
+RideEventLinkRepoD = Annotated[RideEventLinkRepo, Depends(get_ride_event_link_repo)]
+JournalEntryActivityRepoD = Annotated[JournalEntryActivityRepo, Depends(get_journal_entry_activity_repo)]
+MediaServiceD = Annotated[MediaService, Depends(get_media_service)]
 
 
 # --- Use Cases ---
 
+from trainingdash.use_cases.batch_link_activities import BatchLinkActivities
 from trainingdash.use_cases.delete_activity import DeleteActivity
 from trainingdash.use_cases.ensure_default_thresholds import EnsureDefaultThresholds
 from trainingdash.use_cases.ingest_activity import IngestActivity
@@ -203,6 +257,17 @@ async def get_ensure_default_thresholds_use_case(db: DbSession) -> EnsureDefault
     return EnsureDefaultThresholds(db)
 
 
+async def get_batch_link_activities_use_case(
+    event_repo: RideEventRepoD,
+    entry_repo: JournalEntryRepoD,
+    activity_repo: ActivityRepoD,
+    activity_link_repo: JournalEntryActivityRepoD,
+) -> BatchLinkActivities:
+    """Create a BatchLinkActivities use case with its dependencies."""
+    return BatchLinkActivities(event_repo, entry_repo, activity_repo, activity_link_repo)
+
+
 IngestActivityD = Annotated[IngestActivity, Depends(get_ingest_activity_use_case)]
 DeleteActivityD = Annotated[DeleteActivity, Depends(get_delete_activity_use_case)]
 EnsureDefaultThresholdsD = Annotated[EnsureDefaultThresholds, Depends(get_ensure_default_thresholds_use_case)]
+BatchLinkActivitiesD = Annotated[BatchLinkActivities, Depends(get_batch_link_activities_use_case)]

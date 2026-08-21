@@ -1,18 +1,18 @@
 """Ride Events endpoints: CRUD for events, journal entries, links, media, activity linking."""
 
-import os
 from datetime import date
-from io import BytesIO
-from pathlib import Path
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile, status
-from PIL import Image
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
 from trainingdash.auth import CurrentUser, DbSession
-from trainingdash.dependencies import ActivityRepoD
+from trainingdash.dependencies import (
+    ActivityRepoD,
+    BatchLinkActivitiesD,
+    MediaServiceD,
+)
 from trainingdash.repositories.postgres.models import (
     Activity,
     JournalEntry,
@@ -28,6 +28,7 @@ from trainingdash.repositories.postgres.ride_event_repo import (
     PostgresRideEventMediaRepo,
     PostgresRideEventRepo,
 )
+from trainingdash.services.media import MediaValidationError
 
 router = APIRouter(prefix="/api/events", tags=["events"])
 
@@ -500,17 +501,14 @@ async def delete_event(
     db: DbSession,
     user: CurrentUser,
     event_id: UUID,
+    media_service: MediaServiceD,
 ):
     """Delete a ride event (cascades to entries, media, links). Cleans up uploaded files."""
     # Verify ownership first
     event = await _get_owned_event(db, user, event_id)
 
     # Delete uploaded files directory for this event
-    uploads_dir = _get_safe_event_uploads_dir(event_id)
-    if uploads_dir.exists():
-        import shutil
-
-        shutil.rmtree(uploads_dir, ignore_errors=True)
+    media_service.delete_event_directory(event_id)
 
     # Delete database record (cascades handle entries, media, links)
     repo = await _get_event_repo(db)
@@ -806,11 +804,10 @@ async def delete_entry_video(
 
 @router.post("/{event_id}/activities", status_code=status.HTTP_201_CREATED)
 async def batch_link_activities(
-    db: DbSession,
     user: CurrentUser,
-    activity_repo: ActivityRepoD,
     event_id: UUID,
     request: BatchLinkActivitiesRequest,
+    use_case: BatchLinkActivitiesD,
 ):
     """
     Batch link activities to an event.
@@ -818,36 +815,23 @@ async def batch_link_activities(
     Activities are linked via a journal entry for the activity's date.
     If no journal entry exists for that date, one is auto-created.
     """
-    event = await _get_owned_event(db, user, event_id)
-    entry_repo = await _get_entry_repo(db)
-    activity_link_repo = await _get_activity_link_repo(db)
+    try:
+        result = await use_case.execute(user.id, event_id, request.activity_ids)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
-    linked = []
-    for activity_id in request.activity_ids:
-        # Verify user owns the activity
-        activity = await activity_repo.get_by_id(activity_id, user.id)
-        if activity is None:
-            continue  # Skip activities not owned by user
-
-        # Find or create journal entry for activity date
-        activity_date = activity.started_at.date() if activity.started_at else event.start_date
-        entries = await entry_repo.list_for_event(event_id)
-        entry = next((e for e in entries if e.entry_date == activity_date), None)
-
-        if entry is None:
-            # Auto-create entry for this date
-            entry = JournalEntry(
-                id=uuid4(),
-                ride_event_id=event_id,
-                entry_date=activity_date,
-            )
-            entry = await entry_repo.save(entry)
-
-        # Link activity to entry
-        link = await activity_link_repo.link(entry.id, activity_id, sort_order=0)
-        linked.append(serialize_activity_link(link))
-
-    return {"linked": linked, "count": len(linked)}
+    return {
+        "linked": [
+            {
+                "id": link.link_id,
+                "journal_entry_id": str(link.journal_entry_id),
+                "activity_id": str(link.activity_id),
+                "sort_order": link.sort_order,
+            }
+            for link in result.linked
+        ],
+        "count": len(result.linked),
+    }
 
 
 @router.delete("/{event_id}/activities/{activity_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -1005,115 +989,6 @@ async def list_available_activities(
 
 
 # =============================================================================
-# Photo Upload Constants
-# =============================================================================
-
-MAX_PHOTO_SIZE = 10 * 1024 * 1024  # 10MB
-THUMBNAIL_SIZE = (400, 400)  # Max dimensions for thumbnails
-ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
-IMAGE_EXTENSIONS = {
-    "image/jpeg": ".jpg",
-    "image/png": ".png",
-    "image/webp": ".webp",
-    "image/gif": ".gif",
-}
-
-
-def _get_uploads_dir() -> Path:
-    """Get the uploads base directory."""
-    return Path(os.environ.get("TRAININGDASH_UPLOADS_DIR", "/app/uploads"))
-
-
-def _get_safe_event_uploads_dir(event_id: UUID) -> Path:
-    """
-    Get uploads directory for an event with path traversal protection.
-
-    While UUID validation by FastAPI/Pydantic prevents traversal attacks,
-    this provides defense in depth against path injection.
-
-    Args:
-        event_id: Event UUID (already validated by FastAPI)
-
-    Returns:
-        Safe path to event uploads directory
-
-    Raises:
-        HTTPException: If path validation fails (should never happen with valid UUID)
-    """
-    base_dir = _get_uploads_dir() / "events"
-    # Convert UUID to string - UUID format guarantees no path separators
-    event_id_str = str(event_id)
-    target_dir = base_dir / event_id_str
-
-    # Defense in depth: verify the resolved path stays within base
-    resolved = target_dir.resolve()
-    base_resolved = base_dir.resolve()
-
-    # Check that target is under base directory
-    try:
-        resolved.relative_to(base_resolved)
-    except ValueError:
-        # Path escapes base directory - should never happen with valid UUID
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid event ID",
-        )
-
-    return target_dir
-
-
-def _get_safe_entry_uploads_dir(event_id: UUID) -> Path:
-    """
-    Get uploads directory for journal entry files with path traversal protection.
-
-    Args:
-        event_id: Event UUID (already validated by FastAPI)
-
-    Returns:
-        Safe path to entry uploads directory
-    """
-    base_dir = _get_uploads_dir() / "events"
-    event_id_str = str(event_id)
-    target_dir = base_dir / event_id_str / "entries"
-
-    resolved = target_dir.resolve()
-    base_resolved = base_dir.resolve()
-
-    try:
-        resolved.relative_to(base_resolved)
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid event ID",
-        )
-
-    return target_dir
-
-
-def _generate_thumbnail(image_bytes: bytes, content_type: str) -> bytes:
-    """Generate a thumbnail from image bytes."""
-    img = Image.open(BytesIO(image_bytes))
-
-    # Convert RGBA to RGB for JPEG output
-    if img.mode in ("RGBA", "P"):
-        img = img.convert("RGB")
-
-    # Resize maintaining aspect ratio
-    img.thumbnail(THUMBNAIL_SIZE, Image.Resampling.LANCZOS)
-
-    # Save to bytes
-    output = BytesIO()
-    format_map = {
-        "image/jpeg": "JPEG",
-        "image/png": "PNG",
-        "image/webp": "WEBP",
-        "image/gif": "GIF",
-    }
-    img_format = format_map.get(content_type, "JPEG")
-    img.save(output, format=img_format, quality=85, optimize=True)
-    return output.getvalue()
-
-
 # =============================================================================
 # Photo Upload Endpoints
 # =============================================================================
@@ -1125,56 +1000,27 @@ async def upload_event_photo(
     user: CurrentUser,
     event_id: UUID,
     request: Request,
+    media_service: MediaServiceD,
     caption: str | None = Query(None, max_length=500),
 ):
     """Upload a photo to an event."""
     event = await _get_owned_event(db, user, event_id)
 
     content_type = request.headers.get("content-type", "")
-    if content_type not in ALLOWED_IMAGE_TYPES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unsupported image type. Allowed: {', '.join(ALLOWED_IMAGE_TYPES)}",
-        )
-
     body = await request.body()
-    if len(body) > MAX_PHOTO_SIZE:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Image too large. Maximum size: {MAX_PHOTO_SIZE // 1024 // 1024}MB",
-        )
 
-    # Generate IDs and paths
-    media_id = uuid4()
-    ext = IMAGE_EXTENSIONS.get(content_type, ".jpg")
-    filename = f"{media_id}{ext}"
-    thumb_filename = f"{media_id}_thumb{ext}"
-
-    # Ensure directories exist
-    uploads_dir = _get_safe_event_uploads_dir(event_id)
-    uploads_dir.mkdir(parents=True, exist_ok=True)
-
-    # Save original image
-    filepath = uploads_dir / filename
-    with open(filepath, "wb") as f:
-        f.write(body)
-
-    # Generate and save thumbnail
-    thumbnail_bytes = _generate_thumbnail(body, content_type)
-    thumb_filepath = uploads_dir / thumb_filename
-    with open(thumb_filepath, "wb") as f:
-        f.write(thumbnail_bytes)
+    try:
+        result = media_service.save_photo(body, content_type, event_id)
+    except MediaValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
     # Create media record
-    storage_path = f"/uploads/events/{event_id}/{filename}"
-    thumbnail_path = f"/uploads/events/{event_id}/{thumb_filename}"
-
     media = RideEventMedia(
-        id=media_id,
+        id=result.media_id,
         ride_event_id=event_id,
         media_type="photo",
-        storage_path=storage_path,
-        thumbnail_path=thumbnail_path,
+        storage_path=result.storage_path,
+        thumbnail_path=result.thumbnail_path,
         caption=caption,
         sort_order=0,
     )
@@ -1196,64 +1042,35 @@ async def upload_event_photos_batch(
     db: DbSession,
     user: CurrentUser,
     event_id: UUID,
+    media_service: MediaServiceD,
     files: list[UploadFile] = File(...),
 ):
     """Upload multiple photos to an event in a single request."""
     event = await _get_owned_event(db, user, event_id)
 
+    # Read all files and prepare for batch processing
+    file_data: list[tuple[bytes, str, str | None]] = []
+    for file in files:
+        body = await file.read()
+        file_data.append((body, file.content_type or "", file.filename))
+
+    # Save all photos
+    result = media_service.save_photos_batch(file_data, event_id)
+
+    # Create media records for successful uploads
     repo = await _get_media_repo(db)
     uploaded = []
-    errors = []
 
-    for file in files:
-        content_type = file.content_type or ""
-        if content_type not in ALLOWED_IMAGE_TYPES:
-            errors.append({"filename": file.filename, "error": f"Unsupported image type: {content_type}"})
-            continue
-
-        body = await file.read()
-        if len(body) > MAX_PHOTO_SIZE:
-            errors.append({"filename": file.filename, "error": "Image too large (max 10MB)"})
-            continue
-
-        # Generate IDs and paths
-        media_id = uuid4()
-        ext = IMAGE_EXTENSIONS.get(content_type, ".jpg")
-        filename = f"{media_id}{ext}"
-        thumb_filename = f"{media_id}_thumb{ext}"
-
-        # Ensure directories exist
-        uploads_dir = _get_uploads_dir() / "events" / str(event_id)
-        uploads_dir.mkdir(parents=True, exist_ok=True)
-
-        # Save original image
-        filepath = uploads_dir / filename
-        with open(filepath, "wb") as f:
-            f.write(body)
-
-        # Generate and save thumbnail
-        try:
-            thumbnail_bytes = _generate_thumbnail(body, content_type)
-            thumb_filepath = uploads_dir / thumb_filename
-            with open(thumb_filepath, "wb") as f:
-                f.write(thumbnail_bytes)
-            thumbnail_path = f"/uploads/events/{event_id}/{thumb_filename}"
-        except Exception:
-            thumbnail_path = None  # Failed to generate thumbnail, continue without
-
-        # Create media record
-        storage_path = f"/uploads/events/{event_id}/{filename}"
-
+    for idx, upload in enumerate(result.uploaded):
         media = RideEventMedia(
-            id=media_id,
+            id=upload.media_id,
             ride_event_id=event_id,
             media_type="photo",
-            storage_path=storage_path,
-            thumbnail_path=thumbnail_path,
+            storage_path=upload.storage_path,
+            thumbnail_path=upload.thumbnail_path,
             caption=None,
-            sort_order=len(uploaded),
+            sort_order=idx,
         )
-
         saved = await repo.save(media)
         uploaded.append(serialize_media(saved))
 
@@ -1263,7 +1080,7 @@ async def upload_event_photos_batch(
         event_repo = await _get_event_repo(db)
         await event_repo.save(event)
 
-    return {"uploaded": uploaded, "errors": errors, "count": len(uploaded)}
+    return {"uploaded": uploaded, "errors": result.errors, "count": len(uploaded)}
 
 
 @router.post("/entries/{entry_id}/photos", status_code=status.HTTP_201_CREATED)
@@ -1272,56 +1089,27 @@ async def upload_entry_photo(
     user: CurrentUser,
     entry_id: UUID,
     request: Request,
+    media_service: MediaServiceD,
     caption: str | None = Query(None, max_length=500),
 ):
     """Upload a photo to a journal entry."""
     entry = await _get_owned_entry(db, user, entry_id)
 
     content_type = request.headers.get("content-type", "")
-    if content_type not in ALLOWED_IMAGE_TYPES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unsupported image type. Allowed: {', '.join(ALLOWED_IMAGE_TYPES)}",
-        )
-
     body = await request.body()
-    if len(body) > MAX_PHOTO_SIZE:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Image too large. Maximum size: {MAX_PHOTO_SIZE // 1024 // 1024}MB",
-        )
 
-    # Generate IDs and paths
-    media_id = uuid4()
-    ext = IMAGE_EXTENSIONS.get(content_type, ".jpg")
-    filename = f"{media_id}{ext}"
-    thumb_filename = f"{media_id}_thumb{ext}"
-
-    # Ensure directories exist (use event_id for organization)
-    uploads_dir = _get_safe_entry_uploads_dir(entry.ride_event_id)
-    uploads_dir.mkdir(parents=True, exist_ok=True)
-
-    # Save original image
-    filepath = uploads_dir / filename
-    with open(filepath, "wb") as f:
-        f.write(body)
-
-    # Generate and save thumbnail
-    thumbnail_bytes = _generate_thumbnail(body, content_type)
-    thumb_filepath = uploads_dir / thumb_filename
-    with open(thumb_filepath, "wb") as f:
-        f.write(thumbnail_bytes)
+    try:
+        result = media_service.save_photo(body, content_type, entry.ride_event_id, is_entry=True)
+    except MediaValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
     # Create media record
-    storage_path = f"/uploads/events/{entry.ride_event_id}/entries/{filename}"
-    thumbnail_path = f"/uploads/events/{entry.ride_event_id}/entries/{thumb_filename}"
-
     media = RideEventMedia(
-        id=media_id,
+        id=result.media_id,
         journal_entry_id=entry_id,
         media_type="photo",
-        storage_path=storage_path,
-        thumbnail_path=thumbnail_path,
+        storage_path=result.storage_path,
+        thumbnail_path=result.thumbnail_path,
         caption=caption,
         sort_order=0,
     )
@@ -1336,68 +1124,39 @@ async def upload_entry_photos_batch(
     db: DbSession,
     user: CurrentUser,
     entry_id: UUID,
+    media_service: MediaServiceD,
     files: list[UploadFile] = File(...),
 ):
     """Upload multiple photos to a journal entry in a single request."""
     entry = await _get_owned_entry(db, user, entry_id)
 
+    # Read all files and prepare for batch processing
+    file_data: list[tuple[bytes, str, str | None]] = []
+    for file in files:
+        body = await file.read()
+        file_data.append((body, file.content_type or "", file.filename))
+
+    # Save all photos
+    result = media_service.save_photos_batch(file_data, entry.ride_event_id, is_entry=True)
+
+    # Create media records for successful uploads
     repo = await _get_media_repo(db)
     uploaded = []
-    errors = []
 
-    for file in files:
-        content_type = file.content_type or ""
-        if content_type not in ALLOWED_IMAGE_TYPES:
-            errors.append({"filename": file.filename, "error": f"Unsupported image type: {content_type}"})
-            continue
-
-        body = await file.read()
-        if len(body) > MAX_PHOTO_SIZE:
-            errors.append({"filename": file.filename, "error": "Image too large (max 10MB)"})
-            continue
-
-        # Generate IDs and paths
-        media_id = uuid4()
-        ext = IMAGE_EXTENSIONS.get(content_type, ".jpg")
-        filename = f"{media_id}{ext}"
-        thumb_filename = f"{media_id}_thumb{ext}"
-
-        # Ensure directories exist
-        uploads_dir = _get_safe_entry_uploads_dir(entry.ride_event_id)
-        uploads_dir.mkdir(parents=True, exist_ok=True)
-
-        # Save original image
-        filepath = uploads_dir / filename
-        with open(filepath, "wb") as f:
-            f.write(body)
-
-        # Generate and save thumbnail
-        try:
-            thumbnail_bytes = _generate_thumbnail(body, content_type)
-            thumb_filepath = uploads_dir / thumb_filename
-            with open(thumb_filepath, "wb") as f:
-                f.write(thumbnail_bytes)
-            thumbnail_path = f"/uploads/events/{entry.ride_event_id}/entries/{thumb_filename}"
-        except Exception:
-            thumbnail_path = None
-
-        # Create media record
-        storage_path = f"/uploads/events/{entry.ride_event_id}/entries/{filename}"
-
+    for idx, upload in enumerate(result.uploaded):
         media = RideEventMedia(
-            id=media_id,
+            id=upload.media_id,
             journal_entry_id=entry_id,
             media_type="photo",
-            storage_path=storage_path,
-            thumbnail_path=thumbnail_path,
+            storage_path=upload.storage_path,
+            thumbnail_path=upload.thumbnail_path,
             caption=None,
-            sort_order=len(uploaded),
+            sort_order=idx,
         )
-
         saved = await repo.save(media)
         uploaded.append(serialize_media(saved))
 
-    return {"uploaded": uploaded, "errors": errors, "count": len(uploaded)}
+    return {"uploaded": uploaded, "errors": result.errors, "count": len(uploaded)}
 
 
 @router.patch("/media/{media_id}")
@@ -1428,6 +1187,7 @@ async def delete_media(
     db: DbSession,
     user: CurrentUser,
     media_id: UUID,
+    media_service: MediaServiceD,
 ):
     """Delete a photo/media item."""
     repo = await _get_media_repo(db)
@@ -1436,15 +1196,7 @@ async def delete_media(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media not found")
 
     # Delete files from disk
-    uploads_base = _get_uploads_dir()
-    if media.storage_path:
-        filepath = uploads_base.parent / media.storage_path.lstrip("/")
-        if filepath.exists():
-            filepath.unlink()
-    if media.thumbnail_path:
-        thumb_path = uploads_base.parent / media.thumbnail_path.lstrip("/")
-        if thumb_path.exists():
-            thumb_path.unlink()
+    media_service.delete_media_files(media.storage_path, media.thumbnail_path)
 
     # Delete record
     await repo.delete(media_id, user.id)
