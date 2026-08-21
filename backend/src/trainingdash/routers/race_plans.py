@@ -1,13 +1,21 @@
 """Race plans endpoints: generate and manage race pacing plans."""
 
 from datetime import datetime
-from decimal import Decimal
+from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from trainingdash.auth import CurrentUser
-from trainingdash.dependencies import BikeRepoD, CourseRepoD, RacePlanRepoD, UserRepoD
+from trainingdash.dependencies import (
+    ActivityRepoD,
+    BikeRepoD,
+    CourseRepoD,
+    RacePlanRepoD,
+    RecordRepoD,
+    UserRepoD,
+)
+from trainingdash.use_cases.compare_execution import CompareExecution
 from trainingdash.use_cases.generate_race_plan import (
     GeneratePlanRequest,
     GenerateRacePlan,
@@ -144,6 +152,59 @@ class PlanUpdateSchema(BaseModel):
     name: str | None = Field(None, max_length=200)
 
 
+class CompareRequestSchema(BaseModel):
+    """Request to compare activity against a plan."""
+
+    activity_id: UUID
+
+
+class SegmentComparisonSchema(BaseModel):
+    """Comparison data for a single segment."""
+
+    segment_idx: int
+    distance_m: float
+    grade_pct: float
+    planned_power_w: float
+    actual_power_w: float | None
+    power_delta_pct: float | None
+    planned_time_s: float
+    actual_time_s: float | None
+    time_delta_s: float | None
+
+
+class ComparisonResponse(BaseModel):
+    """Response from comparing activity execution against race plan."""
+
+    plan_id: int
+    activity_id: UUID
+
+    total_planned_time_s: float
+    total_planned_time_formatted: str
+    total_actual_time_s: float
+    total_actual_time_formatted: str
+    time_delta_s: float
+    time_delta_formatted: str  # "+2:30" or "-1:15"
+    time_delta_pct: float
+
+    pacing_consistency: float
+    segments_over_target: int
+    segments_under_target: int
+
+    segment_comparisons: list[SegmentComparisonSchema]
+    insights: list[str]
+
+
+class ActivityListItem(BaseModel):
+    """Summary item for activity list."""
+
+    id: UUID
+    name: str | None
+    started_at: datetime
+    total_distance_m: float
+    moving_time_s: int
+    avg_power_w: float | None
+
+
 # =============================================================================
 # Helper Functions
 # =============================================================================
@@ -157,6 +218,14 @@ def format_time(seconds: float) -> str:
     if hours > 0:
         return f"{hours}:{minutes:02d}:{secs:02d}"
     return f"{minutes}:{secs:02d}"
+
+
+def format_time_delta(seconds: float) -> str:
+    """Format time delta as +M:SS or -M:SS."""
+    sign = "+" if seconds >= 0 else "-"
+    abs_seconds = abs(int(seconds))
+    minutes, secs = divmod(abs_seconds, 60)
+    return f"{sign}{minutes}:{secs:02d}"
 
 
 # =============================================================================
@@ -398,3 +467,127 @@ async def regenerate_plan(
         comparison=ComparisonSchema(**result.comparison),
         warnings=result.warnings,
     )
+
+
+
+# =============================================================================
+# Comparison Endpoints
+# =============================================================================
+
+
+@router.post("/{plan_id}/compare", response_model=ComparisonResponse)
+async def compare_execution(
+    plan_id: int,
+    request: CompareRequestSchema,
+    current_user: CurrentUser,
+    plan_repo: RacePlanRepoD,
+    activity_repo: ActivityRepoD,
+    record_repo: RecordRepoD,
+    course_repo: CourseRepoD,
+):
+    """
+    Compare an executed activity against a race plan.
+
+    The activity should be a ride on the same course as the plan.
+    Returns segment-by-segment comparison and summary insights.
+    """
+    use_case = CompareExecution(plan_repo, activity_repo, record_repo, course_repo)
+
+    try:
+        result = await use_case.execute(
+            current_user.id, plan_id, request.activity_id
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+
+    return ComparisonResponse(
+        plan_id=result.plan_id,
+        activity_id=result.activity_id,
+        total_planned_time_s=result.total_planned_time_s,
+        total_planned_time_formatted=format_time(result.total_planned_time_s),
+        total_actual_time_s=result.total_actual_time_s,
+        total_actual_time_formatted=format_time(result.total_actual_time_s),
+        time_delta_s=result.time_delta_s,
+        time_delta_formatted=format_time_delta(result.time_delta_s),
+        time_delta_pct=result.time_delta_pct,
+        pacing_consistency=result.pacing_consistency,
+        segments_over_target=result.segments_over_target,
+        segments_under_target=result.segments_under_target,
+        segment_comparisons=[
+            SegmentComparisonSchema(
+                segment_idx=c.segment_idx,
+                distance_m=c.distance_m,
+                grade_pct=c.grade_pct,
+                planned_power_w=c.planned_power_w,
+                actual_power_w=c.actual_power_w,
+                power_delta_pct=c.power_delta_pct,
+                planned_time_s=c.planned_time_s,
+                actual_time_s=c.actual_time_s,
+                time_delta_s=c.time_delta_s,
+            )
+            for c in result.segment_comparisons
+        ],
+        insights=result.insights,
+    )
+
+
+@router.get("/{plan_id}/matching-activities", response_model=list[ActivityListItem])
+async def get_matching_activities(
+    plan_id: int,
+    current_user: CurrentUser,
+    plan_repo: RacePlanRepoD,
+    activity_repo: ActivityRepoD,
+    course_repo: CourseRepoD,
+):
+    """
+    Get activities that could be compared to this plan.
+
+    Returns activities that:
+    - Have power data
+    - Match approximate distance of the course
+    """
+    # Get the plan
+    plan = await plan_repo.get_by_id(plan_id, current_user.id)
+    if plan is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Race plan not found",
+        )
+
+    # Get the course for distance reference
+    course = await course_repo.get_by_id(plan.course_id, current_user.id)
+    if course is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not found",
+        )
+
+    # List recent activities with power data
+    activities = await activity_repo.list_for_user(current_user.id, limit=50)
+
+    # Filter to activities with power data and similar distance (within 20%)
+    course_distance = course.distance_m
+    distance_tolerance = course_distance * 0.2
+
+    matching_activities = [
+        a for a in activities
+        if a.avg_power_w is not None
+        and a.avg_power_w > 0
+        and a.total_distance_m is not None
+        and abs(a.total_distance_m - course_distance) <= distance_tolerance
+    ]
+
+    return [
+        ActivityListItem(
+            id=a.id,
+            name=a.title,
+            started_at=a.started_at,
+            total_distance_m=a.total_distance_m or 0,
+            moving_time_s=a.moving_time_s or 0,
+            avg_power_w=a.avg_power_w,
+        )
+        for a in matching_activities[:20]  # Limit to 20
+    ]
