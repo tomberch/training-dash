@@ -68,7 +68,7 @@ interface Props {
 
 export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Props) {
   const {
-    loading: summaryLoading, error: summaryError, setError, activity,
+    loading: summaryLoading, error: summaryError, setError, activity, setActivity,
     isEditingTitle, setIsEditingTitle, editedTitle, setEditedTitle,
     saveTitle, isGeneratingTitle, generateTitle,
   } = useActivitySummary(activityId);
@@ -146,7 +146,7 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
     const updated = await updateActivityBike(activityId, bikeId);
     // Update local activity state with new bike
     if (activity) {
-      // Find the bike name for the toast message
+      setActivity({ ...activity, bike_id: updated.bike_id, bike: updated.bike });
       const bikeName = updated.bike?.name;
       toast.success(bikeName ? `Bike set to ${bikeName}` : "Bike removed");
     }

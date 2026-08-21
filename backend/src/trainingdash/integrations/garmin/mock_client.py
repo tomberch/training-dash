@@ -55,8 +55,10 @@ class MockGarminClient:
             raise GarminAPIError("Invalid Garmin credentials")
         self._logged_in = True
         self._email = email
-        # Note: Only masked email is logged, never the password
-        logger.info("MockGarminClient: login successful for %s", _sanitize_log_value(_mask_email(email)))
+        # Security: email is masked before logging to avoid PII exposure
+        # and sanitized to prevent log injection attacks
+        masked = _mask_email(email)
+        logger.info("MockGarminClient: login successful for %s", _sanitize_log_value(masked))
         return True
 
     def complete_mfa(self, code: str) -> None:

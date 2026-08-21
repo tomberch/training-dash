@@ -176,6 +176,7 @@ async def update_activity(
 
     # Handle bike_id changes
     # Use model_dump to distinguish "not provided" from "explicitly set to null"
+    new_bike = None
     if "bike_id" in request.model_dump(exclude_unset=True):
         new_bike_id = request.bike_id
         old_bike_id = activity.bike_id
@@ -205,6 +206,7 @@ async def update_activity(
                 await bike_repo.update_distance(new_bike_id, user.id, activity_distance)
 
         activity.bike_id = new_bike_id
+        activity.bike = new_bike  # Update relationship for serialization
 
     await db.commit()
     await db.refresh(activity)

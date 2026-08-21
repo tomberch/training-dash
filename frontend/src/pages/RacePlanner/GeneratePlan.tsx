@@ -125,7 +125,7 @@ function BikeSelector({ bikes, selectedBikeId, onSelect, loading }: BikeSelector
       )}
       {activeBikes.length === 0 && (
         <p className="text-xs text-muted-foreground">
-          <Link to="/settings/gear" className="text-primary hover:underline">
+          <Link to="/gear" className="text-primary hover:underline">
             Add a bike
           </Link>{" "}
           for more accurate predictions

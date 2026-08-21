@@ -175,7 +175,7 @@ function AppLayout({ user, onLogout, onUserUpdate }: {
                 } 
               />
               <Route 
-                path="/settings/gear" 
+                path="/gear" 
                 element={<GearPage unitSystem={user.unit_system} />} 
               />
               <Route path="/race-planner" element={<RacePlannerDashboard />} />

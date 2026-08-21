@@ -95,7 +95,7 @@ class Bike(Base):
     __tablename__ = "bikes"
     __table_args__ = (
         sa.CheckConstraint(
-            "bike_type IN ('road', 'tt', 'gravel', 'mtb', 'ebike')",
+            "bike_type IN ('road', 'gravel', 'mtb', 'tt', 'track', 'cx', 'commuter', 'ebike', 'other')",
             name="valid_bike_type",
         ),
         sa.CheckConstraint(

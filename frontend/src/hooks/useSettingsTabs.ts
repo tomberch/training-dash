@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
-export type SettingsTab = "profile" | "preferences" | "training" | "connections" | "gear";
+export type SettingsTab = "profile" | "preferences" | "training" | "connections";
 
-const VALID_TABS: SettingsTab[] = ["profile", "preferences", "training", "connections", "gear"];
+const VALID_TABS: SettingsTab[] = ["profile", "preferences", "training", "connections"];
 const STORAGE_KEY = "settings-tab";
 const DEFAULT_TAB: SettingsTab = "profile";
 
