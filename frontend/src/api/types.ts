@@ -252,3 +252,143 @@ export interface JobStatus {
   status: "pending" | "processing" | "complete" | "not_found" | "unknown";
   result: { success: boolean; activity_id: string | null } | null;
 }
+
+
+
+// ============================================================================
+// Race Plan Types
+// ============================================================================
+
+export interface SegmentTarget {
+  segment_idx: number;
+  power_w: number;
+  time_s: number;
+  speed_mps: number;
+}
+
+export interface RiderParams {
+  weight_kg: number;
+  ftp_watts: number;
+  cp_watts: number | null;
+  w_prime_joules: number | null;
+}
+
+export interface BikeParams {
+  weight_kg: number | null;
+  cda: number;
+  crr: number;
+}
+
+export interface WbalPrediction {
+  min_wbal: number | null;
+  min_wbal_distance_m: number | null;
+}
+
+export interface PlanComparison {
+  constant_time_s?: number | null;
+  heuristic_time_s?: number | null;
+  optimized_time_s?: number | null;
+  improvement_vs_constant_pct?: number | null;
+  improvement_vs_heuristic_pct?: number | null;
+}
+
+export interface RacePlanListItem {
+  id: number;
+  course_id: number;
+  name: string | null;
+  total_time_s: number;
+  total_time_formatted: string;
+  avg_power_w: number;
+  optimization_method: string | null;
+  created_at: string;
+}
+
+export interface RacePlanDetail {
+  id: number;
+  course_id: number;
+  name: string | null;
+  total_time_s: number;
+  total_time_formatted: string;
+  avg_power_w: number;
+  normalized_power_w: number | null;
+  intensity_factor: number | null;
+  comparison: PlanComparison;
+  warnings: string[];
+  segment_targets: SegmentTarget[];
+  wbal_prediction: WbalPrediction | null;
+  rider_params: RiderParams;
+  bike_params: BikeParams;
+  optimization_method: string | null;
+  created_at: string;
+}
+
+export interface GeneratePlanRequest {
+  course_id: number;
+  bike_id?: number | null;
+  rider_weight_kg?: number | null;
+  ftp_watts: number;
+  cp_watts?: number | null;
+  w_prime_joules?: number | null;
+  target_intensity?: number;
+  use_optimizer?: boolean;
+  name?: string | null;
+}
+
+export interface RacePlanResponse {
+  id: number;
+  course_id: number;
+  name: string | null;
+  total_time_s: number;
+  total_time_formatted: string;
+  avg_power_w: number;
+  normalized_power_w: number | null;
+  intensity_factor: number | null;
+  comparison: PlanComparison;
+  warnings: string[];
+}
+
+// Course types for race planner
+export interface CourseSegment {
+  start_m: number;
+  end_m: number;
+  distance_m: number;
+  avg_grade_pct: number;
+  elevation_gain_m: number;
+  elevation_loss_m: number;
+  terrain_type: string;
+}
+
+export interface CourseClimb {
+  name: string | null;
+  start_m: number;
+  end_m: number;
+  distance_m: number;
+  avg_grade_pct: number;
+  elevation_gain_m: number;
+  max_grade_pct: number;
+  category: string | null;
+}
+
+export interface ElevationPoint {
+  distance_m: number;
+  elevation_m: number;
+  grade_pct: number;
+}
+
+export interface CourseDetail {
+  id: number;
+  name: string;
+  description: string | null;
+  source_type: string;
+  source_filename: string | null;
+  distance_m: number;
+  elevation_gain_m: number;
+  elevation_loss_m: number;
+  min_elevation_m: number | null;
+  max_elevation_m: number | null;
+  created_at: string;
+  updated_at: string;
+  segments: CourseSegment[];
+  climbs: CourseClimb[];
+  elevation_profile: ElevationPoint[];
+}

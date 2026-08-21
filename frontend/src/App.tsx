@@ -34,6 +34,7 @@ const EventDetailPage = lazy(() => import("./pages/EventDetailPage").then(m => (
 const EventFormPage = lazy(() => import("./pages/EventFormPage").then(m => ({ default: m.EventFormPage })));
 const EventEditPage = lazy(() => import("./pages/EventEditPage").then(m => ({ default: m.EventEditPage })));
 const GearPage = lazy(() => import("./pages/GearPage").then(m => ({ default: m.GearPage })));
+const PlanDetail = lazy(() => import("./pages/RacePlanner").then(m => ({ default: m.PlanDetail })));
 
 // Page loading skeleton for Suspense fallback
 function PageLoadingSkeleton() {
@@ -170,6 +171,7 @@ function AppLayout({ user, onLogout, onUserUpdate }: {
                 path="/settings/gear" 
                 element={<GearPage unitSystem={user.unit_system} />} 
               />
+              <Route path="/race-planner/plans/:planId" element={<PlanDetail />} />
               {user.is_admin && (
                 <Route path="/admin" element={<AdminViewWrapper />} />
               )}
