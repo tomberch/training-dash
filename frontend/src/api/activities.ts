@@ -5,7 +5,7 @@ import { apiGet, apiPost, apiPatch, apiDelete, API_BASE, ApiError, extractError 
 import type {
   Activity, PaginatedActivities, GeoJSONFeatureCollection,
   WbalResponse, SameRouteResponse, CompareResponse, JobStatus,
-  ActivityType,
+  ActivityType, WhatIfRequest, WhatIfResponse,
 } from "./types";
 
 export async function fetchActivities(
@@ -24,8 +24,13 @@ export async function fetchActivities(
   return apiGet<PaginatedActivities>(`/activities${query ? `?${query}` : ""}`);
 }
 
-export async function fetchActivity(id: string): Promise<Activity> {
-  return apiGet<Activity>(`/activities/${id}`);
+export async function fetchActivity(id: string, include?: "calc_trace"): Promise<Activity> {
+  const query = include ? `?include=${include}` : "";
+  return apiGet<Activity>(`/activities/${id}${query}`);
+}
+
+export async function fetchWhatIf(id: string, params: WhatIfRequest): Promise<WhatIfResponse> {
+  return apiPost<WhatIfResponse>(`/activities/${id}/what-if`, params, "Failed to calculate what-if");
 }
 
 export async function fetchActivityRecords(id: string): Promise<GeoJSONFeatureCollection> {

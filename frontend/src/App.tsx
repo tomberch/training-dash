@@ -29,6 +29,8 @@ const AthletePage = lazy(() => import("./pages/AthletePage").then(m => ({ defaul
 const PrototypeEventDetail = lazy(() => import("./pages/prototype-event-detail").then(m => ({ default: m.PrototypeEventDetail })));
 const PrototypeEventList = lazy(() => import("./pages/prototype-event-list").then(m => ({ default: m.PrototypeEventList })));
 const PrototypeSegments = lazy(() => import("./pages/prototype-segments").then(m => ({ default: m.PrototypeSegments })));
+const PrototypeCalcLab = lazy(() => import("./pages/prototype-calc-lab").then(m => ({ default: m.PrototypeCalcLab })));
+const CalcLabPage = lazy(() => import("./pages/CalcLabPage").then(m => ({ default: m.CalcLabPage })));
 const QueryPage = lazy(() => import("./pages/QueryPage").then(m => ({ default: m.QueryPage })));
 const EventsPage = lazy(() => import("./pages/EventsPage").then(m => ({ default: m.EventsPage })));
 const EventDetailPage = lazy(() => import("./pages/EventDetailPage").then(m => ({ default: m.EventDetailPage })));
@@ -149,6 +151,10 @@ function AppLayout({ user, onLogout, onUserUpdate }: {
                 path="/activities/:id" 
                 element={<ActivityDetailWrapper unitSystem={user.unit_system} />} 
               />
+              <Route 
+                path="/activities/:id/calc-lab" 
+                element={<CalcLabPage />} 
+              />
               <Route path="/pmc" element={<PMCView />} />
               <Route path="/power-curve" element={<PowerCurveView />} />
               <Route path="/analyze" element={<AnalyzePage />} />
@@ -162,6 +168,7 @@ function AppLayout({ user, onLogout, onUserUpdate }: {
               <Route path="/prototype/event-detail" element={<PrototypeEventDetail />} />
               <Route path="/prototype/event-list" element={<PrototypeEventList />} />
               <Route path="/prototype/segments" element={<PrototypeSegments />} />
+              <Route path="/prototype/calc-lab" element={<PrototypeCalcLab />} />
               <Route 
                 path="/records" 
                 element={<RecordsView unitSystem={user.unit_system} />} 

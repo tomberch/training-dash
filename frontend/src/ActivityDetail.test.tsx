@@ -41,6 +41,8 @@ vi.mock("./api", async (importOriginal) => {
       estimated_crr: null,
       aero_confidence: null,
       weather_status: null,
+      effective_ftp: null,
+      effective_lthr: null,
     }),
     fetchActivityRecords: vi.fn().mockResolvedValue({
       type: "FeatureCollection",
@@ -109,6 +111,8 @@ vi.mock("./api", async (importOriginal) => {
           estimated_crr: null,
           aero_confidence: null,
           weather_status: null,
+          effective_ftp: null,
+          effective_lthr: null,
         },
       ],
     }),
