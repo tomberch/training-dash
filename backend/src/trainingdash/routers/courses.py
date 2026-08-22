@@ -1,15 +1,20 @@
 """Courses endpoints: CRUD for race courses."""
 
 from datetime import datetime
+from uuid import UUID
 
 from fastapi import APIRouter, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field
 
 from trainingdash.auth import CurrentUser
-from trainingdash.dependencies import CourseRepoD
+from trainingdash.dependencies import ActivityRepoD, CourseRepoD, RecordRepoD
 from trainingdash.use_cases.create_course import (
     CourseCreationError,
     CreateCourse,
+)
+from trainingdash.use_cases.create_course_from_activity import (
+    CourseFromActivityError,
+    CreateCourseFromActivity,
 )
 
 router = APIRouter(prefix="/api/courses", tags=["courses"])
@@ -150,6 +155,61 @@ async def upload_course(
             name=name,
         )
     except CourseCreationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+
+    return CourseResponse(
+        id=result.course.id,
+        name=result.course.name,
+        source_type=result.course.source_type,
+        source_filename=result.course.source_filename,
+        distance_m=result.course.distance_m,
+        elevation_gain_m=result.course.elevation_gain_m,
+        elevation_loss_m=result.course.elevation_loss_m,
+        min_elevation_m=result.course.min_elevation_m,
+        max_elevation_m=result.course.max_elevation_m,
+        created_at=result.course.created_at,
+        warnings=result.warnings,
+    )
+
+
+class CreateFromActivityRequest(BaseModel):
+    """Request body for creating a course from an activity."""
+
+    activity_id: UUID
+    name: str | None = None
+
+
+@router.post("/from-activity", response_model=CourseResponse, status_code=status.HTTP_201_CREATED)
+async def create_course_from_activity(
+    request: CreateFromActivityRequest,
+    current_user: CurrentUser,
+    activity_repo: ActivityRepoD,
+    record_repo: RecordRepoD,
+    course_repo: CourseRepoD,
+):
+    """
+    Create a course from an existing activity.
+
+    This extracts the GPS track and elevation data from the activity
+    and creates a new race course that can be used for pacing plans.
+
+    Args:
+        request: Activity ID and optional course name
+
+    Returns:
+        Created course with any processing warnings
+    """
+    use_case = CreateCourseFromActivity(activity_repo, record_repo, course_repo)
+    try:
+        result = await use_case.execute(
+            user_id=current_user.id,
+            activity_id=str(request.activity_id),
+            name=request.name,
+        )
+    except CourseFromActivityError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
