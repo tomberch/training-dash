@@ -22,6 +22,7 @@ from geoalchemy2 import WKTElement
 from trainingdash.domain.course_segmentation import (
     Climb,
     CourseSegment,
+    assign_segment_bearings,
     detect_climbs,
     segment_course,
 )
@@ -139,6 +140,10 @@ class CreateCourse:
 
         # Step 6: Segment course
         segments = segment_course(distances, grades, smoothed_elevations)
+
+        # Step 6b: Assign bearings to segments from GPS track
+        gps_points = [(p.latitude, p.longitude, p.distance_m) for p in parsed.points]
+        assign_segment_bearings(segments, gps_points)
 
         # Step 7: Detect climbs
         climbs = detect_climbs(segments)
@@ -306,6 +311,7 @@ class CreateCourse:
                 "elevation_gain_m": s.elevation_gain_m,
                 "elevation_loss_m": s.elevation_loss_m,
                 "terrain_type": s.terrain_type,
+                "bearing_deg": s.bearing_deg,
             }
             for s in segments
         ]

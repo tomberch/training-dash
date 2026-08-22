@@ -13,7 +13,7 @@ from trainingdash.domain.aero_selection import AeroSource, BikeAeroData, select_
 from trainingdash.domain.course_segmentation import CourseSegment
 from trainingdash.domain.pacing import generate_heuristic_pacing
 from trainingdash.domain.pacing_optimizer import optimize_pacing, optimize_pacing_for_time
-from trainingdash.domain.physics import EnvironmentParams, RiderParams
+from trainingdash.domain.physics import EnvironmentParams, RiderParams, calculate_headwind
 from trainingdash.domain.wbal import predict_wbal_for_plan
 from trainingdash.integrations.weather import (
     ForecastConditions,
@@ -248,6 +248,28 @@ class GenerateRacePlan:
         # Use forecast air density instead of default
         env_params = EnvironmentParams(air_density=forecast_conditions.air_density)
 
+        # 5b. Build per-segment environment params for wind-adjusted pacing
+        # Only calculate headwind if we have meaningful wind speed
+        segment_env_params: list[EnvironmentParams] | None = None
+        if forecast_conditions.wind_speed_mps > 0.1:  # Ignore negligible wind
+            segment_env_params = []
+            for seg in segments:
+                if seg.bearing_deg is not None:
+                    headwind = calculate_headwind(
+                        wind_speed_mps=forecast_conditions.wind_speed_mps,
+                        wind_direction_deg=forecast_conditions.wind_direction_deg,
+                        course_bearing_deg=seg.bearing_deg,
+                    )
+                else:
+                    # No bearing data, assume no wind effect
+                    headwind = 0.0
+                segment_env_params.append(
+                    EnvironmentParams(
+                        air_density=forecast_conditions.air_density,
+                        headwind_mps=headwind,
+                    )
+                )
+
         # Estimate CP and W' if not provided
         ftp = request.ftp_watts
         cp = request.cp_watts if request.cp_watts else int(ftp * 0.95)
@@ -274,6 +296,7 @@ class GenerateRacePlan:
                 target_time_s=request.target_time_s,
                 rider_params=rider_params,
                 env_params=env_params,
+                segment_env_params=segment_env_params,
             )
 
             total_time_s = optimized.total_time_s
@@ -318,6 +341,7 @@ class GenerateRacePlan:
                 target_energy_kj=target_energy_kj,
                 rider_params=rider_params,
                 env_params=env_params,
+                segment_env_params=segment_env_params,
             )
 
             total_time_s = optimized.total_time_s
@@ -354,6 +378,7 @@ class GenerateRacePlan:
                 target_intensity=request.target_intensity,
                 rider_params=rider_params,
                 env_params=env_params,
+                segment_env_params=segment_env_params,
             )
 
             total_time_s = heuristic.total_time_s
@@ -469,6 +494,7 @@ class GenerateRacePlan:
                     elevation_gain_m=seg.get("elevation_gain_m", 0),
                     elevation_loss_m=seg.get("elevation_loss_m", 0),
                     terrain_type=seg.get("terrain_type", "flat"),
+                    bearing_deg=seg.get("bearing_deg"),
                 )
             )
         return segments

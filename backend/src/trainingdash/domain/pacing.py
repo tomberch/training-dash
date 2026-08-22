@@ -89,6 +89,7 @@ def generate_heuristic_pacing(
     target_intensity: float = 0.85,
     rider_params: RiderParams | None = None,
     env_params: EnvironmentParams | None = None,
+    segment_env_params: list[EnvironmentParams] | None = None,
 ) -> PacingPlan:
     """
     Generate pacing plan using grade-based heuristics.
@@ -110,6 +111,7 @@ def generate_heuristic_pacing(
         rider_params: Rider physical parameters for physics calculations.
             If None, uses typical values (83kg, 0.32 CdA, 0.004 Crr).
         env_params: Environmental conditions. If None, uses sea level.
+        segment_env_params: Optional per-segment environment params (for wind).
 
     Returns:
         PacingPlan with per-segment targets and overall metrics.
@@ -142,12 +144,15 @@ def generate_heuristic_pacing(
         target_power = base_power * multiplier
         target_power = min(target_power, rider_ftp)
 
+        # Use per-segment env params if provided
+        seg_env = segment_env_params[idx] if segment_env_params else env_params
+
         # Use physics model to get speed and time
         speed_mps = speed_from_power(
             target_power,
             segment.avg_grade_pct,
             rider_params,
-            env_params,
+            seg_env,
         )
 
         # Calculate time for segment

@@ -7,6 +7,7 @@ from trainingdash.domain.course_segmentation import (
     Climb,
     CourseSegment,
     _categorize_climb,
+    assign_segment_bearings,
     detect_climbs,
     segment_course,
 )
@@ -344,3 +345,144 @@ class TestClimbDataclass:
         )
 
         assert climb.name is None
+
+
+
+class TestAssignSegmentBearings:
+    """Tests for assign_segment_bearings function."""
+
+    def test_single_segment_northbound(self):
+        """Single segment heading north should get bearing ~0."""
+        segment = CourseSegment(
+            start_distance_m=0,
+            end_distance_m=1000,
+            length_m=1000,
+            avg_grade_pct=0,
+            elevation_gain_m=0,
+            elevation_loss_m=0,
+            terrain_type="flat",
+        )
+        # Points going north: (0,0) -> (1,0) lat
+        points = [(0.0, 0.0, 0.0), (1.0, 0.0, 1000.0)]
+
+        assign_segment_bearings([segment], points)
+
+        assert segment.bearing_deg is not None
+        assert segment.bearing_deg == pytest.approx(0.0, abs=1.0)
+
+    def test_single_segment_eastbound(self):
+        """Single segment heading east should get bearing ~90."""
+        segment = CourseSegment(
+            start_distance_m=0,
+            end_distance_m=1000,
+            length_m=1000,
+            avg_grade_pct=0,
+            elevation_gain_m=0,
+            elevation_loss_m=0,
+            terrain_type="flat",
+        )
+        # Points going east: (0,0) -> (0,1) lon
+        points = [(0.0, 0.0, 0.0), (0.0, 1.0, 1000.0)]
+
+        assign_segment_bearings([segment], points)
+
+        assert segment.bearing_deg is not None
+        assert segment.bearing_deg == pytest.approx(90.0, abs=1.0)
+
+    def test_multiple_segments(self):
+        """Multiple segments should each get their own bearing."""
+        seg1 = CourseSegment(
+            start_distance_m=0,
+            end_distance_m=500,
+            length_m=500,
+            avg_grade_pct=0,
+            elevation_gain_m=0,
+            elevation_loss_m=0,
+            terrain_type="flat",
+        )
+        seg2 = CourseSegment(
+            start_distance_m=500,
+            end_distance_m=1000,
+            length_m=500,
+            avg_grade_pct=0,
+            elevation_gain_m=0,
+            elevation_loss_m=0,
+            terrain_type="flat",
+        )
+        # First segment goes north, second goes east
+        points = [
+            (0.0, 0.0, 0.0),
+            (0.5, 0.0, 250.0),
+            (1.0, 0.0, 500.0),
+            (1.0, 0.5, 750.0),
+            (1.0, 1.0, 1000.0),
+        ]
+
+        assign_segment_bearings([seg1, seg2], points)
+
+        assert seg1.bearing_deg is not None
+        assert seg2.bearing_deg is not None
+        assert seg1.bearing_deg == pytest.approx(0.0, abs=1.0)  # North
+        assert seg2.bearing_deg == pytest.approx(90.0, abs=1.0)  # East
+
+    def test_empty_segments(self):
+        """Empty segments list should not raise."""
+        points = [(0.0, 0.0, 0.0), (1.0, 0.0, 1000.0)]
+        result = assign_segment_bearings([], points)
+        assert result == []
+
+    def test_empty_points(self):
+        """Empty points list should not raise, bearings remain None."""
+        segment = CourseSegment(
+            start_distance_m=0,
+            end_distance_m=1000,
+            length_m=1000,
+            avg_grade_pct=0,
+            elevation_gain_m=0,
+            elevation_loss_m=0,
+            terrain_type="flat",
+        )
+
+        assign_segment_bearings([segment], [])
+
+        assert segment.bearing_deg is None
+
+    def test_real_world_course(self):
+        """Test with realistic GPS coordinates from a cycling course."""
+        # Simulating a course that goes roughly northeast then east
+        seg1 = CourseSegment(
+            start_distance_m=0,
+            end_distance_m=2000,
+            length_m=2000,
+            avg_grade_pct=2.0,
+            elevation_gain_m=40,
+            elevation_loss_m=0,
+            terrain_type="false_flat",
+        )
+        seg2 = CourseSegment(
+            start_distance_m=2000,
+            end_distance_m=4000,
+            length_m=2000,
+            avg_grade_pct=-1.0,
+            elevation_gain_m=0,
+            elevation_loss_m=20,
+            terrain_type="false_flat",
+        )
+        # Zurich area coordinates going NE then E
+        points = [
+            (47.3769, 8.5417, 0.0),      # Start
+            (47.3850, 8.5550, 1000.0),   # Midpoint seg1
+            (47.3930, 8.5680, 2000.0),   # End seg1 / Start seg2
+            (47.3935, 8.5900, 3000.0),   # Midpoint seg2
+            (47.3940, 8.6120, 4000.0),   # End seg2
+        ]
+
+        assign_segment_bearings([seg1, seg2], points)
+
+        # Segment 1 should be roughly NE (~40-50°)
+        assert seg1.bearing_deg is not None
+        assert 35 < seg1.bearing_deg < 55
+
+        # Segment 2 should be roughly E (~85-95°)
+        assert seg2.bearing_deg is not None
+        assert 80 < seg2.bearing_deg < 100

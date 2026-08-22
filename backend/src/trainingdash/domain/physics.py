@@ -386,3 +386,105 @@ def estimate_cp_from_ftp(ftp_watts: float) -> float:
         Estimated CP in watts (typically ~FTP for trained cyclists).
     """
     return ftp_watts
+
+
+
+# =============================================================================
+# Wind and Bearing Calculations
+# =============================================================================
+
+
+def calculate_bearing(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Calculate initial bearing from point 1 to point 2.
+
+    Uses the forward azimuth formula for great-circle navigation.
+    Returns the initial bearing (direction you'd face when starting
+    from point 1 heading toward point 2).
+
+    Args:
+        lat1: Latitude of starting point in degrees
+        lon1: Longitude of starting point in degrees
+        lat2: Latitude of ending point in degrees
+        lon2: Longitude of ending point in degrees
+
+    Returns:
+        Bearing in degrees (0-360, where 0=North, 90=East, 180=South, 270=West)
+
+    Examples:
+        >>> calculate_bearing(0, 0, 1, 0)  # Due north
+        0.0
+        >>> calculate_bearing(0, 0, 0, 1)  # Due east
+        90.0
+        >>> calculate_bearing(47.0, 8.0, 47.0, 9.0)  # East in Switzerland
+        89.3...
+    """
+    # Convert to radians
+    lat1_rad = math.radians(lat1)
+    lat2_rad = math.radians(lat2)
+    delta_lon = math.radians(lon2 - lon1)
+
+    # Forward azimuth formula
+    x = math.sin(delta_lon) * math.cos(lat2_rad)
+    y = math.cos(lat1_rad) * math.sin(lat2_rad) - math.sin(lat1_rad) * math.cos(lat2_rad) * math.cos(delta_lon)
+
+    bearing_rad = math.atan2(x, y)
+    bearing_deg = math.degrees(bearing_rad)
+
+    # Normalize to 0-360
+    return (bearing_deg + 360) % 360
+
+
+def calculate_headwind(
+    wind_speed_mps: float,
+    wind_direction_deg: float,
+    course_bearing_deg: float,
+) -> float:
+    """Calculate effective headwind component from wind speed and direction.
+
+    Decomposes wind into the component parallel to the course direction.
+    Positive = headwind (slows you down), negative = tailwind (helps you).
+
+    Wind direction uses meteorological convention: the direction wind
+    comes FROM (0° = wind from north, 90° = wind from east).
+
+    Course bearing is where you're heading TO (0° = heading north).
+
+    The effective headwind is:
+        headwind = wind_speed × cos(wind_direction - course_bearing)
+
+    This is positive when wind comes from ahead (headwind) and
+    negative when wind comes from behind (tailwind).
+
+    Args:
+        wind_speed_mps: Wind speed in m/s
+        wind_direction_deg: Meteorological wind direction in degrees
+            (where wind comes FROM)
+        course_bearing_deg: Direction of travel in degrees
+            (where you're heading TO)
+
+    Returns:
+        Effective headwind in m/s (positive = headwind, negative = tailwind)
+
+    Examples:
+        >>> calculate_headwind(10, 0, 0)    # Wind from north, heading north
+        10.0  # Full headwind
+        >>> calculate_headwind(10, 180, 0)  # Wind from south, heading north
+        -10.0  # Full tailwind
+        >>> calculate_headwind(10, 90, 0)   # Wind from east, heading north
+        0.0  # Pure crosswind (no head/tail component)
+        >>> calculate_headwind(10, 45, 0)   # Wind from NE, heading north
+        7.07...  # Partial headwind
+    """
+    # Calculate relative angle between wind direction and course
+    # Wind direction is where wind comes FROM
+    # Course bearing is where we're going TO
+    # If wind comes from our heading direction, it's a headwind
+    relative_angle_deg = wind_direction_deg - course_bearing_deg
+
+    # Convert to radians and compute headwind component
+    relative_angle_rad = math.radians(relative_angle_deg)
+
+    # cos(0) = 1 (full headwind when wind comes from ahead)
+    # cos(180) = -1 (full tailwind when wind comes from behind)
+    # cos(90) = 0 (no head/tail component for crosswind)
+    return wind_speed_mps * math.cos(relative_angle_rad)

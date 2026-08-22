@@ -23,6 +23,7 @@ class CourseSegment:
     elevation_gain_m: float
     elevation_loss_m: float
     terrain_type: str  # from grade.classify_terrain
+    bearing_deg: float | None = None  # Direction of travel (0=N, 90=E, 180=S, 270=W)
 
 
 @dataclass
@@ -297,3 +298,68 @@ def _categorize_climb(length_m: float, avg_grade_pct: float) -> str | None:
         return "4"
     else:
         return None
+
+
+
+def assign_segment_bearings(
+    segments: list[CourseSegment],
+    points: list[tuple[float, float, float]],  # (lat, lon, distance_m)
+) -> list[CourseSegment]:
+    """Assign bearing to each segment based on GPS track points.
+
+    For each segment, finds the track points at segment start and end distances,
+    then calculates the bearing between them.
+
+    Args:
+        segments: List of CourseSegment objects (bearing_deg will be set).
+        points: List of (latitude, longitude, cumulative_distance_m) tuples
+            representing the GPS track.
+
+    Returns:
+        The same segments list with bearing_deg populated.
+    """
+    from trainingdash.domain.physics import calculate_bearing
+
+    if not points or not segments:
+        return segments
+
+    # Build distance-indexed lookup for points
+    # points are assumed sorted by distance
+    point_distances = [p[2] for p in points]
+
+    for segment in segments:
+        # Find points closest to segment start and end
+        start_idx = _find_closest_point_index(point_distances, segment.start_distance_m)
+        end_idx = _find_closest_point_index(point_distances, segment.end_distance_m)
+
+        # Need at least two different points
+        if start_idx == end_idx:
+            # Segment too short, try adjacent points
+            if end_idx < len(points) - 1:
+                end_idx += 1
+            elif start_idx > 0:
+                start_idx -= 1
+
+        if start_idx != end_idx:
+            lat1, lon1 = points[start_idx][0], points[start_idx][1]
+            lat2, lon2 = points[end_idx][0], points[end_idx][1]
+            segment.bearing_deg = calculate_bearing(lat1, lon1, lat2, lon2)
+
+    return segments
+
+
+def _find_closest_point_index(distances: list[float], target_distance: float) -> int:
+    """Find index of point closest to target distance using binary search."""
+    import bisect
+
+    idx = bisect.bisect_left(distances, target_distance)
+
+    if idx == 0:
+        return 0
+    if idx >= len(distances):
+        return len(distances) - 1
+
+    # Check which is closer: idx-1 or idx
+    if abs(distances[idx - 1] - target_distance) <= abs(distances[idx] - target_distance):
+        return idx - 1
+    return idx

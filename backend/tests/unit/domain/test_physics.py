@@ -10,6 +10,8 @@ from trainingdash.domain.physics import (
     EnvironmentParams,
     RiderParams,
     air_density_from_altitude,
+    calculate_bearing,
+    calculate_headwind,
     estimate_cp_from_ftp,
     estimate_ftp_from_cp,
     power_required,
@@ -503,3 +505,149 @@ class TestPhysicsIntegration:
         # Should achieve high speed due to gravity assist
         speed_kph = speed * 3.6
         assert speed_kph > 50  # Fast descent
+
+
+
+
+# =============================================================================
+# Test calculate_bearing
+# =============================================================================
+
+
+class TestCalculateBearing:
+    """Tests for calculate_bearing function."""
+
+    def test_due_north(self):
+        """Point directly north should give bearing 0."""
+        bearing = calculate_bearing(0, 0, 1, 0)
+        assert bearing == pytest.approx(0.0, abs=0.1)
+
+    def test_due_south(self):
+        """Point directly south should give bearing 180."""
+        bearing = calculate_bearing(1, 0, 0, 0)
+        assert bearing == pytest.approx(180.0, abs=0.1)
+
+    def test_due_east(self):
+        """Point directly east should give bearing 90."""
+        bearing = calculate_bearing(0, 0, 0, 1)
+        assert bearing == pytest.approx(90.0, abs=0.1)
+
+    def test_due_west(self):
+        """Point directly west should give bearing 270."""
+        bearing = calculate_bearing(0, 0, 0, -1)
+        assert bearing == pytest.approx(270.0, abs=0.1)
+
+    def test_northeast(self):
+        """Point northeast should give bearing ~45."""
+        bearing = calculate_bearing(0, 0, 1, 1)
+        assert 40 < bearing < 50
+
+    def test_southeast(self):
+        """Point southeast should give bearing ~135."""
+        bearing = calculate_bearing(0, 0, -1, 1)
+        assert 130 < bearing < 140
+
+    def test_southwest(self):
+        """Point southwest should give bearing ~225."""
+        bearing = calculate_bearing(0, 0, -1, -1)
+        assert 220 < bearing < 230
+
+    def test_northwest(self):
+        """Point northwest should give bearing ~315."""
+        bearing = calculate_bearing(0, 0, 1, -1)
+        assert 310 < bearing < 320
+
+    def test_same_point_returns_zero(self):
+        """Same start and end point should return 0."""
+        bearing = calculate_bearing(47.0, 8.0, 47.0, 8.0)
+        assert bearing == 0.0
+
+    def test_real_world_zurich_to_bern(self):
+        """Test bearing from Zurich to Bern (roughly west-southwest)."""
+        # Zurich: 47.3769, 8.5417
+        # Bern: 46.9480, 7.4474
+        bearing = calculate_bearing(47.3769, 8.5417, 46.9480, 7.4474)
+        # Should be roughly 240-250 degrees (west-southwest)
+        assert 235 < bearing < 255
+
+
+# =============================================================================
+# Test calculate_headwind
+# =============================================================================
+
+
+class TestCalculateHeadwind:
+    """Tests for calculate_headwind function."""
+
+    def test_direct_headwind(self):
+        """Wind from same direction as travel should be full headwind."""
+        # Wind from north (0°), traveling north (0°)
+        headwind = calculate_headwind(10, 0, 0)
+        assert headwind == pytest.approx(10.0, abs=0.1)
+
+    def test_direct_tailwind(self):
+        """Wind from opposite direction should be full tailwind (negative)."""
+        # Wind from south (180°), traveling north (0°)
+        headwind = calculate_headwind(10, 180, 0)
+        assert headwind == pytest.approx(-10.0, abs=0.1)
+
+    def test_crosswind_from_east(self):
+        """Crosswind from 90° off course should give zero headwind."""
+        # Wind from east (90°), traveling north (0°)
+        headwind = calculate_headwind(10, 90, 0)
+        assert headwind == pytest.approx(0.0, abs=0.1)
+
+    def test_crosswind_from_west(self):
+        """Crosswind from 270° off course should give zero headwind."""
+        # Wind from west (270°), traveling north (0°)
+        headwind = calculate_headwind(10, 270, 0)
+        assert headwind == pytest.approx(0.0, abs=0.1)
+
+    def test_quartering_headwind(self):
+        """45° quartering headwind should give ~70% of wind speed."""
+        # Wind from NE (45°), traveling north (0°)
+        headwind = calculate_headwind(10, 45, 0)
+        # cos(45°) ≈ 0.707
+        assert headwind == pytest.approx(7.07, abs=0.1)
+
+    def test_quartering_tailwind(self):
+        """45° quartering tailwind should give ~-70% of wind speed."""
+        # Wind from SW (225°), traveling north (0°)
+        headwind = calculate_headwind(10, 225, 0)
+        # cos(225° - 0°) = cos(225°) ≈ -0.707
+        assert headwind == pytest.approx(-7.07, abs=0.1)
+
+    def test_zero_wind_speed(self):
+        """Zero wind speed should give zero headwind regardless of direction."""
+        headwind = calculate_headwind(0, 90, 45)
+        assert headwind == 0.0
+
+    def test_traveling_east_wind_from_west(self):
+        """Traveling east with wind from west should be tailwind."""
+        # Wind from west (270°) means wind blows toward east
+        # Traveling east (90°) means wind is behind you = tailwind
+        headwind = calculate_headwind(10, 270, 90)
+        assert headwind == pytest.approx(-10.0, abs=0.1)
+
+    def test_traveling_south_wind_from_north(self):
+        """Traveling south with wind from north should be tailwind."""
+        # Wind from north (0°) means wind blows toward south
+        # Traveling south (180°) means wind is behind you = tailwind
+        headwind = calculate_headwind(10, 0, 180)
+        assert headwind == pytest.approx(-10.0, abs=0.1)
+
+    def test_symmetry_of_crosswind(self):
+        """Crosswinds from left vs right should have same magnitude."""
+        hw_left = calculate_headwind(10, 45, 0)
+        hw_right = calculate_headwind(10, 315, 0)
+        assert hw_left == pytest.approx(hw_right, abs=0.01)
+
+    def test_typical_race_scenario(self):
+        """Test a realistic race scenario with moderate wind."""
+        # 15 km/h wind (4.17 m/s) from northwest (315°)
+        # Course heading northeast (45°)
+        # Angle between = 315 - 45 = 270° → cos(270°) = 0
+        # Actually: wind from 315, heading 45 → pure crosswind
+        wind_mps = 15 / 3.6  # ~4.17 m/s
+        headwind = calculate_headwind(wind_mps, 315, 45)
+        assert headwind == pytest.approx(0.0, abs=0.1)
