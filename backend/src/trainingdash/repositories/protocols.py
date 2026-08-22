@@ -1116,6 +1116,23 @@ class BackupRepo(Protocol):
         """
         ...
 
+    async def upsert_config(
+        self,
+        *,
+        enabled: bool,
+        repository_path: str,
+        retention_keep_daily: int,
+        retention_keep_weekly: int,
+        retention_keep_monthly: int,
+    ) -> "BackupConfig":
+        """
+        Create or update backup configuration from primitive values.
+
+        This is the preferred method for routers to avoid importing models.
+        Returns the saved config.
+        """
+        ...
+
     async def create_history_entry(
         self,
         trigger_type: str,

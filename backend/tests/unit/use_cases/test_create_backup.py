@@ -28,6 +28,27 @@ class FakeBackupRepo:
         self.config = config
         return config
 
+    async def upsert_config(
+        self,
+        *,
+        enabled: bool,
+        repository_path: str,
+        retention_keep_daily: int,
+        retention_keep_weekly: int,
+        retention_keep_monthly: int,
+    ):
+        config = mock.MagicMock()
+        config.enabled = enabled
+        config.repository_path = repository_path
+        config.retention_keep_daily = retention_keep_daily
+        config.retention_keep_weekly = retention_keep_weekly
+        config.retention_keep_monthly = retention_keep_monthly
+        config.encrypted_password = None
+        config.created_at = None
+        config.updated_at = None
+        self.config = config
+        return config
+
     async def create_history_entry(self, trigger_type: str, status: str, db_migration_version: str | None = None):
         entry_id = self._next_id
         self._next_id += 1

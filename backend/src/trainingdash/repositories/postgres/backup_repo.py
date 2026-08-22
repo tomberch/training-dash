@@ -47,6 +47,41 @@ class PostgresBackupRepo:
             await self._db.refresh(config)
             return config
 
+    async def upsert_config(
+        self,
+        *,
+        enabled: bool,
+        repository_path: str,
+        retention_keep_daily: int,
+        retention_keep_weekly: int,
+        retention_keep_monthly: int,
+    ) -> BackupConfig:
+        """Create or update backup configuration from primitive values."""
+        existing = await self.get_config()
+        if existing:
+            existing.enabled = enabled
+            existing.repository_path = repository_path
+            existing.retention_keep_daily = retention_keep_daily
+            existing.retention_keep_weekly = retention_keep_weekly
+            existing.retention_keep_monthly = retention_keep_monthly
+            existing.updated_at = datetime.now(UTC).replace(tzinfo=None)
+            await self._db.flush()
+            await self._db.refresh(existing)
+            return existing
+        else:
+            config = BackupConfig(
+                id=1,
+                enabled=enabled,
+                repository_path=repository_path,
+                retention_keep_daily=retention_keep_daily,
+                retention_keep_weekly=retention_keep_weekly,
+                retention_keep_monthly=retention_keep_monthly,
+            )
+            self._db.add(config)
+            await self._db.flush()
+            await self._db.refresh(config)
+            return config
+
     async def create_history_entry(
         self,
         trigger_type: str,

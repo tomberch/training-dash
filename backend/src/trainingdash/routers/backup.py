@@ -101,6 +101,22 @@ class TriggerBackupResponse(BaseModel):
     history_id: int | None = None
 
 
+class LatestBackupInfo(BaseModel):
+    """Info about the latest completed backup."""
+
+    id: int
+    completed_at: datetime | None
+    status: str
+    snapshot_id: str | None
+
+
+class BackupStatusResponse(BaseModel):
+    """Response for backup status check."""
+
+    is_running: bool
+    latest_backup: LatestBackupInfo | None = None
+
+
 # --- Endpoints ---
 
 
@@ -143,27 +159,13 @@ async def update_backup_config(
     On first save, a restic repository password will be auto-generated
     when the first backup runs.
     """
-    from trainingdash.repositories.postgres.models import BackupConfig
-
-    # Get existing or create new
-    config = await backup_repo.get_config()
-    if config is None:
-        config = BackupConfig(
-            id=1,  # Singleton
-            enabled=request.enabled,
-            repository_path=request.repository_path,
-            retention_keep_daily=request.retention_keep_daily,
-            retention_keep_weekly=request.retention_keep_weekly,
-            retention_keep_monthly=request.retention_keep_monthly,
-        )
-    else:
-        config.enabled = request.enabled
-        config.repository_path = request.repository_path
-        config.retention_keep_daily = request.retention_keep_daily
-        config.retention_keep_weekly = request.retention_keep_weekly
-        config.retention_keep_monthly = request.retention_keep_monthly
-
-    config = await backup_repo.save_config(config)
+    config = await backup_repo.upsert_config(
+        enabled=request.enabled,
+        repository_path=request.repository_path,
+        retention_keep_daily=request.retention_keep_daily,
+        retention_keep_weekly=request.retention_keep_weekly,
+        retention_keep_monthly=request.retention_keep_monthly,
+    )
 
     return BackupConfigResponse(
         enabled=config.enabled,
@@ -279,7 +281,7 @@ async def trigger_backup(
     )
 
 
-@router.get("/status")
+@router.get("/status", response_model=BackupStatusResponse)
 async def get_backup_status(
     admin: AdminUser,
     backup_repo: BackupRepoD,
@@ -292,16 +294,16 @@ async def get_backup_status(
     is_running = await backup_repo.is_backup_running()
     latest = await backup_repo.get_latest_completed()
 
-    return {
-        "is_running": is_running,
-        "latest_backup": (
-            {
-                "id": latest.id,
-                "completed_at": latest.completed_at,
-                "status": latest.status,
-                "snapshot_id": latest.snapshot_id,
-            }
+    return BackupStatusResponse(
+        is_running=is_running,
+        latest_backup=(
+            LatestBackupInfo(
+                id=latest.id,
+                completed_at=latest.completed_at,
+                status=latest.status,
+                snapshot_id=latest.snapshot_id,
+            )
             if latest
             else None
         ),
-    }
+    )
