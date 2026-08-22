@@ -54,6 +54,7 @@ class TestBackupConfigResponse:
         response = BackupConfigResponse(
             enabled=True,
             repository_path="/data/backups",
+            schedule_hour=3,
             retention_keep_daily=7,
             retention_keep_weekly=4,
             retention_keep_monthly=3,
@@ -62,6 +63,7 @@ class TestBackupConfigResponse:
         data = response.model_dump()
         assert data["enabled"] is True
         assert data["has_password"] is True
+        assert data["schedule_hour"] == 3
         assert data["created_at"] is None
 
 

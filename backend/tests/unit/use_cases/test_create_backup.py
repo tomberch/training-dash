@@ -33,6 +33,7 @@ class FakeBackupRepo:
         *,
         enabled: bool,
         repository_path: str,
+        schedule_hour: int | None = None,
         retention_keep_daily: int,
         retention_keep_weekly: int,
         retention_keep_monthly: int,
@@ -40,6 +41,7 @@ class FakeBackupRepo:
         config = mock.MagicMock()
         config.enabled = enabled
         config.repository_path = repository_path
+        config.schedule_hour = schedule_hour
         config.retention_keep_daily = retention_keep_daily
         config.retention_keep_weekly = retention_keep_weekly
         config.retention_keep_monthly = retention_keep_monthly

@@ -32,6 +32,7 @@ class BackupConfigResponse(BaseModel):
 
     enabled: bool
     repository_path: str
+    schedule_hour: int | None
     retention_keep_daily: int
     retention_keep_weekly: int
     retention_keep_monthly: int
@@ -47,6 +48,12 @@ class BackupConfigUpdate(BaseModel):
     repository_path: str = Field(
         default="/data/backups",
         description="Path to restic repository",
+    )
+    schedule_hour: int | None = Field(
+        default=None,
+        ge=0,
+        le=23,
+        description="Hour of day (0-23 UTC) to run scheduled backup. Null for manual-only.",
     )
     retention_keep_daily: int = Field(
         default=7,
@@ -137,6 +144,7 @@ async def get_backup_config(
     return BackupConfigResponse(
         enabled=config.enabled,
         repository_path=config.repository_path,
+        schedule_hour=config.schedule_hour,
         retention_keep_daily=config.retention_keep_daily,
         retention_keep_weekly=config.retention_keep_weekly,
         retention_keep_monthly=config.retention_keep_monthly,
@@ -162,6 +170,7 @@ async def update_backup_config(
     config = await backup_repo.upsert_config(
         enabled=request.enabled,
         repository_path=request.repository_path,
+        schedule_hour=request.schedule_hour,
         retention_keep_daily=request.retention_keep_daily,
         retention_keep_weekly=request.retention_keep_weekly,
         retention_keep_monthly=request.retention_keep_monthly,
@@ -170,6 +179,7 @@ async def update_backup_config(
     return BackupConfigResponse(
         enabled=config.enabled,
         repository_path=config.repository_path,
+        schedule_hour=config.schedule_hour,
         retention_keep_daily=config.retention_keep_daily,
         retention_keep_weekly=config.retention_keep_weekly,
         retention_keep_monthly=config.retention_keep_monthly,

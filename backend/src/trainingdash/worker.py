@@ -438,6 +438,109 @@ async def prune_old_data(ctx: dict) -> dict:
     }
 
 
+@tracked_job("backup")
+async def backup_job(ctx: dict) -> dict:
+    """
+    Execute a database and uploads backup using restic.
+
+    This job is triggered by the hourly backup scheduler when the current
+    hour matches the configured schedule_hour. Can also be enqueued manually.
+
+    Uses the CreateBackup use case which handles:
+    - pg_dump piped to restic
+    - Uploads directory backup
+    - Metadata JSON generation
+    - Retention policy enforcement
+    """
+    from trainingdash.repositories.postgres.backup_repo import PostgresBackupRepo
+    from trainingdash.use_cases import CreateBackup
+
+    database_url = os.environ.get("DATABASE_URL", "")
+    if not database_url:
+        return {"success": False, "error": "DATABASE_URL not configured"}
+
+    async with worker_db_session(ctx) as db:
+        repo = PostgresBackupRepo(db)
+        use_case = CreateBackup(
+            backup_repo=repo,
+            database_url=database_url,
+        )
+        result = await use_case.execute(trigger_type="scheduled")
+
+        return {
+            "success": result.success,
+            "history_id": result.history_id,
+            "snapshot_id": result.snapshot_id,
+            "duration_seconds": result.duration_seconds,
+            "files_new": result.files_new,
+            "files_changed": result.files_changed,
+            "bytes_added": result.bytes_added,
+            "error": result.error,
+        }
+
+
+async def hourly_backup_scheduler(ctx: dict) -> dict:
+    """
+    Hourly cron: trigger backup if current hour matches configured schedule_hour.
+
+    Checks the backup_config table for an enabled config with a schedule_hour
+    that matches the current UTC hour. If found, enqueues a backup_job.
+
+    Skips if:
+    - No backup config exists
+    - Backup is disabled
+    - schedule_hour is null (manual-only mode)
+    - Current hour doesn't match schedule_hour
+    - A backup is already running
+    """
+    from datetime import UTC, datetime
+
+    from sqlalchemy import select
+
+    from trainingdash.jobs import get_queue
+    from trainingdash.repositories.postgres.models import BackupConfig, BackupHistory
+
+    current_hour = datetime.now(UTC).hour
+
+    async with worker_db_session(ctx) as db:
+        # Get backup config
+        result = await db.execute(select(BackupConfig).where(BackupConfig.id == 1))
+        config = result.scalar_one_or_none()
+
+        if config is None:
+            logger.debug("hourly_backup_scheduler: no backup config found")
+            return {"triggered": False, "reason": "no_config"}
+
+        if not config.enabled:
+            logger.debug("hourly_backup_scheduler: backup disabled")
+            return {"triggered": False, "reason": "disabled"}
+
+        if config.schedule_hour is None:
+            logger.debug("hourly_backup_scheduler: manual-only mode (no schedule_hour)")
+            return {"triggered": False, "reason": "manual_only"}
+
+        if config.schedule_hour != current_hour:
+            logger.debug(
+                f"hourly_backup_scheduler: not scheduled hour (current={current_hour}, scheduled={config.schedule_hour})"
+            )
+            return {"triggered": False, "reason": "wrong_hour"}
+
+        # Check if backup is already running
+        running = await db.execute(
+            select(BackupHistory.id).where(BackupHistory.status == "running").limit(1)
+        )
+        if running.scalar_one_or_none() is not None:
+            logger.info("hourly_backup_scheduler: backup already running, skipping")
+            return {"triggered": False, "reason": "already_running"}
+
+        # Enqueue the backup job
+        queue = await get_queue()
+        await queue.enqueue("backup_job")
+        logger.info(f"hourly_backup_scheduler: enqueued backup job (hour={current_hour})")
+
+        return {"triggered": True, "hour": current_hour}
+
+
 # SAQ worker settings - this is what `saq worker.settings` loads
 # Note: SAQ supports settings as a callable, which delays queue creation
 # until the worker actually starts. This is crucial for Docker Compose
@@ -470,7 +573,9 @@ def settings():
             fetch_weather_job,
             sync_xert_job,
             sync_garmin_job,
+            backup_job,
             hourly_sync_scheduler,
+            hourly_backup_scheduler,
             flush_cache_stats,
             prune_old_data,
         ],
@@ -478,9 +583,11 @@ def settings():
         "startup": startup,
         "shutdown": shutdown,
         # Cron schedule: run the sync scheduler at the top of every hour,
+        # backup scheduler at :01 past each hour,
         # flush cache stats at :05 past each hour, and prune old data daily at 4 AM
         "cron_jobs": [
             CronJob(hourly_sync_scheduler, cron="0 * * * *", unique=True),
+            CronJob(hourly_backup_scheduler, cron="1 * * * *", unique=True),
             CronJob(flush_cache_stats, cron="5 * * * *", unique=True),
             CronJob(prune_old_data, cron="0 4 * * *", unique=True),
         ],

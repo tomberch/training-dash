@@ -1121,6 +1121,7 @@ class BackupRepo(Protocol):
         *,
         enabled: bool,
         repository_path: str,
+        schedule_hour: int | None,
         retention_keep_daily: int,
         retention_keep_weekly: int,
         retention_keep_monthly: int,

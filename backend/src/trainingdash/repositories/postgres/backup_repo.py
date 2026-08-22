@@ -52,6 +52,7 @@ class PostgresBackupRepo:
         *,
         enabled: bool,
         repository_path: str,
+        schedule_hour: int | None,
         retention_keep_daily: int,
         retention_keep_weekly: int,
         retention_keep_monthly: int,
@@ -61,6 +62,7 @@ class PostgresBackupRepo:
         if existing:
             existing.enabled = enabled
             existing.repository_path = repository_path
+            existing.schedule_hour = schedule_hour
             existing.retention_keep_daily = retention_keep_daily
             existing.retention_keep_weekly = retention_keep_weekly
             existing.retention_keep_monthly = retention_keep_monthly
@@ -73,6 +75,7 @@ class PostgresBackupRepo:
                 id=1,
                 enabled=enabled,
                 repository_path=repository_path,
+                schedule_hour=schedule_hour,
                 retention_keep_daily=retention_keep_daily,
                 retention_keep_weekly=retention_keep_weekly,
                 retention_keep_monthly=retention_keep_monthly,
