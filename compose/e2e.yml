@@ -6,6 +6,8 @@
 #   docker compose -f compose/e2e.yml up -d --build
 #   docker compose -f compose/e2e.yml down -v
 
+name: traindash-e2e
+
 services:
   db:
     image: postgis/postgis:16-3.4
@@ -34,8 +36,10 @@ services:
       TRAININGDASH_ENCRYPTION_KEY: D1prO+2rx2zmauRYJc8yKA2rbW0ABdAo5uf8ZJMoXSQ=
       MOCK_XERT_ENABLED: "true"
       MOCK_XERT_FIXTURES_DIR: /app/e2e-fixtures/fit-files
+      TRAININGDASH_UPLOADS_DIR: /app/uploads
     volumes:
       - e2e-tilecache:/app/tile-cache
+      - e2e-uploads:/app/uploads
       - ../frontend/e2e/fixtures:/app/e2e-fixtures:ro
     depends_on:
       db:
@@ -60,8 +64,11 @@ services:
       MOCK_XERT_ENABLED: "true"
       MOCK_XERT_FIXTURES_DIR: /app/e2e-fixtures/fit-files
       DISABLE_GEOCODING: "true"
+      TRAININGDASH_UPLOADS_DIR: /app/uploads
     volumes:
       - ../frontend/e2e/fixtures:/app/e2e-fixtures:ro
+      - e2e-uploads:/app/uploads
+      - e2e-backups:/data/backups
     depends_on:
       app:
         condition: service_healthy
@@ -69,3 +76,5 @@ services:
 
 volumes:
   e2e-tilecache:
+  e2e-uploads:
+  e2e-backups:

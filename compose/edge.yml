@@ -5,6 +5,8 @@
 #   docker compose -f compose/edge.yml up -d
 #   docker compose -f compose/edge.yml down
 
+name: traindash-edge
+
 services:
   db:
     image: postgis/postgis:16-3.4
@@ -29,8 +31,10 @@ services:
       SECRET_KEY: edge-secret-change-me
       ADMIN_PASSWORD: admin
       TRAININGDASH_ENCRYPTION_KEY: D1prO+2rx2zmauRYJc8yKA2rbW0ABdAo5uf8ZJMoXSQ=
+      TRAININGDASH_UPLOADS_DIR: /app/uploads
     volumes:
       - tilecache-edge:/app/tile-cache
+      - uploads-edge:/app/uploads
     depends_on:
       db:
         condition: service_healthy
@@ -42,6 +46,10 @@ services:
       DATABASE_URL: postgresql+asyncpg://trainingdash:trainingdash@db:5432/trainingdash
       SECRET_KEY: edge-secret-change-me
       TRAININGDASH_ENCRYPTION_KEY: D1prO+2rx2zmauRYJc8yKA2rbW0ABdAo5uf8ZJMoXSQ=
+      TRAININGDASH_UPLOADS_DIR: /app/uploads
+    volumes:
+      - uploads-edge:/app/uploads
+      - backups-edge:/data/backups
     depends_on:
       db:
         condition: service_healthy
@@ -50,3 +58,5 @@ services:
 volumes:
   pgdata-edge:
   tilecache-edge:
+  uploads-edge:
+  backups-edge:

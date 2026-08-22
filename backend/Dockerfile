@@ -46,6 +46,8 @@ WORKDIR /app
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     libpq5 \
     curl \
+    postgresql-client \
+    restic \
     && rm -rf /var/lib/apt/lists/* \
     # Remove pip/setuptools from runtime - we don't need them
     && pip uninstall -y pip setuptools \
@@ -64,8 +66,8 @@ COPY backend/migrations/ ./migrations/
 # Copy built frontend
 COPY --from=frontend-builder /frontend/dist ./static/
 
-# Create tile cache directory
-RUN mkdir -p /app/tile-cache
+# Create tile cache and uploads directories
+RUN mkdir -p /app/tile-cache /app/uploads /data/backups
 
 EXPOSE 8000
 
