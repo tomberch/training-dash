@@ -773,3 +773,165 @@ class TestActivityBikeTagging:
         assert response.status_code == 200
         assert response.json()["title"] == "New Title"
         assert response.json()["bike_id"] == bike_id  # Bike unchanged
+
+
+
+
+class TestCalcTrace:
+    """Tests for the ?include=calc_trace query parameter on GET /api/activities/{id}."""
+
+    async def _upload_with_thresholds(self, auth_client, num_records=60):
+        """Upload activity and create thresholds, return activity_id."""
+        # Create thresholds first (before activity date)
+        await auth_client.post(
+            "/api/me/thresholds",
+            json={"effective_date": "2024-01-01", "ftp_watts": 280, "lthr_bpm": 165, "hrmax_bpm": 185},
+        )
+        # Upload activity
+        fit_data = make_test_fit(num_records=num_records)
+        resp = await auth_client.post(
+            "/api/upload",
+            files={"file": ("test.fit", fit_data, "application/octet-stream")},
+        )
+        return resp.json()["id"]
+
+    @pytest.mark.asyncio
+    async def test_activity_includes_effective_thresholds(self, auth_client):
+        """Activity response includes effective_ftp and effective_lthr."""
+        activity_id = await self._upload_with_thresholds(auth_client)
+        
+        response = await auth_client.get(f"/api/activities/{activity_id}")
+        assert response.status_code == 200
+        data = response.json()
+        
+        assert "effective_ftp" in data
+        assert "effective_lthr" in data
+        assert data["effective_ftp"] == 280
+        assert data["effective_lthr"] == 165
+
+    @pytest.mark.asyncio
+    async def test_activity_without_include_has_no_calc_trace(self, auth_client):
+        """Normal activity response does not include calc_trace."""
+        activity_id = await self._upload_with_thresholds(auth_client)
+        
+        response = await auth_client.get(f"/api/activities/{activity_id}")
+        assert response.status_code == 200
+        data = response.json()
+        
+        assert "calc_trace" not in data
+
+    @pytest.mark.asyncio
+    async def test_include_calc_trace_returns_zone_boundaries(self, auth_client):
+        """With include=calc_trace, response includes power and HR zones."""
+        activity_id = await self._upload_with_thresholds(auth_client)
+        
+        response = await auth_client.get(f"/api/activities/{activity_id}?include=calc_trace")
+        assert response.status_code == 200
+        data = response.json()
+        
+        assert "calc_trace" in data
+        calc_trace = data["calc_trace"]
+        
+        # Power zones
+        assert "power_zones" in calc_trace
+        power_zones = calc_trace["power_zones"]
+        assert len(power_zones) == 7  # Coggan 7-zone system
+        assert power_zones[0]["zone"] == 1
+        assert power_zones[0]["name"] == "Active Recovery"
+        assert power_zones[0]["min_watts"] == 0
+        assert power_zones[0]["max_watts"] == int(280 * 0.55)  # 55% of FTP
+        
+        # HR zones
+        assert "hr_zones" in calc_trace
+        hr_zones = calc_trace["hr_zones"]
+        assert len(hr_zones) == 5  # 5-zone HR system
+        assert hr_zones[0]["zone"] == 1
+        assert hr_zones[0]["name"] == "Recovery"
+
+    @pytest.mark.asyncio
+    async def test_include_calc_trace_returns_wbal_curve(self, auth_client):
+        """With include=calc_trace, response includes W'bal curve."""
+        activity_id = await self._upload_with_thresholds(auth_client, num_records=120)
+        
+        response = await auth_client.get(f"/api/activities/{activity_id}?include=calc_trace")
+        assert response.status_code == 200
+        data = response.json()
+        
+        calc_trace = data["calc_trace"]
+        assert "wbal_curve" in calc_trace
+        assert "w_prime_joules" in calc_trace
+        assert "cp_watts" in calc_trace
+        
+        # W'bal curve should be sampled (not every second)
+        wbal_curve = calc_trace["wbal_curve"]
+        assert len(wbal_curve) > 0
+        
+        # First point should be at elapsed_s=0
+        assert wbal_curve[0]["elapsed_s"] == 0
+        assert "wbal_joules" in wbal_curve[0]
+        assert "wbal_pct" in wbal_curve[0]
+        
+        # W' should be FTP * 60
+        assert calc_trace["w_prime_joules"] == 280 * 60
+        assert calc_trace["cp_watts"] == 280
+
+    @pytest.mark.asyncio
+    async def test_include_calc_trace_returns_peak_windows(self, auth_client):
+        """With include=calc_trace, response includes peak windows with indices."""
+        activity_id = await self._upload_with_thresholds(auth_client, num_records=120)
+        
+        response = await auth_client.get(f"/api/activities/{activity_id}?include=calc_trace")
+        assert response.status_code == 200
+        data = response.json()
+        
+        calc_trace = data["calc_trace"]
+        assert "peak_windows" in calc_trace
+        
+        peak_windows = calc_trace["peak_windows"]
+        # Should have at least some peaks for a 120-second activity
+        assert len(peak_windows) > 0
+        
+        # Each peak window should have required fields
+        for pw in peak_windows:
+            assert "duration_seconds" in pw
+            assert "watts" in pw
+            assert "start_index" in pw
+            assert "end_index" in pw
+            # end_index should be start_index + duration - 1
+            assert pw["end_index"] == pw["start_index"] + pw["duration_seconds"] - 1
+
+    @pytest.mark.asyncio
+    async def test_calc_trace_without_thresholds(self, auth_client):
+        """Calc trace works even without thresholds (zones will be null)."""
+        # Upload without creating thresholds
+        fit_data = make_test_fit(num_records=60)
+        resp = await auth_client.post(
+            "/api/upload",
+            files={"file": ("test.fit", fit_data, "application/octet-stream")},
+        )
+        activity_id = resp.json()["id"]
+        
+        response = await auth_client.get(f"/api/activities/{activity_id}?include=calc_trace")
+        assert response.status_code == 200
+        data = response.json()
+        
+        assert data["effective_ftp"] is None
+        assert data["effective_lthr"] is None
+        
+        calc_trace = data["calc_trace"]
+        assert calc_trace["power_zones"] is None
+        assert calc_trace["hr_zones"] is None
+        assert calc_trace["wbal_curve"] is None
+
+    @pytest.mark.asyncio
+    async def test_invalid_include_param_ignored(self, auth_client):
+        """Invalid include param value is ignored (no calc_trace returned)."""
+        activity_id = await self._upload_with_thresholds(auth_client)
+        
+        response = await auth_client.get(f"/api/activities/{activity_id}?include=invalid")
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Should return normal response without calc_trace
+        assert "calc_trace" not in data
+        assert "effective_ftp" in data  # But effective thresholds are always included

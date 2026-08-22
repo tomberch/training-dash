@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 
 from trainingdash.auth import CurrentUser, DbSession
-from trainingdash.dependencies import ActivityRepoD, BikeRepoD, DeleteActivityD, ThresholdRepoD
+from trainingdash.dependencies import ActivityRepoD, BikeRepoD, DeleteActivityD, RecordRepoD, ThresholdRepoD
 from trainingdash.domain.activity_type import validate_activity_type
 from trainingdash.domain.fit_modifier import FitModifications
 from trainingdash.repositories.postgres.models import Activity, ActivityPeakPower, Record
@@ -105,10 +105,32 @@ async def list_activities(
 
 
 @router.get("/activities/{activity_id}")
-async def get_activity(db: DbSession, repo: ActivityRepoD, user: CurrentUser, activity_id: UUID):
-    """Get full details for an activity including peak powers."""
+async def get_activity(
+    db: DbSession,
+    repo: ActivityRepoD,
+    threshold_repo: ThresholdRepoD,
+    record_repo: RecordRepoD,
+    user: CurrentUser,
+    activity_id: UUID,
+    include: str | None = Query(default=None, description="Optional: 'calc_trace' for calculation transparency data"),
+):
+    """Get full details for an activity including peak powers.
+    
+    When include=calc_trace, adds:
+    - zone_boundaries: Power and HR zones computed from effective thresholds
+    - wbal_curve: W'bal trajectory sampled every 30s
+    - peak_windows: Start/end indices for each peak duration
+    """
+    from trainingdash.use_cases.build_calc_trace import BuildCalcTrace, PeakInfo
+
     activity = await _get_owned_activity(repo, user, activity_id)
     result = activity_detail(activity)
+
+    # Get effective thresholds for this activity's date
+    activity_date = activity.started_at.date()
+    thresholds = await threshold_repo.get_for_date(user.id, activity_date)
+    result["effective_ftp"] = thresholds.ftp_watts
+    result["effective_lthr"] = thresholds.lthr_bpm
 
     # Fetch peak powers for this activity
     peaks_result = await db.execute(
@@ -145,6 +167,21 @@ async def get_activity(db: DbSession, repo: ActivityRepoD, user: CurrentUser, ac
         }
         for p in peaks
     ]
+
+    # Add calc_trace data if requested (via use case)
+    if include == "calc_trace":
+        use_case = BuildCalcTrace(record_repo)
+        peak_infos = [PeakInfo(p.duration_seconds, p.watts) for p in peaks]
+        calc_trace_result = await use_case.execute(activity_id, thresholds, peak_infos)
+        
+        result["calc_trace"] = {
+            "power_zones": calc_trace_result.power_zones,
+            "hr_zones": calc_trace_result.hr_zones,
+            "wbal_curve": calc_trace_result.wbal_curve,
+            "w_prime_joules": calc_trace_result.w_prime_joules,
+            "cp_watts": calc_trace_result.cp_watts,
+            "peak_windows": calc_trace_result.peak_windows,
+        }
 
     return result
 
