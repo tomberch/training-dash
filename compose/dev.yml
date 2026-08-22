@@ -2,8 +2,8 @@
 # Builds from local source code
 #
 # Usage:
-#   docker compose -f compose/dev.yml up -d --build
-#   docker compose -f compose/dev.yml down
+#   docker compose --env-file .env -f compose/dev.yml up -d --build
+#   docker compose --env-file .env -f compose/dev.yml down
 
 name: traindash-dev
 
@@ -36,6 +36,7 @@ services:
       ADMIN_PASSWORD: admin
       TRAININGDASH_ENCRYPTION_KEY: D1prO+2rx2zmauRYJc8yKA2rbW0ABdAo5uf8ZJMoXSQ=
       TRAININGDASH_UPLOADS_DIR: /app/uploads
+      BACKUP_HOST_PATH: ${BACKUP_HOST_PATH:-}
     volumes:
       - tilecache:/app/tile-cache
       - uploads:/app/uploads
@@ -48,14 +49,17 @@ services:
     build:
       context: ..
       dockerfile: backend/Dockerfile
+    env_file:
+      - ../.env
     environment:
       DATABASE_URL: postgresql+asyncpg://trainingdash:trainingdash@db:5432/trainingdash
       SECRET_KEY: dev-secret-change-me
       TRAININGDASH_ENCRYPTION_KEY: D1prO+2rx2zmauRYJc8yKA2rbW0ABdAo5uf8ZJMoXSQ=
       TRAININGDASH_UPLOADS_DIR: /app/uploads
+      BACKUP_HOST_PATH: ${BACKUP_HOST_PATH:-}
     volumes:
       - uploads:/app/uploads
-      - backups:/data/backups
+      - ${BACKUP_HOST_PATH:-/tmp/no-backup}:/data/backups
     depends_on:
       db:
         condition: service_healthy
@@ -65,4 +69,3 @@ volumes:
   pgdata:
   tilecache:
   uploads:
-  backups:

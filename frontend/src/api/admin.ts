@@ -190,20 +190,19 @@ export async function fetchCacheStats(days?: number): Promise<CacheStatsResponse
 
 // Backup API
 export interface BackupConfig {
-  enabled: boolean;
-  repository_path: string;
+  configured: boolean;
+  host_path: string | null;
+  path_valid: boolean;
+  path_error: string | null;
   schedule_hour: number | null;
   retention_keep_daily: number;
   retention_keep_weekly: number;
   retention_keep_monthly: number;
   has_password: boolean;
-  created_at: string | null;
   updated_at: string | null;
 }
 
 export interface BackupConfigUpdate {
-  enabled: boolean;
-  repository_path: string;
   schedule_hour: number | null;
   retention_keep_daily: number;
   retention_keep_weekly: number;
@@ -233,6 +232,7 @@ export interface BackupHistoryResponse {
 }
 
 export interface BackupStatus {
+  configured: boolean;
   is_running: boolean;
   latest_backup: {
     id: number;

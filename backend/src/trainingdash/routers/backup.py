@@ -1,20 +1,70 @@
 """Backup management API endpoints (admin only).
 
-Provides endpoints for:
-- GET/PUT backup configuration
-- GET backup history
-- POST trigger manual backup
+Backup is enabled when BACKUP_HOST_PATH environment variable is set.
+Configuration (schedule, retention) can be updated via PUT.
 """
 
+import os
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
-from trainingdash.auth import AdminUser, DbSession
+from trainingdash.auth import AdminUser
 from trainingdash.dependencies import BackupRepoD
 
 router = APIRouter(prefix="/api/admin/backup", tags=["admin-backup"])
+
+# Container path where backups are stored (must match volume mount)
+BACKUP_CONTAINER_PATH = "/data/backups"
+
+
+def get_host_path() -> str | None:
+    """Get the host backup path from environment. None means backup is disabled."""
+    path = os.environ.get("BACKUP_HOST_PATH")
+    return path if path else None  # Treat empty string as not set
+
+
+def is_backup_path_valid() -> bool:
+    """Check if the backup container path exists and is writable."""
+    path = Path(BACKUP_CONTAINER_PATH)
+    if not path.exists():
+        return False
+    if not path.is_dir():
+        return False
+    # Check if writable by attempting to create a test file
+    test_file = path / ".write_test"
+    try:
+        test_file.touch()
+        test_file.unlink()
+        return True
+    except (OSError, PermissionError):
+        return False
+
+
+def get_path_error() -> str | None:
+    """Get a human-readable error message if path is invalid."""
+    path = Path(BACKUP_CONTAINER_PATH)
+    if not path.exists():
+        return "Path does not exist or is not mounted"
+    if not path.is_dir():
+        return "Path exists but is not a directory"
+    # Check if writable
+    test_file = path / ".write_test"
+    try:
+        test_file.touch()
+        test_file.unlink()
+        return None
+    except PermissionError:
+        return "Path exists but is not writable (permission denied)"
+    except OSError as e:
+        return f"Path exists but is not writable ({e})"
+
+
+def is_backup_configured() -> bool:
+    """Check if backup is configured via environment."""
+    return get_host_path() is not None
 
 
 # --- Request/Response Models ---
@@ -23,25 +73,21 @@ router = APIRouter(prefix="/api/admin/backup", tags=["admin-backup"])
 class BackupConfigResponse(BaseModel):
     """Response model for backup configuration."""
 
-    enabled: bool
-    repository_path: str
+    configured: bool  # True if BACKUP_HOST_PATH is set
+    host_path: str | None  # The actual host path where backups go
+    path_valid: bool  # True if path exists and is writable
+    path_error: str | None  # Error message if path is invalid
     schedule_hour: int | None
     retention_keep_daily: int
     retention_keep_weekly: int
     retention_keep_monthly: int
     has_password: bool
-    created_at: datetime | None = None
     updated_at: datetime | None = None
 
 
 class BackupConfigUpdate(BaseModel):
-    """Request model for updating backup configuration."""
+    """Request model for updating backup schedule/retention."""
 
-    enabled: bool = Field(description="Enable or disable automated backups")
-    repository_path: str = Field(
-        default="/data/backups",
-        description="Path to restic repository",
-    )
     schedule_hour: int | None = Field(
         default=None,
         ge=0,
@@ -113,6 +159,7 @@ class LatestBackupInfo(BaseModel):
 class BackupStatusResponse(BaseModel):
     """Response for backup status check."""
 
+    configured: bool
     is_running: bool
     latest_backup: LatestBackupInfo | None = None
 
@@ -120,7 +167,7 @@ class BackupStatusResponse(BaseModel):
 # --- Endpoints ---
 
 
-@router.get("/config", response_model=BackupConfigResponse | None)
+@router.get("/config", response_model=BackupConfigResponse)
 async def get_backup_config(
     admin: AdminUser,
     backup_repo: BackupRepoD,
@@ -128,22 +175,27 @@ async def get_backup_config(
     """
     Get current backup configuration.
 
-    Returns null if backup has not been configured yet.
+    Backup is enabled when BACKUP_HOST_PATH environment variable is set.
     """
+    host_path = get_host_path()
+    configured = host_path is not None
+    path_valid = is_backup_path_valid() if configured else False
+    path_error = get_path_error() if configured else None
+    
+    # Get stored config for schedule/retention (may not exist yet)
     config = await backup_repo.get_config()
-    if config is None:
-        return None
 
     return BackupConfigResponse(
-        enabled=config.enabled,
-        repository_path=config.repository_path,
-        schedule_hour=config.schedule_hour,
-        retention_keep_daily=config.retention_keep_daily,
-        retention_keep_weekly=config.retention_keep_weekly,
-        retention_keep_monthly=config.retention_keep_monthly,
-        has_password=config.encrypted_password is not None,
-        created_at=config.created_at,
-        updated_at=config.updated_at,
+        configured=configured,
+        host_path=host_path,
+        path_valid=path_valid,
+        path_error=path_error,
+        schedule_hour=config.schedule_hour if config else None,
+        retention_keep_daily=config.retention_keep_daily if config else 7,
+        retention_keep_weekly=config.retention_keep_weekly if config else 4,
+        retention_keep_monthly=config.retention_keep_monthly if config else 3,
+        has_password=config.encrypted_password is not None if config else False,
+        updated_at=config.updated_at if config else None,
     )
 
 
@@ -151,18 +203,23 @@ async def get_backup_config(
 async def update_backup_config(
     admin: AdminUser,
     backup_repo: BackupRepoD,
-    db: DbSession,
     request: BackupConfigUpdate,
 ):
     """
-    Create or update backup configuration.
+    Update backup schedule and retention settings.
 
-    On first save, a restic repository password will be auto-generated
-    when the first backup runs.
+    Backup must be configured via BACKUP_HOST_PATH environment variable.
     """
+    host_path = get_host_path()
+    if not host_path:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Backup not configured. Set BACKUP_HOST_PATH environment variable.",
+        )
+
     config = await backup_repo.upsert_config(
-        enabled=request.enabled,
-        repository_path=request.repository_path,
+        enabled=True,  # Always enabled when host_path is set
+        repository_path=BACKUP_CONTAINER_PATH,
         schedule_hour=request.schedule_hour,
         retention_keep_daily=request.retention_keep_daily,
         retention_keep_weekly=request.retention_keep_weekly,
@@ -170,14 +227,15 @@ async def update_backup_config(
     )
 
     return BackupConfigResponse(
-        enabled=config.enabled,
-        repository_path=config.repository_path,
+        configured=True,
+        host_path=host_path,
+        path_valid=is_backup_path_valid(),
+        path_error=get_path_error(),
         schedule_hour=config.schedule_hour,
         retention_keep_daily=config.retention_keep_daily,
         retention_keep_weekly=config.retention_keep_weekly,
         retention_keep_monthly=config.retention_keep_monthly,
         has_password=config.encrypted_password is not None,
-        created_at=config.created_at,
         updated_at=config.updated_at,
     )
 
@@ -188,9 +246,7 @@ async def get_backup_history(
     backup_repo: BackupRepoD,
     limit: int = Query(20, ge=1, le=100, description="Max entries to return"),
 ):
-    """
-    Get backup history, most recent first.
-    """
+    """Get backup history, most recent first."""
     entries = await backup_repo.get_history(limit=limit)
     return BackupHistoryResponse(
         entries=[
@@ -227,21 +283,37 @@ async def trigger_backup(
     Enqueues a backup job on the worker. The backup runs asynchronously;
     check /status or /history for progress.
     """
-    # Check preconditions
+    if not is_backup_configured():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Backup not configured. Set BACKUP_HOST_PATH environment variable.",
+        )
+
+    if not is_backup_path_valid():
+        error = get_path_error() or "Unknown error"
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Backup path is invalid: {error}",
+        )
+
     if await backup_repo.is_backup_running():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="A backup is already running",
         )
 
+    # Ensure config exists in DB (create with defaults if needed)
     config = await backup_repo.get_config()
-    if config is None or not config.enabled:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Backup is not configured or disabled",
+    if config is None:
+        await backup_repo.upsert_config(
+            enabled=True,
+            repository_path=BACKUP_CONTAINER_PATH,
+            schedule_hour=None,
+            retention_keep_daily=7,
+            retention_keep_weekly=4,
+            retention_keep_monthly=3,
         )
 
-    # Enqueue backup job on worker (which has the backup volume mounted)
     from trainingdash.jobs import enqueue_backup_job
 
     job_key = await enqueue_backup_job()
@@ -253,7 +325,7 @@ async def trigger_backup(
 
     return TriggerBackupResponse(
         message="Backup job enqueued",
-        history_id=None,  # History entry created by worker when job starts
+        history_id=None,
     )
 
 
@@ -265,12 +337,14 @@ async def get_backup_status(
     """
     Get current backup status.
 
-    Returns whether a backup is running and the latest completed backup info.
+    Returns whether backup is configured, running, and latest backup info.
     """
-    is_running = await backup_repo.is_backup_running()
-    latest = await backup_repo.get_latest_completed()
+    configured = is_backup_configured()
+    is_running = await backup_repo.is_backup_running() if configured else False
+    latest = await backup_repo.get_latest_completed() if configured else None
 
     return BackupStatusResponse(
+        configured=configured,
         is_running=is_running,
         latest_backup=(
             LatestBackupInfo(

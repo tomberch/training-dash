@@ -1,6 +1,8 @@
 /**
  * Backup Settings panel for admin.
- * Allows configuring backup schedule, retention, and triggering manual backups.
+ *
+ * Backup is enabled when BACKUP_HOST_PATH is set in the environment.
+ * If not configured, shows a message explaining how to enable it.
  */
 import { useState, useEffect } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -53,9 +55,7 @@ export function BackupSettings({ onError }: BackupSettingsProps) {
   const [saving, setSaving] = useState(false);
   const [triggering, setTriggering] = useState(false);
 
-  // Form state
-  const [enabled, setEnabled] = useState(false);
-  const [repositoryPath, setRepositoryPath] = useState("/data/backups");
+  // Form state for schedule/retention
   const [scheduleHour, setScheduleHour] = useState<number | null>(null);
   const [keepDaily, setKeepDaily] = useState(7);
   const [keepWeekly, setKeepWeekly] = useState(4);
@@ -79,8 +79,6 @@ export function BackupSettings({ onError }: BackupSettingsProps) {
 
       // Initialize form with config values
       if (configData) {
-        setEnabled(configData.enabled);
-        setRepositoryPath(configData.repository_path);
         setScheduleHour(configData.schedule_hour);
         setKeepDaily(configData.retention_keep_daily);
         setKeepWeekly(configData.retention_keep_weekly);
@@ -97,8 +95,6 @@ export function BackupSettings({ onError }: BackupSettingsProps) {
     setSaving(true);
     try {
       const updated = await updateBackupConfig({
-        enabled,
-        repository_path: repositoryPath,
         schedule_hour: scheduleHour,
         retention_keep_daily: keepDaily,
         retention_keep_weekly: keepWeekly,
@@ -145,10 +141,67 @@ export function BackupSettings({ onError }: BackupSettingsProps) {
     );
   }
 
+  // Not configured - show setup instructions
+  if (!config?.configured) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Backup Settings</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="rounded-lg border border-border bg-muted/50 p-4">
+            <h3 className="font-medium text-foreground mb-2">Backup Not Configured</h3>
+            <p className="text-body-secondary mb-3">
+              To enable backups, set the <code className="px-1.5 py-0.5 bg-muted rounded text-sm font-mono">BACKUP_HOST_PATH</code> environment
+              variable to the directory where you want backups stored.
+            </p>
+            <div className="bg-card rounded border border-border p-3 font-mono text-sm">
+              <p className="text-muted-foreground"># In your .env file or docker-compose.yml:</p>
+              <p className="text-foreground">BACKUP_HOST_PATH=/path/to/your/backups</p>
+            </div>
+            <p className="text-caption mt-3">
+              After setting this variable, restart the containers for changes to take effect.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Path configured but invalid - show error
+  if (!config.path_valid) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Backup Settings</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+            <h3 className="font-medium text-destructive mb-2">Backup Path Invalid</h3>
+            <p className="text-body-secondary mb-3">
+              The backup path is configured but cannot be used:
+            </p>
+            <div className="bg-card rounded border border-border p-3 mb-3">
+              <p className="text-sm">
+                <span className="text-muted-foreground">Path:</span>{" "}
+                <code className="font-mono">{config.host_path}</code>
+              </p>
+              <p className="text-sm text-destructive mt-1">
+                <span className="text-muted-foreground">Error:</span>{" "}
+                {config.path_error}
+              </p>
+            </div>
+            <p className="text-caption">
+              Make sure the path exists on the host and is properly mounted into the container.
+              Check that the directory has write permissions.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   const hasChanges =
-    config === null ||
-    enabled !== config.enabled ||
-    repositoryPath !== config.repository_path ||
     scheduleHour !== config.schedule_hour ||
     keepDaily !== config.retention_keep_daily ||
     keepWeekly !== config.retention_keep_weekly ||
@@ -162,40 +215,19 @@ export function BackupSettings({ onError }: BackupSettingsProps) {
           <CardTitle>Backup Configuration</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Enable toggle */}
-          <div className="flex items-center justify-between">
-            <div>
-              <Label className="text-base">Enable Backups</Label>
-              <p className="text-body-secondary">
-                Enable automated database and uploads backup using restic
-              </p>
-            </div>
-            <button
-              onClick={() => setEnabled(!enabled)}
-              className={cn(
-                "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
-                enabled ? "bg-primary" : "bg-muted"
-              )}
-            >
-              <span
-                className={cn(
-                  "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
-                  enabled ? "translate-x-6" : "translate-x-1"
-                )}
-              />
-            </button>
-          </div>
-
-          {/* Repository path */}
+          {/* Backup location (read-only) */}
           <div className="space-y-1.5">
-            <Label>Repository Path</Label>
-            <Input
-              value={repositoryPath}
-              onChange={(e) => setRepositoryPath(e.target.value)}
-              placeholder="/data/backups"
-            />
+            <Label>Backup Location</Label>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 px-3 py-2 bg-muted rounded border border-border text-sm font-mono">
+                {config.host_path}
+              </code>
+              <span className="px-2 py-1 text-xs font-medium rounded-full bg-success/20 text-success">
+                Active
+              </span>
+            </div>
             <p className="text-caption">
-              Path to the restic repository. Will be created on first backup.
+              Configured via BACKUP_HOST_PATH environment variable.
             </p>
           </div>
 
@@ -262,7 +294,7 @@ export function BackupSettings({ onError }: BackupSettingsProps) {
           {/* Save button */}
           <div className="flex justify-end">
             <Button onClick={handleSave} disabled={saving || !hasChanges}>
-              {saving ? "Saving..." : "Save Configuration"}
+              {saving ? "Saving..." : "Save Settings"}
             </Button>
           </div>
         </CardContent>
@@ -275,9 +307,9 @@ export function BackupSettings({ onError }: BackupSettingsProps) {
           <Button
             variant="outline"
             onClick={handleTriggerBackup}
-            disabled={triggering || status?.is_running || !config?.enabled}
+            disabled={triggering || status?.is_running}
           >
-            {triggering || status?.is_running ? "Running..." : "Trigger Backup Now"}
+            {triggering || status?.is_running ? "Running..." : "Backup Now"}
           </Button>
         </CardHeader>
         <CardContent>
@@ -312,11 +344,6 @@ export function BackupSettings({ onError }: BackupSettingsProps) {
             </div>
           ) : (
             <p className="text-body-secondary">No backups yet</p>
-          )}
-          {!config?.enabled && (
-            <p className="text-caption text-warning mt-2">
-              Enable backups above to trigger a backup.
-            </p>
           )}
         </CardContent>
       </Card>
