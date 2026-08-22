@@ -188,7 +188,8 @@ class TestGenerateRacePlanDefaults:
         result = await use_case.execute(user_id=1, request=request)
 
         assert result.plan is not None
-        assert any("No bike specified" in w for w in result.warnings)
+        # Warning about using defaults (from aero_selection)
+        assert any("default" in w.lower() for w in result.warnings)
         # Uses road defaults
         assert float(result.plan.cda) == pytest.approx(0.32, rel=0.1)
         assert float(result.plan.crr) == pytest.approx(0.004, rel=0.1)

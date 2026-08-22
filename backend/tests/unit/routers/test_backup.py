@@ -17,19 +17,18 @@ class TestBackupConfigUpdate:
     def test_valid_config(self):
         """Should accept valid config values."""
         config = BackupConfigUpdate(
-            enabled=True,
-            repository_path="/data/backups",
+            schedule_hour=3,
             retention_keep_daily=7,
             retention_keep_weekly=4,
             retention_keep_monthly=3,
         )
-        assert config.enabled is True
-        assert config.repository_path == "/data/backups"
+        assert config.schedule_hour == 3
+        assert config.retention_keep_daily == 7
 
     def test_default_values(self):
         """Should use defaults when not provided."""
-        config = BackupConfigUpdate(enabled=True)
-        assert config.repository_path == "/data/backups"
+        config = BackupConfigUpdate()
+        assert config.schedule_hour is None
         assert config.retention_keep_daily == 7
         assert config.retention_keep_weekly == 4
         assert config.retention_keep_monthly == 3
@@ -37,13 +36,13 @@ class TestBackupConfigUpdate:
     def test_retention_bounds(self):
         """Should reject out-of-bounds retention values."""
         with pytest.raises(ValidationError):
-            BackupConfigUpdate(enabled=True, retention_keep_daily=0)
+            BackupConfigUpdate(retention_keep_daily=0)
 
         with pytest.raises(ValidationError):
-            BackupConfigUpdate(enabled=True, retention_keep_daily=400)
+            BackupConfigUpdate(retention_keep_daily=400)
 
         with pytest.raises(ValidationError):
-            BackupConfigUpdate(enabled=True, retention_keep_weekly=-1)
+            BackupConfigUpdate(retention_keep_weekly=-1)
 
 
 class TestBackupConfigResponse:
@@ -52,8 +51,10 @@ class TestBackupConfigResponse:
     def test_serialization(self):
         """Should serialize all fields correctly."""
         response = BackupConfigResponse(
-            enabled=True,
-            repository_path="/data/backups",
+            configured=True,
+            host_path="/home/user/backups",
+            path_valid=True,
+            path_error=None,
             schedule_hour=3,
             retention_keep_daily=7,
             retention_keep_weekly=4,
@@ -61,10 +62,45 @@ class TestBackupConfigResponse:
             has_password=True,
         )
         data = response.model_dump()
-        assert data["enabled"] is True
+        assert data["configured"] is True
+        assert data["host_path"] == "/home/user/backups"
+        assert data["path_valid"] is True
         assert data["has_password"] is True
         assert data["schedule_hour"] == 3
-        assert data["created_at"] is None
+        assert data["updated_at"] is None
+
+    def test_not_configured(self):
+        """Should handle not configured state."""
+        response = BackupConfigResponse(
+            configured=False,
+            host_path=None,
+            path_valid=False,
+            path_error=None,
+            schedule_hour=None,
+            retention_keep_daily=7,
+            retention_keep_weekly=4,
+            retention_keep_monthly=3,
+            has_password=False,
+        )
+        assert response.configured is False
+        assert response.host_path is None
+
+    def test_invalid_path(self):
+        """Should include path error when path is invalid."""
+        response = BackupConfigResponse(
+            configured=True,
+            host_path="/nonexistent/path",
+            path_valid=False,
+            path_error="Path does not exist or is not mounted",
+            schedule_hour=None,
+            retention_keep_daily=7,
+            retention_keep_weekly=4,
+            retention_keep_monthly=3,
+            has_password=False,
+        )
+        assert response.configured is True
+        assert response.path_valid is False
+        assert response.path_error == "Path does not exist or is not mounted"
 
 
 class TestBackupHistoryEntry:
