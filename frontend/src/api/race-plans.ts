@@ -121,6 +121,20 @@ export async function deleteCourse(courseId: number): Promise<void> {
   return apiDelete(`/courses/${courseId}`, "Failed to delete course");
 }
 
+/**
+ * Create a course from an existing activity.
+ */
+export async function createCourseFromActivity(
+  activityId: string,
+  name?: string
+): Promise<CourseUploadResponse> {
+  return apiPost<CourseUploadResponse>(
+    "/courses/from-activity",
+    { activity_id: activityId, name },
+    "Failed to create course from activity"
+  );
+}
+
 
 
 /**

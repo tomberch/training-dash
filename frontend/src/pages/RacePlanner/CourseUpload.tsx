@@ -7,16 +7,22 @@
  * - Map preview of the course
  * - Basic metrics display
  * - Name input and submit
+ *
+ * Or create from existing activity:
+ * - Activity selector with search
+ * - Preview of selected activity
  */
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { uploadCourse } from "@/api/race-plans";
+import { uploadCourse, createCourseFromActivity } from "@/api/race-plans";
+import { fetchActivities } from "@/api";
+import type { Activity } from "@/api";
 
 // =============================================================================
 // Types
@@ -346,8 +352,13 @@ function MetricCard({ label, value }: { label: string; value: string }) {
 // Main Page Component
 // =============================================================================
 
+type SourceMode = "file" | "activity";
+
 export function CourseUpload() {
   const navigate = useNavigate();
+  const [sourceMode, setSourceMode] = useState<SourceMode>("file");
+  
+  // File upload state
   const [file, setFile] = useState<File | null>(null);
   const [parsedCourse, setParsedCourse] = useState<ParsedCourse | null>(null);
   const [courseName, setCourseName] = useState("");
@@ -355,6 +366,33 @@ export function CourseUpload() {
   const [isParsing, setIsParsing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
+
+  // Activity selection state
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [isLoadingActivities, setIsLoadingActivities] = useState(false);
+  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
+  const [activitySearch, setActivitySearch] = useState("");
+
+  // Load activities when switching to activity mode
+  useEffect(() => {
+    if (sourceMode === "activity" && activities.length === 0) {
+      setIsLoadingActivities(true);
+      fetchActivities(1, 100)
+        .then((result) => setActivities(result.activities))
+        .catch(() => setError("Failed to load activities"))
+        .finally(() => setIsLoadingActivities(false));
+    }
+  }, [sourceMode, activities.length]);
+
+  // Filter activities by search
+  const filteredActivities = activities.filter((a) => {
+    if (!activitySearch) return true;
+    const search = activitySearch.toLowerCase();
+    return (
+      a.title?.toLowerCase().includes(search) ||
+      a.started_at.toLowerCase().includes(search)
+    );
+  });
 
   const handleFileSelect = useCallback(async (selectedFile: File) => {
     setFile(selectedFile);
@@ -386,21 +424,28 @@ export function CourseUpload() {
     }
   }, []);
 
+  const handleActivitySelect = (activity: Activity) => {
+    setSelectedActivity(activity);
+    setCourseName(activity.title || `Course from ${new Date(activity.started_at).toLocaleDateString()}`);
+    setError(null);
+  };
 
   const handleSubmit = async () => {
-    if (!file) return;
-
     setIsUploading(true);
     setError(null);
 
     try {
-      const result = await uploadCourse(file, courseName || undefined);
-      setWarnings(result.warnings);
-
-      // Navigate to course detail page
-      navigate(`/race-planner/courses/${result.id}`);
+      if (sourceMode === "file" && file) {
+        const result = await uploadCourse(file, courseName || undefined);
+        setWarnings(result.warnings);
+        navigate(`/race-planner/courses/${result.id}`);
+      } else if (sourceMode === "activity" && selectedActivity) {
+        const result = await createCourseFromActivity(selectedActivity.id, courseName || undefined);
+        setWarnings(result.warnings);
+        navigate(`/race-planner/courses/${result.id}`);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed");
+      setError(err instanceof Error ? err.message : "Failed to create course");
     } finally {
       setIsUploading(false);
     }
@@ -409,10 +454,13 @@ export function CourseUpload() {
   const handleClear = () => {
     setFile(null);
     setParsedCourse(null);
+    setSelectedActivity(null);
     setCourseName("");
     setError(null);
     setWarnings([]);
   };
+
+  const canSubmit = sourceMode === "file" ? !!file : !!selectedActivity;
 
   return (
     <div className="p-8 max-w-2xl mx-auto">
@@ -427,12 +475,47 @@ export function CourseUpload() {
           </svg>
           Back to Race Planner
         </button>
-        <h1 className="text-page-title">Upload Course</h1>
+        <h1 className="text-page-title">Create Course</h1>
         <p className="text-page-subtitle mt-1">
-          Import a GPX or FIT file to create a race course
+          Upload a file or use an existing activity
         </p>
       </div>
 
+      {/* Source mode toggle */}
+      <div className="flex gap-2 mb-6 p-1 bg-muted rounded-lg">
+        <button
+          onClick={() => { setSourceMode("file"); handleClear(); }}
+          className={cn(
+            "flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors",
+            sourceMode === "file"
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <span className="flex items-center justify-center gap-2">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+            Upload File
+          </span>
+        </button>
+        <button
+          onClick={() => { setSourceMode("activity"); handleClear(); }}
+          className={cn(
+            "flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors",
+            sourceMode === "activity"
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <span className="flex items-center justify-center gap-2">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            From Activity
+          </span>
+        </button>
+      </div>
 
       {/* Error display */}
       {error && (
@@ -452,101 +535,232 @@ export function CourseUpload() {
         </div>
       )}
 
-      {/* File drop zone (shown when no file selected) */}
-      {!file && (
-        <DropZone
-          onFileSelect={handleFileSelect}
-          onInvalidFile={() => setError("Please select a GPX or FIT file")}
-          disabled={isUploading}
-        />
-      )}
-
-      {/* File selected - show preview and form */}
-      {file && (
-        <div className="space-y-6">
-          {/* File info card */}
-          <div className="bg-card border border-border rounded-xl p-4">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </div>
-                <div>
-                  <div className="font-medium">{file.name}</div>
-                  <div className="text-sm text-muted-foreground">
-                    {(file.size / 1024).toFixed(1)} KB
-                  </div>
-                </div>
-              </div>
-              <Button variant="ghost" size="sm" onClick={handleClear} disabled={isUploading}>
-                Change file
-              </Button>
-            </div>
-
-
-            {/* Map preview (GPX only) */}
-            {isParsing ? (
-              <Skeleton className="h-48 w-full rounded-lg mb-4" />
-            ) : parsedCourse ? (
-              <CoursePreviewMap
-                coordinates={parsedCourse.coordinates}
-                className="h-48 mb-4"
-              />
-            ) : file.name.toLowerCase().endsWith(".fit") ? (
-              <div className="h-48 bg-muted rounded-lg flex items-center justify-center mb-4">
-                <span className="text-muted-foreground">
-                  Preview available after upload
-                </span>
-              </div>
-            ) : null}
-
-            {/* Metrics (GPX only) */}
-            {parsedCourse && (
-              <div className="grid grid-cols-4 gap-3">
-                <MetricCard label="Distance" value={formatDistance(parsedCourse.distance_m)} />
-                <MetricCard label="Elevation Gain" value={formatElevation(parsedCourse.elevation_gain_m)} />
-                <MetricCard label="Min Elevation" value={formatElevation(parsedCourse.min_elevation_m)} />
-                <MetricCard label="Max Elevation" value={formatElevation(parsedCourse.max_elevation_m)} />
-              </div>
-            )}
-          </div>
-
-          {/* Name input */}
-          <div className="space-y-2">
-            <Label htmlFor="courseName">Course Name</Label>
-            <Input
-              id="courseName"
-              value={courseName}
-              onChange={(e) => setCourseName(e.target.value)}
-              placeholder="Enter a name for this course"
+      {/* FILE MODE */}
+      {sourceMode === "file" && (
+        <>
+          {/* File drop zone (shown when no file selected) */}
+          {!file && (
+            <DropZone
+              onFileSelect={handleFileSelect}
+              onInvalidFile={() => setError("Please select a GPX or FIT file")}
               disabled={isUploading}
             />
-            <p className="text-caption">
-              Leave blank to use the name from the file
-            </p>
-          </div>
+          )}
 
-          {/* Submit button */}
-          <div className="flex gap-3">
-            <Button
-              onClick={handleSubmit}
-              disabled={isUploading}
-              className="flex-1"
-            >
-              {isUploading ? "Uploading..." : "Create Course"}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={handleClear}
-              disabled={isUploading}
-            >
-              Cancel
-            </Button>
-          </div>
+          {/* File selected - show preview and form */}
+          {file && (
+            <div className="space-y-6">
+              {/* File info card */}
+              <div className="bg-card border border-border rounded-xl p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div className="font-medium">{file.name}</div>
+                      <div className="text-sm text-muted-foreground">
+                        {(file.size / 1024).toFixed(1)} KB
+                      </div>
+                    </div>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={handleClear} disabled={isUploading}>
+                    Change file
+                  </Button>
+                </div>
+
+                {/* Map preview (GPX only) */}
+                {isParsing ? (
+                  <Skeleton className="h-48 w-full rounded-lg mb-4" />
+                ) : parsedCourse ? (
+                  <CoursePreviewMap
+                    coordinates={parsedCourse.coordinates}
+                    className="h-48 mb-4"
+                  />
+                ) : file.name.toLowerCase().endsWith(".fit") ? (
+                  <div className="h-48 bg-muted rounded-lg flex items-center justify-center mb-4">
+                    <span className="text-muted-foreground">
+                      Preview available after upload
+                    </span>
+                  </div>
+                ) : null}
+
+                {/* Metrics (GPX only) */}
+                {parsedCourse && (
+                  <div className="grid grid-cols-4 gap-3">
+                    <MetricCard label="Distance" value={formatDistance(parsedCourse.distance_m)} />
+                    <MetricCard label="Elevation Gain" value={formatElevation(parsedCourse.elevation_gain_m)} />
+                    <MetricCard label="Min Elevation" value={formatElevation(parsedCourse.min_elevation_m)} />
+                    <MetricCard label="Max Elevation" value={formatElevation(parsedCourse.max_elevation_m)} />
+                  </div>
+                )}
+              </div>
+
+              {/* Name input */}
+              <div className="space-y-2">
+                <Label htmlFor="courseName">Course Name</Label>
+                <Input
+                  id="courseName"
+                  value={courseName}
+                  onChange={(e) => setCourseName(e.target.value)}
+                  placeholder="Enter a name for this course"
+                  disabled={isUploading}
+                />
+                <p className="text-caption">
+                  Leave blank to use the name from the file
+                </p>
+              </div>
+
+              {/* Submit button */}
+              <div className="flex gap-3">
+                <Button
+                  onClick={handleSubmit}
+                  disabled={isUploading}
+                  className="flex-1"
+                >
+                  {isUploading ? "Uploading..." : "Create Course"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleClear}
+                  disabled={isUploading}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ACTIVITY MODE */}
+      {sourceMode === "activity" && (
+        <div className="space-y-6">
+          {/* Activity search and list */}
+          {!selectedActivity && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="activitySearch">Search Activities</Label>
+                <Input
+                  id="activitySearch"
+                  value={activitySearch}
+                  onChange={(e) => setActivitySearch(e.target.value)}
+                  placeholder="Search by name or date..."
+                />
+              </div>
+
+              {isLoadingActivities ? (
+                <div className="space-y-2">
+                  {[...Array(5)].map((_, i) => (
+                    <Skeleton key={i} className="h-16 w-full" />
+                  ))}
+                </div>
+              ) : filteredActivities.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  {activitySearch ? "No activities match your search" : "No activities found"}
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {filteredActivities.map((activity) => (
+                    <button
+                      key={activity.id}
+                      onClick={() => handleActivitySelect(activity)}
+                      className="w-full text-left p-4 bg-card border border-border rounded-lg hover:border-primary/50 transition-colors"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-medium">
+                            {activity.title || new Date(activity.started_at).toLocaleDateString()}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {new Date(activity.started_at).toLocaleDateString()} · {formatDistance(activity.total_distance_m)} · {formatElevation(activity.elevation_gain_m)} gain
+                          </div>
+                        </div>
+                        <svg className="w-5 h-5 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Selected activity preview */}
+          {selectedActivity && (
+            <>
+              <div className="bg-card border border-border rounded-xl p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div className="font-medium">
+                        {selectedActivity.title || "Untitled Activity"}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {new Date(selectedActivity.started_at).toLocaleDateString()}
+                      </div>
+                    </div>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={handleClear} disabled={isUploading}>
+                    Change activity
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <MetricCard label="Distance" value={formatDistance(selectedActivity.total_distance_m)} />
+                  <MetricCard label="Elevation Gain" value={formatElevation(selectedActivity.elevation_gain_m)} />
+                  <MetricCard label="Duration" value={formatDuration(selectedActivity.moving_time_s)} />
+                </div>
+              </div>
+
+              {/* Name input */}
+              <div className="space-y-2">
+                <Label htmlFor="courseNameActivity">Course Name</Label>
+                <Input
+                  id="courseNameActivity"
+                  value={courseName}
+                  onChange={(e) => setCourseName(e.target.value)}
+                  placeholder="Enter a name for this course"
+                  disabled={isUploading}
+                />
+              </div>
+
+              {/* Submit button */}
+              <div className="flex gap-3">
+                <Button
+                  onClick={handleSubmit}
+                  disabled={isUploading || !canSubmit}
+                  className="flex-1"
+                >
+                  {isUploading ? "Creating..." : "Create Course"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleClear}
+                  disabled={isUploading}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
   );
+}
+
+function formatDuration(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
 }
