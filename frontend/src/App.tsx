@@ -31,6 +31,7 @@ const PrototypeEventList = lazy(() => import("./pages/prototype-event-list").the
 const PrototypeSegments = lazy(() => import("./pages/prototype-segments").then(m => ({ default: m.PrototypeSegments })));
 const PrototypeCalcLab = lazy(() => import("./pages/prototype-calc-lab").then(m => ({ default: m.PrototypeCalcLab })));
 const CalcLabPage = lazy(() => import("./pages/CalcLabPage").then(m => ({ default: m.CalcLabPage })));
+const MyModelPage = lazy(() => import("./pages/MyModelPage").then(m => ({ default: m.MyModelPage })));
 const QueryPage = lazy(() => import("./pages/QueryPage").then(m => ({ default: m.QueryPage })));
 const EventsPage = lazy(() => import("./pages/EventsPage").then(m => ({ default: m.EventsPage })));
 const EventDetailPage = lazy(() => import("./pages/EventDetailPage").then(m => ({ default: m.EventDetailPage })));
@@ -155,6 +156,7 @@ function AppLayout({ user, onLogout, onUserUpdate }: {
                 path="/activities/:id/calc-lab" 
                 element={<CalcLabPage />} 
               />
+              <Route path="/calc-lab" element={<MyModelPage />} />
               <Route path="/pmc" element={<PMCView />} />
               <Route path="/power-curve" element={<PowerCurveView />} />
               <Route path="/analyze" element={<AnalyzePage />} />
