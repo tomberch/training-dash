@@ -158,6 +158,7 @@ def parse_records(fit_bytes: bytes) -> dict[str, Any]:
         hr = _safe_int(msg.get("heart_rate"))
         power = _safe_int(msg.get("power"))
         cadence = _safe_int(msg.get("cadence"))
+        temperature = _safe_int(msg.get("temperature"))
 
         records.append(
             {
@@ -170,6 +171,7 @@ def parse_records(fit_bytes: bytes) -> dict[str, Any]:
                 "speed_mps": speed,
                 "altitude_m": altitude,
                 "cadence_rpm": cadence,
+                "temperature_c": temperature,
             }
         )
 
@@ -435,6 +437,7 @@ async def _store_parsed_fit(
             speed_mps=r["speed_mps"],
             altitude_m=r["altitude_m"],
             cadence_rpm=r["cadence_rpm"],
+            temperature_c=r.get("temperature_c"),
             geom=geom,
         )
         db.add(record)

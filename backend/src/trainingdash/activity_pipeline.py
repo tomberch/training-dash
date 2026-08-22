@@ -106,6 +106,16 @@ class HrmaxDetectionResult:
 
 
 @dataclass
+class AeroEstimationResult:
+    """Result of CdA/Crr estimation step."""
+
+    estimated_cda: float | None = None
+    estimated_crr: float | None = None
+    confidence: float | None = None
+    skipped_reason: str | None = None
+
+
+@dataclass
 class PipelineResult:
     """Combined result of all pipeline steps."""
 
@@ -113,6 +123,10 @@ class PipelineResult:
     peaks: PeaksResult = field(default_factory=PeaksResult)
     hr_power: HrPowerResult = field(default_factory=HrPowerResult)
     hrmax_detection: HrmaxDetectionResult = field(default_factory=HrmaxDetectionResult)
+    breakthrough: BreakthroughResult = field(default_factory=BreakthroughResult)
+    route: RouteMatchResult = field(default_factory=RouteMatchResult)
+    title: TitleResult = field(default_factory=TitleResult)
+    aero: AeroEstimationResult = field(default_factory=AeroEstimationResult)
     breakthrough: BreakthroughResult = field(default_factory=BreakthroughResult)
     route: RouteMatchResult = field(default_factory=RouteMatchResult)
     title: TitleResult = field(default_factory=TitleResult)
@@ -195,6 +209,11 @@ class ActivityPipeline:
         # and asyncpg doesn't support concurrent operations on one connection.
         self.result.route = await self.match_route()
         self.result.title = await self.generate_title()
+
+        # Step 9: CdA/Crr estimation (requires GPS track and power data)
+        # Note: Weather fetch happens async in background job, estimation
+        # runs when weather data becomes available. For now, mark status.
+        self.result.aero = await self.estimate_aero()
 
         # Single commit for the entire pipeline — all steps flush() to get
         # auto-assigned IDs but only run() commits, keeping the activity
@@ -721,6 +740,202 @@ class ActivityPipeline:
             await self.db.refresh(self.activity)
 
         return result
+
+    async def estimate_aero(self) -> AeroEstimationResult:
+        """
+        Step 9: Estimate CdA and Crr using wind-corrected regression.
+
+        Requires:
+        - Measured power data (not HR-derived)
+        - GPS track with sufficient coverage
+        - Duration >= 20 minutes
+        - Weather data (fetched separately)
+
+        For now, this step only checks eligibility and marks the activity
+        for weather fetch. The actual estimation runs after weather data
+        is available (via background job or on-demand).
+
+        Returns:
+            AeroEstimationResult with estimates or skip reason
+        """
+        from trainingdash.domain.aero_estimation import (
+            ActivityRecord,
+            AeroEstimationResult as DomainAeroResult,
+            WeatherSnapshot,
+            check_estimation_requirements,
+            estimate_cda_crr,
+            prepare_data_points,
+        )
+        from trainingdash.repositories.postgres.models import ActivityWeather
+
+        result = AeroEstimationResult()
+
+        # Build ActivityRecord list from pipeline records
+        start_ts = self.records[0].get("timestamp") if self.records else None
+        activity_records = []
+
+        for r in self.records:
+            ts = r.get("timestamp")
+            timestamp_s = (ts - start_ts).total_seconds() if ts and start_ts else 0.0
+
+            activity_records.append(
+                ActivityRecord(
+                    timestamp_s=timestamp_s,
+                    lat=r.get("lat"),
+                    lon=r.get("lon"),
+                    power_w=r.get("power_w"),
+                    speed_mps=r.get("speed_mps"),
+                    altitude_m=r.get("altitude_m"),
+                    temperature_c=r.get("temperature_c"),
+                    grade_pct=None,  # Will be computed from altitude
+                )
+            )
+
+        # Check if activity meets requirements
+        can_estimate, reasons = check_estimation_requirements(
+            activity_records,
+            self.activity.power_source,
+        )
+
+        if not can_estimate:
+            result.skipped_reason = "; ".join(reasons)
+            self.activity.weather_status = "not_applicable"
+            await self.db.flush()
+            return result
+
+        # Check if we have weather data
+        from sqlalchemy import select
+
+        weather_query = await self.db.execute(
+            select(ActivityWeather).where(ActivityWeather.activity_id == self.activity.id)
+        )
+        weather_rows = weather_query.scalars().all()
+
+        if not weather_rows:
+            # Mark for weather fetch (background job will handle it)
+            self.activity.weather_status = "pending"
+            result.skipped_reason = "Awaiting weather data"
+            await self.db.flush()
+            return result
+
+        # Convert weather rows to domain objects
+        weather_snapshots = [
+            WeatherSnapshot(
+                hour_offset=w.hour_offset,
+                wind_speed_mps=w.wind_speed_mps,
+                wind_direction_deg=w.wind_direction_deg,
+                pressure_hpa=w.pressure_hpa,
+                humidity_pct=w.humidity_pct,
+                temperature_c=w.temperature_c,
+            )
+            for w in weather_rows
+        ]
+
+        # Get user weight for physics calculation
+        user = await self._get_user()
+        if user is None or user.weight_kg is None:
+            result.skipped_reason = "User weight not set"
+            return result
+
+        # Get bike weight if assigned
+        bike_weight = 0.0
+        if self.activity.bike and self.activity.bike.weight_kg:
+            bike_weight = float(self.activity.bike.weight_kg)
+        else:
+            bike_weight = 9.0  # Default bike weight
+
+        total_mass = float(user.weight_kg) + bike_weight
+
+        # Prepare data points with wind correction
+        data_points, prep_warnings = prepare_data_points(
+            activity_records,
+            weather_snapshots,
+        )
+
+        if len(data_points) < 10:
+            result.skipped_reason = f"Insufficient valid data points ({len(data_points)})"
+            return result
+
+        # Run estimation
+        estimation: DomainAeroResult = estimate_cda_crr(
+            data_points,
+            total_mass,
+        )
+
+        # Store results
+        result.estimated_cda = estimation.cda
+        result.estimated_crr = estimation.crr
+        result.confidence = estimation.confidence
+
+        self.activity.estimated_cda = estimation.cda
+        self.activity.estimated_crr = estimation.crr
+        self.activity.aero_confidence = estimation.confidence
+        self.activity.weather_status = "fetched"
+
+        await self.db.flush()
+        await self.db.refresh(self.activity)
+
+        # Update bike aggregates if bike is assigned
+        if self.activity.bike_id and estimation.confidence > 0.3:
+            await self._update_bike_aggregates()
+
+        return result
+
+    async def _update_bike_aggregates(self) -> None:
+        """Update bike's aggregate CdA/Crr statistics from all activities."""
+        from sqlalchemy import func, select
+
+        from trainingdash.repositories.postgres.models import Bike
+
+        if not self.activity.bike_id:
+            return
+
+        # Get all activities for this bike with valid estimates
+        result = await self.db.execute(
+            select(
+                func.sum(Activity.estimated_cda * Activity.aero_confidence).label("weighted_cda"),
+                func.sum(Activity.estimated_crr * Activity.aero_confidence).label("weighted_crr"),
+                func.sum(Activity.aero_confidence).label("total_weight"),
+                func.count().label("count"),
+            ).where(
+                Activity.bike_id == self.activity.bike_id,
+                Activity.estimated_cda.isnot(None),
+                Activity.aero_confidence > 0.3,
+            )
+        )
+        row = result.one()
+
+        if row.count == 0 or row.total_weight == 0:
+            return
+
+        # Confidence-weighted average
+        avg_cda = row.weighted_cda / row.total_weight
+        avg_crr = row.weighted_crr / row.total_weight
+
+        # Calculate stddev
+        stddev_result = await self.db.execute(
+            select(
+                func.stddev(Activity.estimated_cda).label("cda_stddev"),
+                func.stddev(Activity.estimated_crr).label("crr_stddev"),
+            ).where(
+                Activity.bike_id == self.activity.bike_id,
+                Activity.estimated_cda.isnot(None),
+                Activity.aero_confidence > 0.3,
+            )
+        )
+        stddev_row = stddev_result.one()
+
+        # Update bike
+        bike_result = await self.db.execute(select(Bike).where(Bike.id == self.activity.bike_id))
+        bike = bike_result.scalar_one_or_none()
+
+        if bike:
+            bike.estimated_cda_avg = avg_cda
+            bike.estimated_crr_avg = avg_crr
+            bike.estimated_cda_stddev = stddev_row.cda_stddev
+            bike.estimated_crr_stddev = stddev_row.crr_stddev
+            bike.aero_sample_count = row.count
+            await self.db.flush()
 
 
 # --- Helper Functions ---

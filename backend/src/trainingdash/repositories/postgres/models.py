@@ -129,6 +129,12 @@ class Bike(Base):
     calibrated_at: Mapped[datetime | None] = mapped_column(nullable=True)
     is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     retired_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    # Aggregate CdA/Crr statistics from activities (confidence-weighted)
+    estimated_cda_avg: Mapped[float | None] = mapped_column(Float, nullable=True)
+    estimated_crr_avg: Mapped[float | None] = mapped_column(Float, nullable=True)
+    estimated_cda_stddev: Mapped[float | None] = mapped_column(Float, nullable=True)
+    estimated_crr_stddev: Mapped[float | None] = mapped_column(Float, nullable=True)
+    aero_sample_count: Mapped[int | None] = mapped_column(Integer, nullable=True, server_default=text("0"))
     created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
     updated_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
 
@@ -210,6 +216,12 @@ class Activity(Base):
         BigInteger, ForeignKey("bikes.id", ondelete="SET NULL"), nullable=True, index=True
     )
     bike: Mapped["Bike | None"] = relationship("Bike", lazy="joined")
+    # CdA/Crr estimation (from wind-corrected regression)
+    estimated_cda: Mapped[float | None] = mapped_column(Float, nullable=True)
+    estimated_crr: Mapped[float | None] = mapped_column(Float, nullable=True)
+    aero_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Weather fetch status: pending, fetched, failed, not_applicable
+    weather_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
 
 
@@ -380,7 +392,33 @@ class Record(Base):
     speed_mps: Mapped[float | None] = mapped_column(Float, nullable=True)
     altitude_m: Mapped[float | None] = mapped_column(Float, nullable=True)
     cadence_rpm: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    temperature_c: Mapped[int | None] = mapped_column(Integer, nullable=True)
     geom: Mapped[object | None] = mapped_column(Geography("POINT", srid=4326, spatial_index=True), nullable=True)
+
+
+class ActivityWeather(Base):
+    """Hourly weather snapshots during an activity.
+
+    Stores weather conditions at hourly intervals for wind-corrected
+    CdA/Crr estimation. Data fetched from Open-Meteo historical API.
+    """
+
+    __tablename__ = "activity_weather"
+    __table_args__ = (UniqueConstraint("activity_id", "hour_offset", name="uq_activity_weather_hour"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    activity_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("activities.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    hour_offset: Mapped[int] = mapped_column(Integer, nullable=False)  # Hours from activity start
+    lat: Mapped[float | None] = mapped_column(Float, nullable=True)  # Sample point latitude
+    lon: Mapped[float | None] = mapped_column(Float, nullable=True)  # Sample point longitude
+    temperature_c: Mapped[float] = mapped_column(Float, nullable=False)
+    wind_speed_mps: Mapped[float] = mapped_column(Float, nullable=False)
+    wind_direction_deg: Mapped[float] = mapped_column(Float, nullable=False)  # Meteorological (FROM)
+    pressure_hpa: Mapped[float] = mapped_column(Float, nullable=False)
+    humidity_pct: Mapped[float] = mapped_column(Float, nullable=False)
+    air_density: Mapped[float] = mapped_column(Float, nullable=False)  # Pre-calculated kg/m³
 
 
 class RecalculationJob(Base):
