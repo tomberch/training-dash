@@ -61,6 +61,65 @@ class TestUserOverride:
         assert result.crr == 0.004
 
 
+class TestCalibratedValues:
+    """Tests for calibrated values from wind tunnel/velodrome."""
+
+    def test_calibrated_takes_priority_over_estimated(self):
+        """Calibrated values should take priority over estimated."""
+        bike = BikeAeroData(
+            bike_type="road",
+            cda=0.25,  # Calibrated value
+            crr=0.003,
+            cda_source="calibrated",
+            crr_source="calibrated",
+            estimated_cda_avg=0.32,  # Would normally be used
+            estimated_crr_avg=0.005,
+            aero_sample_count=10,
+        )
+
+        result = select_aero_params(bike=bike)
+
+        assert result.cda == 0.25
+        assert result.crr == 0.003
+        assert result.source == AeroSource.CALIBRATED
+        assert "calibrated" in result.confidence_note.lower()
+
+    def test_calibrated_requires_both_sources(self):
+        """Both cda_source and crr_source must be calibrated."""
+        # Only CdA is calibrated
+        bike = BikeAeroData(
+            bike_type="road",
+            cda=0.25,
+            crr=0.003,
+            cda_source="calibrated",
+            crr_source="manual",
+            estimated_cda_avg=0.32,
+            estimated_crr_avg=0.005,
+            aero_sample_count=10,
+        )
+
+        result = select_aero_params(bike=bike)
+
+        # Should fall through to estimated since not both calibrated
+        assert result.source == AeroSource.ESTIMATED
+
+    def test_user_override_still_beats_calibrated(self):
+        """User override should still take priority over calibrated."""
+        bike = BikeAeroData(
+            bike_type="road",
+            cda=0.25,
+            crr=0.003,
+            cda_source="calibrated",
+            crr_source="calibrated",
+        )
+
+        result = select_aero_params(bike=bike, user_cda=0.28, user_crr=0.004)
+
+        assert result.source == AeroSource.USER_OVERRIDE
+        assert result.cda == 0.28
+        assert result.crr == 0.004
+
+
 class TestEstimatedAggregates:
     """Tests for bike estimated aggregates from activity data."""
 
@@ -149,7 +208,7 @@ class TestManualValues:
         assert result.cda == 0.30
         assert result.crr == 0.004
         assert result.source == AeroSource.MANUAL
-        assert "configured" in result.confidence_note.lower()
+        assert "manually" in result.confidence_note.lower()
 
     def test_manual_skipped_with_partial_values(self):
         """Should fall through to defaults if manual values incomplete."""

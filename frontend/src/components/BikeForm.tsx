@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { Bike, BikeType, BikeCreateRequest, BikeUpdateRequest } from "@/api/types";
 import { BIKE_TYPES, BIKE_TYPE_LABELS } from "@/api/types";
@@ -30,6 +31,8 @@ export function BikeForm({ open, onClose, bike, onSave }: BikeFormProps) {
   const [weightKg, setWeightKg] = useState("");
   const [cda, setCda] = useState("");
   const [crr, setCrr] = useState("");
+  const [cdaCalibrated, setCdaCalibrated] = useState(false);
+  const [crrCalibrated, setCrrCalibrated] = useState(false);
   const [isDefault, setIsDefault] = useState(false);
 
   // UI state
@@ -46,6 +49,8 @@ export function BikeForm({ open, onClose, bike, onSave }: BikeFormProps) {
         setWeightKg(bike.weight_kg?.toString() || "");
         setCda(bike.cda?.toString() || "");
         setCrr(bike.crr?.toString() || "");
+        setCdaCalibrated(bike.cda_source === "calibrated");
+        setCrrCalibrated(bike.crr_source === "calibrated");
         setIsDefault(bike.is_default);
       } else {
         setName("");
@@ -54,6 +59,8 @@ export function BikeForm({ open, onClose, bike, onSave }: BikeFormProps) {
         setWeightKg("");
         setCda("");
         setCrr("");
+        setCdaCalibrated(false);
+        setCrrCalibrated(false);
         setIsDefault(false);
       }
       setError(null);
@@ -71,11 +78,11 @@ export function BikeForm({ open, onClose, bike, onSave }: BikeFormProps) {
     if (weightKg && (isNaN(parseFloat(weightKg)) || parseFloat(weightKg) <= 0 || parseFloat(weightKg) > 50)) {
       return "Weight must be between 0 and 50 kg";
     }
-    if (cda && (isNaN(parseFloat(cda)) || parseFloat(cda) <= 0 || parseFloat(cda) > 1)) {
-      return "CdA must be between 0 and 1";
+    if (cda && (isNaN(parseFloat(cda)) || parseFloat(cda) < 0.15 || parseFloat(cda) > 0.6)) {
+      return "CdA must be between 0.15 and 0.6 m²";
     }
-    if (crr && (isNaN(parseFloat(crr)) || parseFloat(crr) <= 0 || parseFloat(crr) > 0.1)) {
-      return "Crr must be between 0 and 0.1";
+    if (crr && (isNaN(parseFloat(crr)) || parseFloat(crr) < 0.002 || parseFloat(crr) > 0.015)) {
+      return "Crr must be between 0.002 and 0.015";
     }
 
     return null;
@@ -100,6 +107,8 @@ export function BikeForm({ open, onClose, bike, onSave }: BikeFormProps) {
           weight_kg: weightKg ? parseFloat(weightKg) : null,
           cda: cda ? parseFloat(cda) : null,
           crr: crr ? parseFloat(crr) : null,
+          cda_source: cda ? (cdaCalibrated ? "calibrated" : "manual") : null,
+          crr_source: crr ? (crrCalibrated ? "calibrated" : "manual") : null,
         };
         await onSave(updateData);
       } else {
@@ -110,6 +119,8 @@ export function BikeForm({ open, onClose, bike, onSave }: BikeFormProps) {
           weight_kg: weightKg ? parseFloat(weightKg) : null,
           cda: cda ? parseFloat(cda) : null,
           crr: crr ? parseFloat(crr) : null,
+          cda_source: cda ? (cdaCalibrated ? "calibrated" : "manual") : null,
+          crr_source: crr ? (crrCalibrated ? "calibrated" : "manual") : null,
           is_default: isDefault,
         };
         await onSave(createData);
@@ -213,7 +224,27 @@ export function BikeForm({ open, onClose, bike, onSave }: BikeFormProps) {
               min={0}
               max={1}
             />
-            <p className="text-caption">Coefficient of drag area (m²). Typical values: 0.20-0.35</p>
+            <div className="flex items-center justify-between">
+              <p className="text-caption">Drag area (m²). Road: 0.25-0.35, TT: 0.20-0.25</p>
+              {cda && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={cdaCalibrated}
+                        onChange={(e) => setCdaCalibrated(e.target.checked)}
+                        className="h-3.5 w-3.5 rounded border-input"
+                      />
+                      <span className="text-xs text-success font-medium">Calibrated</span>
+                    </label>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs">
+                    <p>Check if this value is from a wind tunnel, velodrome test, or other professional measurement. Calibrated values take priority over activity-based estimates.</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </div>
           </div>
 
           {/* Crr field */}
@@ -229,7 +260,27 @@ export function BikeForm({ open, onClose, bike, onSave }: BikeFormProps) {
               min={0}
               max={0.1}
             />
-            <p className="text-caption">Coefficient of rolling resistance. Typical values: 0.002-0.006</p>
+            <div className="flex items-center justify-between">
+              <p className="text-caption">Rolling resistance. Smooth: 0.003-0.005</p>
+              {crr && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={crrCalibrated}
+                        onChange={(e) => setCrrCalibrated(e.target.checked)}
+                        className="h-3.5 w-3.5 rounded border-input"
+                      />
+                      <span className="text-xs text-success font-medium">Calibrated</span>
+                    </label>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs">
+                    <p>Check if this value is from a professional rolldown test or velodrome measurement. Calibrated values take priority over activity-based estimates.</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </div>
           </div>
 
           {/* Is default field (only for create) */}

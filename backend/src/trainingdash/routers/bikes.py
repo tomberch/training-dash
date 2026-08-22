@@ -35,8 +35,10 @@ class BikeCreate(BaseModel):
     bike_type: str = Field(..., description="Bike type: road, tt, gravel, mtb, ebike")
     model_year: int | None = Field(None, ge=1900, le=2100)
     weight_kg: float | None = Field(None, gt=0, le=50)
-    cda: float | None = Field(None, gt=0, le=1.0, description="CdA in m²")
-    crr: float | None = Field(None, gt=0, le=0.1, description="Rolling resistance coefficient")
+    cda: float | None = Field(None, ge=0.15, le=0.6, description="CdA in m² (0.15-0.6)")
+    crr: float | None = Field(None, ge=0.002, le=0.015, description="Rolling resistance coefficient (0.002-0.015)")
+    cda_source: str | None = Field(None, description="CdA source: manual or calibrated")
+    crr_source: str | None = Field(None, description="Crr source: manual or calibrated")
     is_default: bool = False
 
 
@@ -47,7 +49,10 @@ class BikeUpdate(BaseModel):
     bike_type: str | None = Field(None, description="Bike type: road, tt, gravel, mtb, ebike")
     model_year: int | None = Field(None, ge=1900, le=2100)
     weight_kg: float | None = Field(None, gt=0, le=50)
-    cda: float | None = Field(None, gt=0, le=1.0, description="CdA in m²")
+    cda: float | None = Field(None, ge=0.15, le=0.6, description="CdA in m² (0.15-0.6)")
+    crr: float | None = Field(None, ge=0.002, le=0.015, description="Rolling resistance coefficient (0.002-0.015)")
+    cda_source: str | None = Field(None, description="CdA source: manual or calibrated")
+    crr_source: str | None = Field(None, description="Crr source: manual or calibrated")
     crr: float | None = Field(None, gt=0, le=0.1, description="Rolling resistance coefficient")
 
 
@@ -102,8 +107,8 @@ async def create_bike(
         weight_kg=request.weight_kg,
         cda=request.cda,
         crr=request.crr,
-        cda_source="manual" if request.cda else None,
-        crr_source="manual" if request.crr else None,
+        cda_source=request.cda_source if request.cda and request.cda_source in ("manual", "calibrated") else ("manual" if request.cda else None),
+        crr_source=request.crr_source if request.crr and request.crr_source in ("manual", "calibrated") else ("manual" if request.crr else None),
     )
 
     saved = await bike_repo.save(bike)
@@ -155,11 +160,13 @@ async def update_bike(
 
     if request.cda is not None:
         bike.cda = request.cda
-        bike.cda_source = "manual"
+        # Use provided source or default to "manual"
+        bike.cda_source = request.cda_source if request.cda_source in ("manual", "calibrated") else "manual"
 
     if request.crr is not None:
         bike.crr = request.crr
-        bike.crr_source = "manual"
+        # Use provided source or default to "manual"
+        bike.crr_source = request.crr_source if request.crr_source in ("manual", "calibrated") else "manual"
 
     saved = await bike_repo.save(bike)
     return bike_response(saved)

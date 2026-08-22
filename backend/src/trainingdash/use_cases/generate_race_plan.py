@@ -148,6 +148,8 @@ class GenerateRacePlan:
                     bike_type=bike.bike_type,
                     cda=float(bike.cda) if bike.cda else None,
                     crr=float(bike.crr) if bike.crr else None,
+                    cda_source=bike.cda_source,
+                    crr_source=bike.crr_source,
                     estimated_cda_avg=float(bike.estimated_cda_avg) if bike.estimated_cda_avg else None,
                     estimated_crr_avg=float(bike.estimated_crr_avg) if bike.estimated_crr_avg else None,
                     estimated_cda_stddev=float(bike.estimated_cda_stddev) if bike.estimated_cda_stddev else None,
@@ -155,7 +157,7 @@ class GenerateRacePlan:
                     aero_sample_count=bike.aero_sample_count,
                 )
 
-        # Select CdA/Crr using priority: user override > estimated > manual > defaults
+        # Select CdA/Crr using priority: user override > calibrated > estimated > manual > defaults
         aero_selection = select_aero_params(
             bike=bike_aero_data,
             user_cda=request.override_cda,

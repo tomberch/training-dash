@@ -101,6 +101,8 @@ export interface BikeCreateRequest {
   weight_kg?: number | null;
   cda?: number | null;
   crr?: number | null;
+  cda_source?: "manual" | "calibrated" | null;
+  crr_source?: "manual" | "calibrated" | null;
   is_default?: boolean;
 }
 
@@ -111,6 +113,8 @@ export interface BikeUpdateRequest {
   weight_kg?: number | null;
   cda?: number | null;
   crr?: number | null;
+  cda_source?: "manual" | "calibrated" | null;
+  crr_source?: "manual" | "calibrated" | null;
 }
 
 // ============================================================================
