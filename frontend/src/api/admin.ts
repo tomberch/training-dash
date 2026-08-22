@@ -185,3 +185,85 @@ export async function fetchCacheStats(days?: number): Promise<CacheStatsResponse
   const query = params.toString();
   return apiGet<CacheStatsResponse>(`/admin/system/cache-stats${query ? `?${query}` : ""}`);
 }
+
+
+
+// Backup API
+export interface BackupConfig {
+  enabled: boolean;
+  repository_path: string;
+  schedule_hour: number | null;
+  retention_keep_daily: number;
+  retention_keep_weekly: number;
+  retention_keep_monthly: number;
+  has_password: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface BackupConfigUpdate {
+  enabled: boolean;
+  repository_path: string;
+  schedule_hour: number | null;
+  retention_keep_daily: number;
+  retention_keep_weekly: number;
+  retention_keep_monthly: number;
+}
+
+export interface BackupHistoryEntry {
+  id: number;
+  started_at: string;
+  completed_at: string | null;
+  trigger_type: "manual" | "scheduled";
+  status: "running" | "completed" | "failed";
+  snapshot_id: string | null;
+  duration_seconds: number | null;
+  files_new: number | null;
+  files_changed: number | null;
+  files_unmodified: number | null;
+  bytes_added: number | null;
+  bytes_total: number | null;
+  db_migration_version: string | null;
+  error_message: string | null;
+}
+
+export interface BackupHistoryResponse {
+  entries: BackupHistoryEntry[];
+  total: number;
+}
+
+export interface BackupStatus {
+  is_running: boolean;
+  latest_backup: {
+    id: number;
+    completed_at: string | null;
+    status: string;
+    snapshot_id: string | null;
+  } | null;
+}
+
+export interface TriggerBackupResponse {
+  message: string;
+  history_id: number | null;
+}
+
+export async function fetchBackupConfig(): Promise<BackupConfig | null> {
+  return apiGet<BackupConfig | null>("/admin/backup/config");
+}
+
+export async function updateBackupConfig(config: BackupConfigUpdate): Promise<BackupConfig> {
+  return apiPut<BackupConfig>("/admin/backup/config", config, "Failed to update backup config");
+}
+
+export async function fetchBackupHistory(limit?: number): Promise<BackupHistoryResponse> {
+  const params = limit ? `?limit=${limit}` : "";
+  return apiGet<BackupHistoryResponse>(`/admin/backup/history${params}`);
+}
+
+export async function fetchBackupStatus(): Promise<BackupStatus> {
+  return apiGet<BackupStatus>("/admin/backup/status");
+}
+
+export async function triggerBackup(): Promise<TriggerBackupResponse> {
+  return apiPost<TriggerBackupResponse>("/admin/backup/trigger", undefined, "Failed to trigger backup");
+}

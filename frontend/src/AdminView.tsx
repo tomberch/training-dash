@@ -26,7 +26,7 @@ interface SyncStatus {
   message?: string;
 }
 
-export function AdminView({ onBack, onSystemDashboard }: { onBack: () => void; onSystemDashboard?: () => void }) {
+export function AdminView({ onBack, onSystemDashboard, onBackupSettings }: { onBack: () => void; onSystemDashboard?: () => void; onBackupSettings?: () => void }) {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [pendingUsers, setPendingUsers] = useState<AdminUser[]>([]);
   const [settings, setSettings] = useState<AdminSettings | null>(null);
@@ -236,6 +236,14 @@ export function AdminView({ onBack, onSystemDashboard }: { onBack: () => void; o
               className="px-4 py-2 text-sm font-medium text-foreground bg-card border border-border rounded-lg hover:bg-muted transition-fast"
             >
               System Dashboard &rarr;
+            </button>
+          )}
+          {onBackupSettings && (
+            <button
+              onClick={onBackupSettings}
+              className="px-4 py-2 text-sm font-medium text-foreground bg-card border border-border rounded-lg hover:bg-muted transition-fast"
+            >
+              Backup Settings &rarr;
             </button>
           )}
         </div>

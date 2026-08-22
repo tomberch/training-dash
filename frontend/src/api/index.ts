@@ -166,6 +166,12 @@ export type {
   CacheHistoryEntry,
   CacheSizes,
   CacheStatsResponse,
+  BackupConfig,
+  BackupConfigUpdate,
+  BackupHistoryEntry,
+  BackupHistoryResponse,
+  BackupStatus,
+  TriggerBackupResponse,
 } from "./admin";
 export {
   fetchAdminUsers,
@@ -184,6 +190,11 @@ export {
   fetchSystemEvents,
   fetchActiveJobs,
   fetchCacheStats,
+  fetchBackupConfig,
+  updateBackupConfig,
+  fetchBackupHistory,
+  fetchBackupStatus,
+  triggerBackup,
 } from "./admin";
 
 // Query DSL API

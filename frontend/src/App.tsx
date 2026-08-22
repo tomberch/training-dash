@@ -17,6 +17,7 @@ const ActivityDetail = lazy(() => import("./ActivityDetail").then(m => ({ defaul
 const RecordsView = lazy(() => import("./RecordsView").then(m => ({ default: m.RecordsView })));
 const AdminView = lazy(() => import("./AdminView").then(m => ({ default: m.AdminView })));
 const SystemDashboard = lazy(() => import("./SystemDashboard").then(m => ({ default: m.SystemDashboard })));
+const BackupSettings = lazy(() => import("./components/admin/BackupSettings").then(m => ({ default: m.BackupSettings })));
 const Settings = lazy(() => import("./Settings").then(m => ({ default: m.Settings })));
 const Dashboard = lazy(() => import("./pages/Dashboard").then(m => ({ default: m.Dashboard })));
 const PMCView = lazy(() => import("./pages/PMCView").then(m => ({ default: m.PMCView })));
@@ -193,6 +194,9 @@ function AppLayout({ user, onLogout, onUserUpdate }: {
               {user.is_admin && (
                 <Route path="/admin/system" element={<SystemDashboardWrapper />} />
               )}
+              {user.is_admin && (
+                <Route path="/admin/backup" element={<BackupSettingsWrapper />} />
+              )}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
             </Suspense>
@@ -243,6 +247,7 @@ function AdminViewWrapper() {
     <AdminView 
       onBack={() => navigate("/")} 
       onSystemDashboard={() => navigate("/admin/system")}
+      onBackupSettings={() => navigate("/admin/backup")}
     />
   );
 }
@@ -252,6 +257,31 @@ function SystemDashboardWrapper() {
   
   return (
     <SystemDashboard onBack={() => navigate("/admin")} />
+  );
+}
+
+function BackupSettingsWrapper() {
+  const navigate = useNavigate();
+  const [error, setError] = useState<Error | null>(null);
+  
+  return (
+    <div className="px-4 py-6">
+      <div className="flex items-center gap-4 mb-6">
+        <button
+          onClick={() => navigate("/admin")}
+          className="px-4 py-2 text-sm font-medium text-foreground bg-card border border-border rounded-lg hover:bg-muted transition-fast"
+        >
+          &larr; Back to Admin
+        </button>
+        <h1 className="text-metric">Backup Settings</h1>
+      </div>
+      {error && (
+        <div className="mb-6 p-4 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive">
+          {error.message}
+        </div>
+      )}
+      <BackupSettings onError={setError} />
+    </div>
   );
 }
 
