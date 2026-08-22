@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from trainingdash.domain.aero_selection import AeroSource, BikeAeroData, select_aero_params
-from trainingdash.domain.cda_estimation import get_default_cda, get_default_crr
 from trainingdash.domain.course_segmentation import CourseSegment
 from trainingdash.domain.pacing import generate_heuristic_pacing
 from trainingdash.domain.pacing_optimizer import optimize_pacing, optimize_pacing_for_time
