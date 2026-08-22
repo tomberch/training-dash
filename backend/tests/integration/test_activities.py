@@ -935,3 +935,179 @@ class TestCalcTrace:
         # Should return normal response without calc_trace
         assert "calc_trace" not in data
         assert "effective_ftp" in data  # But effective thresholds are always included
+
+
+
+class TestWhatIf:
+    """Tests for POST /api/activities/{id}/what-if endpoint."""
+
+    async def _upload_with_thresholds(self, auth_client, num_records=120):
+        """Upload activity and create thresholds, return activity_id."""
+        # Create thresholds first (before activity date)
+        await auth_client.post(
+            "/api/me/thresholds",
+            json={"effective_date": "2024-01-01", "ftp_watts": 280, "lthr_bpm": 165, "hrmax_bpm": 185},
+        )
+        # Upload activity
+        fit_data = make_test_fit(num_records=num_records)
+        resp = await auth_client.post(
+            "/api/upload",
+            files={"file": ("test.fit", fit_data, "application/octet-stream")},
+        )
+        return resp.json()["id"]
+
+    @pytest.mark.asyncio
+    async def test_what_if_returns_recalculated_zones(self, auth_client):
+        """What-if with different FTP returns different zone boundaries."""
+        activity_id = await self._upload_with_thresholds(auth_client)
+
+        # Original zones (FTP=280)
+        original = await auth_client.get(f"/api/activities/{activity_id}?include=calc_trace")
+        original_zones = original.json()["calc_trace"]["power_zones"]
+
+        # What-if with higher FTP
+        response = await auth_client.post(
+            f"/api/activities/{activity_id}/what-if",
+            json={"ftp": 300},
+        )
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["activity_id"] == activity_id
+        assert data["what_if_params"]["ftp"] == 300
+
+        # Zones should be different
+        what_if_zones = data["calc_trace"]["power_zones"]
+        assert what_if_zones[0]["max_watts"] == int(300 * 0.55)  # 55% of new FTP
+        assert what_if_zones[0]["max_watts"] != original_zones[0]["max_watts"]
+
+    @pytest.mark.asyncio
+    async def test_what_if_recalculates_wbal_with_new_cp(self, auth_client):
+        """What-if with different CP/W' recalculates W'bal curve."""
+        activity_id = await self._upload_with_thresholds(auth_client)
+
+        response = await auth_client.post(
+            f"/api/activities/{activity_id}/what-if",
+            json={"cp": 270, "w_prime": 22000},
+        )
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["calc_trace"]["cp_watts"] == 270
+        assert data["calc_trace"]["w_prime_joules"] == 22000
+        assert data["calc_trace"]["wbal_curve"] is not None
+
+    @pytest.mark.asyncio
+    async def test_what_if_returns_zone_times(self, auth_client):
+        """What-if response includes zone time distribution."""
+        activity_id = await self._upload_with_thresholds(auth_client)
+
+        response = await auth_client.post(
+            f"/api/activities/{activity_id}/what-if",
+            json={"ftp": 280},
+        )
+        assert response.status_code == 200
+        data = response.json()
+
+        assert "power_zone_times" in data["calc_trace"]
+        assert "hr_zone_times" in data["calc_trace"]
+
+    @pytest.mark.asyncio
+    async def test_what_if_validates_ftp_range(self, auth_client):
+        """What-if validates FTP is within reasonable range (50-500)."""
+        activity_id = await self._upload_with_thresholds(auth_client)
+
+        # FTP too low
+        response = await auth_client.post(
+            f"/api/activities/{activity_id}/what-if",
+            json={"ftp": 40},
+        )
+        assert response.status_code == 422
+
+        # FTP too high
+        response = await auth_client.post(
+            f"/api/activities/{activity_id}/what-if",
+            json={"ftp": 600},
+        )
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_what_if_validates_lthr_range(self, auth_client):
+        """What-if validates LTHR is within reasonable range (100-220)."""
+        activity_id = await self._upload_with_thresholds(auth_client)
+
+        # LTHR too low
+        response = await auth_client.post(
+            f"/api/activities/{activity_id}/what-if",
+            json={"lthr": 80},
+        )
+        assert response.status_code == 422
+
+        # LTHR too high
+        response = await auth_client.post(
+            f"/api/activities/{activity_id}/what-if",
+            json={"lthr": 250},
+        )
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_what_if_validates_w_prime_range(self, auth_client):
+        """What-if validates W' is within reasonable range (5000-50000)."""
+        activity_id = await self._upload_with_thresholds(auth_client)
+
+        # W' too low
+        response = await auth_client.post(
+            f"/api/activities/{activity_id}/what-if",
+            json={"w_prime": 3000},
+        )
+        assert response.status_code == 422
+
+        # W' too high
+        response = await auth_client.post(
+            f"/api/activities/{activity_id}/what-if",
+            json={"w_prime": 60000},
+        )
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_what_if_empty_body_uses_effective_values(self, auth_client):
+        """What-if with empty body uses activity's effective thresholds."""
+        activity_id = await self._upload_with_thresholds(auth_client)
+
+        response = await auth_client.post(
+            f"/api/activities/{activity_id}/what-if",
+            json={},
+        )
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should use effective FTP=280
+        assert data["calc_trace"]["power_zones"][0]["max_watts"] == int(280 * 0.55)
+
+    @pytest.mark.asyncio
+    async def test_what_if_not_found_returns_404(self, auth_client):
+        """What-if on non-existent activity returns 404."""
+        response = await auth_client.post(
+            "/api/activities/00000000-0000-0000-0000-000000000000/what-if",
+            json={"ftp": 280},
+        )
+        assert response.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_what_if_does_not_persist(self, auth_client):
+        """What-if calculations are ephemeral - original values unchanged."""
+        activity_id = await self._upload_with_thresholds(auth_client)
+
+        # Do a what-if with different FTP
+        await auth_client.post(
+            f"/api/activities/{activity_id}/what-if",
+            json={"ftp": 350},
+        )
+
+        # Check original calc_trace still uses original FTP
+        response = await auth_client.get(f"/api/activities/{activity_id}?include=calc_trace")
+        data = response.json()
+
+        # Original FTP=280 should still be used
+        assert data["effective_ftp"] == 280
+        assert data["calc_trace"]["power_zones"][0]["max_watts"] == int(280 * 0.55)
