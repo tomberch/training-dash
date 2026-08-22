@@ -2,9 +2,10 @@
 
 Tests the priority order:
 1. User override (highest)
-2. Bike estimated aggregates
-3. Bike manual values
-4. Bike type defaults (fallback)
+2. Bike calibrated values (wind tunnel, velodrome)
+3. Bike manual values (user entry)
+4. Bike estimated aggregates
+5. Bike type defaults (fallback)
 """
 
 import pytest
@@ -86,7 +87,7 @@ class TestCalibratedValues:
 
     def test_calibrated_requires_both_sources(self):
         """Both cda_source and crr_source must be calibrated."""
-        # Only CdA is calibrated
+        # Only CdA is calibrated - should fall through to manual
         bike = BikeAeroData(
             bike_type="road",
             cda=0.25,
@@ -100,8 +101,8 @@ class TestCalibratedValues:
 
         result = select_aero_params(bike=bike)
 
-        # Should fall through to estimated since not both calibrated
-        assert result.source == AeroSource.ESTIMATED
+        # Should fall through to manual since not both calibrated
+        assert result.source == AeroSource.MANUAL
 
     def test_user_override_still_beats_calibrated(self):
         """User override should still take priority over calibrated."""
@@ -123,12 +124,11 @@ class TestCalibratedValues:
 class TestEstimatedAggregates:
     """Tests for bike estimated aggregates from activity data."""
 
-    def test_estimated_used_when_available(self):
-        """Estimated values should be used when sample_count > 0."""
+    def test_estimated_used_when_no_manual_values(self):
+        """Estimated values should be used when no manual values set."""
         bike = BikeAeroData(
             bike_type="road",
-            cda=0.30,  # Manual value
-            crr=0.004,
+            # No manual cda/crr values
             estimated_cda_avg=0.32,
             estimated_crr_avg=0.005,
             estimated_cda_stddev=0.01,
@@ -145,12 +145,29 @@ class TestEstimatedAggregates:
         assert result.crr_stddev == 0.0005
         assert result.sample_count == 10
 
-    def test_estimated_skipped_with_zero_samples(self):
-        """Should fall through to manual if sample_count is 0."""
+    def test_manual_takes_priority_over_estimated(self):
+        """Manual values should be used even when estimates are available."""
         bike = BikeAeroData(
             bike_type="road",
-            cda=0.30,
+            cda=0.30,  # Manual value
             crr=0.004,
+            estimated_cda_avg=0.32,
+            estimated_crr_avg=0.005,
+            estimated_cda_stddev=0.01,
+            estimated_crr_stddev=0.0005,
+            aero_sample_count=10,
+        )
+
+        result = select_aero_params(bike=bike)
+
+        assert result.cda == 0.30
+        assert result.crr == 0.004
+        assert result.source == AeroSource.MANUAL
+
+    def test_estimated_skipped_with_zero_samples(self):
+        """Should fall through to defaults if sample_count is 0 and no manual."""
+        bike = BikeAeroData(
+            bike_type="road",
             estimated_cda_avg=0.32,
             estimated_crr_avg=0.005,
             aero_sample_count=0,
@@ -158,15 +175,12 @@ class TestEstimatedAggregates:
 
         result = select_aero_params(bike=bike)
 
-        assert result.source == AeroSource.MANUAL
-        assert result.cda == 0.30
+        assert result.source == AeroSource.DEFAULT
 
     def test_estimated_skipped_with_none_sample_count(self):
-        """Should fall through to manual if sample_count is None."""
+        """Should fall through to defaults if sample_count is None and no manual."""
         bike = BikeAeroData(
             bike_type="road",
-            cda=0.30,
-            crr=0.004,
             estimated_cda_avg=0.32,
             estimated_crr_avg=0.005,
             aero_sample_count=None,
@@ -174,14 +188,12 @@ class TestEstimatedAggregates:
 
         result = select_aero_params(bike=bike)
 
-        assert result.source == AeroSource.MANUAL
+        assert result.source == AeroSource.DEFAULT
 
     def test_estimated_skipped_with_partial_values(self):
-        """Should fall through if estimated values are incomplete."""
+        """Should fall through to defaults if estimated values are incomplete."""
         bike = BikeAeroData(
             bike_type="road",
-            cda=0.30,
-            crr=0.004,
             estimated_cda_avg=0.32,
             estimated_crr_avg=None,  # Missing
             aero_sample_count=10,
@@ -189,7 +201,7 @@ class TestEstimatedAggregates:
 
         result = select_aero_params(bike=bike)
 
-        assert result.source == AeroSource.MANUAL
+        assert result.source == AeroSource.DEFAULT
 
 
 class TestManualValues:

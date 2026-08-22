@@ -85,8 +85,8 @@ def select_aero_params(
     Uses the priority order:
     1. User override (if both cda and crr provided) - per-request
     2. Bike's calibrated values (wind tunnel, velodrome) - known good
-    3. Bike's estimated aggregates (if sample_count > 0)
-    4. Bike's manually entered values (user guess)
+    3. Bike's manually entered values (user entry takes precedence)
+    4. Bike's estimated aggregates (if sample_count > 0)
     5. Bike type defaults
 
     Args:
@@ -133,7 +133,16 @@ def select_aero_params(
             confidence_note="Using calibrated values (wind tunnel/velodrome)",
         )
 
-    # 3. Estimated aggregates from activities
+    # 3. Manually entered values on the bike (user entry takes precedence over estimates)
+    if bike.cda is not None and bike.crr is not None:
+        return AeroSelection(
+            cda=bike.cda,
+            crr=bike.crr,
+            source=AeroSource.MANUAL,
+            confidence_note="Using bike's manually entered values",
+        )
+
+    # 4. Estimated aggregates from activities
     if (
         bike.aero_sample_count is not None
         and bike.aero_sample_count > 0
@@ -153,15 +162,6 @@ def select_aero_params(
             crr_stddev=bike.estimated_crr_stddev,
             sample_count=bike.aero_sample_count,
             confidence_note=confidence_note,
-        )
-
-    # 4. Manually entered values on the bike (user guess)
-    if bike.cda is not None and bike.crr is not None:
-        return AeroSelection(
-            cda=bike.cda,
-            crr=bike.crr,
-            source=AeroSource.MANUAL,
-            confidence_note="Using bike's manually entered values",
         )
 
     # 5. Bike type defaults

@@ -121,7 +121,7 @@ export function AeroEstimateCard({
   const getConfidenceColor = (conf: number | null) => {
     if (conf === null) return "text-muted-foreground";
     if (conf >= 0.7) return "text-success";
-    if (conf >= 0.4) return "text-amber-500";
+    if (conf >= 0.4) return "text-warning";
     return "text-destructive";
   };
 
