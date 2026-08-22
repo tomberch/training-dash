@@ -339,3 +339,304 @@ class TestHourlyWeatherDataclass:
 
         with pytest.raises(AttributeError):
             weather.temperature_c = 25.0
+
+
+
+# =============================================================================
+# Forecast API Tests
+# =============================================================================
+
+from datetime import date, timedelta
+
+from trainingdash.integrations.weather import (
+    FORECAST_API_URL,
+    MAX_FORECAST_DAYS,
+    ForecastConditions,
+    ForecastResult,
+    _parse_forecast_response,
+    fetch_race_day_forecast,
+    get_calm_conditions,
+)
+
+
+class TestGetCalmConditions:
+    """Tests for get_calm_conditions()."""
+
+    def test_returns_calm_conditions(self):
+        """Should return conditions with zero wind."""
+        calm = get_calm_conditions()
+
+        assert calm.wind_speed_mps == 0.0
+        assert calm.wind_direction_deg == 0.0
+        assert calm.temperature_c == 20.0
+        assert calm.pressure_hpa == 1013.25
+        assert calm.humidity_pct == 50.0
+        assert 1.15 < calm.air_density < 1.25  # Reasonable air density
+
+    def test_calm_conditions_are_immutable(self):
+        """ForecastConditions should be frozen."""
+        calm = get_calm_conditions()
+        with pytest.raises(AttributeError):
+            calm.wind_speed_mps = 5.0
+
+
+class TestForecastConditions:
+    """Tests for ForecastConditions dataclass."""
+
+    def test_to_dict(self):
+        """to_dict should create dictionary with all fields."""
+        conditions = ForecastConditions(
+            temperature_c=25.0,
+            wind_speed_mps=5.0,
+            wind_direction_deg=180.0,
+            pressure_hpa=1010.0,
+            humidity_pct=60.0,
+            air_density=1.18,
+        )
+        d = conditions.to_dict()
+
+        assert d["temperature_c"] == 25.0
+        assert d["wind_speed_mps"] == 5.0
+        assert d["wind_direction_deg"] == 180.0
+        assert d["pressure_hpa"] == 1010.0
+        assert d["humidity_pct"] == 60.0
+        assert d["air_density"] == 1.18
+
+    def test_from_dict(self):
+        """from_dict should recreate ForecastConditions."""
+        d = {
+            "temperature_c": 25.0,
+            "wind_speed_mps": 5.0,
+            "wind_direction_deg": 180.0,
+            "pressure_hpa": 1010.0,
+            "humidity_pct": 60.0,
+            "air_density": 1.18,
+        }
+        conditions = ForecastConditions.from_dict(d)
+
+        assert conditions.temperature_c == 25.0
+        assert conditions.wind_speed_mps == 5.0
+        assert conditions.wind_direction_deg == 180.0
+
+    def test_roundtrip(self):
+        """to_dict -> from_dict should preserve all values."""
+        original = ForecastConditions(
+            temperature_c=18.5,
+            wind_speed_mps=3.2,
+            wind_direction_deg=270.0,
+            pressure_hpa=1020.0,
+            humidity_pct=45.0,
+            air_density=1.22,
+        )
+        restored = ForecastConditions.from_dict(original.to_dict())
+
+        assert restored == original
+
+
+class TestParseForecastResponse:
+    """Tests for _parse_forecast_response()."""
+
+    def test_parse_valid_response(self):
+        """Should parse valid API response for target hour."""
+        data = {
+            "hourly": {
+                "time": [
+                    "2024-09-15T08:00",
+                    "2024-09-15T09:00",
+                    "2024-09-15T10:00",
+                    "2024-09-15T11:00",
+                ],
+                "temperature_2m": [18.0, 19.0, 20.0, 21.0],
+                "windspeed_10m": [10.8, 14.4, 18.0, 21.6],  # km/h
+                "winddirection_10m": [90, 100, 110, 120],
+                "surface_pressure": [1012.0, 1011.5, 1011.0, 1010.5],
+                "relativehumidity_2m": [70, 65, 60, 55],
+            }
+        }
+
+        result = _parse_forecast_response(data, target_hour=10)
+
+        assert result.temperature_c == 20.0
+        assert result.wind_speed_mps == pytest.approx(5.0, rel=0.01)  # 18 km/h -> 5 m/s
+        assert result.wind_direction_deg == 110
+        assert result.pressure_hpa == 1011.0
+        assert result.humidity_pct == 60
+
+    def test_parse_with_missing_hour_falls_back_to_midday(self):
+        """Should fall back to midday if target hour not found."""
+        data = {
+            "hourly": {
+                "time": [f"2024-09-15T{h:02d}:00" for h in range(24)],
+                "temperature_2m": [15.0 + h * 0.5 for h in range(24)],
+                "windspeed_10m": [10.0] * 24,
+                "winddirection_10m": [180] * 24,
+                "surface_pressure": [1013.0] * 24,
+                "relativehumidity_2m": [50] * 24,
+            }
+        }
+
+        # Request hour 25 (invalid) - should fall back to index 12
+        result = _parse_forecast_response(data, target_hour=25)
+
+        # Index 12 = 15.0 + 12 * 0.5 = 21.0
+        assert result.temperature_c == 21.0
+
+    def test_parse_raises_on_empty_response(self):
+        """Should raise ValueError on empty hourly data."""
+        data = {"hourly": {"time": []}}
+
+        with pytest.raises(ValueError, match="No hourly data"):
+            _parse_forecast_response(data, target_hour=10)
+
+    def test_wind_speed_converted_from_kmh_to_mps(self):
+        """Wind speed should be converted from km/h to m/s."""
+        data = {
+            "hourly": {
+                "time": ["2024-09-15T10:00"],
+                "temperature_2m": [20.0],
+                "windspeed_10m": [36.0],  # 36 km/h = 10 m/s
+                "winddirection_10m": [180],
+                "surface_pressure": [1013.0],
+                "relativehumidity_2m": [50],
+            }
+        }
+
+        result = _parse_forecast_response(data, target_hour=10)
+
+        assert result.wind_speed_mps == pytest.approx(10.0, rel=0.001)
+
+
+class TestFetchRaceDayForecast:
+    """Tests for fetch_race_day_forecast()."""
+
+    @pytest.mark.asyncio
+    async def test_past_date_returns_calm_conditions(self):
+        """Target date in the past should return calm conditions."""
+        past_date = date.today() - timedelta(days=5)
+
+        result = await fetch_race_day_forecast(
+            lat=47.5, lon=8.5, target_date=past_date
+        )
+
+        assert result.success is True
+        assert result.forecast_available is False
+        assert result.conditions.wind_speed_mps == 0.0
+        assert "past" in result.error_message.lower()
+
+    @pytest.mark.asyncio
+    async def test_far_future_date_returns_calm_conditions(self):
+        """Target date beyond forecast range should return calm conditions."""
+        far_future = date.today() + timedelta(days=MAX_FORECAST_DAYS + 10)
+
+        result = await fetch_race_day_forecast(
+            lat=47.5, lon=8.5, target_date=far_future
+        )
+
+        assert result.success is True
+        assert result.forecast_available is False
+        assert result.conditions.wind_speed_mps == 0.0
+        assert str(MAX_FORECAST_DAYS) in result.error_message
+
+    @pytest.mark.asyncio
+    async def test_fetch_success_returns_forecast(self):
+        """Successful API response should return parsed forecast."""
+        mock_response = {
+            "hourly": {
+                "time": ["2024-09-20T10:00"],
+                "temperature_2m": [22.0],
+                "windspeed_10m": [14.4],  # km/h
+                "winddirection_10m": [270],
+                "surface_pressure": [1015.0],
+                "relativehumidity_2m": [55],
+            }
+        }
+
+        with patch("trainingdash.integrations.weather.httpx.AsyncClient") as mock_client:
+            mock_instance = AsyncMock()
+            mock_client.return_value.__aenter__.return_value = mock_instance
+
+            mock_response_obj = Mock()
+            mock_response_obj.json.return_value = mock_response
+            mock_response_obj.raise_for_status = Mock()
+            mock_instance.get.return_value = mock_response_obj
+
+            target = date.today() + timedelta(days=5)
+            result = await fetch_race_day_forecast(
+                lat=47.5, lon=8.5, target_date=target, target_hour=10
+            )
+
+        assert result.success is True
+        assert result.forecast_available is True
+        assert result.conditions.temperature_c == 22.0
+        assert result.conditions.wind_speed_mps == pytest.approx(4.0, rel=0.01)
+        assert result.conditions.wind_direction_deg == 270
+
+    @pytest.mark.asyncio
+    async def test_timeout_returns_calm_conditions(self):
+        """API timeout should return calm conditions with error message."""
+        with patch("trainingdash.integrations.weather.httpx.AsyncClient") as mock_client:
+            mock_instance = AsyncMock()
+            mock_client.return_value.__aenter__.return_value = mock_instance
+            mock_instance.get.side_effect = httpx.TimeoutException("Timeout")
+
+            target = date.today() + timedelta(days=3)
+            result = await fetch_race_day_forecast(
+                lat=47.5, lon=8.5, target_date=target
+            )
+
+        assert result.success is False
+        assert result.conditions.wind_speed_mps == 0.0
+        assert "timeout" in result.error_message.lower()
+
+    @pytest.mark.asyncio
+    async def test_http_error_returns_calm_conditions(self):
+        """HTTP error should return calm conditions with error message."""
+        with patch("trainingdash.integrations.weather.httpx.AsyncClient") as mock_client:
+            mock_instance = AsyncMock()
+            mock_client.return_value.__aenter__.return_value = mock_instance
+
+            mock_response = Mock()
+            mock_response.status_code = 500
+            mock_instance.get.side_effect = httpx.HTTPStatusError(
+                "Server Error", request=Mock(), response=mock_response
+            )
+
+            target = date.today() + timedelta(days=3)
+            result = await fetch_race_day_forecast(
+                lat=47.5, lon=8.5, target_date=target
+            )
+
+        assert result.success is False
+        assert result.conditions.wind_speed_mps == 0.0
+        assert "500" in result.error_message
+
+    @pytest.mark.asyncio
+    async def test_uses_forecast_api_url(self):
+        """Should call forecast API, not archive API."""
+        mock_response = {
+            "hourly": {
+                "time": ["2024-09-20T10:00"],
+                "temperature_2m": [20.0],
+                "windspeed_10m": [10.0],
+                "winddirection_10m": [180],
+                "surface_pressure": [1013.0],
+                "relativehumidity_2m": [50],
+            }
+        }
+
+        with patch("trainingdash.integrations.weather.httpx.AsyncClient") as mock_client:
+            mock_instance = AsyncMock()
+            mock_client.return_value.__aenter__.return_value = mock_instance
+
+            mock_response_obj = Mock()
+            mock_response_obj.json.return_value = mock_response
+            mock_response_obj.raise_for_status = Mock()
+            mock_instance.get.return_value = mock_response_obj
+
+            target = date.today() + timedelta(days=5)
+            await fetch_race_day_forecast(lat=47.5, lon=8.5, target_date=target)
+
+            # Verify forecast API was called (not archive)
+            call_args = mock_instance.get.call_args
+            assert FORECAST_API_URL in str(call_args)
+            assert ARCHIVE_API_URL not in str(call_args)

@@ -764,6 +764,15 @@ class RacePlan(Base):
     wbal_min: Mapped[float | None] = mapped_column(Float, nullable=True)
     wbal_min_distance_m: Mapped[float | None] = mapped_column(Float, nullable=True)
 
+    # Weather/conditions for race day
+    target_date: Mapped[date | None] = mapped_column(Date, nullable=True)  # Event date
+    target_conditions: Mapped[dict | None] = mapped_column(
+        JSONB, nullable=True
+    )  # {temp_c, pressure_hpa, humidity_pct, wind_speed_mps, wind_direction_deg, air_density}
+    conditions_fetched_at: Mapped[datetime | None] = mapped_column(nullable=True)  # When forecast was last fetched
+    wind_override_speed_mps: Mapped[float | None] = mapped_column(Float, nullable=True)  # Manual wind override
+    wind_override_direction_deg: Mapped[float | None] = mapped_column(Float, nullable=True)
+
     # Relationships
     user: Mapped["User"] = relationship("User", lazy="select")
     course: Mapped["RaceCourse"] = relationship("RaceCourse", lazy="select")

@@ -6,6 +6,7 @@ parameters, and pacing algorithms (heuristic or optimized).
 """
 
 from dataclasses import dataclass
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 from trainingdash.domain.aero_selection import AeroSource, BikeAeroData, select_aero_params
@@ -14,6 +15,11 @@ from trainingdash.domain.pacing import generate_heuristic_pacing
 from trainingdash.domain.pacing_optimizer import optimize_pacing, optimize_pacing_for_time
 from trainingdash.domain.physics import EnvironmentParams, RiderParams
 from trainingdash.domain.wbal import predict_wbal_for_plan
+from trainingdash.integrations.weather import (
+    ForecastConditions,
+    fetch_race_day_forecast,
+    get_calm_conditions,
+)
 from trainingdash.repositories.postgres.models import RacePlan
 from trainingdash.repositories.protocols import BikeRepo, CourseRepo, RacePlanRepo, UserRepo
 
@@ -32,6 +38,11 @@ class GeneratePlanRequest:
     CdA/Crr selection:
     - If override_cda and override_crr are both set, use those values
     - Otherwise, use smart selection from bike data (estimated > manual > defaults)
+
+    Weather conditions:
+    - If target_date is set and within 16 days, fetch forecast
+    - If target_date is beyond 16 days or not set, use calm conditions
+    - Wind overrides can be set for specific scenarios
     """
 
     course_id: int
@@ -47,6 +58,11 @@ class GeneratePlanRequest:
     # CdA/Crr overrides - if both set, use these instead of bike data
     override_cda: float | None = None
     override_crr: float | None = None
+    # Weather/conditions for race day
+    target_date: date | None = None  # Event date for forecast
+    target_hour: int = 10  # Hour of day for forecast (0-23)
+    wind_override_speed_mps: float | None = None  # Manual wind speed override
+    wind_override_direction_deg: float | None = None  # Manual wind direction override
 
 
 @dataclass
@@ -57,6 +73,8 @@ class GeneratePlanResult:
     comparison: dict  # constant vs heuristic vs optimized times
     warnings: list[str]
     aero_selection: dict | None = None  # CdA/Crr selection metadata
+    weather_conditions: dict | None = None  # Forecast conditions used
+    forecast_stale: bool = False  # True if no forecast available (calm conditions used)
 
 
 class GenerateRacePlan:
@@ -171,9 +189,64 @@ class GenerateRacePlan:
         gear_weight_kg = 3.0
         total_mass_kg = rider_weight_kg + (bike_weight_kg or 8.0) + gear_weight_kg
 
-        # 4. Build parameters
+        # 4. Fetch weather conditions if target_date is set
+        forecast_conditions: ForecastConditions
+        conditions_fetched_at: datetime | None = None
+        weather_conditions_dict: dict | None = None
+        forecast_stale = False  # True if calm conditions used (no real forecast)
+
+        if request.target_date is not None:
+            # Get course location for weather fetch
+            course_lat = course.start_lat
+            course_lon = course.start_lon
+
+            if course_lat is not None and course_lon is not None:
+                forecast_result = await fetch_race_day_forecast(
+                    lat=course_lat,
+                    lon=course_lon,
+                    target_date=request.target_date,
+                    target_hour=request.target_hour,
+                )
+                forecast_conditions = forecast_result.conditions or get_calm_conditions()
+                conditions_fetched_at = datetime.now(timezone.utc)
+                forecast_stale = not forecast_result.forecast_available
+
+                if forecast_result.error_message:
+                    warnings.append(f"Weather: {forecast_result.error_message}")
+                elif forecast_result.forecast_available:
+                    warnings.append(
+                        f"Forecast for {request.target_date}: {forecast_conditions.temperature_c:.0f}°C, "
+                        f"wind {forecast_conditions.wind_speed_mps:.1f} m/s"
+                    )
+            else:
+                forecast_conditions = get_calm_conditions()
+                forecast_stale = True
+                warnings.append("Course has no location data, using calm conditions")
+        else:
+            forecast_conditions = get_calm_conditions()
+            # No target_date means no staleness concept applies
+
+        # Apply wind overrides if provided
+        if request.wind_override_speed_mps is not None and request.wind_override_direction_deg is not None:
+            forecast_conditions = ForecastConditions(
+                temperature_c=forecast_conditions.temperature_c,
+                wind_speed_mps=request.wind_override_speed_mps,
+                wind_direction_deg=request.wind_override_direction_deg,
+                pressure_hpa=forecast_conditions.pressure_hpa,
+                humidity_pct=forecast_conditions.humidity_pct,
+                air_density=forecast_conditions.air_density,
+            )
+            warnings.append(
+                f"Using wind override: {request.wind_override_speed_mps:.1f} m/s "
+                f"from {request.wind_override_direction_deg:.0f}°"
+            )
+
+        weather_conditions_dict = forecast_conditions.to_dict()
+
+        # 5. Build parameters
         rider_params = RiderParams(mass_kg=total_mass_kg, cda=cda, crr=crr)
-        env_params = EnvironmentParams()  # Sea level defaults
+        # Use forecast air density instead of default
+        env_params = EnvironmentParams(air_density=forecast_conditions.air_density)
 
         # Estimate CP and W' if not provided
         ftp = request.ftp_watts
@@ -185,7 +258,7 @@ class GenerateRacePlan:
         if request.w_prime_joules is None:
             warnings.append("W' using default: 20kJ")
 
-        # 5. Generate pacing plan
+        # 6. Generate pacing plan
         # Three modes:
         # A) Target time mode: optimize power to hit specific finish time
         # B) Optimizer mode: optimize power to minimize time given energy budget
@@ -350,6 +423,12 @@ class GenerateRacePlan:
             segment_targets=segment_targets,
             wbal_min=wbal_min,
             wbal_min_distance_m=wbal_min_distance_m,
+            # Weather/conditions
+            target_date=request.target_date,
+            target_conditions=weather_conditions_dict,
+            conditions_fetched_at=conditions_fetched_at,
+            wind_override_speed_mps=request.wind_override_speed_mps,
+            wind_override_direction_deg=request.wind_override_direction_deg,
         )
 
         saved_plan = await self._plan_repo.save(plan)
@@ -373,6 +452,8 @@ class GenerateRacePlan:
             comparison=comparison,
             warnings=warnings,
             aero_selection=aero_selection_dict,
+            weather_conditions=weather_conditions_dict,
+            forecast_stale=forecast_stale,
         )
 
     def _parse_segments(self, segments_json: list[dict]) -> list[CourseSegment]:

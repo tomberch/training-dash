@@ -1,6 +1,6 @@
 """Race plans endpoints: generate and manage race pacing plans."""
 
-from datetime import datetime
+from datetime import date, datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
@@ -14,6 +14,11 @@ from trainingdash.dependencies import (
     RacePlanRepoD,
     RecordRepoD,
     UserRepoD,
+)
+from trainingdash.integrations.weather import (
+    ForecastConditions,
+    fetch_race_day_forecast,
+    get_calm_conditions,
 )
 from trainingdash.use_cases.compare_execution import CompareExecution
 from trainingdash.use_cases.generate_race_plan import (
@@ -42,6 +47,10 @@ class GeneratePlanRequestSchema(BaseModel):
     CdA/Crr selection:
     - If override_cda AND override_crr are both provided, use those values
     - Otherwise, smart selection: estimated from activities > manual bike config > defaults
+
+    Weather conditions:
+    - Set target_date to get forecast (within 16 days)
+    - Wind overrides require both speed AND direction
     """
 
     course_id: int
@@ -57,6 +66,11 @@ class GeneratePlanRequestSchema(BaseModel):
     # CdA/Crr overrides - if both set, use these instead of smart selection
     override_cda: float | None = Field(None, ge=0.15, le=0.6, description="Override CdA in m²")
     override_crr: float | None = Field(None, ge=0.002, le=0.015, description="Override Crr coefficient")
+    # Weather/conditions for race day
+    target_date: date | None = Field(None, description="Event date for weather forecast")
+    target_hour: int = Field(10, ge=0, le=23, description="Hour of day for forecast (0-23)")
+    wind_override_speed_mps: float | None = Field(None, ge=0, le=30, description="Manual wind speed override (m/s)")
+    wind_override_direction_deg: float | None = Field(None, ge=0, le=360, description="Manual wind direction override (degrees)")
 
     def to_domain(self) -> GeneratePlanRequest:
         """Convert to domain request object."""
@@ -73,6 +87,10 @@ class GeneratePlanRequestSchema(BaseModel):
             name=self.name,
             override_cda=self.override_cda,
             override_crr=self.override_crr,
+            target_date=self.target_date,
+            target_hour=self.target_hour,
+            wind_override_speed_mps=self.wind_override_speed_mps,
+            wind_override_direction_deg=self.wind_override_direction_deg,
         )
 
 
@@ -131,6 +149,17 @@ class AeroSelectionSchema(BaseModel):
     sample_count: int | None = None
 
 
+class WeatherConditionsSchema(BaseModel):
+    """Weather conditions used for race planning."""
+
+    temperature_c: float
+    wind_speed_mps: float
+    wind_direction_deg: float
+    pressure_hpa: float
+    humidity_pct: float
+    air_density: float
+
+
 class RacePlanResponse(BaseModel):
     """Response after generating a race plan."""
 
@@ -145,6 +174,8 @@ class RacePlanResponse(BaseModel):
     comparison: ComparisonSchema
     warnings: list[str]
     aero_selection: AeroSelectionSchema | None = None
+    weather_conditions: WeatherConditionsSchema | None = None
+    forecast_stale: bool = False  # True if calm conditions used (no real forecast)
 
 
 class RacePlanListItem(BaseModel):
@@ -169,6 +200,12 @@ class RacePlanDetailResponse(RacePlanResponse):
     bike_params: BikeParamsSchema
     optimization_method: str | None
     created_at: datetime
+    # Weather metadata
+    target_date: date | None = None
+    conditions_fetched_at: datetime | None = None
+    forecast_stale: bool = False  # True if fetched > 24h ago or target_date changed
+    wind_override_speed_mps: float | None = None
+    wind_override_direction_deg: float | None = None
 
 
 class PlanUpdateSchema(BaseModel):
@@ -188,6 +225,16 @@ class CompareRequestSchema(BaseModel):
     """Request to compare activity against a plan."""
 
     activity_id: UUID
+
+
+class RefreshWeatherResponse(BaseModel):
+    """Response after refreshing weather forecast."""
+
+    plan_id: int
+    target_date: date | None
+    weather_conditions: WeatherConditionsSchema | None
+    conditions_fetched_at: datetime | None
+    message: str
 
 
 class SegmentComparisonSchema(BaseModel):
@@ -307,6 +354,8 @@ async def generate_plan(
         comparison=ComparisonSchema(**result.comparison),
         warnings=result.warnings,
         aero_selection=AeroSelectionSchema(**result.aero_selection) if result.aero_selection else None,
+        weather_conditions=WeatherConditionsSchema(**result.weather_conditions) if result.weather_conditions else None,
+        forecast_stale=result.forecast_stale,
     )
 
 
@@ -361,6 +410,17 @@ async def get_plan(
     # Parse segment targets from JSONB
     segment_targets = [SegmentTargetSchema(**st) for st in (plan.segment_targets or [])]
 
+    # Parse weather conditions if present
+    weather_conditions = None
+    if plan.target_conditions:
+        weather_conditions = WeatherConditionsSchema(**plan.target_conditions)
+
+    # Check if forecast is stale (> 24 hours old)
+    forecast_stale = False
+    if plan.target_date and plan.conditions_fetched_at:
+        age = datetime.now(timezone.utc) - plan.conditions_fetched_at
+        forecast_stale = age.total_seconds() > 86400  # 24 hours
+
     return RacePlanDetailResponse(
         id=plan.id,
         course_id=plan.course_id,
@@ -390,6 +450,13 @@ async def get_plan(
         ),
         optimization_method=plan.optimization_method,
         created_at=plan.created_at,
+        # Weather metadata
+        weather_conditions=weather_conditions,
+        target_date=plan.target_date,
+        conditions_fetched_at=plan.conditions_fetched_at,
+        forecast_stale=forecast_stale,
+        wind_override_speed_mps=plan.wind_override_speed_mps,
+        wind_override_direction_deg=plan.wind_override_direction_deg,
     )
 
 
@@ -490,6 +557,93 @@ async def regenerate_plan(
         comparison=ComparisonSchema(**result.comparison),
         warnings=result.warnings,
         aero_selection=AeroSelectionSchema(**result.aero_selection) if result.aero_selection else None,
+        weather_conditions=WeatherConditionsSchema(**result.weather_conditions) if result.weather_conditions else None,
+        forecast_stale=result.forecast_stale,
+    )
+
+
+# =============================================================================
+# Weather Endpoints
+# =============================================================================
+
+
+@router.post("/{plan_id}/refresh-weather", response_model=RefreshWeatherResponse)
+async def refresh_weather(
+    plan_id: int,
+    current_user: CurrentUser,
+    plan_repo: RacePlanRepoD,
+    course_repo: CourseRepoD,
+    target_hour: int = Query(10, ge=0, le=23, description="Hour of day for forecast"),
+):
+    """
+    Refresh weather forecast for a race plan.
+
+    Fetches updated forecast from Open-Meteo if:
+    - Plan has a target_date set
+    - Target date is within 16 days
+
+    Returns calm conditions (no wind) if target_date is not set or beyond forecast range.
+    """
+    # Get plan
+    plan = await plan_repo.get_by_id(plan_id)
+    if not plan or plan.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Race plan not found",
+        )
+
+    # Check if plan has target_date
+    if not plan.target_date:
+        return RefreshWeatherResponse(
+            plan_id=plan_id,
+            target_date=None,
+            weather_conditions=None,
+            conditions_fetched_at=None,
+            message="No target date set for this plan",
+        )
+
+    # Get course for location
+    course = await course_repo.get_by_id(plan.course_id)
+    if not course or course.start_lat is None or course.start_lon is None:
+        calm = get_calm_conditions()
+        return RefreshWeatherResponse(
+            plan_id=plan_id,
+            target_date=plan.target_date,
+            weather_conditions=WeatherConditionsSchema(**calm.to_dict()),
+            conditions_fetched_at=None,
+            message="Course has no location data, using calm conditions",
+        )
+
+    # Fetch forecast
+    result = await fetch_race_day_forecast(
+        lat=course.start_lat,
+        lon=course.start_lon,
+        target_date=plan.target_date,
+        target_hour=target_hour,
+    )
+
+    conditions = result.conditions or get_calm_conditions()
+    now = datetime.now(timezone.utc)
+
+    # Update plan in database
+    plan.target_conditions = conditions.to_dict()
+    plan.conditions_fetched_at = now
+    await plan_repo.save(plan)
+
+    # Build message
+    if result.error_message:
+        message = result.error_message
+    elif result.forecast_available:
+        message = f"Forecast updated for {plan.target_date}"
+    else:
+        message = "Using calm conditions (no forecast available)"
+
+    return RefreshWeatherResponse(
+        plan_id=plan_id,
+        target_date=plan.target_date,
+        weather_conditions=WeatherConditionsSchema(**conditions.to_dict()),
+        conditions_fetched_at=now,
+        message=message,
     )
 
 

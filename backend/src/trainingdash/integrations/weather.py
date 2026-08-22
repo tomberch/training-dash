@@ -297,3 +297,255 @@ def _find_closest_hour_index(times: list[str], target: datetime) -> int | None:
         return None
 
     return closest_idx
+
+
+
+# =============================================================================
+# Weather Forecast API (for race planning)
+# =============================================================================
+
+# Open-Meteo Forecast API (up to 16 days ahead)
+FORECAST_API_URL = "https://api.open-meteo.com/v1/forecast"
+
+# Maximum days ahead that forecast is available
+MAX_FORECAST_DAYS = 16
+
+
+@dataclass(frozen=True, slots=True)
+class ForecastConditions:
+    """Weather conditions for a specific date/time.
+
+    Used for race day predictions. Includes pre-calculated air density.
+
+    Attributes:
+        temperature_c: Temperature in Celsius
+        wind_speed_mps: Wind speed in m/s
+        wind_direction_deg: Meteorological direction (where wind comes FROM)
+        pressure_hpa: Surface pressure in hPa
+        humidity_pct: Relative humidity as percentage (0-100)
+        air_density: Pre-calculated air density in kg/m³
+    """
+
+    temperature_c: float
+    wind_speed_mps: float
+    wind_direction_deg: float
+    pressure_hpa: float
+    humidity_pct: float
+    air_density: float
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary for JSONB storage."""
+        return {
+            "temperature_c": self.temperature_c,
+            "wind_speed_mps": self.wind_speed_mps,
+            "wind_direction_deg": self.wind_direction_deg,
+            "pressure_hpa": self.pressure_hpa,
+            "humidity_pct": self.humidity_pct,
+            "air_density": self.air_density,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "ForecastConditions":
+        """Create from dictionary (JSONB storage)."""
+        return cls(
+            temperature_c=data["temperature_c"],
+            wind_speed_mps=data["wind_speed_mps"],
+            wind_direction_deg=data["wind_direction_deg"],
+            pressure_hpa=data["pressure_hpa"],
+            humidity_pct=data["humidity_pct"],
+            air_density=data["air_density"],
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ForecastResult:
+    """Result of weather forecast fetch.
+
+    Attributes:
+        success: Whether fetch succeeded
+        conditions: Forecast conditions for the target date
+        error_message: Error message if fetch failed
+        forecast_available: Whether forecast data is available for the date
+    """
+
+    success: bool
+    conditions: ForecastConditions | None
+    error_message: str | None = None
+    forecast_available: bool = True
+
+
+def get_calm_conditions() -> ForecastConditions:
+    """Return calm/default conditions for conservative race planning.
+
+    Used when:
+    - No target date is set
+    - Target date is beyond forecast range
+    - Forecast fetch fails
+
+    Returns conditions with zero wind for conservative power estimates.
+    """
+    return ForecastConditions(
+        temperature_c=20.0,  # Mild temperature
+        wind_speed_mps=0.0,  # No wind (conservative)
+        wind_direction_deg=0.0,
+        pressure_hpa=1013.25,  # Sea level pressure
+        humidity_pct=50.0,  # Moderate humidity
+        air_density=calculate_air_density(20.0, 1013.25, 50.0),
+    )
+
+
+async def fetch_race_day_forecast(
+    lat: float,
+    lon: float,
+    target_date: date,
+    target_hour: int = 10,  # Default to mid-morning start
+    timeout: float = 15.0,
+) -> ForecastResult:
+    """Fetch weather forecast for a race day.
+
+    Uses Open-Meteo forecast API for dates within 16 days,
+    returns calm conditions for dates further out.
+
+    Args:
+        lat: Course location latitude
+        lon: Course location longitude
+        target_date: Date of the race/event
+        target_hour: Hour of day for forecast (0-23, local time)
+        timeout: HTTP request timeout in seconds
+
+    Returns:
+        ForecastResult with conditions or error message
+    """
+    today = date.today()
+    days_ahead = (target_date - today).days
+
+    # Check if date is in the past
+    if days_ahead < 0:
+        return ForecastResult(
+            success=True,
+            conditions=get_calm_conditions(),
+            error_message="Target date is in the past, using calm conditions",
+            forecast_available=False,
+        )
+
+    # Check if date is beyond forecast range
+    if days_ahead > MAX_FORECAST_DAYS:
+        return ForecastResult(
+            success=True,
+            conditions=get_calm_conditions(),
+            error_message=f"Target date is {days_ahead} days ahead (max {MAX_FORECAST_DAYS}), using calm conditions",
+            forecast_available=False,
+        )
+
+    # Fetch forecast from Open-Meteo
+    params = {
+        "latitude": lat,
+        "longitude": lon,
+        "hourly": ",".join(HOURLY_VARIABLES),
+        "start_date": target_date.isoformat(),
+        "end_date": target_date.isoformat(),
+        "timezone": "auto",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.get(FORECAST_API_URL, params=params)
+            response.raise_for_status()
+            data = response.json()
+
+    except httpx.TimeoutException:
+        logger.warning(f"Forecast API timeout for ({lat}, {lon})")
+        return ForecastResult(
+            success=False,
+            conditions=get_calm_conditions(),
+            error_message="API timeout, using calm conditions",
+        )
+    except httpx.HTTPStatusError as e:
+        logger.warning(f"Forecast API HTTP error: {e.response.status_code}")
+        return ForecastResult(
+            success=False,
+            conditions=get_calm_conditions(),
+            error_message=f"HTTP {e.response.status_code}, using calm conditions",
+        )
+    except httpx.HTTPError as e:
+        logger.warning(f"Forecast API error: {e}")
+        return ForecastResult(
+            success=False,
+            conditions=get_calm_conditions(),
+            error_message=str(e),
+        )
+
+    # Parse response
+    try:
+        conditions = _parse_forecast_response(data, target_hour)
+        return ForecastResult(
+            success=True,
+            conditions=conditions,
+        )
+    except (KeyError, ValueError, IndexError) as e:
+        logger.warning(f"Forecast parse error: {e}")
+        return ForecastResult(
+            success=False,
+            conditions=get_calm_conditions(),
+            error_message=f"Parse error: {e}",
+        )
+
+
+def _parse_forecast_response(data: dict, target_hour: int) -> ForecastConditions:
+    """Parse Open-Meteo forecast response for a specific hour.
+
+    Args:
+        data: Raw API response JSON
+        target_hour: Hour of day to extract (0-23)
+
+    Returns:
+        ForecastConditions for the target hour
+
+    Raises:
+        ValueError: If data is missing or invalid
+    """
+    hourly = data.get("hourly", {})
+
+    times = hourly.get("time", [])
+    temps = hourly.get("temperature_2m", [])
+    winds = hourly.get("windspeed_10m", [])
+    wind_dirs = hourly.get("winddirection_10m", [])
+    pressures = hourly.get("surface_pressure", [])
+    humidities = hourly.get("relativehumidity_2m", [])
+
+    if not times:
+        raise ValueError("No hourly data in response")
+
+    # Find the target hour index
+    # Times are in format "2024-06-15T10:00"
+    target_idx = None
+    for i, time_str in enumerate(times):
+        if f"T{target_hour:02d}:00" in time_str:
+            target_idx = i
+            break
+
+    if target_idx is None:
+        # Fall back to midday if target hour not found
+        target_idx = min(12, len(times) - 1)
+
+    # Extract values with defaults
+    temp = temps[target_idx] if target_idx < len(temps) and temps[target_idx] is not None else 20.0
+    wind = winds[target_idx] if target_idx < len(winds) and winds[target_idx] is not None else 0.0
+    wind_dir = wind_dirs[target_idx] if target_idx < len(wind_dirs) and wind_dirs[target_idx] is not None else 0.0
+    pressure = pressures[target_idx] if target_idx < len(pressures) and pressures[target_idx] is not None else 1013.25
+    humidity = humidities[target_idx] if target_idx < len(humidities) and humidities[target_idx] is not None else 50.0
+
+    # Convert wind speed from km/h to m/s
+    wind_mps = wind / 3.6
+
+    # Calculate air density
+    air_density = calculate_air_density(temp, pressure, humidity)
+
+    return ForecastConditions(
+        temperature_c=temp,
+        wind_speed_mps=wind_mps,
+        wind_direction_deg=wind_dir,
+        pressure_hpa=pressure,
+        humidity_pct=humidity,
+        air_density=air_density,
+    )
