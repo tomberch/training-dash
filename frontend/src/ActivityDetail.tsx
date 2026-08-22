@@ -40,7 +40,7 @@ import { getNiceTicks, getNiceTimeTicks } from "./lib/chartUtils";
 import { notifyError } from "@/lib/notify";
 import {
   ActivityDetailSkeleton, MetricGroupCard, MetricEntry,
-  SectionHeader, ChartCard, ZoneChart, WbalChart,
+  SectionHeader, ChartCard, ZoneChart, WbalChart, AeroEstimateCard,
 } from "./components/activity";
 
 interface ChartConfig {
@@ -450,6 +450,16 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
           <MetricEntry label="W'bal Min" value={activity.wbal_min_pct != null ? `${Math.round(activity.wbal_min_pct)}%` : "—"} />
           {!ftpWatts && <div className="pt-3 border-t border-border"><p className="text-caption">Set FTP in Athlete profile to calculate training load metrics</p></div>}
         </MetricGroupCard>
+
+        {/* Aero Estimate Card - only show for power activities */}
+        {activity.power_source === "measured" && (
+          <AeroEstimateCard
+            estimatedCda={activity.estimated_cda}
+            estimatedCrr={activity.estimated_crr}
+            aeroConfidence={activity.aero_confidence}
+            weatherStatus={activity.weather_status}
+          />
+        )}
       </div>
 
 

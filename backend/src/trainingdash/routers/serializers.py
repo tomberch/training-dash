@@ -104,6 +104,11 @@ def activity_detail(a: Activity) -> dict[str, Any]:
             "wbal_min_pct": a.wbal_min_pct,
             # Breakthrough
             "is_breakthrough": a.is_breakthrough,
+            # Aero estimation
+            "estimated_cda": a.estimated_cda,
+            "estimated_crr": a.estimated_crr,
+            "aero_confidence": a.aero_confidence,
+            "weather_status": a.weather_status,
         }
     )
     return result
@@ -167,4 +172,10 @@ def bike_response(bike: Bike) -> dict[str, Any]:
         "retired_at": utc_str(bike.retired_at) if bike.retired_at else None,
         "created_at": utc_str(bike.created_at),
         "updated_at": utc_str(bike.updated_at),
+        # Estimated aero aggregates from activities
+        "estimated_cda_avg": bike.estimated_cda_avg,
+        "estimated_crr_avg": bike.estimated_crr_avg,
+        "estimated_cda_stddev": bike.estimated_cda_stddev,
+        "estimated_crr_stddev": bike.estimated_crr_stddev,
+        "aero_sample_count": bike.aero_sample_count,
     }

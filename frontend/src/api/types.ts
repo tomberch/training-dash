@@ -82,6 +82,12 @@ export interface Bike {
   retired_at: string | null;
   created_at: string;
   updated_at: string;
+  // Estimated aero aggregates from activities
+  estimated_cda_avg: number | null;
+  estimated_crr_avg: number | null;
+  estimated_cda_stddev: number | null;
+  estimated_crr_stddev: number | null;
+  aero_sample_count: number | null;
 }
 
 export interface BikeListResponse {
@@ -142,6 +148,11 @@ export interface Activity {
   activity_type: ActivityType | null;
   bike_id: number | null;
   bike: BikeSummary | null;
+  // Aero estimation
+  estimated_cda: number | null;
+  estimated_crr: number | null;
+  aero_confidence: number | null;
+  weather_status: "pending" | "fetched" | "failed" | "not_applicable" | null;
 }
 
 export interface PaginationMeta {
