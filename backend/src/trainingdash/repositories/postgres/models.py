@@ -768,3 +768,70 @@ class RacePlan(Base):
     user: Mapped["User"] = relationship("User", lazy="select")
     course: Mapped["RaceCourse"] = relationship("RaceCourse", lazy="select")
     bike: Mapped["Bike | None"] = relationship("Bike", lazy="select")
+
+
+
+# =============================================================================
+# Backup Models
+# =============================================================================
+
+
+class BackupConfig(Base):
+    """Singleton configuration for restic backups.
+
+    Only one row (id=1) is allowed, enforced by a CHECK constraint.
+    Stores encrypted restic repository password and retention settings.
+    """
+
+    __tablename__ = "backup_config"
+    __table_args__ = (
+        sa.CheckConstraint("id = 1", name="backup_config_singleton"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    repository_path: Mapped[str] = mapped_column(String(500), nullable=False, server_default="/backups")
+    encrypted_password: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    # Schedule: hour of day (0-23) like sync_hour, null = manual only
+    schedule_hour: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Retention policy
+    retention_keep_daily: Mapped[int] = mapped_column(Integer, nullable=False, server_default="7")
+    retention_keep_weekly: Mapped[int] = mapped_column(Integer, nullable=False, server_default="4")
+    retention_keep_monthly: Mapped[int] = mapped_column(Integer, nullable=False, server_default="3")
+    # Options
+    exclude_raw_fit: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
+    updated_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
+
+
+class BackupHistory(Base):
+    """Log of backup operations with metadata from restic.
+
+    Records both successful and failed backup attempts, including
+    statistics from restic's JSON output for completed backups.
+    """
+
+    __tablename__ = "backup_history"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    # Restic snapshot ID (short form, e.g. "a1b2c3d4")
+    snapshot_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    # Trigger type: scheduled, manual
+    trigger_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    # Status: running, completed, failed
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    # Timing
+    started_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
+    completed_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Backup metadata (from restic JSON output)
+    files_new: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    files_changed: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    files_unmodified: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    bytes_added: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    bytes_total: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    # Database metadata
+    db_migration_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # Error info
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)

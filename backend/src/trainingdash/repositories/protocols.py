@@ -1092,6 +1092,104 @@ class RacePlanRepo(Protocol):
         ...
 
 
+class BackupRepo(Protocol):
+    """
+    Repository protocol for backup configuration and history.
+
+    Manages the singleton backup configuration and backup history log.
+    """
+
+    async def get_config(self) -> "BackupConfig | None":
+        """
+        Get the backup configuration.
+
+        Returns None if no configuration exists yet.
+        """
+        ...
+
+    async def save_config(self, config: "BackupConfig") -> "BackupConfig":
+        """
+        Save backup configuration (upsert).
+
+        Creates the singleton row if it doesn't exist, or updates it.
+        Returns the saved config with any DB-generated fields populated.
+        """
+        ...
+
+    async def create_history_entry(
+        self,
+        trigger_type: str,
+        status: str,
+        db_migration_version: str | None = None,
+    ) -> "BackupHistory":
+        """
+        Create a new backup history entry.
+
+        Called at backup start with status='running'.
+        Returns the created entry with generated ID.
+        """
+        ...
+
+    async def update_history_entry(
+        self,
+        entry_id: int,
+        *,
+        snapshot_id: str | None = None,
+        status: str | None = None,
+        completed_at: "datetime | None" = None,
+        duration_seconds: float | None = None,
+        files_new: int | None = None,
+        files_changed: int | None = None,
+        files_unmodified: int | None = None,
+        bytes_added: int | None = None,
+        bytes_total: int | None = None,
+        error_message: str | None = None,
+    ) -> "BackupHistory | None":
+        """
+        Update a backup history entry.
+
+        Called at backup completion/failure to record results.
+        Returns the updated entry, or None if not found.
+        """
+        ...
+
+    async def get_history(self, limit: int = 20) -> list["BackupHistory"]:
+        """
+        List backup history entries, most recent first.
+
+        Args:
+            limit: Maximum number of entries to return
+
+        Returns:
+            List of BackupHistory objects ordered by started_at descending
+        """
+        ...
+
+    async def get_history_entry(self, entry_id: int) -> "BackupHistory | None":
+        """
+        Get a specific backup history entry by ID.
+
+        Returns None if not found.
+        """
+        ...
+
+    async def get_latest_completed(self) -> "BackupHistory | None":
+        """
+        Get the most recent completed backup.
+
+        Returns None if no completed backups exist.
+        """
+        ...
+
+    async def is_backup_running(self) -> bool:
+        """
+        Check if a backup is currently running.
+
+        Returns True if there's an entry with status='running'.
+        """
+        ...
+
+
 # Import types for type hints (avoid circular import at runtime)
 from datetime import date, datetime
 from typing import TYPE_CHECKING, Any
@@ -1102,6 +1200,8 @@ if TYPE_CHECKING:
     from trainingdash.repositories.postgres.models import (
         Activity,
         AppSettings,
+        BackupConfig,
+        BackupHistory,
         Bike,
         Event,
         FitnessHistory,
