@@ -31,6 +31,14 @@ from trainingdash.use_cases.calibrate_bike import (
     InsufficientDataError,
     NoActivitiesError,
 )
+from trainingdash.use_cases.create_backup import (
+    BackupAlreadyRunningError,
+    BackupError,
+    BackupNotConfiguredError,
+    BackupResult,
+    CreateBackup,
+    ResticError,
+)
 from trainingdash.use_cases.delete_activity import DeleteActivity
 from trainingdash.use_cases.ensure_default_thresholds import EnsureDefaultThresholds
 from trainingdash.use_cases.fitness_model_updater import FitnessModelUpdater
@@ -47,12 +55,17 @@ from trainingdash.use_cases.upload_to_provider import (
 )
 
 __all__ = [
+    "BackupAlreadyRunningError",
+    "BackupError",
+    "BackupNotConfiguredError",
+    "BackupResult",
     "BikeNotEligibleError",
     "BikeNotFoundError",
     "BreakthroughEvaluator",
     "CalibrateFromActivities",
     "CalibrationError",
     "CalibrationResult",
+    "CreateBackup",
     "DeleteActivity",
     "EnsureDefaultThresholds",
     "FitnessModelUpdater",
@@ -65,6 +78,7 @@ __all__ = [
     "RecalcAfterDelete",
     "RecalculateMetrics",
     "RecalculationResult",
+    "ResticError",
     "SyncFromProvider",
     "SyncResult",
     "UploadResult",
