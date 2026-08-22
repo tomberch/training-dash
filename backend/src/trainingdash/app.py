@@ -24,6 +24,7 @@ from trainingdash.routers import (
     admin_system,
     analytics,
     auth,
+    backup,
     bikes,
     courses,
     events,
@@ -95,6 +96,7 @@ def create_app() -> FastAPI:
     app.include_router(user.router)
     app.include_router(admin.router)
     app.include_router(admin_system.router)
+    app.include_router(backup.router)
     app.include_router(activities.router)
     app.include_router(analytics.router)
     app.include_router(bikes.router)
