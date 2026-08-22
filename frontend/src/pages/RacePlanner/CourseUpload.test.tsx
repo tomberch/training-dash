@@ -96,9 +96,9 @@ describe("CourseUpload", () => {
     it("renders page title and description", () => {
       renderCourseUpload();
 
-      expect(screen.getByText("Upload Course")).toBeInTheDocument();
+      expect(screen.getByText("Create Course")).toBeInTheDocument();
       expect(
-        screen.getByText(/Import a GPX or FIT file to create a race course/)
+        screen.getByText(/Upload a file or use an existing activity/)
       ).toBeInTheDocument();
     });
 

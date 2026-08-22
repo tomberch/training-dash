@@ -188,15 +188,24 @@ function ExpandableFormula({
             {unit && <span className="text-sm font-normal ml-0.5">{unit}</span>}
           </span>
           {hasChanged && (
-            <button
+            <span
+              role="button"
+              tabIndex={0}
               onClick={(e) => {
                 e.stopPropagation();
                 onRestore?.();
               }}
-              className="text-xs text-muted-foreground hover:text-foreground underline"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  onRestore?.();
+                }
+              }}
+              className="text-xs text-muted-foreground hover:text-foreground underline cursor-pointer"
             >
               (was {typeof originalResult === "number" ? originalResult.toFixed(1) : originalResult})
-            </button>
+            </span>
           )}
           <svg
             className={cn("w-5 h-5 transition-transform text-muted-foreground", expanded && "rotate-180")}
@@ -245,15 +254,17 @@ function InputField({
 }: InputFieldProps) {
   const displayValue = value ?? originalValue ?? "";
   const hasChanged = value !== null && value !== originalValue;
+  const inputId = `input-${label.toLowerCase().replace(/\s+/g, "-")}`;
 
   return (
     <div className="flex items-center justify-between py-3 border-b border-border last:border-b-0">
       <div className="flex items-center">
-        <Label className="font-medium">{label}</Label>
+        <Label htmlFor={inputId} className="font-medium">{label}</Label>
         <InfoTooltip explanation={explanation} />
       </div>
       <div className="flex items-center gap-2">
         <Input
+          id={inputId}
           type="number"
           value={displayValue}
           min={min}
@@ -304,13 +315,15 @@ function ZonesGrid({
     );
   }
 
+  const gridCols = zones.length === 5 ? "grid-cols-5" : "grid-cols-7";
+
   return (
     <div className="py-3">
       <div className="flex items-center mb-3">
         <span className="font-medium">{label}</span>
         <InfoTooltip explanation={`Zone boundaries calculated from your threshold. Each zone targets a specific training adaptation.`} />
       </div>
-      <div className="grid grid-cols-7 gap-2 text-center text-sm">
+      <div className={cn("grid gap-2 text-center text-sm", gridCols)}>
         {zones.map((z, i) => {
           const orig = originalZones?.[i];
           const minVal = z.minValue;
@@ -351,13 +364,16 @@ function ZoneTimesGrid({
 }) {
   if (!zoneTimes) return null;
 
+  const zoneCount = Object.keys(zoneTimes).length;
+  const gridCols = zoneCount === 5 ? "grid-cols-5" : "grid-cols-7";
+
   return (
     <div className="py-3 border-t border-border">
       <div className="flex items-center mb-3">
         <span className="font-medium">Time in {label}</span>
         <InfoTooltip explanation="Time spent in each zone during this activity." />
       </div>
-      <div className="grid grid-cols-7 gap-2 text-center text-sm">
+      <div className={cn("grid gap-2 text-center text-sm", gridCols)}>
         {Object.entries(zoneTimes).map(([zone, seconds]) => (
           <div key={zone} className="p-2 rounded bg-muted/50">
             <div className="font-medium">Z{zone}</div>
@@ -398,7 +414,7 @@ function PeaksGrid({ peaks }: { peaks: Activity["peaks"] }) {
 
 function LoadingSkeleton() {
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-testid="loading-skeleton">
       <Skeleton className="h-8 w-48" />
       <Skeleton className="h-4 w-64" />
       <div className="space-y-3 mt-6">

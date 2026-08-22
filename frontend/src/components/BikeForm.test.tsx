@@ -92,7 +92,7 @@ describe("BikeForm", () => {
     await userEvent.type(screen.getByLabelText(/CdA/), "2");
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     
-    expect(screen.getByText("CdA must be between 0 and 1")).toBeInTheDocument();
+    expect(screen.getByText("CdA must be between 0.15 and 0.6 m²")).toBeInTheDocument();
     expect(mockOnSave).not.toHaveBeenCalled();
   });
 
@@ -103,7 +103,7 @@ describe("BikeForm", () => {
     await userEvent.type(screen.getByLabelText(/Crr/), "0.5");
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     
-    expect(screen.getByText("Crr must be between 0 and 0.1")).toBeInTheDocument();
+    expect(screen.getByText("Crr must be between 0.002 and 0.015")).toBeInTheDocument();
     expect(mockOnSave).not.toHaveBeenCalled();
   });
 
@@ -123,6 +123,8 @@ describe("BikeForm", () => {
         weight_kg: null,
         cda: null,
         crr: null,
+        cda_source: null,
+        crr_source: null,
         is_default: false,
       });
     });
