@@ -8,6 +8,7 @@ parameters, and pacing algorithms (heuristic or optimized).
 from dataclasses import dataclass
 from decimal import Decimal
 
+from trainingdash.domain.aero_selection import AeroSource, BikeAeroData, select_aero_params
 from trainingdash.domain.cda_estimation import get_default_cda, get_default_crr
 from trainingdash.domain.course_segmentation import CourseSegment
 from trainingdash.domain.pacing import generate_heuristic_pacing
@@ -28,6 +29,10 @@ class GeneratePlanRequest:
 
     If target_time_s is provided, it takes precedence and the optimizer
     will calculate the power distribution needed to achieve that time.
+
+    CdA/Crr selection:
+    - If override_cda and override_crr are both set, use those values
+    - Otherwise, use smart selection from bike data (estimated > manual > defaults)
     """
 
     course_id: int
@@ -40,6 +45,9 @@ class GeneratePlanRequest:
     target_time_s: float | None = None  # if set, optimizer calculates watts to hit this time
     use_optimizer: bool = False  # heuristic by default
     name: str | None = None
+    # CdA/Crr overrides - if both set, use these instead of bike data
+    override_cda: float | None = None
+    override_crr: float | None = None
 
 
 @dataclass
@@ -49,6 +57,7 @@ class GeneratePlanResult:
     plan: RacePlan
     comparison: dict  # constant vs heuristic vs optimized times
     warnings: list[str]
+    aero_selection: dict | None = None  # CdA/Crr selection metadata
 
 
 class GenerateRacePlan:
@@ -106,28 +115,45 @@ class GenerateRacePlan:
         if not segments:
             raise ValueError("Course has no segments")
 
-        # 2. Load bike or use defaults
-        cda: float
-        crr: float
+        # 2. Load bike and select CdA/Crr using smart selection
         bike_weight_kg: float | None = None
         bike_id: int | None = None
+        bike_aero_data: BikeAeroData | None = None
 
         if request.bike_id is not None:
             bike = await self._bike_repo.get_by_id(request.bike_id, user_id)
             if bike is None:
                 warnings.append(f"Bike {request.bike_id} not found, using defaults")
-                cda = get_default_cda("road")
-                crr = get_default_crr("road")
             else:
                 bike_id = bike.id
-                cda = float(bike.cda) if bike.cda else get_default_cda(bike.bike_type)
-                crr = float(bike.crr) if bike.crr else get_default_crr(bike.bike_type)
                 bike_weight_kg = float(bike.weight_kg) if bike.weight_kg else None
-        else:
-            # No bike specified - use road defaults
-            cda = get_default_cda("road")
-            crr = get_default_crr("road")
-            warnings.append("No bike specified, using road defaults")
+                bike_aero_data = BikeAeroData(
+                    bike_type=bike.bike_type,
+                    cda=float(bike.cda) if bike.cda else None,
+                    crr=float(bike.crr) if bike.crr else None,
+                    estimated_cda_avg=float(bike.estimated_cda_avg) if bike.estimated_cda_avg else None,
+                    estimated_crr_avg=float(bike.estimated_crr_avg) if bike.estimated_crr_avg else None,
+                    estimated_cda_stddev=float(bike.estimated_cda_stddev) if bike.estimated_cda_stddev else None,
+                    estimated_crr_stddev=float(bike.estimated_crr_stddev) if bike.estimated_crr_stddev else None,
+                    aero_sample_count=bike.aero_sample_count,
+                )
+
+        # Select CdA/Crr using priority: user override > estimated > manual > defaults
+        aero_selection = select_aero_params(
+            bike=bike_aero_data,
+            user_cda=request.override_cda,
+            user_crr=request.override_crr,
+            bike_type_fallback="road",
+        )
+
+        cda = aero_selection.cda
+        crr = aero_selection.crr
+
+        # Add warning/note about aero source
+        if aero_selection.source == AeroSource.DEFAULT:
+            warnings.append(aero_selection.confidence_note or "Using default CdA/Crr values")
+        elif aero_selection.confidence_note:
+            warnings.append(f"CdA/Crr: {aero_selection.confidence_note}")
 
         # 3. Get rider weight
         rider_weight_kg: float
@@ -329,10 +355,25 @@ class GenerateRacePlan:
 
         saved_plan = await self._plan_repo.save(plan)
 
+        # Build aero selection metadata for response
+        aero_selection_dict = {
+            "cda": aero_selection.cda,
+            "crr": aero_selection.crr,
+            "source": aero_selection.source.value,
+            "confidence_note": aero_selection.confidence_note,
+        }
+        if aero_selection.cda_stddev is not None:
+            aero_selection_dict["cda_stddev"] = aero_selection.cda_stddev
+        if aero_selection.crr_stddev is not None:
+            aero_selection_dict["crr_stddev"] = aero_selection.crr_stddev
+        if aero_selection.sample_count is not None:
+            aero_selection_dict["sample_count"] = aero_selection.sample_count
+
         return GeneratePlanResult(
             plan=saved_plan,
             comparison=comparison,
             warnings=warnings,
+            aero_selection=aero_selection_dict,
         )
 
     def _parse_segments(self, segments_json: list[dict]) -> list[CourseSegment]:

@@ -38,6 +38,10 @@ class GeneratePlanRequestSchema(BaseModel):
     2. Time mode: Set target_time_s to specify desired finish time
 
     If target_time_s is provided, optimizer calculates power to hit that time.
+
+    CdA/Crr selection:
+    - If override_cda AND override_crr are both provided, use those values
+    - Otherwise, smart selection: estimated from activities > manual bike config > defaults
     """
 
     course_id: int
@@ -50,6 +54,9 @@ class GeneratePlanRequestSchema(BaseModel):
     target_time_s: float | None = Field(None, ge=60, le=86400)  # 1 min to 24 hours
     use_optimizer: bool = False
     name: str | None = Field(None, max_length=200)
+    # CdA/Crr overrides - if both set, use these instead of smart selection
+    override_cda: float | None = Field(None, ge=0.15, le=0.6, description="Override CdA in m²")
+    override_crr: float | None = Field(None, ge=0.002, le=0.015, description="Override Crr coefficient")
 
     def to_domain(self) -> GeneratePlanRequest:
         """Convert to domain request object."""
@@ -64,6 +71,8 @@ class GeneratePlanRequestSchema(BaseModel):
             target_time_s=self.target_time_s,
             use_optimizer=self.use_optimizer,
             name=self.name,
+            override_cda=self.override_cda,
+            override_crr=self.override_crr,
         )
 
 
@@ -110,6 +119,18 @@ class ComparisonSchema(BaseModel):
     improvement_vs_heuristic_pct: float | None = None
 
 
+class AeroSelectionSchema(BaseModel):
+    """CdA/Crr selection metadata."""
+
+    cda: float
+    crr: float
+    source: str  # "user_override", "estimated", "manual", "default"
+    confidence_note: str | None = None
+    cda_stddev: float | None = None
+    crr_stddev: float | None = None
+    sample_count: int | None = None
+
+
 class RacePlanResponse(BaseModel):
     """Response after generating a race plan."""
 
@@ -123,6 +144,7 @@ class RacePlanResponse(BaseModel):
     intensity_factor: float | None
     comparison: ComparisonSchema
     warnings: list[str]
+    aero_selection: AeroSelectionSchema | None = None
 
 
 class RacePlanListItem(BaseModel):
@@ -284,6 +306,7 @@ async def generate_plan(
         intensity_factor=float(plan.intensity_factor) if plan.intensity_factor else None,
         comparison=ComparisonSchema(**result.comparison),
         warnings=result.warnings,
+        aero_selection=AeroSelectionSchema(**result.aero_selection) if result.aero_selection else None,
     )
 
 
@@ -466,6 +489,7 @@ async def regenerate_plan(
         intensity_factor=float(plan.intensity_factor) if plan.intensity_factor else None,
         comparison=ComparisonSchema(**result.comparison),
         warnings=result.warnings,
+        aero_selection=AeroSelectionSchema(**result.aero_selection) if result.aero_selection else None,
     )
 
 
