@@ -129,3 +129,23 @@ async def enqueue_match_route_job(activity_id: str, user_id: int) -> str | None:
     queue = await get_queue()
     job = await queue.enqueue("match_route_job", activity_id=activity_id, user_id=user_id)
     return job.key if job else None
+
+
+
+async def enqueue_fetch_weather_job(user_id: int, activity_id: str | None = None) -> str | None:
+    """
+    Enqueue a weather fetch job for activities pending weather data.
+
+    If activity_id is provided, fetches weather for that single activity.
+    Otherwise, processes pending activities for the user.
+
+    Returns job key or None if queue is not available.
+    """
+    if not queue_available():
+        return None
+    queue = await get_queue()
+    kwargs = {"user_id": user_id, "timeout": 120}
+    if activity_id:
+        kwargs["activity_id"] = activity_id
+    job = await queue.enqueue("fetch_weather_job", **kwargs)
+    return job.key if job else None

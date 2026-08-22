@@ -144,4 +144,10 @@ class IngestActivity:
             },
         )
 
+        # Enqueue weather fetch if activity is eligible (weather_status='pending')
+        if activity.weather_status == "pending":
+            from trainingdash.jobs import enqueue_fetch_weather_job
+
+            await enqueue_fetch_weather_job(user_id, str(activity.id))
+
         return activity

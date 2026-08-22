@@ -245,6 +245,40 @@ async def hourly_sync_scheduler(ctx: dict):
         return await HourlySyncScheduler(db).execute()
 
 
+@tracked_job("fetch_weather")
+async def fetch_weather_job(ctx: dict, *, user_id: int, activity_id: str | None = None) -> dict:
+    """
+    Fetch weather data for activities pending weather fetch.
+
+    If activity_id is provided, fetches weather for that single activity.
+    Otherwise, processes up to 10 pending activities for the user.
+
+    Uses the FetchActivityWeather use case which:
+    - Fetches historical weather from Open-Meteo
+    - Stores hourly snapshots in activity_weather table
+    - Runs CdA/Crr estimation if weather fetch succeeds
+    """
+    from uuid import UUID
+
+    from trainingdash.use_cases.fetch_activity_weather import FetchActivityWeather
+
+    async with worker_db_session(ctx) as db:
+        use_case = FetchActivityWeather(db)
+
+        if activity_id:
+            result = await use_case.execute_single(UUID(activity_id))
+        else:
+            result = await use_case.execute(user_id)
+
+        return {
+            "success": not result.errors,
+            "activities_processed": result.activities_processed,
+            "weather_fetched": result.weather_fetched,
+            "aero_estimated": result.aero_estimated,
+            "errors": result.errors,
+        }
+
+
 @tracked_job("recalculate_metrics")
 async def recalculate_metrics_job(ctx: dict, *, user_id: int) -> dict:
     """
@@ -433,6 +467,7 @@ def settings():
             match_route_job,
             recalculate_after_delete_job,
             recalculate_metrics_job,
+            fetch_weather_job,
             sync_xert_job,
             sync_garmin_job,
             hourly_sync_scheduler,
