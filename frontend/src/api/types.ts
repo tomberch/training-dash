@@ -169,7 +169,7 @@ export interface CalcTrace {
   hr_zones: CalcTraceHrZone[] | null;
   power_zone_times: Record<number, number> | null;
   hr_zone_times: Record<number, number> | null;
-  wbal_curve: WbalPoint[] | null;
+  wbal_curve: CalcTraceWbalPoint[] | null;
   w_prime_joules: number | null;
   cp_watts: number | null;
   peak_windows: PeakWindow[];
@@ -189,7 +189,7 @@ export interface CalcTraceHrZone {
   max_bpm: number | null;
 }
 
-export interface WbalPoint {
+export interface CalcTraceWbalPoint {
   elapsed_s: number;
   wbal_joules: number;
   wbal_pct: number;

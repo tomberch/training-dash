@@ -87,9 +87,9 @@ const mockActivity = {
     power_zone_times: { 1: 180, 2: 1200, 3: 1800, 4: 1500, 5: 600, 6: 120, 7: 0 },
     hr_zone_times: { 1: 300, 2: 1500, 3: 2000, 4: 1200, 5: 400 },
     wbal_curve: [
-      { elapsed_s: 0, distance_m: 0, wbal_joules: 16800, wbal_pct: 100 },
-      { elapsed_s: 30, distance_m: 250, wbal_joules: 15200, wbal_pct: 90.5 },
-      { elapsed_s: 60, distance_m: 500, wbal_joules: 12000, wbal_pct: 71.4 },
+      { elapsed_s: 0, wbal_joules: 16800, wbal_pct: 100 },
+      { elapsed_s: 30, wbal_joules: 15200, wbal_pct: 90.5 },
+      { elapsed_s: 60, wbal_joules: 12000, wbal_pct: 71.4 },
     ],
     w_prime_joules: 16800,
     cp_watts: 280,
@@ -239,6 +239,14 @@ describe("CalcLabPage", () => {
       });
       expect(screen.getByText("280W")).toBeInTheDocument();
       expect(screen.getByText("16.8kJ")).toBeInTheDocument(); // W'
+    });
+
+    it("shows W'bal chart", async () => {
+      renderCalcLab("test-activity-1");
+
+      await waitFor(() => {
+        expect(screen.getByText("W'bal Over Time")).toBeInTheDocument();
+      });
     });
   });
 

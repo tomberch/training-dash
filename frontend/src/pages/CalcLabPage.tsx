@@ -7,6 +7,16 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  ResponsiveContainer,
+  ReferenceLine,
+} from "recharts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,7 +29,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { fetchActivity, fetchWhatIf } from "@/api/activities";
-import type { Activity, CalcTrace, WhatIfRequest } from "@/api/types";
+import type { Activity, CalcTrace, WhatIfRequest, CalcTraceWbalPoint } from "@/api/types";
 import { calculateIntensityFactor, calculateTss } from "@/lib/training-load";
 import { computePowerZones, computeHrZones, type ComputedZone } from "@/lib/zones";
 
@@ -412,6 +422,109 @@ function PeaksGrid({ peaks }: { peaks: Activity["peaks"] }) {
   );
 }
 
+function formatTime(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+  const hours = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+}
+
+interface WbalChartProps {
+  wbalCurve: CalcTraceWbalPoint[];
+  wPrimeJoules: number;
+  minWbalJoules?: number | null;
+}
+
+function WbalChart({ wbalCurve, wPrimeJoules, minWbalJoules }: WbalChartProps) {
+  // Transform data for chart - show as percentage of W'
+  const chartData = wbalCurve.map((point) => ({
+    elapsed_s: point.elapsed_s,
+    wbal_pct: point.wbal_pct,
+    wbal_kj: point.wbal_joules / 1000,
+  }));
+
+  // Find minimum point for reference line
+  const minPoint = minWbalJoules != null
+    ? { pct: (minWbalJoules / wPrimeJoules) * 100, kj: minWbalJoules / 1000 }
+    : null;
+
+  // Custom tooltip
+  const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ payload: { elapsed_s: number; wbal_pct: number; wbal_kj: number } }> }) => {
+    if (!active || !payload || !payload.length) return null;
+    const data = payload[0].payload;
+    return (
+      <div className="bg-popover border border-border rounded-lg shadow-lg px-3 py-2 text-sm">
+        <div className="font-medium">{formatTime(data.elapsed_s)}</div>
+        <div className="text-muted-foreground">
+          W'bal: <span className="text-foreground font-medium">{data.wbal_pct.toFixed(1)}%</span>
+          <span className="ml-2">({data.wbal_kj.toFixed(1)} kJ)</span>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="pt-3 border-t border-border">
+      <div className="flex items-center mb-3">
+        <span className="font-medium">W'bal Over Time</span>
+        <InfoTooltip explanation="Shows how your anaerobic work capacity depletes and recovers during the activity. Lower values mean you were working harder above CP." />
+      </div>
+      <div className="h-48">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+            <defs>
+              <linearGradient id="wbalGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="var(--chart-emerald)" stopOpacity={0.4} />
+                <stop offset="100%" stopColor="var(--chart-emerald)" stopOpacity={0.05} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+            <XAxis
+              dataKey="elapsed_s"
+              tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+              tickFormatter={formatTime}
+              axisLine={{ stroke: "var(--border)" }}
+              tickLine={false}
+            />
+            <YAxis
+              domain={[0, 100]}
+              tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+              tickFormatter={(v) => `${v}%`}
+              axisLine={false}
+              tickLine={false}
+              width={45}
+            />
+            <RechartsTooltip content={<CustomTooltip />} />
+            {minPoint && (
+              <ReferenceLine
+                y={minPoint.pct}
+                stroke="var(--chart-red)"
+                strokeDasharray="4 4"
+                strokeWidth={1}
+                label={{
+                  value: `Min: ${minPoint.pct.toFixed(0)}%`,
+                  position: "right",
+                  fill: "var(--chart-red)",
+                  fontSize: 11,
+                }}
+              />
+            )}
+            <Area
+              type="monotone"
+              dataKey="wbal_pct"
+              stroke="var(--chart-emerald)"
+              strokeWidth={2}
+              fill="url(#wbalGradient)"
+              isAnimationActive={false}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
 function LoadingSkeleton() {
   return (
     <div className="space-y-4" data-testid="loading-skeleton">
@@ -685,12 +798,11 @@ export function CalcLabPage() {
                 </div>
               )}
               {currentTrace.wbal_curve && currentTrace.wbal_curve.length > 0 && (
-                <div className="pt-2 border-t border-border">
-                  <p className="text-sm text-muted-foreground">
-                    W'bal curve: {currentTrace.wbal_curve.length} sample points
-                    (chart visualization coming soon)
-                  </p>
-                </div>
+                <WbalChart
+                  wbalCurve={currentTrace.wbal_curve}
+                  wPrimeJoules={currentTrace.w_prime_joules}
+                  minWbalJoules={activity.wbal_min_joules}
+                />
               )}
             </>
           ) : (
