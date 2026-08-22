@@ -81,14 +81,20 @@ class FetchActivityWeather:
         Returns:
             FetchWeatherResult with counts and any errors
         """
+        from sqlalchemy import or_
+
         result = FetchWeatherResult(errors=[])
 
         # Find activities pending weather fetch
+        # Include NULL status (historical activities) and 'pending' status
         query = (
             select(Activity)
             .where(
                 Activity.user_id == user_id,
-                Activity.weather_status == WeatherStatus.PENDING,
+                or_(
+                    Activity.weather_status == WeatherStatus.PENDING,
+                    Activity.weather_status.is_(None),
+                ),
             )
             .order_by(Activity.started_at.desc())
             .limit(limit)

@@ -549,3 +549,154 @@ async def admin_nuke_account(
 
     await db.commit()
     return {"success": True, "deleted": summary}
+
+
+
+# --- Weather backfill ---
+
+
+class WeatherBackfillResponse(BaseModel):
+    """Response for weather backfill operation."""
+
+    success: bool
+    activities_needing_backfill: int
+    activities_queued: int
+    job_ids: list[str] | None = None
+    message: str | None = None
+
+
+@router.get("/users/{user_id}/weather-backfill/status")
+async def admin_get_weather_backfill_status(
+    db: DbSession,
+    user_repo: UserRepoD,
+    admin: AdminUser,
+    user_id: int,
+):
+    """
+    Get weather backfill status for a user (admin only).
+
+    Returns counts of activities by weather_status, showing how many
+    need backfill (NULL or 'pending' status). Also shows aero estimation
+    progress for activities with weather data.
+    """
+    await _get_user_or_404(user_repo, user_id)
+
+    # Count activities by weather status
+    result = await db.execute(
+        select(
+            func.count().filter(Activity.weather_status.is_(None)).label("null_status"),
+            func.count().filter(Activity.weather_status == "pending").label("pending"),
+            func.count().filter(Activity.weather_status == "fetched").label("fetched"),
+            func.count().filter(Activity.weather_status == "failed").label("failed"),
+            func.count().filter(Activity.weather_status == "not_applicable").label("not_applicable"),
+            func.count().label("total"),
+        ).where(Activity.user_id == user_id)
+    )
+    row = result.one()
+
+    # Count aero estimation status for activities with weather
+    aero_result = await db.execute(
+        select(
+            func.count().filter(Activity.estimated_cda.isnot(None)).label("with_aero"),
+            func.count().filter(
+                Activity.weather_status == "fetched",
+                Activity.estimated_cda.is_(None),
+            ).label("pending_aero"),
+        ).where(Activity.user_id == user_id)
+    )
+    aero_row = aero_result.one()
+
+    return {
+        "user_id": user_id,
+        "weather_status_counts": {
+            "null": row.null_status,
+            "pending": row.pending,
+            "fetched": row.fetched,
+            "failed": row.failed,
+            "not_applicable": row.not_applicable,
+        },
+        "total_activities": row.total,
+        "needing_backfill": row.null_status + row.pending,
+        "aero_estimation": {
+            "with_estimates": aero_row.with_aero,
+            "pending_estimation": aero_row.pending_aero,
+        },
+    }
+
+
+@router.post("/users/{user_id}/weather-backfill")
+async def admin_trigger_weather_backfill(
+    db: DbSession,
+    user_repo: UserRepoD,
+    event_repo: EventRepoD,
+    admin: AdminUser,
+    user_id: int,
+) -> WeatherBackfillResponse:
+    """
+    Trigger weather backfill for a user's historical activities (admin only).
+
+    This endpoint:
+    1. Finds activities with NULL weather_status (pre-integration activities)
+    2. Sets them to 'pending' status
+    3. Queues weather fetch jobs (batched, 10 activities per job)
+
+    Weather fetch will also trigger CdA/Crr estimation for eligible activities.
+    """
+    from trainingdash.jobs import enqueue_fetch_weather_job
+
+    await _get_user_or_404(user_repo, user_id)
+
+    # Count activities needing backfill (NULL status = historical, never processed)
+    count_result = await db.execute(
+        select(func.count())
+        .select_from(Activity)
+        .where(Activity.user_id == user_id, Activity.weather_status.is_(None))
+    )
+    null_count = count_result.scalar() or 0
+
+    if null_count == 0:
+        return WeatherBackfillResponse(
+            success=True,
+            activities_needing_backfill=0,
+            activities_queued=0,
+            message="No activities need weather backfill",
+        )
+
+    # Update NULL weather_status to 'pending'
+    await db.execute(
+        update(Activity)
+        .where(Activity.user_id == user_id, Activity.weather_status.is_(None))
+        .values(weather_status="pending")
+    )
+    await db.commit()
+
+    # Queue weather fetch jobs (process in batches of 10)
+    # Each job processes up to 10 pending activities
+    num_jobs = (null_count + 9) // 10  # Ceiling division
+    job_ids = []
+
+    for _ in range(min(num_jobs, 5)):  # Max 5 concurrent jobs per user
+        job_id = await enqueue_fetch_weather_job(user_id)
+        if job_id:
+            job_ids.append(job_id)
+
+    # Log the backfill action
+    await event_repo.log(
+        event_type=EventType.ADMIN_TRIGGER_SYNC.value,  # Reuse existing event type
+        outcome=EventOutcome.INFO.value,
+        user_id=user_id,
+        payload={
+            "admin_id": admin.id,
+            "action": "weather_backfill",
+            "activities_queued": null_count,
+            "jobs_queued": len(job_ids),
+        },
+    )
+
+    return WeatherBackfillResponse(
+        success=True,
+        activities_needing_backfill=null_count,
+        activities_queued=null_count,
+        job_ids=job_ids if job_ids else None,
+        message=f"Queued {null_count} activities for weather backfill across {len(job_ids)} jobs",
+    )
