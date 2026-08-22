@@ -127,9 +127,6 @@ class PipelineResult:
     route: RouteMatchResult = field(default_factory=RouteMatchResult)
     title: TitleResult = field(default_factory=TitleResult)
     aero: AeroEstimationResult = field(default_factory=AeroEstimationResult)
-    breakthrough: BreakthroughResult = field(default_factory=BreakthroughResult)
-    route: RouteMatchResult = field(default_factory=RouteMatchResult)
-    title: TitleResult = field(default_factory=TitleResult)
 
 
 # --- Pipeline Class ---
