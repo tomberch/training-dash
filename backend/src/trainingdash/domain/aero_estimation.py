@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -34,6 +35,16 @@ from scipy.optimize import least_squares
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+
+class WeatherStatus(StrEnum):
+    """Status of weather data fetch for an activity."""
+
+    PENDING = "pending"  # Eligible for weather fetch, awaiting processing
+    FETCHED = "fetched"  # Weather data successfully retrieved
+    FAILED = "failed"  # Weather fetch attempted but failed
+    NOT_APPLICABLE = "not_applicable"  # Activity not eligible (indoor, no GPS, etc.)
+
 
 # Physical constants
 GRAVITY = 9.80665  # m/s²

@@ -22,6 +22,7 @@ from sqlalchemy.orm import selectinload
 from trainingdash.domain.aero_estimation import (
     ActivityRecord,
     WeatherSnapshot,
+    WeatherStatus,
     calculate_air_density,
     check_estimation_requirements,
     estimate_cda_crr,
@@ -87,7 +88,7 @@ class FetchActivityWeather:
             select(Activity)
             .where(
                 Activity.user_id == user_id,
-                Activity.weather_status == "pending",
+                Activity.weather_status == WeatherStatus.PENDING,
             )
             .order_by(Activity.started_at.desc())
             .limit(limit)
@@ -160,7 +161,7 @@ class FetchActivityWeather:
 
         if not first_record or first_record.lat is None or first_record.lon is None:
             logger.info(f"Activity {activity.id} has no GPS data for weather fetch")
-            activity.weather_status = "not_applicable"
+            activity.weather_status = WeatherStatus.NOT_APPLICABLE
             return False
 
         # Calculate duration in hours
@@ -176,7 +177,7 @@ class FetchActivityWeather:
 
         if not weather_result.success:
             logger.warning(f"Weather fetch failed for {activity.id}: {weather_result.error_message}")
-            activity.weather_status = "failed"
+            activity.weather_status = WeatherStatus.FAILED
             return False
 
         # Store hourly weather data
@@ -195,7 +196,7 @@ class FetchActivityWeather:
             )
             self._db.add(weather_row)
 
-        activity.weather_status = "fetched"
+        activity.weather_status = WeatherStatus.FETCHED
         await self._db.flush()
 
         logger.info(f"Stored {len(weather_result.hourly_data)} weather snapshots for activity {activity.id}")

@@ -759,6 +759,7 @@ class ActivityPipeline:
             ActivityRecord,
             AeroEstimationResult as DomainAeroResult,
             WeatherSnapshot,
+            WeatherStatus,
             check_estimation_requirements,
             estimate_cda_crr,
             prepare_data_points,
@@ -796,7 +797,7 @@ class ActivityPipeline:
 
         if not can_estimate:
             result.skipped_reason = "; ".join(reasons)
-            self.activity.weather_status = "not_applicable"
+            self.activity.weather_status = WeatherStatus.NOT_APPLICABLE
             await self.db.flush()
             return result
 
@@ -810,7 +811,7 @@ class ActivityPipeline:
 
         if not weather_rows:
             # Mark for weather fetch (background job will handle it)
-            self.activity.weather_status = "pending"
+            self.activity.weather_status = WeatherStatus.PENDING
             result.skipped_reason = "Awaiting weather data"
             await self.db.flush()
             return result
@@ -867,7 +868,7 @@ class ActivityPipeline:
         self.activity.estimated_cda = estimation.cda
         self.activity.estimated_crr = estimation.crr
         self.activity.aero_confidence = estimation.confidence
-        self.activity.weather_status = "fetched"
+        self.activity.weather_status = WeatherStatus.FETCHED
 
         await self.db.flush()
         await self.db.refresh(self.activity)

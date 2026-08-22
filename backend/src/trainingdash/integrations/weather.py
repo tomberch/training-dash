@@ -136,7 +136,7 @@ async def fetch_activity_weather(
         "start_date": start_date.isoformat(),
         "end_date": end_date.isoformat(),
         "hourly": ",".join(HOURLY_VARIABLES),
-        "timezone": "UTC",
+        "timezone": "auto",  # Let API determine timezone from coordinates
     }
 
     try:
