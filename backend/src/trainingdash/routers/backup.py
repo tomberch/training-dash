@@ -6,20 +6,13 @@ Provides endpoints for:
 - POST trigger manual backup
 """
 
-import contextlib
-import os
 from datetime import datetime
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from trainingdash.auth import AdminUser, DbSession
 from trainingdash.dependencies import BackupRepoD
-from trainingdash.use_cases import (
-    BackupAlreadyRunningError,
-    BackupNotConfiguredError,
-    CreateBackup,
-)
 
 router = APIRouter(prefix="/api/admin/backup", tags=["admin-backup"])
 
@@ -227,15 +220,14 @@ async def get_backup_history(
 async def trigger_backup(
     admin: AdminUser,
     backup_repo: BackupRepoD,
-    db: DbSession,
-    background_tasks: BackgroundTasks,
 ):
     """
     Trigger a manual backup.
 
-    The backup runs in the background. Check /history for status.
+    Enqueues a backup job on the worker. The backup runs asynchronously;
+    check /status or /history for progress.
     """
-    # Check preconditions synchronously
+    # Check preconditions
     if await backup_repo.is_backup_running():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -249,45 +241,19 @@ async def trigger_backup(
             detail="Backup is not configured or disabled",
         )
 
-    # Get database URL from environment
-    database_url = os.environ.get("DATABASE_URL", "")
-    if not database_url:
+    # Enqueue backup job on worker (which has the backup volume mounted)
+    from trainingdash.jobs import enqueue_backup_job
+
+    job_key = await enqueue_backup_job()
+    if job_key is None:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="DATABASE_URL not configured",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Job queue not available",
         )
 
-    # Create history entry synchronously so we can return the ID
-    migration_version = await backup_repo.get_migration_version()
-    history = await backup_repo.create_history_entry(
-        trigger_type="manual",
-        status="running",
-        db_migration_version=migration_version,
-    )
-    await db.commit()
-
-    # Run backup in background
-    async def run_backup():
-        from trainingdash.db import async_session_factory
-
-        async with async_session_factory() as session:
-            from trainingdash.repositories.postgres.backup_repo import PostgresBackupRepo
-
-            repo = PostgresBackupRepo(session)
-            use_case = CreateBackup(
-                backup_repo=repo,
-                database_url=database_url,
-            )
-            # Execute continues from existing history entry
-            with contextlib.suppress(BackupAlreadyRunningError, BackupNotConfiguredError):
-                await use_case.execute(trigger_type="manual")
-            await session.commit()
-
-    background_tasks.add_task(run_backup)
-
     return TriggerBackupResponse(
-        message="Backup started",
-        history_id=history.id,
+        message="Backup job enqueued",
+        history_id=None,  # History entry created by worker when job starts
     )
 
 

@@ -1207,6 +1207,14 @@ class BackupRepo(Protocol):
         """
         ...
 
+    async def get_migration_version(self) -> str | None:
+        """
+        Get current alembic migration version from database.
+
+        Returns the version_num from alembic_version table, or None if not found.
+        """
+        ...
+
 
 # Import types for type hints (avoid circular import at runtime)
 from datetime import date, datetime

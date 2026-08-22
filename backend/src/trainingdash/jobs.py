@@ -149,3 +149,21 @@ async def enqueue_fetch_weather_job(user_id: int, activity_id: str | None = None
         kwargs["activity_id"] = activity_id
     job = await queue.enqueue("fetch_weather_job", **kwargs)
     return job.key if job else None
+
+
+async def enqueue_backup_job() -> str | None:
+    """
+    Enqueue a backup job to run on the worker.
+
+    Backups must run on the worker container because it has the /data/backups
+    volume mounted. The use case handles all logic including history entry
+    creation, restic operations, and retention policy.
+
+    Returns job key or None if queue is not available.
+    """
+    if not queue_available():
+        return None
+    queue = await get_queue()
+    # Backups can be slow depending on data size; give generous timeout
+    job = await queue.enqueue("backup_job", timeout=1800)
+    return job.key if job else None

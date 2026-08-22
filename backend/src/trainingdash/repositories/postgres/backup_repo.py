@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from trainingdash.repositories.postgres.models import BackupConfig, BackupHistory
@@ -177,3 +177,9 @@ class PostgresBackupRepo:
             select(BackupHistory.id).where(BackupHistory.status == "running").limit(1)
         )
         return result.scalar_one_or_none() is not None
+
+    async def get_migration_version(self) -> str | None:
+        """Get current alembic migration version from database."""
+        result = await self._db.execute(text("SELECT version_num FROM alembic_version LIMIT 1"))
+        row = result.scalar_one_or_none()
+        return row

@@ -439,12 +439,17 @@ async def prune_old_data(ctx: dict) -> dict:
 
 
 @tracked_job("backup")
-async def backup_job(ctx: dict) -> dict:
+async def backup_job(ctx: dict, trigger_type: str = "manual") -> dict:
     """
     Execute a database and uploads backup using restic.
 
     This job is triggered by the hourly backup scheduler when the current
-    hour matches the configured schedule_hour. Can also be enqueued manually.
+    hour matches the configured schedule_hour. Can also be enqueued manually
+    via the /trigger API endpoint.
+
+    Args:
+        ctx: SAQ job context
+        trigger_type: "manual" (API trigger) or "scheduled" (cron scheduler)
 
     Uses the CreateBackup use case which handles:
     - pg_dump piped to restic
@@ -465,7 +470,7 @@ async def backup_job(ctx: dict) -> dict:
             backup_repo=repo,
             database_url=database_url,
         )
-        result = await use_case.execute(trigger_type="scheduled")
+        result = await use_case.execute(trigger_type=trigger_type)
 
         return {
             "success": result.success,
@@ -535,7 +540,7 @@ async def hourly_backup_scheduler(ctx: dict) -> dict:
 
         # Enqueue the backup job
         queue = await get_queue()
-        await queue.enqueue("backup_job")
+        await queue.enqueue("backup_job", trigger_type="scheduled")
         logger.info(f"hourly_backup_scheduler: enqueued backup job (hour={current_hour})")
 
         return {"triggered": True, "hour": current_hour}
