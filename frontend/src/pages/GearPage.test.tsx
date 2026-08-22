@@ -30,6 +30,11 @@ const mockBike: Bike = {
   retired_at: null,
   created_at: "2024-01-01T00:00:00Z",
   updated_at: "2024-01-01T00:00:00Z",
+  estimated_cda_avg: null,
+  estimated_crr_avg: null,
+  estimated_cda_stddev: null,
+  estimated_crr_stddev: null,
+  aero_sample_count: null,
 };
 
 const mockRetiredBike: Bike = {
@@ -38,6 +43,11 @@ const mockRetiredBike: Bike = {
   name: "Old Bike",
   is_default: false,
   retired_at: "2024-06-01T00:00:00Z",
+  estimated_cda_avg: null,
+  estimated_crr_avg: null,
+  estimated_cda_stddev: null,
+  estimated_crr_stddev: null,
+  aero_sample_count: null,
 };
 
 function renderGearPage() {

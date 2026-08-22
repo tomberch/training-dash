@@ -59,6 +59,11 @@ const baseActivity = {
   // Bike
   bike_id: null as number | null,
   bike: null,
+  // Aero estimation
+  estimated_cda: null,
+  estimated_crr: null,
+  aero_confidence: null,
+  weather_status: null,
 };
 
 // Helper to render with router

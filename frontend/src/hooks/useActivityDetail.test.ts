@@ -61,6 +61,10 @@ const mockActivity = {
   activity_type: null,
   bike_id: null,
   bike: null,
+  estimated_cda: null,
+  estimated_crr: null,
+  aero_confidence: null,
+  weather_status: null,
 };
 
 const mockGeojson = {

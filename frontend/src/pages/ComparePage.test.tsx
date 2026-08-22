@@ -47,6 +47,10 @@ const mockBaseActivity: Activity = {
   activity_type: "road",
   bike_id: 1,
   bike: { id: 1, name: "Road Bike", bike_type: "road" },
+  estimated_cda: null,
+  estimated_crr: null,
+  aero_confidence: null,
+  weather_status: null,
 };
 
 const mockCompareActivity: Activity = {
