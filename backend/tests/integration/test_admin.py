@@ -115,9 +115,9 @@ class TestAdminEndpoints:
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_admin_trigger_sync_returns_success(self, auth_client, seed_user):
-        # Trigger sync (stub job)
-        response = await auth_client.post(f"/api/admin/users/{seed_user.id}/sync")
+    async def test_admin_trigger_import_returns_success(self, auth_client, seed_user):
+        # Trigger import (stub job)
+        response = await auth_client.post(f"/api/admin/users/{seed_user.id}/import")
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
@@ -125,8 +125,8 @@ class TestAdminEndpoints:
         assert "job_ids" in data
 
     @pytest.mark.asyncio
-    async def test_admin_trigger_sync_user_not_found(self, auth_client):
-        response = await auth_client.post("/api/admin/users/99999/sync")
+    async def test_admin_trigger_import_user_not_found(self, auth_client):
+        response = await auth_client.post("/api/admin/users/99999/import")
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -198,6 +198,7 @@ class TestWeatherBackfillEndpoints:
         assert data["weather_status_counts"]["null"] == 1
         assert data["weather_status_counts"]["not_applicable"] == 1
         assert data["needing_backfill"] == 2  # null + pending
+        assert data["running_job"] is None  # no job running
 
     @pytest.mark.asyncio
     async def test_weather_backfill_status_user_not_found(self, auth_client):

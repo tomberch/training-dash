@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, select, text, update
 
 from trainingdash.auth import AdminUser, DbSession, hash_password
 from trainingdash.crypto import EncryptionError, encrypt
@@ -90,32 +90,32 @@ async def admin_reset_password(
     return {"success": True}
 
 
-@router.post("/users/{user_id}/sync")
-async def admin_trigger_sync(
+@router.post("/users/{user_id}/import")
+async def admin_trigger_import(
     xert_repo: XertCredentialsRepoD,
     garmin_repo: GarminCredentialsRepoD,
     user_repo: UserRepoD,
     admin: AdminUser,
     user_id: int,
 ):
-    """Trigger sync for a user (admin only). Only syncs providers with sync_enabled=true."""
+    """Trigger import for a user (admin only). Only imports from providers with sync_enabled=true."""
     await _get_user_or_404(user_repo, user_id)
 
-    from trainingdash.jobs import enqueue_sync_garmin_job, enqueue_sync_xert_job
+    from trainingdash.jobs import enqueue_import_garmin_job, enqueue_import_xert_job
 
     job_ids = {}
 
-    # Check if user has Xert credentials with sync enabled
+    # Check if user has Xert credentials with import enabled
     xert_creds = await xert_repo.get_by_user_id(user_id)
     if xert_creds and xert_creds.sync_enabled:
-        job_id = await enqueue_sync_xert_job(user_id)
+        job_id = await enqueue_import_xert_job(user_id)
         if job_id:
             job_ids["xert"] = job_id
 
-    # Check if user has Garmin credentials with sync enabled
+    # Check if user has Garmin credentials with import enabled
     garmin_creds = await garmin_repo.get_by_user_id(user_id)
     if garmin_creds and garmin_creds.sync_enabled:
-        job_id = await enqueue_sync_garmin_job(user_id)
+        job_id = await enqueue_import_garmin_job(user_id)
         if job_id:
             job_ids["garmin"] = job_id
 
@@ -123,7 +123,7 @@ async def admin_trigger_sync(
         return {
             "success": True,
             "job_ids": None,
-            "message": "No integrations with sync enabled or Redis not available",
+            "message": "No integrations with import enabled or Redis not available",
         }
     return {"success": True, "job_ids": job_ids}
 
@@ -607,6 +607,34 @@ async def admin_get_weather_backfill_status(
     )
     aero_row = aero_result.one()
 
+    # Check for running/queued batch_weather_job for this user
+    # The saq_jobs table may not exist if the worker hasn't started yet
+    running_job = None
+    try:
+        job_result = await db.execute(
+            text("""
+                SELECT key, status, scheduled, (job->>'started')::timestamptz as started
+                FROM saq_jobs
+                WHERE (job->>'function') = 'batch_weather_job'
+                  AND (job->'kwargs'->>'user_id')::int = :user_id
+                  AND status IN ('active', 'queued', 'new')
+                ORDER BY scheduled DESC
+                LIMIT 1
+            """),
+            {"user_id": user_id},
+        )
+        job_row = job_result.fetchone()
+        if job_row:
+            running_job = {
+                "key": job_row.key,
+                "status": job_row.status,
+                "scheduled": job_row.scheduled.isoformat() if job_row.scheduled else None,
+                "started": job_row.started.isoformat() if job_row.started else None,
+            }
+    except Exception:
+        # saq_jobs table doesn't exist or query failed - no running job
+        await db.rollback()
+
     return {
         "user_id": user_id,
         "weather_status_counts": {
@@ -622,6 +650,7 @@ async def admin_get_weather_backfill_status(
             "with_estimates": aero_row.with_aero,
             "pending_estimation": aero_row.pending_aero,
         },
+        "running_job": running_job,
     }
 
 

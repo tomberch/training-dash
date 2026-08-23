@@ -8,7 +8,7 @@ import {
   approveUser,
   rejectUser,
   resetUserPassword, 
-  triggerUserSync,
+  triggerUserImport,
   fetchAdminSettings,
   updateAdminSetting,
   fetchNukePreview,
@@ -22,9 +22,9 @@ import { ErrorDisplay } from "./ErrorDisplay";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 
-interface SyncStatus {
+interface ImportStatus {
   userId: number;
-  status: "syncing" | "success" | "error";
+  status: "importing" | "success" | "error";
   message?: string;
 }
 
@@ -44,8 +44,8 @@ export function AdminView({ onBack, onSystemDashboard, onBackupSettings }: { onB
   const [resetUserId, setResetUserId] = useState<number | null>(null);
   const [resetPassword, setResetPassword] = useState("");
 
-  // Sync status per user
-  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+  // Import status per user
+  const [importStatus, setImportStatus] = useState<ImportStatus | null>(null);
 
   // Approval loading state
   const [approvingUserId, setApprovingUserId] = useState<number | null>(null);
@@ -133,20 +133,20 @@ export function AdminView({ onBack, onSystemDashboard, onBackupSettings }: { onB
     }
   }
 
-  async function handleTriggerSync(userId: number) {
-    setSyncStatus({ userId, status: "syncing" });
+  async function handleTriggerImport(userId: number) {
+    setImportStatus({ userId, status: "importing" });
     try {
-      const result = await triggerUserSync(userId);
+      const result = await triggerUserImport(userId);
       if (result.job_id) {
-        setSyncStatus({ userId, status: "success", message: `Sync started (job: ${result.job_id.slice(0, 8)}...)` });
+        setImportStatus({ userId, status: "success", message: `Import started (job: ${result.job_id.slice(0, 8)}...)` });
       } else {
-        setSyncStatus({ userId, status: "success", message: "Sync triggered (no job queue)" });
+        setImportStatus({ userId, status: "success", message: "Import triggered (no job queue)" });
       }
-      setTimeout(() => setSyncStatus(null), 5000);
+      setTimeout(() => setImportStatus(null), 5000);
       setError(null);
     } catch (e) {
-      setSyncStatus({ userId, status: "error", message: (e as Error).message });
-      setTimeout(() => setSyncStatus(null), 5000);
+      setImportStatus({ userId, status: "error", message: (e as Error).message });
+      setTimeout(() => setImportStatus(null), 5000);
     }
   }
 
@@ -475,23 +475,23 @@ export function AdminView({ onBack, onSystemDashboard, onBackupSettings }: { onB
                             </button>
                           )}
                           <button
-                            onClick={() => handleTriggerSync(user.id)}
-                            disabled={syncStatus?.userId === user.id && syncStatus.status === "syncing"}
-                            data-testid={`sync-btn-${user.id}`}
+                            onClick={() => handleTriggerImport(user.id)}
+                            disabled={importStatus?.userId === user.id && importStatus.status === "importing"}
+                            data-testid={`import-btn-${user.id}`}
                             className="px-3 py-1 text-xs font-medium bg-warning/20 text-warning rounded hover:bg-warning/30 disabled:opacity-50 disabled:cursor-not-allowed transition-fast"
                           >
-                            {syncStatus?.userId === user.id && syncStatus.status === "syncing"
-                              ? "Syncing..."
-                              : "Trigger Sync"}
+                            {importStatus?.userId === user.id && importStatus.status === "importing"
+                              ? "Importing..."
+                              : "Trigger Import"}
                           </button>
-                          {syncStatus?.userId === user.id && syncStatus.status === "success" && (
+                          {importStatus?.userId === user.id && importStatus.status === "success" && (
                             <span className="px-2 py-1 text-xs bg-success/20 text-success rounded">
-                              {syncStatus.message}
+                              {importStatus.message}
                             </span>
                           )}
-                          {syncStatus?.userId === user.id && syncStatus.status === "error" && (
+                          {importStatus?.userId === user.id && importStatus.status === "error" && (
                             <span className="px-2 py-1 text-xs bg-destructive/20 text-destructive rounded">
-                              {syncStatus.message}
+                              {importStatus.message}
                             </span>
                           )}
                           <button
@@ -819,12 +819,23 @@ function WeatherBackfillModal({
   }
 
   async function handleTriggerBackfill() {
+    // Refresh status first to check for running jobs
     setTriggering(true);
     setError(null);
     try {
+      const freshStatus = await fetchWeatherBackfillStatus(user.id);
+      setStatus(freshStatus);
+      
+      // Check if a job is already running
+      if (freshStatus.running_job) {
+        setError(`A backfill job is already ${freshStatus.running_job.status}. Please wait for it to complete.`);
+        setTriggering(false);
+        return;
+      }
+
       const response = await triggerWeatherBackfill(user.id, includeFailed);
       setResult(response.message || `Queued ${response.activities_queued} activities`);
-      // Refresh status after triggering
+      // Refresh status after triggering to show the new job
       setTimeout(() => loadStatus(), 1000);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Failed to trigger backfill");
@@ -836,6 +847,8 @@ function WeatherBackfillModal({
   const needsBackfill = status
     ? status.weather_status_counts.null + status.weather_status_counts.pending + (includeFailed ? status.weather_status_counts.failed : 0)
     : 0;
+
+  const hasRunningJob = status?.running_job != null;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -865,6 +878,25 @@ function WeatherBackfillModal({
             </div>
           ) : status ? (
             <>
+              {/* Running job warning */}
+              {hasRunningJob && (
+                <div className="p-4 bg-warning/10 border border-warning/30 rounded-lg">
+                  <div className="flex items-center gap-2 text-warning">
+                    <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    <span className="font-medium">Job {status.running_job!.status}</span>
+                  </div>
+                  <p className="text-sm text-warning/80 mt-1">
+                    A backfill job is currently running. Please wait for it to complete.
+                    {status.running_job!.started && (
+                      <> Started: {new Date(status.running_job!.started).toLocaleTimeString()}</>
+                    )}
+                  </p>
+                </div>
+              )}
+
               {/* Overview */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-4 bg-muted rounded-lg text-center">
@@ -945,18 +977,27 @@ function WeatherBackfillModal({
               )}
 
               {/* Summary */}
-              <div className="p-4 bg-primary/10 border border-primary/30 rounded-lg">
-                <p className="text-sm text-foreground">
-                  <span className="font-medium">{needsBackfill}</span> activities will be queued for weather fetch.
-                  {needsBackfill > 0 && " This runs in the background with 1s delay between API calls."}
-                </p>
-              </div>
+              {!hasRunningJob && (
+                <div className="p-4 bg-primary/10 border border-primary/30 rounded-lg">
+                  <p className="text-sm text-foreground">
+                    <span className="font-medium">{needsBackfill}</span> activities will be queued for weather fetch.
+                    {needsBackfill > 0 && " This runs in the background with 1s delay between API calls."}
+                  </p>
+                </div>
+              )}
             </>
           ) : null}
         </div>
 
         {/* Footer */}
         <div className="p-6 border-t border-border flex justify-end gap-3">
+          <button
+            onClick={loadStatus}
+            disabled={loading}
+            className="px-4 py-2 text-sm font-medium text-foreground bg-card border border-border rounded-lg hover:bg-muted transition-fast disabled:opacity-50"
+          >
+            Refresh
+          </button>
           <button
             onClick={onClose}
             className="px-4 py-2 text-sm font-medium text-foreground bg-card border border-border rounded-lg hover:bg-muted transition-fast"
@@ -965,10 +1006,10 @@ function WeatherBackfillModal({
           </button>
           <button
             onClick={handleTriggerBackfill}
-            disabled={triggering || loading || needsBackfill === 0}
+            disabled={triggering || loading || needsBackfill === 0 || hasRunningJob}
             className="px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-lg hover:bg-primary/80 disabled:opacity-50 disabled:cursor-not-allowed transition-fast"
           >
-            {triggering ? "Triggering..." : `Backfill ${needsBackfill} Activities`}
+            {triggering ? "Triggering..." : hasRunningJob ? "Job Running..." : `Backfill ${needsBackfill} Activities`}
           </button>
         </div>
       </div>

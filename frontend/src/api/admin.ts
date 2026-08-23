@@ -42,11 +42,11 @@ export async function resetUserPassword(userId: number, password: string): Promi
   return apiPost(`/admin/users/${userId}/reset-password`, { password }, "Failed to reset password");
 }
 
-export async function triggerUserSync(userId: number): Promise<{ job_id: string | null }> {
+export async function triggerUserImport(userId: number): Promise<{ job_id: string | null }> {
   return apiPost<{ job_id: string | null }>(
-    `/admin/users/${userId}/sync`,
+    `/admin/users/${userId}/import`,
     undefined,
-    "Failed to trigger sync"
+    "Failed to trigger import"
   );
 }
 
@@ -189,6 +189,13 @@ export async function fetchCacheStats(days?: number): Promise<CacheStatsResponse
 
 
 // Weather Backfill API
+export interface RunningJob {
+  key: string;
+  status: "active" | "queued" | "new";
+  scheduled: string | null;
+  started: string | null;
+}
+
 export interface WeatherBackfillStatus {
   user_id: number;
   weather_status_counts: {
@@ -204,6 +211,7 @@ export interface WeatherBackfillStatus {
     with_estimates: number;
     pending_estimation: number;
   };
+  running_job: RunningJob | null;
 }
 
 export interface WeatherBackfillResponse {
