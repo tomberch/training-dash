@@ -227,18 +227,18 @@ class TestXertCredentialsEndpoints:
 
 
 # ---------------------------------------------------------------------------
-# sync_xert_job tests
+# import_xert_job tests
 # ---------------------------------------------------------------------------
 
 
-class TestSyncXertJob:
-    """Tests for the sync_xert_job worker function."""
+class TestImportXertJob:
+    """Tests for the import_xert_job worker function."""
 
     @pytest.mark.asyncio
-    async def test_sync_xert_imports_new_activities(
+    async def test_import_xert_imports_new_activities(
         self, db_engine, user_with_xert_creds, mock_xert_client, encryption_key_env
     ):
-        """sync_xert_job downloads FIT and creates Activity+Records for new activities."""
+        """import_xert_job downloads FIT and creates Activity+Records for new activities."""
         mock_xert_client.activities = [
             XertActivity(
                 id="s8pehgletoecmk5x",
@@ -253,12 +253,12 @@ class TestSyncXertJob:
         with _patch_pipeline():
             with mock.patch("trainingdash.integrations.xert.get_xert_client", return_value=mock_xert_client):
                 with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
-                    from trainingdash.worker import sync_xert_job
+                    from trainingdash.worker import import_xert_job
 
-                    result = await sync_xert_job({}, user_id=user_with_xert_creds.id)
+                    result = await import_xert_job({}, user_id=user_with_xert_creds.id)
 
         assert result["success"] is True
-        assert result["synced_activities"] == 1
+        assert result["imported_activities"] == 1
         assert mock_xert_client.login_called
         assert mock_xert_client.login_username == "user@xert.com"
 
@@ -278,10 +278,10 @@ class TestSyncXertJob:
             assert len(records) == 10
 
     @pytest.mark.asyncio
-    async def test_sync_xert_writes_last_synced_at(
+    async def test_import_xert_writes_last_synced_at(
         self, db_engine, user_with_xert_creds, mock_xert_client, encryption_key_env
     ):
-        """A successful sync writes last_synced_at to xert_credentials."""
+        """A successful import writes last_synced_at to xert_credentials."""
         mock_xert_client.activities = [
             XertActivity(
                 id="last-synced-test",
@@ -296,9 +296,9 @@ class TestSyncXertJob:
         with _patch_pipeline():
             with mock.patch("trainingdash.integrations.xert.get_xert_client", return_value=mock_xert_client):
                 with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
-                    from trainingdash.worker import sync_xert_job
+                    from trainingdash.worker import import_xert_job
 
-                    result = await sync_xert_job({}, user_id=user_with_xert_creds.id)
+                    result = await import_xert_job({}, user_id=user_with_xert_creds.id)
 
         assert result["success"] is True
 
@@ -313,7 +313,7 @@ class TestSyncXertJob:
             assert abs(delta.total_seconds()) < 60
 
     @pytest.mark.asyncio
-    async def test_sync_xert_no_new_activities_still_writes_last_synced_at(
+    async def test_import_xert_no_new_activities_still_writes_last_synced_at(
         self, db_engine, db_session, user_with_xert_creds, mock_xert_client, encryption_key_env
     ):
         """last_synced_at is updated even when there are no new activities to import."""
@@ -343,12 +343,12 @@ class TestSyncXertJob:
 
         with mock.patch("trainingdash.integrations.xert.get_xert_client", return_value=mock_xert_client):
             with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
-                from trainingdash.worker import sync_xert_job
+                from trainingdash.worker import import_xert_job
 
-                result = await sync_xert_job({}, user_id=user_with_xert_creds.id)
+                result = await import_xert_job({}, user_id=user_with_xert_creds.id)
 
         assert result["success"] is True
-        assert result["synced_activities"] == 0
+        assert result["imported_activities"] == 0
 
         async with session_factory() as session:
             creds_result = await session.execute(
@@ -358,7 +358,7 @@ class TestSyncXertJob:
             assert creds.last_synced_at is not None
 
     @pytest.mark.asyncio
-    async def test_sync_xert_activity_has_fit_fields(
+    async def test_import_xert_activity_has_fit_fields(
         self, db_engine, user_with_xert_creds, mock_xert_client, encryption_key_env
     ):
         """Records from the FIT file include temperature, grade, and GPS."""
@@ -376,9 +376,9 @@ class TestSyncXertJob:
         with _patch_pipeline():
             with mock.patch("trainingdash.integrations.xert.get_xert_client", return_value=mock_xert_client):
                 with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
-                    from trainingdash.worker import sync_xert_job
+                    from trainingdash.worker import import_xert_job
 
-                    await sync_xert_job({}, user_id=user_with_xert_creds.id)
+                    await import_xert_job({}, user_id=user_with_xert_creds.id)
 
         async with session_factory() as session:
             activity_result = await session.execute(
@@ -402,7 +402,7 @@ class TestSyncXertJob:
             assert len(gps_records) == 10
 
     @pytest.mark.asyncio
-    async def test_sync_xert_xss_stored_as_training_load(
+    async def test_import_xert_xss_stored_as_training_load(
         self, db_engine, user_with_xert_creds, mock_xert_client, encryption_key_env
     ):
         """XSS from get_xss() is stored as training_load on the activity."""
@@ -423,9 +423,9 @@ class TestSyncXertJob:
         with _patch_pipeline():
             with mock.patch("trainingdash.integrations.xert.get_xert_client", return_value=mock_xert_client):
                 with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
-                    from trainingdash.worker import sync_xert_job
+                    from trainingdash.worker import import_xert_job
 
-                    await sync_xert_job({}, user_id=user_with_xert_creds.id)
+                    await import_xert_job({}, user_id=user_with_xert_creds.id)
 
         async with session_factory() as session:
             activity_result = await session.execute(
@@ -435,7 +435,7 @@ class TestSyncXertJob:
             assert activity.training_load == expected_xss
 
     @pytest.mark.asyncio
-    async def test_sync_xert_xss_none_leaves_training_load_from_pipeline(
+    async def test_import_xert_xss_none_leaves_training_load_from_pipeline(
         self, db_engine, user_with_xert_creds, mock_xert_client, encryption_key_env
     ):
         """When get_xss() returns None, training_load is whatever the pipeline computed."""
@@ -455,12 +455,12 @@ class TestSyncXertJob:
         with _patch_pipeline():
             with mock.patch("trainingdash.integrations.xert.get_xert_client", return_value=mock_xert_client):
                 with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
-                    from trainingdash.worker import sync_xert_job
+                    from trainingdash.worker import import_xert_job
 
-                    result = await sync_xert_job({}, user_id=user_with_xert_creds.id)
+                    result = await import_xert_job({}, user_id=user_with_xert_creds.id)
 
         assert result["success"] is True
-        assert result["synced_activities"] == 1
+        assert result["imported_activities"] == 1
         # Activity should exist even without XSS
         async with session_factory() as session:
             activity_result = await session.execute(
@@ -470,10 +470,10 @@ class TestSyncXertJob:
             assert activity is not None
 
     @pytest.mark.asyncio
-    async def test_sync_xert_skips_already_imported(
+    async def test_import_xert_skips_already_imported(
         self, db_engine, db_session, user_with_xert_creds, mock_xert_client, encryption_key_env
     ):
-        """sync_xert_job skips activities already in the database."""
+        """import_xert_job skips activities already in the database."""
         existing = Activity(
             user_id=user_with_xert_creds.id,
             source="xert",
@@ -500,16 +500,16 @@ class TestSyncXertJob:
         with _patch_pipeline():
             with mock.patch("trainingdash.integrations.xert.get_xert_client", return_value=mock_xert_client):
                 with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
-                    from trainingdash.worker import sync_xert_job
+                    from trainingdash.worker import import_xert_job
 
-                    result = await sync_xert_job({}, user_id=user_with_xert_creds.id)
+                    result = await import_xert_job({}, user_id=user_with_xert_creds.id)
 
         assert result["success"] is True
-        assert result["synced_activities"] == 0
+        assert result["imported_activities"] == 0
 
     @pytest.mark.asyncio
-    async def test_sync_xert_no_credentials_returns_error(self, db_engine, db_session):
-        """sync_xert_job returns an error when the user has no Xert credentials."""
+    async def test_import_xert_no_credentials_returns_error(self, db_engine, db_session):
+        """import_xert_job returns an error when the user has no Xert credentials."""
         user = User(email="nocreds@example.com", password_hash=CACHED_HASH_TESTPASS)
         db_session.add(user)
         await db_session.commit()
@@ -518,36 +518,36 @@ class TestSyncXertJob:
         mock_worker_db_session, _ = _make_worker_db_session_ctx(db_engine)
 
         with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
-            from trainingdash.worker import sync_xert_job
+            from trainingdash.worker import import_xert_job
 
-            result = await sync_xert_job({}, user_id=user.id)
+            result = await import_xert_job({}, user_id=user.id)
 
         assert result["success"] is False
         assert "No Xert credentials" in result["error"]
 
     @pytest.mark.asyncio
-    async def test_sync_xert_login_failure_returns_error(
+    async def test_import_xert_login_failure_returns_error(
         self, db_engine, user_with_xert_creds, mock_xert_client, encryption_key_env
     ):
-        """sync_xert_job returns an error when Xert login fails."""
+        """import_xert_job returns an error when Xert login fails."""
         mock_xert_client.should_fail_login = True
 
         mock_worker_db_session, _ = _make_worker_db_session_ctx(db_engine)
 
         with mock.patch("trainingdash.integrations.xert.get_xert_client", return_value=mock_xert_client):
             with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
-                from trainingdash.worker import sync_xert_job
+                from trainingdash.worker import import_xert_job
 
-                result = await sync_xert_job({}, user_id=user_with_xert_creds.id)
+                result = await import_xert_job({}, user_id=user_with_xert_creds.id)
 
         assert result["success"] is False
         assert "Invalid credentials" in result["error"]
 
     @pytest.mark.asyncio
-    async def test_sync_xert_continues_on_download_failure(
+    async def test_import_xert_continues_on_download_failure(
         self, db_engine, user_with_xert_creds, mock_xert_client, encryption_key_env
     ):
-        """sync_xert_job continues when one activity's FIT download fails."""
+        """import_xert_job continues when one activity's FIT download fails."""
         mock_xert_client.activities = [
             XertActivity(
                 id="fail-activity",
@@ -569,12 +569,12 @@ class TestSyncXertJob:
         with _patch_pipeline():
             with mock.patch("trainingdash.integrations.xert.get_xert_client", return_value=mock_xert_client):
                 with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
-                    from trainingdash.worker import sync_xert_job
+                    from trainingdash.worker import import_xert_job
 
-                    result = await sync_xert_job({}, user_id=user_with_xert_creds.id)
+                    result = await import_xert_job({}, user_id=user_with_xert_creds.id)
 
         assert result["success"] is True
-        assert result["synced_activities"] == 1
+        assert result["imported_activities"] == 1
 
         async with session_factory() as session:
             activity_result = await session.execute(select(Activity).where(Activity.source == "xert"))
@@ -588,14 +588,14 @@ class TestSyncXertJob:
 # ---------------------------------------------------------------------------
 
 
-class TestHourlySyncScheduler:
-    """Tests for the hourly sync scheduler cron job."""
+class TestHourlyImportScheduler:
+    """Tests for the hourly import scheduler cron job."""
 
     @pytest.mark.asyncio
-    async def test_hourly_sync_enqueues_for_users_with_matching_sync_hour(
+    async def test_hourly_import_enqueues_for_users_with_matching_sync_hour(
         self, db_engine, db_session, encryption_key_env
     ):
-        """hourly_sync_scheduler enqueues sync only for users whose sync_hour matches."""
+        """hourly_import_scheduler enqueues import only for users whose sync_hour matches."""
         from trainingdash.crypto import encrypt
 
         current_hour = datetime.now(UTC).hour
@@ -630,13 +630,15 @@ class TestHourlySyncScheduler:
         _fake_enqueue_garmin.calls = []
 
         with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
-            with mock.patch("trainingdash.use_cases.hourly_sync_scheduler.enqueue_sync_xert_job", _fake_enqueue_xert):
+            with mock.patch(
+                "trainingdash.use_cases.hourly_import_scheduler.enqueue_import_xert_job", _fake_enqueue_xert
+            ):
                 with mock.patch(
-                    "trainingdash.use_cases.hourly_sync_scheduler.enqueue_sync_garmin_job", _fake_enqueue_garmin
+                    "trainingdash.use_cases.hourly_import_scheduler.enqueue_import_garmin_job", _fake_enqueue_garmin
                 ):
-                    from trainingdash.worker import hourly_sync_scheduler
+                    from trainingdash.worker import hourly_import_scheduler
 
-                    result = await hourly_sync_scheduler({})
+                    result = await hourly_import_scheduler({})
 
         assert result["success"] is True
         assert result["xert_queued"] == 2
@@ -647,8 +649,8 @@ class TestHourlySyncScheduler:
         assert user3.id not in enqueued_user_ids
 
     @pytest.mark.asyncio
-    async def test_hourly_sync_no_users_for_current_hour(self, db_engine, db_session):
-        """hourly_sync_scheduler handles no users matching the current sync hour."""
+    async def test_hourly_import_no_users_for_current_hour(self, db_engine, db_session):
+        """hourly_import_scheduler handles no users matching the current sync hour."""
         current_hour = datetime.now(UTC).hour
         different_hour = (current_hour + 1) % 24
 
@@ -666,21 +668,23 @@ class TestHourlySyncScheduler:
             return "test-job-key"
 
         with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
-            with mock.patch("trainingdash.use_cases.hourly_sync_scheduler.enqueue_sync_xert_job", _fake_enqueue_xert):
+            with mock.patch(
+                "trainingdash.use_cases.hourly_import_scheduler.enqueue_import_xert_job", _fake_enqueue_xert
+            ):
                 with mock.patch(
-                    "trainingdash.use_cases.hourly_sync_scheduler.enqueue_sync_garmin_job", _fake_enqueue_garmin
+                    "trainingdash.use_cases.hourly_import_scheduler.enqueue_import_garmin_job", _fake_enqueue_garmin
                 ):
-                    from trainingdash.worker import hourly_sync_scheduler
+                    from trainingdash.worker import hourly_import_scheduler
 
-                    result = await hourly_sync_scheduler({})
+                    result = await hourly_import_scheduler({})
 
         assert result["success"] is True
         assert result["xert_queued"] == 0
         assert result["garmin_queued"] == 0
 
     @pytest.mark.asyncio
-    async def test_hourly_sync_respects_sync_enabled_flag(self, db_engine, db_session, encryption_key_env):
-        """hourly_sync_scheduler skips users with sync_enabled=False."""
+    async def test_hourly_import_respects_sync_enabled_flag(self, db_engine, db_session, encryption_key_env):
+        """hourly_import_scheduler skips users with sync_enabled=False."""
         from trainingdash.crypto import encrypt
 
         current_hour = datetime.now(UTC).hour
@@ -715,13 +719,15 @@ class TestHourlySyncScheduler:
             return "test-job-key"
 
         with mock.patch("trainingdash.worker.worker_db_session", mock_worker_db_session):
-            with mock.patch("trainingdash.use_cases.hourly_sync_scheduler.enqueue_sync_xert_job", _fake_enqueue_xert):
+            with mock.patch(
+                "trainingdash.use_cases.hourly_import_scheduler.enqueue_import_xert_job", _fake_enqueue_xert
+            ):
                 with mock.patch(
-                    "trainingdash.use_cases.hourly_sync_scheduler.enqueue_sync_garmin_job", _fake_enqueue_garmin
+                    "trainingdash.use_cases.hourly_import_scheduler.enqueue_import_garmin_job", _fake_enqueue_garmin
                 ):
-                    from trainingdash.worker import hourly_sync_scheduler
+                    from trainingdash.worker import hourly_import_scheduler
 
-                    result = await hourly_sync_scheduler({})
+                    result = await hourly_import_scheduler({})
 
         assert result["success"] is True
         assert result["xert_queued"] == 1  # Only user1 with sync_enabled=True

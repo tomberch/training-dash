@@ -65,8 +65,8 @@ test.describe('J009: Race Planner', () => {
   test('can upload a GPX course', async ({ page }) => {
     await page.goto('/race-planner/courses/new');
 
-    // Should be on upload page - wait for page to fully load
-    await expect(page.getByRole('heading', { name: /upload|new course/i })).toBeVisible({ timeout: 10000 });
+    // Should be on create course page - wait for page to fully load
+    await expect(page.getByRole('heading', { name: /create course/i })).toBeVisible({ timeout: 10000 });
 
     // Create a temp GPX file and upload
     const gpxContent = generateTestGpx();
@@ -85,8 +85,8 @@ test.describe('J009: Race Planner', () => {
       await nameInput.fill('E2E Test Course');
     }
 
-    // Submit the form - scope to main content to avoid header upload button
-    await page.locator('main').getByRole('button', { name: /save|upload|create/i }).click();
+    // Submit the form - click "Create Course" button
+    await page.locator('main').getByRole('button', { name: 'Create Course' }).click();
 
     // Should redirect to course detail or show success
     await expect(page).toHaveURL(/\/race-planner\/courses\/\d+/, { timeout: 30000 });
@@ -343,8 +343,8 @@ test.describe('J009: Race Planner', () => {
       await nameInput.fill('Workflow Test Course');
     }
 
-    // Save course - scope to main
-    await main.getByRole('button', { name: /save|upload|create/i }).click();
+    // Save course - click "Create Course" button
+    await main.getByRole('button', { name: 'Create Course' }).click();
 
     // Should be on course detail
     await expect(page).toHaveURL(/\/race-planner\/courses\/\d+/, { timeout: 30000 });

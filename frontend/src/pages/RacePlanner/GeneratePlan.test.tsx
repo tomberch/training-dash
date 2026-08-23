@@ -381,8 +381,10 @@ describe("GeneratePlan", () => {
       const courseSelect = getCourseSelect();
       await userEvent.selectOptions(courseSelect, "1");
 
-      // Enable optimizer
-      await userEvent.click(screen.getByRole("switch"));
+      // Enable optimizer - find by id to avoid matching other switches
+      const optimizerSwitch = document.getElementById("optimizer");
+      expect(optimizerSwitch).not.toBeNull();
+      await userEvent.click(optimizerSwitch!);
 
       await userEvent.click(screen.getByRole("button", { name: "Generate Plan" }));
 

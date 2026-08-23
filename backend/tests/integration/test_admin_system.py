@@ -140,7 +140,7 @@ class TestJobsEndpoint:
         await db_session.execute(
             text("""
             INSERT INTO saq_jobs (key, queue, status, job, scheduled)
-            VALUES ('test-job-1', 'default', 'active', '{"function": "sync_xert_job", "kwargs": {"user_id": 1}}', NOW())
+            VALUES ('test-job-1', 'default', 'active', '{"function": "import_xert_job", "kwargs": {"user_id": 1}}', NOW())
             ON CONFLICT (key) DO UPDATE SET status = 'active'
         """)
         )
@@ -153,7 +153,7 @@ class TestJobsEndpoint:
 
         job = next((j for j in data["jobs"] if j["key"] == "test-job-1"), None)
         assert job is not None
-        assert job["function"] == "sync_xert_job"
+        assert job["function"] == "import_xert_job"
         assert job["status"] == "active"
 
 

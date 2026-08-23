@@ -107,7 +107,7 @@ test.describe('Admin Panel', () => {
     if (userId) {
       // Check action buttons exist
       await expect(page.getByTestId(`reset-btn-${userId}`)).toBeVisible();
-      await expect(page.getByTestId(`sync-btn-${userId}`)).toBeVisible();
+      await expect(page.getByTestId(`import-btn-${userId}`)).toBeVisible();
       await expect(page.getByTestId(`nuke-btn-${userId}`)).toBeVisible();
     }
   });
@@ -155,8 +155,8 @@ test.describe('Admin Panel', () => {
     // Verify we're on admin page
     await expect(page.getByRole('heading', { name: 'Admin Panel' })).toBeVisible();
 
-    // Click back button
-    await page.getByRole('button', { name: /Back/ }).click();
+    // Click back button (first one that starts with "← Back")
+    await page.getByRole('button', { name: '← Back' }).first().click();
 
     // Should navigate away from admin
     await expect(page).not.toHaveURL('/admin');

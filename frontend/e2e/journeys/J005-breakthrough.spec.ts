@@ -42,26 +42,26 @@ test.describe.serial('J005: Breakthrough Upload Flow', () => {
     await page.getByTestId('xert-email').fill('mock@xert.com');
     await page.getByTestId('xert-password').fill('mockpassword');
 
-    // Set sync since date
+    // Set import since date
     const ninetyDaysAgo = new Date();
     ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-    await page.getByTestId('xert-sync-since').fill(ninetyDaysAgo.toISOString().split('T')[0]);
+    await page.getByTestId('xert-import-since').fill(ninetyDaysAgo.toISOString().split('T')[0]);
 
     // Connect
     await page.getByTestId('xert-connect').click();
     await expect(page.getByText('Xert connected successfully')).toBeVisible({ timeout: 10000 });
 
-    // Trigger sync and capture the job ID from the response
-    const syncButton = page.getByRole('button', { name: /Sync Now/i });
-    await expect(syncButton).toBeVisible({ timeout: 5000 });
+    // Trigger import and capture the job ID from the response
+    const importButton = page.getByRole('button', { name: /Import Now/i });
+    await expect(importButton).toBeVisible({ timeout: 5000 });
     
-    const syncPromise = page.waitForResponse(
-      (response) => response.url().includes('/me/sync/xert') && response.status() === 200
+    const importPromise = page.waitForResponse(
+      (response) => response.url().includes('/me/import/xert') && response.status() === 200
     );
-    await syncButton.click();
-    const syncResponse = await syncPromise;
-    const syncData = await syncResponse.json();
-    const jobId = syncData.job_id;
+    await importButton.click();
+    const importResponse = await importPromise;
+    const importData = await importResponse.json();
+    const jobId = importData.job_id;
     
     // Poll for job completion using page.evaluate (runs in browser context with cookies)
     const startTime = Date.now();
@@ -77,13 +77,13 @@ test.describe.serial('J005: Breakthrough Upload Flow', () => {
         break;
       }
       if (status.status === 'failed' || status.status === 'aborted') {
-        throw new Error(`Sync job failed: ${JSON.stringify(status)}`);
+        throw new Error(`Import job failed: ${JSON.stringify(status)}`);
       }
       await page.waitForTimeout(500);
     }
     
     if (!jobComplete) {
-      throw new Error('Sync job did not complete within 60 seconds');
+      throw new Error('Import job did not complete within 60 seconds');
     }
 
     // Verify activities imported
