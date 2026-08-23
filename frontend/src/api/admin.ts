@@ -188,6 +188,48 @@ export async function fetchCacheStats(days?: number): Promise<CacheStatsResponse
 
 
 
+// Weather Backfill API
+export interface WeatherBackfillStatus {
+  user_id: number;
+  weather_status_counts: {
+    null: number;
+    pending: number;
+    fetched: number;
+    failed: number;
+    not_applicable: number;
+  };
+  total_activities: number;
+  needing_backfill: number;
+  aero_estimation: {
+    with_estimates: number;
+    pending_estimation: number;
+  };
+}
+
+export interface WeatherBackfillResponse {
+  success: boolean;
+  activities_needing_backfill: number;
+  activities_queued: number;
+  job_ids: string[] | null;
+  message: string | null;
+}
+
+export async function fetchWeatherBackfillStatus(userId: number): Promise<WeatherBackfillStatus> {
+  return apiGet<WeatherBackfillStatus>(`/admin/users/${userId}/weather-backfill/status`);
+}
+
+export async function triggerWeatherBackfill(
+  userId: number,
+  includeFailed: boolean = false
+): Promise<WeatherBackfillResponse> {
+  const params = includeFailed ? "?include_failed=true" : "";
+  return apiPost<WeatherBackfillResponse>(
+    `/admin/users/${userId}/weather-backfill${params}`,
+    undefined,
+    "Failed to trigger weather backfill"
+  );
+}
+
 // Backup API
 export interface BackupConfig {
   configured: boolean;

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import type { AdminUser, AdminSettings, NukePreview } from "./api";
+import type { AdminUser, AdminSettings, NukePreview, WeatherBackfillStatus } from "./api";
 import { 
   ApiError, 
   fetchAdminUsers, 
@@ -15,6 +15,8 @@ import {
   nukeActivities,
   nukeIntegrations,
   nukeAccount,
+  fetchWeatherBackfillStatus,
+  triggerWeatherBackfill,
 } from "./api";
 import { ErrorDisplay } from "./ErrorDisplay";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -50,6 +52,9 @@ export function AdminView({ onBack, onSystemDashboard, onBackupSettings }: { onB
 
   // Nuke modal state
   const [nukeUser, setNukeUser] = useState<AdminUser | null>(null);
+
+  // Weather backfill modal state
+  const [weatherUser, setWeatherUser] = useState<AdminUser | null>(null);
 
   useEffect(() => {
     loadData();
@@ -490,6 +495,13 @@ export function AdminView({ onBack, onSystemDashboard, onBackupSettings }: { onB
                             </span>
                           )}
                           <button
+                            onClick={() => setWeatherUser(user)}
+                            data-testid={`weather-btn-${user.id}`}
+                            className="px-3 py-1 text-xs font-medium bg-primary/20 text-primary rounded hover:bg-primary/30 transition-fast"
+                          >
+                            Weather
+                          </button>
+                          <button
                             onClick={() => setNukeUser(user)}
                             data-testid={`nuke-btn-${user.id}`}
                             className="px-3 py-1 text-xs font-medium bg-destructive/20 text-destructive rounded hover:bg-destructive/30 transition-fast"
@@ -505,6 +517,14 @@ export function AdminView({ onBack, onSystemDashboard, onBackupSettings }: { onB
             </div>
           )}
         </section>
+
+      {/* Weather Backfill Modal */}
+      {weatherUser && (
+        <WeatherBackfillModal
+          user={weatherUser}
+          onClose={() => setWeatherUser(null)}
+        />
+      )}
 
       {/* Nuke Modal */}
       {nukeUser && (
@@ -761,6 +781,195 @@ function NukeModal({
               {nuking ? "Nuking..." : "Nuke"}
             </button>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WeatherBackfillModal({
+  user,
+  onClose,
+}: {
+  user: AdminUser;
+  onClose: () => void;
+}) {
+  const [status, setStatus] = useState<WeatherBackfillStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [includeFailed, setIncludeFailed] = useState(false);
+  const [triggering, setTriggering] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadStatus();
+  }, [user.id]);
+
+  async function loadStatus() {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchWeatherBackfillStatus(user.id);
+      setStatus(data);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Failed to load status");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleTriggerBackfill() {
+    setTriggering(true);
+    setError(null);
+    try {
+      const response = await triggerWeatherBackfill(user.id, includeFailed);
+      setResult(response.message || `Queued ${response.activities_queued} activities`);
+      // Refresh status after triggering
+      setTimeout(() => loadStatus(), 1000);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Failed to trigger backfill");
+    } finally {
+      setTriggering(false);
+    }
+  }
+
+  const needsBackfill = status
+    ? status.weather_status_counts.null + status.weather_status_counts.pending + (includeFailed ? status.weather_status_counts.failed : 0)
+    : 0;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-card rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="p-6 border-b border-border">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+              <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+              </svg>
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">Weather Backfill</h2>
+              <p className="text-body-secondary">{user.email}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 space-y-6">
+          {loading ? (
+            <div className="text-center py-8 text-muted-foreground">Loading status...</div>
+          ) : error ? (
+            <div className="p-4 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive">
+              {error}
+            </div>
+          ) : status ? (
+            <>
+              {/* Overview */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 bg-muted rounded-lg text-center">
+                  <p className="text-metric">{status.total_activities}</p>
+                  <p className="text-metric-label">Total Activities</p>
+                </div>
+                <div className="p-4 bg-success/10 rounded-lg text-center">
+                  <p className="text-metric text-success">{status.weather_status_counts.fetched}</p>
+                  <p className="text-metric-label">With Weather</p>
+                </div>
+              </div>
+
+              {/* Status breakdown */}
+              <div className="space-y-2">
+                <h3 className="text-sm font-medium text-foreground">Weather Status Breakdown</h3>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="flex justify-between p-2 bg-muted/50 rounded">
+                    <span className="text-muted-foreground">Fetched</span>
+                    <span className="font-medium text-success">{status.weather_status_counts.fetched}</span>
+                  </div>
+                  <div className="flex justify-between p-2 bg-muted/50 rounded">
+                    <span className="text-muted-foreground">Pending</span>
+                    <span className="font-medium text-warning">{status.weather_status_counts.pending}</span>
+                  </div>
+                  <div className="flex justify-between p-2 bg-muted/50 rounded">
+                    <span className="text-muted-foreground">No Status</span>
+                    <span className="font-medium">{status.weather_status_counts.null}</span>
+                  </div>
+                  <div className="flex justify-between p-2 bg-muted/50 rounded">
+                    <span className="text-muted-foreground">Failed</span>
+                    <span className="font-medium text-destructive">{status.weather_status_counts.failed}</span>
+                  </div>
+                  <div className="flex justify-between p-2 bg-muted/50 rounded col-span-2">
+                    <span className="text-muted-foreground">Not Applicable</span>
+                    <span className="font-medium text-muted-foreground">{status.weather_status_counts.not_applicable}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Aero estimation status */}
+              <div className="space-y-2">
+                <h3 className="text-sm font-medium text-foreground">Aero Estimation</h3>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="flex justify-between p-2 bg-muted/50 rounded">
+                    <span className="text-muted-foreground">With Estimates</span>
+                    <span className="font-medium text-success">{status.aero_estimation.with_estimates}</span>
+                  </div>
+                  <div className="flex justify-between p-2 bg-muted/50 rounded">
+                    <span className="text-muted-foreground">Pending Estimation</span>
+                    <span className="font-medium text-warning">{status.aero_estimation.pending_estimation}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Include failed checkbox */}
+              {status.weather_status_counts.failed > 0 && (
+                <label className="flex items-center gap-3 p-3 border border-border rounded-lg cursor-pointer hover:bg-muted/50">
+                  <input
+                    type="checkbox"
+                    checked={includeFailed}
+                    onChange={(e) => setIncludeFailed(e.target.checked)}
+                    className="w-4 h-4"
+                  />
+                  <div>
+                    <p className="font-medium text-foreground">Include failed activities</p>
+                    <p className="text-body-secondary">
+                      Retry {status.weather_status_counts.failed} activities that previously failed
+                    </p>
+                  </div>
+                </label>
+              )}
+
+              {/* Result message */}
+              {result && (
+                <div className="p-4 bg-success/10 border border-success/30 rounded-lg text-success">
+                  {result}
+                </div>
+              )}
+
+              {/* Summary */}
+              <div className="p-4 bg-primary/10 border border-primary/30 rounded-lg">
+                <p className="text-sm text-foreground">
+                  <span className="font-medium">{needsBackfill}</span> activities will be queued for weather fetch.
+                  {needsBackfill > 0 && " This runs in the background with 1s delay between API calls."}
+                </p>
+              </div>
+            </>
+          ) : null}
+        </div>
+
+        {/* Footer */}
+        <div className="p-6 border-t border-border flex justify-end gap-3">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-foreground bg-card border border-border rounded-lg hover:bg-muted transition-fast"
+          >
+            Close
+          </button>
+          <button
+            onClick={handleTriggerBackfill}
+            disabled={triggering || loading || needsBackfill === 0}
+            className="px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-lg hover:bg-primary/80 disabled:opacity-50 disabled:cursor-not-allowed transition-fast"
+          >
+            {triggering ? "Triggering..." : `Backfill ${needsBackfill} Activities`}
+          </button>
         </div>
       </div>
     </div>
