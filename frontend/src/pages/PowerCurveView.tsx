@@ -457,7 +457,7 @@ export function PowerCurveView() {
                       <div className="space-y-1 text-sm">
                         {point[valueKey] !== null && (
                           <div className="flex justify-between gap-4">
-                            <span className="text-indigo-600">Recorded</span>
+                            <span style={{ color: "#6366f1" }}>Recorded</span>
                             <span className="font-medium">
                               {showWkg ? point[valueKey]?.toFixed(2) : point[valueKey]} {unit}
                             </span>
@@ -465,7 +465,7 @@ export function PowerCurveView() {
                         )}
                         {showModel && point[modelKey] !== null && (
                           <div className="flex justify-between gap-4">
-                            <span className="text-purple-600">CP estimate</span>
+                            <span style={{ color: "#a855f7" }}>CP estimate</span>
                             <span className="font-medium">
                               {showWkg ? point[modelKey]?.toFixed(2) : Math.round(point[modelKey])} {unit}
                             </span>
@@ -473,7 +473,7 @@ export function PowerCurveView() {
                         )}
                         {showComparison && point[compValueKey] !== null && (
                           <div className="flex justify-between gap-4">
-                            <span className="text-emerald-600">Comparison</span>
+                            <span style={{ color: "#10b981" }}>Comparison</span>
                             <span className="font-medium">
                               {showWkg ? point[compValueKey]?.toFixed(2) : point[compValueKey]} {unit}
                             </span>
