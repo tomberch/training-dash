@@ -8,13 +8,17 @@ the Activity table. It handles:
 - Aggregations (COUNT, SUM, AVG, MIN, MAX)
 - GROUP BY (fields and time buckets)
 - User scoping (always injected)
+- Zone time fields (computed from JSON columns)
 """
 
+import re
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import Select, and_, func, not_, or_, select
+from sqlalchemy import Select, and_, cast, func, not_, or_, select
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql.expression import ColumnElement
+from sqlalchemy.types import Integer
 
 from trainingdash.repositories.postgres.models import Activity
 
@@ -32,7 +36,13 @@ from .ast import (
     StringValue,
     TextMatch,
 )
+from .fields import FIELD_DEFINITIONS
 from .validator import ValidatedQuery
+
+
+# Zone field patterns for extracting zone number from field name
+POWER_ZONE_PATTERN = re.compile(r"^power_zone_(\d+)_s$")
+HR_ZONE_PATTERN = re.compile(r"^hr_zone_(\d+)_s$")
 
 
 @dataclass
@@ -62,8 +72,40 @@ TranslatedQuery = ListQueryResult | ScalarAggResult | GroupedAggResult
 
 
 def _get_column(field_name: str) -> ColumnElement:
-    """Get the SQLAlchemy column for a field name."""
+    """Get the SQLAlchemy column for a field name.
+
+    Handles both regular columns and computed zone time fields.
+    Zone time fields (e.g., power_zone_3_s) are extracted from JSON columns.
+    """
+    # Check if it's a power zone field
+    power_match = POWER_ZONE_PATTERN.match(field_name)
+    if power_match:
+        zone_num = power_match.group(1)
+        # Extract from power_zone_times JSON: {"1": 100, "2": 200, ...}
+        # Cast the text column to JSONB, then extract the zone value as integer
+        return cast(
+            cast(Activity.power_zone_times, JSONB)[zone_num].astext,
+            Integer,
+        )
+
+    # Check if it's an HR zone field
+    hr_match = HR_ZONE_PATTERN.match(field_name)
+    if hr_match:
+        zone_num = hr_match.group(1)
+        # Extract from hr_zone_times JSON
+        return cast(
+            cast(Activity.hr_zone_times, JSONB)[zone_num].astext,
+            Integer,
+        )
+
+    # Regular column
     return getattr(Activity, field_name)
+
+
+def _is_computed_field(field_name: str) -> bool:
+    """Check if a field is computed (not a direct database column)."""
+    field_def = FIELD_DEFINITIONS.get(field_name)
+    return field_def is not None and field_def.computed
 
 
 def _translate_value(value: Any) -> Any:

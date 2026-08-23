@@ -36,7 +36,9 @@ from .ast import (
 )
 from .fields import (
     AGGREGATABLE_FIELDS,
+    TEMPERATURE_UNITS,
     FieldType,
+    convert_temperature,
     get_conversion_factor,
     get_field_def,
     is_text_match_valid,
@@ -450,7 +452,18 @@ class QueryValidator:
             # Field has no unit, but value has unit - warn
             raise ValidationError(f"Field '{field_name}' does not accept units, but got value with unit '{value.unit}'")
 
-        # Convert unit
+        # Handle temperature conversion separately (non-linear)
+        unit_lower = value.unit.lower()
+        if unit_lower in TEMPERATURE_UNITS:
+            if field_def.internal_unit != "c":
+                raise ValidationError(
+                    f"Temperature unit '{value.unit}' not valid for field '{field_name}' "
+                    f"(expected unit: {field_def.internal_unit})"
+                )
+            converted_value = convert_temperature(value.value, unit_lower)
+            return NumberValue(value=converted_value, unit=None)
+
+        # Convert unit using linear conversion factor
         factor = get_conversion_factor(value.unit, field_def.internal_unit)
         if factor is None:
             raise ValidationError(

@@ -31,6 +31,7 @@ class FieldDef:
 
 # Unit conversion factors to internal units
 # Usage: internal_value = external_value * UNIT_CONVERSIONS[from_unit][to_unit]
+# Note: Temperature conversion is non-linear and handled separately
 UNIT_CONVERSIONS: dict[str, dict[str, float]] = {
     # Distance → meters
     "km": {"m": 1000.0},
@@ -46,7 +47,31 @@ UNIT_CONVERSIONS: dict[str, dict[str, float]] = {
     "min": {"s": 60.0},
     "sec": {"s": 1.0},
     "s": {"s": 1.0},
+    # Temperature → Celsius (marker for special handling)
+    "c": {"c": 1.0},
+    "f": {"c": None},  # Non-linear, handled by convert_temperature()
 }
+
+# Non-linear unit conversions (temperature)
+TEMPERATURE_UNITS = {"c", "f"}
+
+
+def convert_temperature(value: float, from_unit: str) -> float:
+    """Convert temperature value to Celsius.
+
+    Args:
+        value: Temperature value in the source unit
+        from_unit: Source unit ('c' or 'f')
+
+    Returns:
+        Temperature in Celsius
+    """
+    from_unit = from_unit.lower()
+    if from_unit == "c":
+        return value
+    if from_unit == "f":
+        return (value - 32) * 5 / 9
+    raise ValueError(f"Unknown temperature unit: {from_unit}")
 
 # Map internal unit suffixes to the standard internal unit
 INTERNAL_UNIT_MAP: dict[str, str] = {
@@ -80,8 +105,15 @@ FIELD_DEFINITIONS: dict[str, FieldDef] = {
     # Core activity fields
     "id": FieldDef("id", FieldType.STRING, nullable=False, description="Activity UUID"),
     "started_at": FieldDef("started_at", FieldType.DATE, nullable=False, description="Activity start time"),
+    "created_at": FieldDef("created_at", FieldType.DATE, nullable=False, description="Record creation time"),
     "source": FieldDef("source", FieldType.STRING, nullable=False, description="Data source (xert, garmin, upload)"),
     "title": FieldDef("title", FieldType.STRING, nullable=True, description="Activity title"),
+    "activity_type": FieldDef(
+        "activity_type",
+        FieldType.STRING,
+        nullable=True,
+        description="Activity type (road, gravel, mtb, virtual, indoor, commute)",
+    ),
     # Distance and elevation
     "total_distance_m": FieldDef(
         "total_distance_m",
@@ -96,6 +128,33 @@ FIELD_DEFINITIONS: dict[str, FieldDef] = {
         nullable=False,
         internal_unit="m",
         description="Elevation gain in meters",
+    ),
+    "elevation_loss_m": FieldDef(
+        "elevation_loss_m",
+        FieldType.NUMBER,
+        nullable=True,
+        internal_unit="m",
+        description="Elevation loss (descent) in meters",
+    ),
+    "min_altitude_m": FieldDef(
+        "min_altitude_m",
+        FieldType.NUMBER,
+        nullable=True,
+        internal_unit="m",
+        description="Minimum altitude in meters",
+    ),
+    "max_altitude_m": FieldDef(
+        "max_altitude_m",
+        FieldType.NUMBER,
+        nullable=True,
+        internal_unit="m",
+        description="Maximum altitude in meters",
+    ),
+    "max_grade_pct": FieldDef(
+        "max_grade_pct",
+        FieldType.NUMBER,
+        nullable=True,
+        description="Steepest gradient as percentage",
     ),
     # Duration fields
     "moving_time_s": FieldDef(
@@ -112,6 +171,13 @@ FIELD_DEFINITIONS: dict[str, FieldDef] = {
         internal_unit="s",
         description="Elapsed time in seconds",
     ),
+    "timer_time_s": FieldDef(
+        "timer_time_s",
+        FieldType.DURATION,
+        nullable=True,
+        internal_unit="s",
+        description="Timer time in seconds",
+    ),
     # Speed fields
     "avg_speed_mps": FieldDef(
         "avg_speed_mps",
@@ -119,6 +185,13 @@ FIELD_DEFINITIONS: dict[str, FieldDef] = {
         nullable=False,
         internal_unit="mps",
         description="Average speed in m/s",
+    ),
+    "avg_speed_moving_mps": FieldDef(
+        "avg_speed_moving_mps",
+        FieldType.NUMBER,
+        nullable=True,
+        internal_unit="mps",
+        description="Average speed while moving in m/s",
     ),
     "max_speed_mps": FieldDef(
         "max_speed_mps",
@@ -132,6 +205,7 @@ FIELD_DEFINITIONS: dict[str, FieldDef] = {
     "max_hr_bpm": FieldDef("max_hr_bpm", FieldType.NUMBER, nullable=True, description="Max heart rate in bpm"),
     # Power fields
     "avg_power_w": FieldDef("avg_power_w", FieldType.NUMBER, nullable=True, description="Average power in watts"),
+    "max_power_w": FieldDef("max_power_w", FieldType.NUMBER, nullable=True, description="Max power in watts"),
     "np_power_w": FieldDef("np_power_w", FieldType.NUMBER, nullable=True, description="Normalized power in watts"),
     "power_source": FieldDef(
         "power_source",
@@ -144,6 +218,47 @@ FIELD_DEFINITIONS: dict[str, FieldDef] = {
         FieldType.NUMBER,
         nullable=True,
         description="Power confidence for hr_derived (0-1)",
+    ),
+    # Cadence fields
+    "avg_cadence_rpm": FieldDef(
+        "avg_cadence_rpm",
+        FieldType.NUMBER,
+        nullable=True,
+        description="Average cadence in rpm",
+    ),
+    "avg_cadence_pedaling_rpm": FieldDef(
+        "avg_cadence_pedaling_rpm",
+        FieldType.NUMBER,
+        nullable=True,
+        description="Average cadence when pedaling in rpm",
+    ),
+    "max_cadence_rpm": FieldDef(
+        "max_cadence_rpm",
+        FieldType.NUMBER,
+        nullable=True,
+        description="Maximum cadence in rpm",
+    ),
+    # Temperature fields
+    "avg_temperature_c": FieldDef(
+        "avg_temperature_c",
+        FieldType.NUMBER,
+        nullable=True,
+        internal_unit="c",
+        description="Average temperature in Celsius",
+    ),
+    "min_temperature_c": FieldDef(
+        "min_temperature_c",
+        FieldType.NUMBER,
+        nullable=True,
+        internal_unit="c",
+        description="Minimum temperature in Celsius",
+    ),
+    "max_temperature_c": FieldDef(
+        "max_temperature_c",
+        FieldType.NUMBER,
+        nullable=True,
+        internal_unit="c",
+        description="Maximum temperature in Celsius",
     ),
     # Training metrics
     "tss": FieldDef("tss", FieldType.NUMBER, nullable=True, description="Training Stress Score"),
@@ -171,13 +286,138 @@ FIELD_DEFINITIONS: dict[str, FieldDef] = {
         nullable=False,
         description="Breakthrough activity flag",
     ),
-    # Route-related
+    # Route and event related
     "route_id": FieldDef("route_id", FieldType.NUMBER, nullable=True, description="Associated route"),
+    "ride_event_id": FieldDef("ride_event_id", FieldType.STRING, nullable=True, description="Associated ride event"),
+    "bike_id": FieldDef("bike_id", FieldType.NUMBER, nullable=True, description="Associated bike"),
+    # Direction/bearing
     "direction_bearing": FieldDef(
         "direction_bearing",
         FieldType.NUMBER,
         nullable=True,
-        description="Direction bearing (0-359 degrees)",
+        description="Direction bearing at 25% point (0-359 degrees)",
+    ),
+    "direction_bearing_75": FieldDef(
+        "direction_bearing_75",
+        FieldType.NUMBER,
+        nullable=True,
+        description="Direction bearing at 75% point (0-359 degrees)",
+    ),
+    # Aero estimation
+    "estimated_cda": FieldDef(
+        "estimated_cda",
+        FieldType.NUMBER,
+        nullable=True,
+        description="Estimated coefficient of drag area (m²)",
+    ),
+    "estimated_crr": FieldDef(
+        "estimated_crr",
+        FieldType.NUMBER,
+        nullable=True,
+        description="Estimated rolling resistance coefficient",
+    ),
+    "aero_confidence": FieldDef(
+        "aero_confidence",
+        FieldType.NUMBER,
+        nullable=True,
+        description="Confidence score for aero estimates (0-1)",
+    ),
+    # Zone time fields (virtual - computed from JSON)
+    "power_zone_1_s": FieldDef(
+        "power_zone_1_s",
+        FieldType.DURATION,
+        nullable=True,
+        internal_unit="s",
+        computed=True,
+        description="Time in power zone 1 (seconds)",
+    ),
+    "power_zone_2_s": FieldDef(
+        "power_zone_2_s",
+        FieldType.DURATION,
+        nullable=True,
+        internal_unit="s",
+        computed=True,
+        description="Time in power zone 2 (seconds)",
+    ),
+    "power_zone_3_s": FieldDef(
+        "power_zone_3_s",
+        FieldType.DURATION,
+        nullable=True,
+        internal_unit="s",
+        computed=True,
+        description="Time in power zone 3 (seconds)",
+    ),
+    "power_zone_4_s": FieldDef(
+        "power_zone_4_s",
+        FieldType.DURATION,
+        nullable=True,
+        internal_unit="s",
+        computed=True,
+        description="Time in power zone 4 (seconds)",
+    ),
+    "power_zone_5_s": FieldDef(
+        "power_zone_5_s",
+        FieldType.DURATION,
+        nullable=True,
+        internal_unit="s",
+        computed=True,
+        description="Time in power zone 5 (seconds)",
+    ),
+    "power_zone_6_s": FieldDef(
+        "power_zone_6_s",
+        FieldType.DURATION,
+        nullable=True,
+        internal_unit="s",
+        computed=True,
+        description="Time in power zone 6 (seconds)",
+    ),
+    "power_zone_7_s": FieldDef(
+        "power_zone_7_s",
+        FieldType.DURATION,
+        nullable=True,
+        internal_unit="s",
+        computed=True,
+        description="Time in power zone 7 (seconds)",
+    ),
+    "hr_zone_1_s": FieldDef(
+        "hr_zone_1_s",
+        FieldType.DURATION,
+        nullable=True,
+        internal_unit="s",
+        computed=True,
+        description="Time in HR zone 1 (seconds)",
+    ),
+    "hr_zone_2_s": FieldDef(
+        "hr_zone_2_s",
+        FieldType.DURATION,
+        nullable=True,
+        internal_unit="s",
+        computed=True,
+        description="Time in HR zone 2 (seconds)",
+    ),
+    "hr_zone_3_s": FieldDef(
+        "hr_zone_3_s",
+        FieldType.DURATION,
+        nullable=True,
+        internal_unit="s",
+        computed=True,
+        description="Time in HR zone 3 (seconds)",
+    ),
+    "hr_zone_4_s": FieldDef(
+        "hr_zone_4_s",
+        FieldType.DURATION,
+        nullable=True,
+        internal_unit="s",
+        computed=True,
+        description="Time in HR zone 4 (seconds)",
+    ),
+    "hr_zone_5_s": FieldDef(
+        "hr_zone_5_s",
+        FieldType.DURATION,
+        nullable=True,
+        internal_unit="s",
+        computed=True,
+        description="Time in HR zone 5 (seconds)",
     ),
 }
 
@@ -191,15 +431,24 @@ FIELD_ALIASES: dict[str, str] = {
     "elev": "elevation_gain_m",
     "gain": "elevation_gain_m",
     "climbing": "elevation_gain_m",
+    "descent": "elevation_loss_m",
+    "elevation_loss": "elevation_loss_m",
+    "min_altitude": "min_altitude_m",
+    "max_altitude": "max_altitude_m",
+    "max_grade": "max_grade_pct",
+    "grade": "max_grade_pct",
+    "gradient": "max_grade_pct",
     # Duration aliases
     "duration": "moving_time_s",
     "time": "moving_time_s",
     "moving_time": "moving_time_s",
     "elapsed": "elapsed_time_s",
     "elapsed_time": "elapsed_time_s",
+    "timer_time": "timer_time_s",
     # Speed aliases
     "speed": "avg_speed_mps",
     "avg_speed": "avg_speed_mps",
+    "moving_speed": "avg_speed_moving_mps",
     "max_speed": "max_speed_mps",
     # Heart rate aliases
     "hr": "avg_hr_bpm",
@@ -210,22 +459,70 @@ FIELD_ALIASES: dict[str, str] = {
     "power": "avg_power_w",
     "avg_power": "avg_power_w",
     "watts": "avg_power_w",
+    "max_power": "max_power_w",
     "np": "np_power_w",
     "normalized_power": "np_power_w",
+    # Cadence aliases
+    "cadence": "avg_cadence_rpm",
+    "rpm": "avg_cadence_rpm",
+    "avg_cadence": "avg_cadence_rpm",
+    "cadence_pedaling": "avg_cadence_pedaling_rpm",
+    "max_cadence": "max_cadence_rpm",
+    # Temperature aliases
+    "temperature": "avg_temperature_c",
+    "temp": "avg_temperature_c",
+    "avg_temp": "avg_temperature_c",
+    "min_temp": "min_temperature_c",
+    "max_temp": "max_temperature_c",
     # Date aliases
     "date": "started_at",
     "start": "started_at",
     "started": "started_at",
+    "created": "created_at",
     # Training metric aliases
     "if": "intensity_factor",
     "load": "training_load",
     # Boolean aliases
     "breakthrough": "is_breakthrough",
-    # Other
+    # Activity type aliases
+    "type": "activity_type",
+    "activity": "activity_type",
+    # Relationship aliases
     "title": "title",
     "name": "title",
     "source": "source",
     "route": "route_id",
+    "event": "ride_event_id",
+    "bike": "bike_id",
+    # Aero aliases
+    "cda": "estimated_cda",
+    "crr": "estimated_crr",
+    # Zone time aliases (power zones)
+    "pz1": "power_zone_1_s",
+    "pz2": "power_zone_2_s",
+    "pz3": "power_zone_3_s",
+    "pz4": "power_zone_4_s",
+    "pz5": "power_zone_5_s",
+    "pz6": "power_zone_6_s",
+    "pz7": "power_zone_7_s",
+    "power_z1": "power_zone_1_s",
+    "power_z2": "power_zone_2_s",
+    "power_z3": "power_zone_3_s",
+    "power_z4": "power_zone_4_s",
+    "power_z5": "power_zone_5_s",
+    "power_z6": "power_zone_6_s",
+    "power_z7": "power_zone_7_s",
+    # Zone time aliases (HR zones)
+    "hz1": "hr_zone_1_s",
+    "hz2": "hr_zone_2_s",
+    "hz3": "hr_zone_3_s",
+    "hz4": "hr_zone_4_s",
+    "hz5": "hr_zone_5_s",
+    "hr_z1": "hr_zone_1_s",
+    "hr_z2": "hr_zone_2_s",
+    "hr_z3": "hr_zone_3_s",
+    "hr_z4": "hr_zone_4_s",
+    "hr_z5": "hr_zone_5_s",
 }
 
 # All valid field names (internal names + aliases)
@@ -344,21 +641,61 @@ def is_text_match_valid(field_type: FieldType) -> bool:
 
 # Fields valid for aggregation
 AGGREGATABLE_FIELDS: set[str] = {
+    # Distance and elevation
     "total_distance_m",
     "elevation_gain_m",
+    "elevation_loss_m",
+    "min_altitude_m",
+    "max_altitude_m",
+    "max_grade_pct",
+    # Duration
     "moving_time_s",
     "elapsed_time_s",
+    "timer_time_s",
+    # Speed
     "avg_speed_mps",
+    "avg_speed_moving_mps",
     "max_speed_mps",
+    # Heart rate
     "avg_hr_bpm",
     "max_hr_bpm",
+    # Power
     "avg_power_w",
+    "max_power_w",
     "np_power_w",
+    # Cadence
+    "avg_cadence_rpm",
+    "avg_cadence_pedaling_rpm",
+    "max_cadence_rpm",
+    # Temperature
+    "avg_temperature_c",
+    "min_temperature_c",
+    "max_temperature_c",
+    # Training metrics
     "tss",
     "intensity_factor",
     "training_load",
+    # W'bal
     "wbal_min_joules",
     "wbal_min_pct",
+    # Aero
+    "estimated_cda",
+    "estimated_crr",
+    "aero_confidence",
+    # Zone times (power)
+    "power_zone_1_s",
+    "power_zone_2_s",
+    "power_zone_3_s",
+    "power_zone_4_s",
+    "power_zone_5_s",
+    "power_zone_6_s",
+    "power_zone_7_s",
+    # Zone times (HR)
+    "hr_zone_1_s",
+    "hr_zone_2_s",
+    "hr_zone_3_s",
+    "hr_zone_4_s",
+    "hr_zone_5_s",
 }
 
 

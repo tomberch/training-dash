@@ -116,7 +116,7 @@ duration_value: DURATION_COLON
 
 number_value: NUMBER unit?
 
-unit: DISTANCE_UNIT | SPEED_UNIT | DURATION_UNIT
+unit: DISTANCE_UNIT | SPEED_UNIT | DURATION_UNIT | TEMPERATURE_UNIT
 
 string: DOUBLE_QUOTED_STRING | SINGLE_QUOTED_STRING
 
@@ -148,7 +148,8 @@ field: IDENTIFIER
 // Priority matters! More specific patterns first.
 
 // Aggregation functions - HIGH PRIORITY to avoid being captured as IDENTIFIER
-AGG_FUNC.2: /COUNT/i | /SUM/i | /AVG/i | /MIN/i | /MAX/i
+// Must be followed by "(" to distinguish from fields starting with min/max/avg/sum/count
+AGG_FUNC.2: /COUNT(?=\s*\()/i | /SUM(?=\s*\()/i | /AVG(?=\s*\()/i | /MIN(?=\s*\()/i | /MAX(?=\s*\()/i
 
 // Keywords (case-insensitive) - HIGH PRIORITY
 SELECT_KW.2: /SELECT/i
@@ -199,6 +200,7 @@ YEAR_KW.2: /year/i
 DISTANCE_UNIT: /km/i | /mi/i | /m(?![a-z])/i | /ft/i
 SPEED_UNIT: /kph/i | /mph/i | /mps/i
 DURATION_UNIT: /min/i | /sec/i | /h(?![a-z])/i | /s(?![a-z])/i
+TEMPERATURE_UNIT: /[cf](?![a-z])/i
 DATE_UNIT: /mo/i | /d(?![a-z])/i | /w(?![a-z])/i | /y(?![a-z])/i
 
 // Literals - specific patterns first
