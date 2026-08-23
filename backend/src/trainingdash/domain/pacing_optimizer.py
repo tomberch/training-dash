@@ -518,8 +518,14 @@ def optimize_pacing_for_time(
     # Binary search to find constant power that achieves target time
     # This gives us a good starting point
     constant_power = _find_constant_power_for_time(
-        segments, target_time_s, rider_params, env_params, min_power, max_power, segment_env_params,
-        max_descent_speed_mps
+        segments,
+        target_time_s,
+        rider_params,
+        env_params,
+        min_power,
+        max_power,
+        segment_env_params,
+        max_descent_speed_mps,
     )
     if constant_power is None:
         constant_power = (min_power + max_power) / 2

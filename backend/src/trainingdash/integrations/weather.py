@@ -15,6 +15,7 @@ Rate limiting strategy:
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
@@ -157,10 +158,8 @@ async def fetch_activity_weather(
         )
     except httpx.HTTPStatusError as e:
         error_detail = ""
-        try:
+        with contextlib.suppress(TypeError, AttributeError):
             error_detail = f" - {e.response.text[:200]}"
-        except (TypeError, AttributeError):
-            pass
         logger.warning(f"Weather API HTTP error for ({lat}, {lon}): {e.response.status_code}{error_detail}")
         return WeatherFetchResult(
             success=False,
