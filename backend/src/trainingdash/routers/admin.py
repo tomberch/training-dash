@@ -631,30 +631,43 @@ async def admin_trigger_weather_backfill(
     event_repo: EventRepoD,
     admin: AdminUser,
     user_id: int,
+    include_failed: bool = False,
 ) -> WeatherBackfillResponse:
     """
-    Trigger weather backfill for a user's historical activities (admin only).
+    Trigger weather backfill for a user's activities (admin only).
 
     This endpoint:
-    1. Finds activities with NULL weather_status (pre-integration activities)
-    2. Sets them to 'pending' status
-    3. Queues weather fetch jobs (batched, 10 activities per job)
+    1. Finds activities with NULL or 'pending' weather_status
+    2. Optionally includes 'failed' status (use include_failed=true to retry failures)
+    3. Sets them to 'pending' status
+    4. Queues a single throttled batch job to process all activities
 
     Weather fetch will also trigger CdA/Crr estimation for eligible activities.
+    The batch job uses per-hour GPS positions and 1s throttling between API calls.
     """
-    from trainingdash.jobs import enqueue_fetch_weather_job
+    from sqlalchemy import or_
+
+    from trainingdash.jobs import enqueue_batch_weather_job
 
     await _get_user_or_404(user_repo, user_id)
 
-    # Count activities needing backfill (NULL status = historical, never processed)
+    # Build filter for activities needing backfill
+    status_filters = [
+        Activity.weather_status.is_(None),
+        Activity.weather_status == "pending",
+    ]
+    if include_failed:
+        status_filters.append(Activity.weather_status == "failed")
+
+    # Count activities needing backfill
     count_result = await db.execute(
         select(func.count())
         .select_from(Activity)
-        .where(Activity.user_id == user_id, Activity.weather_status.is_(None))
+        .where(Activity.user_id == user_id, or_(*status_filters))
     )
-    null_count = count_result.scalar() or 0
+    backfill_count = count_result.scalar() or 0
 
-    if null_count == 0:
+    if backfill_count == 0:
         return WeatherBackfillResponse(
             success=True,
             activities_needing_backfill=0,
@@ -662,23 +675,17 @@ async def admin_trigger_weather_backfill(
             message="No activities need weather backfill",
         )
 
-    # Update NULL weather_status to 'pending'
+    # Update matching activities to 'pending' status
     await db.execute(
         update(Activity)
-        .where(Activity.user_id == user_id, Activity.weather_status.is_(None))
+        .where(Activity.user_id == user_id, or_(*status_filters))
         .values(weather_status="pending")
     )
     await db.commit()
 
-    # Queue weather fetch jobs (process in batches of 10)
-    # Each job processes up to 10 pending activities
-    num_jobs = (null_count + 9) // 10  # Ceiling division
-    job_ids = []
-
-    for _ in range(min(num_jobs, 5)):  # Max 5 concurrent jobs per user
-        job_id = await enqueue_fetch_weather_job(user_id)
-        if job_id:
-            job_ids.append(job_id)
+    # Queue a single batch weather job with throttling
+    job_id = await enqueue_batch_weather_job(user_id)
+    job_ids = [job_id] if job_id else []
 
     # Log the backfill action
     await event_repo.log(
@@ -688,15 +695,16 @@ async def admin_trigger_weather_backfill(
         payload={
             "admin_id": admin.id,
             "action": "weather_backfill",
-            "activities_queued": null_count,
+            "activities_queued": backfill_count,
             "jobs_queued": len(job_ids),
+            "include_failed": include_failed,
         },
     )
 
     return WeatherBackfillResponse(
         success=True,
-        activities_needing_backfill=null_count,
-        activities_queued=null_count,
+        activities_needing_backfill=backfill_count,
+        activities_queued=backfill_count,
         job_ids=job_ids if job_ids else None,
-        message=f"Queued {null_count} activities for weather backfill across {len(job_ids)} jobs",
+        message=f"Queued {backfill_count} activities for weather backfill",
     )
