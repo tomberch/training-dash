@@ -6,6 +6,7 @@ from trainingdash.domain.query.fields import (
     FIELD_ALIASES,
     FIELD_DEFINITIONS,
     FieldType,
+    convert_temperature,
     get_conversion_factor,
     get_field_def,
     is_aggregatable,
@@ -33,6 +34,45 @@ class TestResolveFieldName:
         assert resolve_field_name("power") == "avg_power_w"
         assert resolve_field_name("np") == "np_power_w"
         assert resolve_field_name("date") == "started_at"
+
+    def test_new_field_aliases(self):
+        """Test newly added field aliases."""
+        # Activity type
+        assert resolve_field_name("type") == "activity_type"
+        assert resolve_field_name("activity") == "activity_type"
+        # Bike
+        assert resolve_field_name("bike") == "bike_id"
+        # Cadence
+        assert resolve_field_name("cadence") == "avg_cadence_rpm"
+        assert resolve_field_name("rpm") == "avg_cadence_rpm"
+        assert resolve_field_name("max_cadence") == "max_cadence_rpm"
+        # Temperature
+        assert resolve_field_name("temp") == "avg_temperature_c"
+        assert resolve_field_name("temperature") == "avg_temperature_c"
+        assert resolve_field_name("min_temp") == "min_temperature_c"
+        assert resolve_field_name("max_temp") == "max_temperature_c"
+        # Max power
+        assert resolve_field_name("max_power") == "max_power_w"
+        # Elevation loss
+        assert resolve_field_name("descent") == "elevation_loss_m"
+        # Grade
+        assert resolve_field_name("grade") == "max_grade_pct"
+        assert resolve_field_name("gradient") == "max_grade_pct"
+        # Aero
+        assert resolve_field_name("cda") == "estimated_cda"
+        assert resolve_field_name("crr") == "estimated_crr"
+
+    def test_zone_time_aliases(self):
+        """Test power and HR zone time aliases."""
+        # Power zones
+        assert resolve_field_name("pz1") == "power_zone_1_s"
+        assert resolve_field_name("pz5") == "power_zone_5_s"
+        assert resolve_field_name("pz7") == "power_zone_7_s"
+        assert resolve_field_name("power_z3") == "power_zone_3_s"
+        # HR zones
+        assert resolve_field_name("hz1") == "hr_zone_1_s"
+        assert resolve_field_name("hz5") == "hr_zone_5_s"
+        assert resolve_field_name("hr_z3") == "hr_zone_3_s"
 
     def test_alias_case_insensitive(self):
         assert resolve_field_name("Distance") == "total_distance_m"
@@ -78,6 +118,49 @@ class TestGetFieldDef:
     def test_non_nullable_field(self):
         field_def = get_field_def("started_at")
         assert field_def.nullable is False
+
+    def test_new_field_definitions(self):
+        """Test newly added field definitions."""
+        # Activity type
+        field_def = get_field_def("activity_type")
+        assert field_def.field_type == FieldType.STRING
+        assert field_def.nullable is True
+
+        # Bike ID
+        field_def = get_field_def("bike_id")
+        assert field_def.field_type == FieldType.NUMBER
+        assert field_def.nullable is True
+
+        # Cadence
+        field_def = get_field_def("avg_cadence_rpm")
+        assert field_def.field_type == FieldType.NUMBER
+        assert field_def.nullable is True
+
+        # Max power
+        field_def = get_field_def("max_power_w")
+        assert field_def.field_type == FieldType.NUMBER
+        assert field_def.nullable is True
+
+        # Temperature
+        field_def = get_field_def("avg_temperature_c")
+        assert field_def.field_type == FieldType.NUMBER
+        assert field_def.internal_unit == "c"
+        assert field_def.nullable is True
+
+    def test_zone_time_field_definitions(self):
+        """Test zone time field definitions are marked as computed."""
+        # Power zones
+        field_def = get_field_def("power_zone_5_s")
+        assert field_def.field_type == FieldType.DURATION
+        assert field_def.internal_unit == "s"
+        assert field_def.computed is True
+        assert field_def.nullable is True
+
+        # HR zones
+        field_def = get_field_def("hr_zone_3_s")
+        assert field_def.field_type == FieldType.DURATION
+        assert field_def.internal_unit == "s"
+        assert field_def.computed is True
 
 
 class TestSuggestFieldName:
@@ -154,6 +237,35 @@ class TestUnitConversion:
         assert get_conversion_factor("unknown", "m") is None
 
 
+class TestTemperatureConversion:
+    """Test temperature unit conversion."""
+
+    def test_fahrenheit_to_celsius_freezing(self):
+        assert convert_temperature(32, "f") == 0.0
+
+    def test_fahrenheit_to_celsius_room_temp(self):
+        assert convert_temperature(68, "f") == 20.0
+
+    def test_fahrenheit_to_celsius_body_temp(self):
+        assert convert_temperature(98.6, "f") == pytest.approx(37.0, rel=0.01)
+
+    def test_fahrenheit_to_celsius_boiling(self):
+        assert convert_temperature(212, "f") == 100.0
+
+    def test_celsius_unchanged(self):
+        assert convert_temperature(20, "c") == 20
+        assert convert_temperature(0, "c") == 0
+
+    def test_case_insensitive(self):
+        assert convert_temperature(68, "F") == 20.0
+        assert convert_temperature(20, "C") == 20
+
+    def test_unknown_unit_raises(self):
+        with pytest.raises(ValueError) as exc:
+            convert_temperature(20, "k")
+        assert "Unknown temperature unit" in str(exc.value)
+
+
 class TestOperatorValidation:
     """Test operator/type compatibility."""
 
@@ -220,3 +332,43 @@ class TestAggregatable:
 
     def test_boolean_not_aggregatable(self):
         assert not is_aggregatable("is_breakthrough")
+
+    def test_new_fields_aggregatable(self):
+        """Test newly added fields are aggregatable."""
+        # Cadence
+        assert is_aggregatable("avg_cadence_rpm")
+        assert is_aggregatable("max_cadence_rpm")
+        assert is_aggregatable("cadence")  # alias
+        # Temperature
+        assert is_aggregatable("avg_temperature_c")
+        assert is_aggregatable("min_temperature_c")
+        assert is_aggregatable("max_temperature_c")
+        assert is_aggregatable("temp")  # alias
+        # Max power
+        assert is_aggregatable("max_power_w")
+        assert is_aggregatable("max_power")  # alias
+        # Elevation loss
+        assert is_aggregatable("elevation_loss_m")
+        assert is_aggregatable("descent")  # alias
+        # Grade
+        assert is_aggregatable("max_grade_pct")
+        # Aero
+        assert is_aggregatable("estimated_cda")
+        assert is_aggregatable("estimated_crr")
+
+    def test_zone_time_fields_aggregatable(self):
+        """Test zone time fields are aggregatable."""
+        # Power zones
+        assert is_aggregatable("power_zone_1_s")
+        assert is_aggregatable("power_zone_5_s")
+        assert is_aggregatable("power_zone_7_s")
+        assert is_aggregatable("pz3")  # alias
+        # HR zones
+        assert is_aggregatable("hr_zone_1_s")
+        assert is_aggregatable("hr_zone_5_s")
+        assert is_aggregatable("hz3")  # alias
+
+    def test_activity_type_not_aggregatable(self):
+        """Test string fields are not aggregatable."""
+        assert not is_aggregatable("activity_type")
+        assert not is_aggregatable("type")  # alias

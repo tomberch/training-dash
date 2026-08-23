@@ -58,6 +58,7 @@ const mockActivity: Activity = {
   power_confidence: null,
   avg_cadence_rpm: null,
   avg_cadence_pedaling_rpm: null,
+  max_cadence_rpm: null,
   avg_temperature_c: null,
   min_temperature_c: null,
   max_temperature_c: null,

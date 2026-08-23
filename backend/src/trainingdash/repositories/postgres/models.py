@@ -191,6 +191,7 @@ class Activity(Base):
     # Cadence metrics
     avg_cadence_rpm: Mapped[int | None] = mapped_column(Integer, nullable=True)
     avg_cadence_pedaling_rpm: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Only when cadence > 0
+    max_cadence_rpm: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Temperature metrics
     avg_temperature_c: Mapped[float | None] = mapped_column(Float, nullable=True)
     min_temperature_c: Mapped[int | None] = mapped_column(Integer, nullable=True)

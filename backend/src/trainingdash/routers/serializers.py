@@ -89,6 +89,7 @@ def activity_summary(a: Activity) -> dict[str, Any]:
         # Cadence metrics
         "avg_cadence_rpm": a.avg_cadence_rpm,
         "avg_cadence_pedaling_rpm": a.avg_cadence_pedaling_rpm,
+        "max_cadence_rpm": a.max_cadence_rpm,
         # Temperature metrics
         "avg_temperature_c": a.avg_temperature_c,
         "min_temperature_c": a.min_temperature_c,

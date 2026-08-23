@@ -66,6 +66,91 @@ class TestFieldAliasResolution:
         assert validated.conditions.field == "total_distance_m"
 
 
+class TestNewFieldAliasResolution:
+    """Test that newly added field aliases are resolved to internal names."""
+
+    def test_activity_type_alias(self):
+        query = parse('type = "road"')
+        validated = validate(query)
+        assert validated.conditions.field == "activity_type"
+
+    def test_bike_alias(self):
+        query = parse("bike = 1")
+        validated = validate(query)
+        assert validated.conditions.field == "bike_id"
+
+    def test_cadence_alias(self):
+        query = parse("cadence > 90")
+        validated = validate(query)
+        assert validated.conditions.field == "avg_cadence_rpm"
+
+    def test_rpm_alias(self):
+        query = parse("rpm > 80")
+        validated = validate(query)
+        assert validated.conditions.field == "avg_cadence_rpm"
+
+    def test_max_cadence_alias(self):
+        query = parse("max_cadence > 110")
+        validated = validate(query)
+        assert validated.conditions.field == "max_cadence_rpm"
+
+    def test_temperature_alias(self):
+        query = parse("temp > 20")
+        validated = validate(query)
+        assert validated.conditions.field == "avg_temperature_c"
+
+    def test_max_power_alias(self):
+        query = parse("max_power > 500")
+        validated = validate(query)
+        assert validated.conditions.field == "max_power_w"
+
+    def test_descent_alias(self):
+        query = parse("descent > 500m")
+        validated = validate(query)
+        assert validated.conditions.field == "elevation_loss_m"
+
+    def test_grade_alias(self):
+        query = parse("grade > 10")
+        validated = validate(query)
+        assert validated.conditions.field == "max_grade_pct"
+
+    def test_cda_alias(self):
+        query = parse("cda < 0.3")
+        validated = validate(query)
+        assert validated.conditions.field == "estimated_cda"
+
+
+class TestZoneTimeFieldResolution:
+    """Test zone time field aliases are resolved correctly."""
+
+    def test_power_zone_alias_pz(self):
+        query = parse("pz5 > 10min")
+        validated = validate(query)
+        assert validated.conditions.field == "power_zone_5_s"
+        assert validated.conditions.value.value == 600.0  # 10 min = 600s
+
+    def test_power_zone_alias_power_z(self):
+        query = parse("power_z3 > 30min")
+        validated = validate(query)
+        assert validated.conditions.field == "power_zone_3_s"
+
+    def test_hr_zone_alias_hz(self):
+        query = parse("hz4 > 15min")
+        validated = validate(query)
+        assert validated.conditions.field == "hr_zone_4_s"
+
+    def test_hr_zone_alias_hr_z(self):
+        query = parse("hr_z2 > 1h")
+        validated = validate(query)
+        assert validated.conditions.field == "hr_zone_2_s"
+        assert validated.conditions.value.value == 3600.0  # 1h = 3600s
+
+    def test_zone_time_internal_name(self):
+        query = parse("power_zone_7_s > 5min")
+        validated = validate(query)
+        assert validated.conditions.field == "power_zone_7_s"
+
+
 class TestUnknownFieldErrors:
     """Test error messages for unknown fields."""
 
@@ -144,6 +229,35 @@ class TestUnitConversion:
         validated = validate(query)
         value = validated.conditions.value
         assert value.value == 5400.0  # 1h30m = 5400s
+
+    def test_fahrenheit_to_celsius(self):
+        """Test Fahrenheit to Celsius conversion."""
+        query = parse("temp > 68f")
+        validated = validate(query)
+        value = validated.conditions.value
+        assert value.value == 20.0  # 68°F = 20°C
+        assert value.unit is None
+
+    def test_fahrenheit_to_celsius_freezing(self):
+        """Test Fahrenheit to Celsius at freezing point."""
+        query = parse("temperature > 32f")
+        validated = validate(query)
+        value = validated.conditions.value
+        assert value.value == 0.0  # 32°F = 0°C
+
+    def test_celsius_unchanged(self):
+        """Test Celsius values pass through unchanged."""
+        query = parse("temp > 20c")
+        validated = validate(query)
+        value = validated.conditions.value
+        assert value.value == 20.0
+
+    def test_temperature_between_with_fahrenheit(self):
+        """Test BETWEEN with Fahrenheit values."""
+        query = parse("temp BETWEEN 50f AND 86f")
+        validated = validate(query)
+        assert validated.conditions.low.value == pytest.approx(10.0)  # 50°F ≈ 10°C
+        assert validated.conditions.high.value == pytest.approx(30.0)  # 86°F = 30°C
 
 
 class TestRelativeDateResolution:

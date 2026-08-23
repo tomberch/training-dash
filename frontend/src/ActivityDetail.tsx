@@ -182,7 +182,7 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
 
 
   // Check if we have cadence or temperature data to show those cards
-  const hasCadenceData = activity?.avg_cadence_rpm != null || activity?.avg_cadence_pedaling_rpm != null;
+  const hasCadenceData = activity?.avg_cadence_rpm != null || activity?.avg_cadence_pedaling_rpm != null || activity?.max_cadence_rpm != null;
   const hasTemperatureData = activity?.avg_temperature_c != null || activity?.min_temperature_c != null || activity?.max_temperature_c != null;
 
 
@@ -398,55 +398,56 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
           <MetricEntry label="Distance" value={formatDistance(activity.total_distance_m, unitSystem)} prominent />
         </MetricGroupCard>
 
-        {/* Elevation Gain/Loss */}
+        {/* Elevation Gain/Loss/Grade */}
         <MetricGroupCard icon={<svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg>} title="Elevation">
           <MetricEntry label="Gain" value={formatElevation(activity.elevation_gain_m, unitSystem)} valueClass="text-green-400" />
           <MetricEntry label="Loss" value={activity.elevation_loss_m != null ? formatElevation(activity.elevation_loss_m, unitSystem) : "—"} valueClass="text-red-400" />
+          <MetricEntry label="Max Grade" value={activity.max_grade_pct != null ? `${activity.max_grade_pct.toFixed(1)}%` : "—"} />
         </MetricGroupCard>
 
-        {/* Altitude */}
-        <MetricGroupCard icon={<svg className="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15l5.12-5.12A3 3 0 0110.24 9H13a2 2 0 012 2v2.76a3 3 0 01-.88 2.12L9 21m0-9l6-6m-6 6h6" /></svg>} title="Altitude">
-          <MetricEntry label="Min" value={activity.min_altitude_m != null ? formatElevation(activity.min_altitude_m, unitSystem) : "—"} />
-          <MetricEntry label="Max" value={activity.max_altitude_m != null ? formatElevation(activity.max_altitude_m, unitSystem) : "—"} />
-          <MetricEntry label="Max Grade" value={activity.max_grade_pct != null ? `${activity.max_grade_pct.toFixed(1)}%` : "—"} />
+        {/* Altitude - mountain icon */}
+        <MetricGroupCard icon={<svg className="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 20l4.5-9 3.5 5 4-7 4 11H4z" /></svg>} title="Altitude">
+          <MetricEntry label="Minimum" value={activity.min_altitude_m != null ? formatElevation(activity.min_altitude_m, unitSystem) : "—"} />
+          <MetricEntry label="Maximum" value={activity.max_altitude_m != null ? formatElevation(activity.max_altitude_m, unitSystem) : "—"} />
         </MetricGroupCard>
 
         {/* Speed */}
         <MetricGroupCard icon={<svg className="w-5 h-5 text-cyan-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>} title="Speed">
           <MetricEntry label="Average" value={formatSpeed(activity.avg_speed_mps, unitSystem)} />
           {activity.avg_speed_moving_mps != null && activity.avg_speed_moving_mps !== activity.avg_speed_mps && (
-            <MetricEntry label="Moving Avg" value={formatSpeed(activity.avg_speed_moving_mps, unitSystem)} />
+            <MetricEntry label="Moving Average" value={formatSpeed(activity.avg_speed_moving_mps, unitSystem)} />
           )}
-          <MetricEntry label="Max" value={activity.max_speed_mps ? formatSpeed(activity.max_speed_mps, unitSystem) : "—"} />
+          <MetricEntry label="Maximum" value={activity.max_speed_mps ? formatSpeed(activity.max_speed_mps, unitSystem) : "—"} />
         </MetricGroupCard>
 
         {/* Heart Rate */}
         <MetricGroupCard icon={<svg className="w-5 h-5 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>} title="Heart Rate">
           <MetricEntry label="Average" value={activity.avg_hr_bpm ? `${activity.avg_hr_bpm} bpm` : "—"} />
-          <MetricEntry label="Max" value={activity.max_hr_bpm ? `${activity.max_hr_bpm} bpm` : "—"} />
+          <MetricEntry label="Maximum" value={activity.max_hr_bpm ? `${activity.max_hr_bpm} bpm` : "—"} />
         </MetricGroupCard>
 
         {/* Power */}
         <MetricGroupCard icon={<svg className="w-5 h-5 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>} title="Power">
           <MetricEntry label="Average" value={activity.avg_power_w ? `${activity.avg_power_w} W` : "—"} subtitle={activity.power_source === "hr_derived" ? "HR-derived" : undefined} />
           <MetricEntry label="Normalized" value={activity.np_power_w ? `${activity.np_power_w} W` : "—"} />
-          <MetricEntry label="Max" value={activity.max_power_w ? `${activity.max_power_w} W` : "—"} />
+          <MetricEntry label="Maximum" value={activity.max_power_w ? `${activity.max_power_w} W` : "—"} />
         </MetricGroupCard>
 
         {/* Cadence - only show if data exists */}
         {hasCadenceData && (
           <MetricGroupCard icon={<svg className="w-5 h-5 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>} title="Cadence">
             <MetricEntry label="Average" value={activity.avg_cadence_rpm != null ? `${Math.round(activity.avg_cadence_rpm)} rpm` : "—"} />
-            <MetricEntry label="Pedaling Avg" value={activity.avg_cadence_pedaling_rpm != null ? `${Math.round(activity.avg_cadence_pedaling_rpm)} rpm` : "—"} />
+            <MetricEntry label="Pedaling Average" value={activity.avg_cadence_pedaling_rpm != null ? `${Math.round(activity.avg_cadence_pedaling_rpm)} rpm` : "—"} />
+            <MetricEntry label="Maximum" value={activity.max_cadence_rpm != null ? `${Math.round(activity.max_cadence_rpm)} rpm` : "—"} />
           </MetricGroupCard>
         )}
 
-        {/* Temperature - only show if data exists */}
+        {/* Temperature - thermometer icon, only show if data exists */}
         {hasTemperatureData && (
-          <MetricGroupCard icon={<svg className="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>} title="Temperature">
+          <MetricGroupCard icon={<svg className="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19c0 1.105.895 2 2 2h2c1.105 0 2-.895 2-2v-1H9v1zM12 2a3 3 0 00-3 3v9.354A4 4 0 1016 18V5a3 3 0 00-3-3zm0 14a2 2 0 110-4 2 2 0 010 4z" /></svg>} title="Temperature">
             <MetricEntry label="Average" value={activity.avg_temperature_c != null ? `${Math.round(activity.avg_temperature_c)}°C` : "—"} />
-            <MetricEntry label="Min" value={activity.min_temperature_c != null ? `${Math.round(activity.min_temperature_c)}°C` : "—"} />
-            <MetricEntry label="Max" value={activity.max_temperature_c != null ? `${Math.round(activity.max_temperature_c)}°C` : "—"} />
+            <MetricEntry label="Minimum" value={activity.min_temperature_c != null ? `${Math.round(activity.min_temperature_c)}°C` : "—"} />
+            <MetricEntry label="Maximum" value={activity.max_temperature_c != null ? `${Math.round(activity.max_temperature_c)}°C` : "—"} />
           </MetricGroupCard>
         )}
 
@@ -454,7 +455,7 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
         <MetricGroupCard icon={<svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>} title="Training Load">
           <MetricEntry label="TSS" value={activity.tss ? Math.round(activity.tss).toString() : "—"} tooltip={!ftpWatts && !activity.tss ? "Set FTP in Settings to calculate" : undefined} />
           <MetricEntry label="IF" value={activity.intensity_factor ? activity.intensity_factor.toFixed(2) : "—"} tooltip={!ftpWatts && !activity.intensity_factor ? "Set FTP in Settings to calculate" : undefined} />
-          <MetricEntry label="W'bal Min" value={activity.wbal_min_pct != null ? `${Math.round(activity.wbal_min_pct)}%` : "—"} />
+          <MetricEntry label="W'bal Minimum" value={activity.wbal_min_pct != null ? `${Math.round(activity.wbal_min_pct)}%` : "—"} />
           {!ftpWatts && <div className="pt-3 border-t border-border"><p className="text-caption">Set FTP in Athlete profile to calculate training load metrics</p></div>}
         </MetricGroupCard>
 

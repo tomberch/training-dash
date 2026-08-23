@@ -94,7 +94,7 @@ def _compute_extended_metrics(
     - elevation_loss_m, min_altitude_m, max_altitude_m, max_grade_pct
     - avg_speed_moving_mps
     - max_power_w
-    - avg_cadence_rpm, avg_cadence_pedaling_rpm
+    - avg_cadence_rpm, avg_cadence_pedaling_rpm, max_cadence_rpm
     - avg_temperature_c, min_temperature_c, max_temperature_c
     """
     result: dict[str, Any] = {
@@ -106,6 +106,7 @@ def _compute_extended_metrics(
         "max_power_w": None,
         "avg_cadence_rpm": None,
         "avg_cadence_pedaling_rpm": None,
+        "max_cadence_rpm": None,
         "avg_temperature_c": None,
         "min_temperature_c": None,
         "max_temperature_c": None,
@@ -174,10 +175,11 @@ def _compute_extended_metrics(
     if powers:
         result["max_power_w"] = max(powers)
 
-    # Cadence: avg overall and avg while pedaling
+    # Cadence: avg overall (including zeros) and avg while pedaling (excluding zeros)
     cadences = [r["cadence_rpm"] for r in records if r.get("cadence_rpm") is not None]
     if cadences:
         result["avg_cadence_rpm"] = int(sum(cadences) / len(cadences))
+        result["max_cadence_rpm"] = max(cadences)
         pedaling_cadences = [c for c in cadences if c > 0]
         if pedaling_cadences:
             result["avg_cadence_pedaling_rpm"] = int(sum(pedaling_cadences) / len(pedaling_cadences))
@@ -339,22 +341,27 @@ def parse_records(fit_bytes: bytes) -> dict[str, Any]:
     if session_data and session_data["started_at"]:
         started_at = session_data["started_at"]
         total_distance = session_data["total_distance_m"]
-        # Prefer total_moving_time (actual moving), fall back to total_timer_time (timer running)
-        # total_moving_time excludes coasting/stopped time even when timer is running
-        moving_time = int(
-            session_data["total_moving_time"]
-            or session_data["total_timer_time"]
-            or 0
-        )
+        # total_moving_time is the true "moving" time from the device
+        # If not available, compute from records (speed > threshold)
+        # timer_time is less useful as it includes stopped time when timer is running
+        fit_moving_time = session_data["total_moving_time"]
         timer_time = int(session_data["total_timer_time"] or 0) if session_data["total_timer_time"] else None
         elapsed_time = int(session_data["total_elapsed_time"] or 0)
 
-        # If moving_time is 0 but we have records, compute from records
-        if moving_time == 0 and records:
+        # Prefer FIT's total_moving_time, but compute from records if not available
+        if fit_moving_time is not None and fit_moving_time > 0:
+            moving_time = int(fit_moving_time)
+        elif records:
+            # Compute moving time from speed records
             computed_moving = _compute_moving_time(records)
             if computed_moving > 0:
                 moving_time = computed_moving
                 logger.debug(f"Computed moving_time from records: {moving_time}s (elapsed: {elapsed_time}s)")
+            else:
+                # Fallback to timer time if no speed data
+                moving_time = timer_time or 0
+        else:
+            moving_time = timer_time or 0
 
         elev_gain = session_data["total_ascent"] or 0
         elev_loss = session_data["total_descent"]
@@ -419,9 +426,11 @@ def parse_records(fit_bytes: bytes) -> dict[str, Any]:
         # Power metrics
         "avg_power_w": avg_power,
         "max_power_w": max_power if max_power else extended["max_power_w"],
-        # Cadence metrics
-        "avg_cadence_rpm": avg_cadence if avg_cadence else extended["avg_cadence_rpm"],
-        "avg_cadence_pedaling_rpm": extended["avg_cadence_pedaling_rpm"],
+        # Cadence: FIT's avg_cadence is typically the "pedaling average" (excluding zeros)
+        # We always compute the overall average from records to get the true average
+        "avg_cadence_rpm": extended["avg_cadence_rpm"],  # Always from records (includes zeros)
+        "avg_cadence_pedaling_rpm": avg_cadence if avg_cadence else extended["avg_cadence_pedaling_rpm"],
+        "max_cadence_rpm": extended["max_cadence_rpm"],
         # Temperature metrics
         "avg_temperature_c": avg_temperature if avg_temperature else extended["avg_temperature_c"],
         "min_temperature_c": extended["min_temperature_c"],
@@ -577,6 +586,7 @@ async def _store_parsed_fit(
         # Cadence metrics
         avg_cadence_rpm=parsed["avg_cadence_rpm"],
         avg_cadence_pedaling_rpm=parsed["avg_cadence_pedaling_rpm"],
+        max_cadence_rpm=parsed["max_cadence_rpm"],
         # Temperature metrics
         avg_temperature_c=parsed["avg_temperature_c"],
         min_temperature_c=parsed["min_temperature_c"],

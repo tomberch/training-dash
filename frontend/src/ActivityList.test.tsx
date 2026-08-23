@@ -59,6 +59,7 @@ const baseActivity = {
   // Cadence metrics
   avg_cadence_rpm: null as number | null,
   avg_cadence_pedaling_rpm: null as number | null,
+  max_cadence_rpm: null as number | null,
   // Temperature metrics
   avg_temperature_c: null as number | null,
   min_temperature_c: null as number | null,

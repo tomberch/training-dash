@@ -516,3 +516,138 @@ class TestResultTypes:
         validated = validate(query)
         result = translate(validated, user_id=1)
         assert isinstance(result, GroupedAggResult)
+
+
+class TestNewFieldsTranslation:
+    """Test translation of newly added fields."""
+
+    def test_activity_type_filter(self):
+        query = parse('type = "road"')
+        validated = validate(query)
+        result = translate(validated, user_id=1)
+
+        sql = _compile_sql(result.query)
+        assert "activities.activity_type = 'road'" in sql
+
+    def test_activity_type_in(self):
+        query = parse('activity_type IN ("road", "gravel", "mtb")')
+        validated = validate(query)
+        result = translate(validated, user_id=1)
+
+        sql = _compile_sql(result.query)
+        assert "activities.activity_type IN" in sql
+        assert "'road'" in sql
+        assert "'gravel'" in sql
+
+    def test_bike_id_filter(self):
+        query = parse("bike = 1")
+        validated = validate(query)
+        result = translate(validated, user_id=1)
+
+        sql = _compile_sql(result.query)
+        assert "activities.bike_id = 1" in sql
+
+    def test_cadence_filter(self):
+        query = parse("cadence > 90")
+        validated = validate(query)
+        result = translate(validated, user_id=1)
+
+        sql = _compile_sql(result.query)
+        assert "activities.avg_cadence_rpm > 90" in sql
+
+    def test_max_power_filter(self):
+        query = parse("max_power > 500")
+        validated = validate(query)
+        result = translate(validated, user_id=1)
+
+        sql = _compile_sql(result.query)
+        assert "activities.max_power_w > 500" in sql
+
+    def test_temperature_filter(self):
+        query = parse("temp > 20")
+        validated = validate(query)
+        result = translate(validated, user_id=1)
+
+        sql = _compile_sql(result.query)
+        assert "activities.avg_temperature_c > 20" in sql
+
+    def test_temperature_with_fahrenheit(self):
+        query = parse("temp > 68f")  # 68F = 20C
+        validated = validate(query)
+        result = translate(validated, user_id=1)
+
+        sql = _compile_sql(result.query)
+        # Should be converted to Celsius
+        assert "activities.avg_temperature_c > 20" in sql
+
+    def test_descent_filter(self):
+        query = parse("descent > 500m")
+        validated = validate(query)
+        result = translate(validated, user_id=1)
+
+        sql = _compile_sql(result.query)
+        assert "activities.elevation_loss_m > 500" in sql
+
+    def test_grade_filter(self):
+        query = parse("grade > 15")
+        validated = validate(query)
+        result = translate(validated, user_id=1)
+
+        sql = _compile_sql(result.query)
+        assert "activities.max_grade_pct > 15" in sql
+
+
+class TestZoneTimeTranslation:
+    """Test zone time field translation with JSON extraction."""
+
+    def test_power_zone_filter(self):
+        query = parse("pz5 > 10min")  # 10min = 600s
+        validated = validate(query)
+        result = translate(validated, user_id=1)
+
+        sql = _compile_sql(result.query)
+        # Should extract from JSON using JSONB
+        assert "power_zone_times" in sql
+        assert "JSONB" in sql.upper() or "jsonb" in sql
+        assert "'5'" in sql  # Zone number as string key
+        assert "600" in sql  # 10min converted to seconds
+
+    def test_power_zone_internal_name(self):
+        query = parse("power_zone_3_s > 30min")
+        validated = validate(query)
+        result = translate(validated, user_id=1)
+
+        sql = _compile_sql(result.query)
+        assert "power_zone_times" in sql
+        assert "'3'" in sql
+
+    def test_hr_zone_filter(self):
+        query = parse("hz4 > 15min")
+        validated = validate(query)
+        result = translate(validated, user_id=1)
+
+        sql = _compile_sql(result.query)
+        assert "hr_zone_times" in sql
+        assert "'4'" in sql
+        assert "900" in sql  # 15min = 900s
+
+    def test_zone_time_aggregation(self):
+        query = parse("SUM(pz5) GROUP BY month")
+        validated = validate(query)
+        result = translate(validated, user_id=1)
+
+        sql = _compile_sql(result.query)
+        assert "sum(" in sql.lower()
+        assert "power_zone_times" in sql
+        assert "'5'" in sql
+        assert "GROUP BY" in sql
+
+    def test_hr_zone_aggregation(self):
+        query = parse("AVG(hz3)")
+        validated = validate(query)
+        result = translate(validated, user_id=1)
+
+        sql = _compile_sql(result.query)
+        assert "avg(" in sql.lower()
+        assert "hr_zone_times" in sql
+        assert "'3'" in sql

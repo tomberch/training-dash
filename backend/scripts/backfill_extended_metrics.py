@@ -3,22 +3,26 @@
 Backfill extended metrics for existing activities.
 
 This script re-parses raw FIT files stored in activities to populate the new
-extended metrics fields added in migration 021:
+extended metrics fields added in migration 021 and 022:
 
 - timer_time_s
+- moving_time_s (recomputed from records when FIT lacks total_moving_time)
 - elevation_loss_m, min_altitude_m, max_altitude_m, max_grade_pct
 - avg_speed_moving_mps
 - max_power_w
-- avg_cadence_rpm, avg_cadence_pedaling_rpm
+- avg_cadence_rpm (overall average including zeros)
+- avg_cadence_pedaling_rpm (average only when pedaling)
+- max_cadence_rpm
 - avg_temperature_c, min_temperature_c, max_temperature_c
 
 Usage:
-    python scripts/backfill_extended_metrics.py [--dry-run] [--user-id USER_ID] [--batch-size N]
+    python scripts/backfill_extended_metrics.py [--dry-run] [--user-id USER_ID] [--batch-size N] [--force]
 
 Options:
     --dry-run       Show what would be updated without making changes
     --user-id       Only process activities for a specific user
     --batch-size    Number of activities to process per batch (default: 100)
+    --force         Re-compute all metrics even if already set (useful for fixing bugs)
 """
 
 import argparse
@@ -44,7 +48,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-async def backfill_activity(db: AsyncSession, activity: Activity, dry_run: bool) -> bool:
+async def backfill_activity(db: AsyncSession, activity: Activity, dry_run: bool, force: bool = False) -> bool:
     """
     Backfill extended metrics for a single activity.
     
@@ -61,45 +65,48 @@ async def backfill_activity(db: AsyncSession, activity: Activity, dry_run: bool)
         # Check if we got new data
         updates = {}
         
-        # Time metrics
-        if parsed.get("timer_time_s") is not None and activity.timer_time_s is None:
+        # Time metrics - always recompute moving_time (fixes bug where we used timer_time)
+        if parsed.get("timer_time_s") is not None and (activity.timer_time_s is None or force):
             updates["timer_time_s"] = parsed["timer_time_s"]
         
-        # Also update moving_time_s if it was computed from total_moving_time
-        # (fixes the bug where we were using timer_time instead)
+        # Always update moving_time_s if the new value differs (fixes the timer_time bug)
         if parsed.get("moving_time_s") and parsed["moving_time_s"] != activity.moving_time_s:
             updates["moving_time_s"] = parsed["moving_time_s"]
         
         # Elevation metrics
-        if parsed.get("elevation_loss_m") is not None and activity.elevation_loss_m is None:
+        if parsed.get("elevation_loss_m") is not None and (activity.elevation_loss_m is None or force):
             updates["elevation_loss_m"] = parsed["elevation_loss_m"]
-        if parsed.get("min_altitude_m") is not None and activity.min_altitude_m is None:
+        if parsed.get("min_altitude_m") is not None and (activity.min_altitude_m is None or force):
             updates["min_altitude_m"] = parsed["min_altitude_m"]
-        if parsed.get("max_altitude_m") is not None and activity.max_altitude_m is None:
+        if parsed.get("max_altitude_m") is not None and (activity.max_altitude_m is None or force):
             updates["max_altitude_m"] = parsed["max_altitude_m"]
-        if parsed.get("max_grade_pct") is not None and activity.max_grade_pct is None:
+        if parsed.get("max_grade_pct") is not None and (activity.max_grade_pct is None or force):
             updates["max_grade_pct"] = parsed["max_grade_pct"]
         
         # Speed metrics
-        if parsed.get("avg_speed_moving_mps") is not None and activity.avg_speed_moving_mps is None:
+        if parsed.get("avg_speed_moving_mps") is not None and (activity.avg_speed_moving_mps is None or force):
             updates["avg_speed_moving_mps"] = parsed["avg_speed_moving_mps"]
         
         # Power metrics
-        if parsed.get("max_power_w") is not None and activity.max_power_w is None:
+        if parsed.get("max_power_w") is not None and (activity.max_power_w is None or force):
             updates["max_power_w"] = parsed["max_power_w"]
         
-        # Cadence metrics
-        if parsed.get("avg_cadence_rpm") is not None and activity.avg_cadence_rpm is None:
-            updates["avg_cadence_rpm"] = parsed["avg_cadence_rpm"]
-        if parsed.get("avg_cadence_pedaling_rpm") is not None and activity.avg_cadence_pedaling_rpm is None:
-            updates["avg_cadence_pedaling_rpm"] = parsed["avg_cadence_pedaling_rpm"]
+        # Cadence metrics - always recompute (fixes bug where avg was same as pedaling avg)
+        if parsed.get("avg_cadence_rpm") is not None:
+            if activity.avg_cadence_rpm is None or force or activity.avg_cadence_rpm == activity.avg_cadence_pedaling_rpm:
+                updates["avg_cadence_rpm"] = parsed["avg_cadence_rpm"]
+        if parsed.get("avg_cadence_pedaling_rpm") is not None:
+            if activity.avg_cadence_pedaling_rpm is None or force:
+                updates["avg_cadence_pedaling_rpm"] = parsed["avg_cadence_pedaling_rpm"]
+        if parsed.get("max_cadence_rpm") is not None and (activity.max_cadence_rpm is None or force):
+            updates["max_cadence_rpm"] = parsed["max_cadence_rpm"]
         
         # Temperature metrics
-        if parsed.get("avg_temperature_c") is not None and activity.avg_temperature_c is None:
+        if parsed.get("avg_temperature_c") is not None and (activity.avg_temperature_c is None or force):
             updates["avg_temperature_c"] = parsed["avg_temperature_c"]
-        if parsed.get("min_temperature_c") is not None and activity.min_temperature_c is None:
+        if parsed.get("min_temperature_c") is not None and (activity.min_temperature_c is None or force):
             updates["min_temperature_c"] = parsed["min_temperature_c"]
-        if parsed.get("max_temperature_c") is not None and activity.max_temperature_c is None:
+        if parsed.get("max_temperature_c") is not None and (activity.max_temperature_c is None or force):
             updates["max_temperature_c"] = parsed["max_temperature_c"]
         
         if not updates:
@@ -124,6 +131,7 @@ async def backfill_all(
     dry_run: bool = False,
     user_id: int | None = None,
     batch_size: int = 100,
+    force: bool = False,
 ) -> tuple[int, int, int]:
     """
     Backfill extended metrics for all activities.
@@ -163,7 +171,7 @@ async def backfill_all(
                 break
             
             for activity in activities:
-                if await backfill_activity(db, activity, dry_run):
+                if await backfill_activity(db, activity, dry_run, force):
                     updated += 1
                 else:
                     skipped += 1
@@ -182,17 +190,21 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Show what would be updated without making changes")
     parser.add_argument("--user-id", type=int, help="Only process activities for a specific user")
     parser.add_argument("--batch-size", type=int, default=100, help="Number of activities to process per batch")
+    parser.add_argument("--force", action="store_true", help="Re-compute all metrics even if already set")
     
     args = parser.parse_args()
     
     if args.dry_run:
         logger.info("DRY RUN MODE - no changes will be made")
+    if args.force:
+        logger.info("FORCE MODE - will overwrite existing values")
     
     total, updated, skipped = asyncio.run(
         backfill_all(
             dry_run=args.dry_run,
             user_id=args.user_id,
             batch_size=args.batch_size,
+            force=args.force,
         )
     )
     

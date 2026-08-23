@@ -160,6 +160,7 @@ export interface Activity {
   // Cadence metrics
   avg_cadence_rpm: number | null;
   avg_cadence_pedaling_rpm: number | null;
+  max_cadence_rpm: number | null;
   // Temperature metrics
   avg_temperature_c: number | null;
   min_temperature_c: number | null;

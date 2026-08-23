@@ -810,24 +810,25 @@ class ActivityPipeline:
         weather_rows = weather_query.scalars().all()
 
         if not weather_rows:
-            # Mark for weather fetch (background job will handle it)
-            self.activity.weather_status = WeatherStatus.PENDING
-            result.skipped_reason = "Awaiting weather data"
-            await self.db.flush()
-            return result
-
-        # Convert weather rows to domain objects
-        weather_snapshots = [
-            WeatherSnapshot(
-                hour_offset=w.hour_offset,
-                wind_speed_mps=w.wind_speed_mps,
-                wind_direction_deg=w.wind_direction_deg,
-                pressure_hpa=w.pressure_hpa,
-                humidity_pct=w.humidity_pct,
-                temperature_c=w.temperature_c,
-            )
-            for w in weather_rows
-        ]
+            # Fetch weather inline during ingestion
+            weather_snapshots = await self._fetch_weather_inline(activity_records)
+            if not weather_snapshots:
+                # Weather fetch failed or no GPS data
+                await self.db.flush()
+                return result
+        else:
+            # Convert existing weather rows to domain objects
+            weather_snapshots = [
+                WeatherSnapshot(
+                    hour_offset=w.hour_offset,
+                    wind_speed_mps=w.wind_speed_mps,
+                    wind_direction_deg=w.wind_direction_deg,
+                    pressure_hpa=w.pressure_hpa,
+                    humidity_pct=w.humidity_pct,
+                    temperature_c=w.temperature_c,
+                )
+                for w in weather_rows
+            ]
 
         # Get user weight for physics calculation
         user = await self._get_user()
@@ -934,6 +935,103 @@ class ActivityPipeline:
             bike.estimated_crr_stddev = stddev_row.crr_stddev
             bike.aero_sample_count = row.count
             await self.db.flush()
+
+    async def _fetch_weather_inline(
+        self,
+        activity_records: list,
+    ) -> list | None:
+        """
+        Fetch weather data inline during ingestion.
+
+        Fetches hourly weather for the activity duration at the start location.
+        Weather is interpolated by time during aero estimation.
+
+        Args:
+            activity_records: List of ActivityRecord objects from the pipeline
+
+        Returns:
+            List of WeatherSnapshot objects, or None if fetch failed
+
+        Note:
+            In batch_mode, weather fetch is skipped to avoid API rate limits
+            during bulk imports. A backfill job handles those activities later.
+        """
+        from datetime import timezone
+
+        from trainingdash.domain.aero_estimation import WeatherSnapshot, WeatherStatus
+        from trainingdash.integrations.weather import fetch_activity_weather
+        from trainingdash.repositories.postgres.models import ActivityWeather
+
+        # Skip in batch mode to avoid rate limits during bulk imports
+        if self.batch_mode:
+            self.activity.weather_status = WeatherStatus.PENDING
+            return None
+
+        # Find first GPS point from records (already in memory)
+        first_gps = None
+        for r in self.records:
+            if r.get("lat") is not None and r.get("lon") is not None:
+                first_gps = r
+                break
+
+        if not first_gps:
+            logger.info(f"Activity {self.activity.id} has no GPS data for weather fetch")
+            self.activity.weather_status = WeatherStatus.NOT_APPLICABLE
+            return None
+
+        # Calculate duration in hours
+        duration_hours = max(1, int((self.activity.elapsed_time_s or 3600) / 3600) + 1)
+
+        # Fetch weather from Open-Meteo (single request for all hours)
+        weather_result = await fetch_activity_weather(
+            lat=first_gps["lat"],
+            lon=first_gps["lon"],
+            start_time=self.activity.started_at.replace(tzinfo=timezone.utc),
+            duration_hours=duration_hours,
+        )
+
+        if not weather_result.success:
+            logger.warning(
+                f"Weather fetch failed for {self.activity.id}: {weather_result.error_message}"
+            )
+            self.activity.weather_status = WeatherStatus.FAILED
+            return None
+
+        # Store hourly weather data in database
+        for hourly in weather_result.hourly_data:
+            weather_row = ActivityWeather(
+                activity_id=self.activity.id,
+                hour_offset=hourly.hour_offset,
+                lat=weather_result.lat,
+                lon=weather_result.lon,
+                temperature_c=hourly.temperature_c,
+                wind_speed_mps=hourly.wind_speed_mps,
+                wind_direction_deg=hourly.wind_direction_deg,
+                pressure_hpa=hourly.pressure_hpa,
+                humidity_pct=hourly.humidity_pct,
+                air_density=hourly.air_density,
+            )
+            self.db.add(weather_row)
+
+        self.activity.weather_status = WeatherStatus.FETCHED
+        await self.db.flush()
+
+        logger.info(
+            f"Fetched {len(weather_result.hourly_data)} weather snapshots for activity {self.activity.id}"
+        )
+
+        # Convert to domain objects for aero estimation
+        return [
+            WeatherSnapshot(
+                hour_offset=h.hour_offset,
+                wind_speed_mps=h.wind_speed_mps,
+                wind_direction_deg=h.wind_direction_deg,
+                pressure_hpa=h.pressure_hpa,
+                humidity_pct=h.humidity_pct,
+                temperature_c=h.temperature_c,
+            )
+            for h in weather_result.hourly_data
+        ]
 
 
 # --- Helper Functions ---
