@@ -1,9 +1,9 @@
 /**
- * E2E tests for Xert sync flow.
+ * E2E tests for Xert import flow.
  *
  * Tests the complete Xert integration:
  * 1. Connect Xert credentials
- * 2. Trigger sync (uses MockXertClient in E2E environment)
+ * 2. Trigger import (uses MockXertClient in E2E environment)
  * 3. Verify activities imported
  * 4. Verify auto-threshold calculated from CP model
  * 5. Verify TSS/IF backfilled
@@ -16,10 +16,10 @@ import { test, expect } from '@playwright/test';
 import { generateTestUser, registerAndApproveUser, loginViaApi } from '../fixtures/auth';
 // MOCK_ACTIVITY_IDS removed - not currently used
 
-const testUser = generateTestUser('xertsync');
+const testUser = generateTestUser('xertimport');
 
 // Run tests serially - they depend on each other
-test.describe.serial('J004: Xert Sync Flow', () => {
+test.describe.serial('J004: Xert Import Flow', () => {
   test.beforeAll(async ({ request }) => {
     await registerAndApproveUser(request, testUser);
   });
@@ -41,11 +41,11 @@ test.describe.serial('J004: Xert Sync Flow', () => {
     await page.getByTestId('xert-email').fill('mock@xert.com');
     await page.getByTestId('xert-password').fill('mockpassword');
 
-    // Set sync since date to 90 days ago
+    // Set import since date to 90 days ago
     const ninetyDaysAgo = new Date();
     ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-    const syncSinceDate = ninetyDaysAgo.toISOString().split('T')[0];
-    await page.getByTestId('xert-sync-since').fill(syncSinceDate);
+    const importSinceDate = ninetyDaysAgo.toISOString().split('T')[0];
+    await page.getByTestId('xert-sync-since').fill(importSinceDate);
 
     // Click Connect
     await page.getByTestId('xert-connect').click();
@@ -53,12 +53,12 @@ test.describe.serial('J004: Xert Sync Flow', () => {
     // Should show success feedback - look for specific success message
     await expect(page.getByText('Xert connected successfully')).toBeVisible({ timeout: 10000 });
 
-    // Sync Now button should appear after connection
-    await expect(page.getByRole('button', { name: /Sync Now/i })).toBeVisible();
+    // Import Now button should appear after connection
+    await expect(page.getByRole('button', { name: /Import Now/i })).toBeVisible();
   });
 
-  test('sync imports activities from mock Xert', async ({ page }) => {
-    // This test needs more time for the sync job to complete
+  test('import fetches activities from mock Xert', async ({ page }) => {
+    // This test needs more time for the import job to complete
     test.setTimeout(180000); // 3 minutes
     
     await loginViaApi(page, testUser);
@@ -70,19 +70,19 @@ test.describe.serial('J004: Xert Sync Flow', () => {
     // Wait for Xert section to load
     await expect(page.getByRole('heading', { name: 'Xert', level: 3 })).toBeVisible();
 
-    // Click Sync Now - capture the job ID from the response
-    const syncButton = page.getByRole('button', { name: /Sync Now/i });
-    await expect(syncButton).toBeVisible({ timeout: 5000 });
+    // Click Import Now - capture the job ID from the response
+    const importButton = page.getByRole('button', { name: /Import Now/i });
+    await expect(importButton).toBeVisible({ timeout: 5000 });
     
-    // Intercept the sync trigger response to get job_id
-    const syncPromise = page.waitForResponse(
-      (response) => response.url().includes('/me/sync/xert') && response.status() === 200
+    // Intercept the import trigger response to get job_id
+    const importPromise = page.waitForResponse(
+      (response) => response.url().includes('/me/import/xert') && response.status() === 200
     );
-    await syncButton.click();
-    const syncResponse = await syncPromise;
-    const syncData = await syncResponse.json();
-    const jobId = syncData.job_id;
-    console.log('Sync job ID:', jobId);
+    await importButton.click();
+    const importResponse = await importPromise;
+    const importData = await importResponse.json();
+    const jobId = importData.job_id;
+    console.log('Import job ID:', jobId);
     
     // Poll for job completion using page.evaluate (runs in browser context with cookies)
     const startTime = Date.now();
@@ -104,13 +104,13 @@ test.describe.serial('J004: Xert Sync Flow', () => {
         break;
       }
       if (status.status === 'failed' || status.status === 'aborted') {
-        throw new Error(`Sync job failed: ${JSON.stringify(status)}`);
+        throw new Error(`Import job failed: ${JSON.stringify(status)}`);
       }
       await page.waitForTimeout(500);
     }
     
     if (!jobComplete) {
-      throw new Error(`Sync job did not complete within 120 seconds. Last status: ${lastStatus}`);
+      throw new Error(`Import job did not complete within 120 seconds. Last status: ${lastStatus}`);
     }
 
     // Navigate to activity list
@@ -130,7 +130,7 @@ test.describe.serial('J004: Xert Sync Flow', () => {
   });
 
   test('auto-threshold calculated from CP model (~220W)', async ({ page }) => {
-    // NOTE: This test verifies that after sync, the Power Zones section is visible.
+    // NOTE: This test verifies that after import, the Power Zones section is visible.
     // The auto-threshold feature creates an FTP based on the CP model, but this may
     // depend on specific conditions being met. For now, we just verify the section exists.
     
@@ -218,8 +218,8 @@ test.describe.serial('J004: Xert Sync Flow', () => {
     // Wait for disconnection to complete
     await expect(page.getByText(/disconnected|removed/i)).toBeVisible({ timeout: 10000 });
 
-    // Sync Now button should no longer be visible
-    await expect(page.getByRole('button', { name: /Sync Now/i })).not.toBeVisible();
+    // Import Now button should no longer be visible
+    await expect(page.getByRole('button', { name: /Import Now/i })).not.toBeVisible();
 
     // Connect button should be visible again
     await expect(page.getByTestId('xert-connect')).toHaveText(/Connect/i);

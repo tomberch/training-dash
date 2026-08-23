@@ -512,13 +512,13 @@ Complete Garmin MFA.
 
 Disconnect Garmin integration.
 
-### POST /api/me/sync/garmin
+### POST /api/me/import/garmin
 
-Trigger manual Garmin sync.
+Trigger manual Garmin import.
 
-### POST /api/me/sync/xert
+### POST /api/me/import/xert
 
-Trigger manual Xert sync.
+Trigger manual Xert import.
 
 ---
 
@@ -546,9 +546,9 @@ Create a new user.
 
 Reset a user's password.
 
-### POST /api/admin/users/:id/sync
+### POST /api/admin/users/:id/import
 
-Trigger sync for a user (both Garmin and Xert if configured).
+Trigger import for a user (both Garmin and Xert if configured).
 
 ### GET /api/admin/users/:id/nuke-preview
 

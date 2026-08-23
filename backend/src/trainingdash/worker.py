@@ -4,10 +4,10 @@ Background worker jobs for TrainingDash.
 This module defines SAQ worker jobs for:
 - FIT file ingestion (from uploads)
 - Route matching
-- Sync jobs for external integrations (Xert, Garmin)
-- Hourly cron jobs to trigger syncs
+- Import jobs for external integrations (Xert, Garmin)
+- Hourly cron jobs to trigger imports
 
-The sync jobs use the common orchestration pattern from sync.py with
+The import jobs use the common orchestration pattern from sync.py with
 provider-specific implementations from sync_providers.py.
 
 Engine lifecycle:
@@ -185,64 +185,64 @@ async def recalculate_after_delete_job(ctx: dict, *, user_id: int) -> dict:
         return await RecalcAfterDelete(db).execute(user_id)
 
 
-@tracked_job("sync_xert")
-async def sync_xert_job(ctx: dict, *, user_id: int):
+@tracked_job("import_xert")
+async def import_xert_job(ctx: dict, *, user_id: int):
     """
-    Sync activities from Xert for a user.
+    Import activities from Xert for a user.
 
-    Uses the SyncFromProvider use case with XertSyncProvider.
+    Uses the ImportFromProvider use case with XertImportProvider.
     Activities are ingested via session_data (not FIT files) and
     routed through the full metric pipeline.
     """
-    from trainingdash.sync_providers import XertSyncProvider
-    from trainingdash.use_cases import SyncFromProvider
+    from trainingdash.import_providers import XertImportProvider
+    from trainingdash.use_cases import ImportFromProvider
 
     async with worker_db_session(ctx) as db:
-        provider = XertSyncProvider()
-        use_case = SyncFromProvider(db)
+        provider = XertImportProvider()
+        use_case = ImportFromProvider(db)
         result = await use_case.execute(user_id, provider)
 
         return {
             "success": result.success,
             "user_id": result.user_id,
-            "synced_activities": result.synced_activities,
+            "imported_activities": result.imported_activities,
             "skipped_duplicates": result.skipped_duplicates,
             "error": result.error,
         }
 
 
-@tracked_job("sync_garmin")
-async def sync_garmin_job(ctx: dict, *, user_id: int):
+@tracked_job("import_garmin")
+async def import_garmin_job(ctx: dict, *, user_id: int):
     """
-    Sync activities from Garmin Connect for a user.
+    Import activities from Garmin Connect for a user.
 
-    Uses the SyncFromProvider use case with GarminSyncProvider.
+    Uses the ImportFromProvider use case with GarminImportProvider.
     Activities are ingested via FIT file download through the
     standard ingest pipeline.
     """
-    from trainingdash.sync_providers import GarminSyncProvider
-    from trainingdash.use_cases import SyncFromProvider
+    from trainingdash.import_providers import GarminImportProvider
+    from trainingdash.use_cases import ImportFromProvider
 
     async with worker_db_session(ctx) as db:
-        provider = GarminSyncProvider()
-        use_case = SyncFromProvider(db)
+        provider = GarminImportProvider()
+        use_case = ImportFromProvider(db)
         result = await use_case.execute(user_id, provider)
 
         return {
             "success": result.success,
             "user_id": result.user_id,
-            "synced_activities": result.synced_activities,
+            "imported_activities": result.imported_activities,
             "skipped_duplicates": result.skipped_duplicates,
             "error": result.error,
         }
 
 
-async def hourly_sync_scheduler(ctx: dict):
-    """Hourly cron: enqueue sync jobs for users whose sync_hour matches (thin dispatch)."""
-    from trainingdash.use_cases.hourly_sync_scheduler import HourlySyncScheduler
+async def hourly_import_scheduler(ctx: dict):
+    """Hourly cron: enqueue import jobs for users whose sync_hour matches (thin dispatch)."""
+    from trainingdash.use_cases.hourly_import_scheduler import HourlyImportScheduler
 
     async with worker_db_session(ctx) as db:
-        return await HourlySyncScheduler(db).execute()
+        return await HourlyImportScheduler(db).execute()
 
 
 @tracked_job("fetch_weather")
@@ -606,10 +606,10 @@ def settings():
             recalculate_metrics_job,
             fetch_weather_job,
             batch_weather_job,
-            sync_xert_job,
-            sync_garmin_job,
+            import_xert_job,
+            import_garmin_job,
             backup_job,
-            hourly_sync_scheduler,
+            hourly_import_scheduler,
             hourly_backup_scheduler,
             flush_cache_stats,
             prune_old_data,
@@ -617,11 +617,11 @@ def settings():
         "concurrency": 10,
         "startup": startup,
         "shutdown": shutdown,
-        # Cron schedule: run the sync scheduler at the top of every hour,
+        # Cron schedule: run the import scheduler at the top of every hour,
         # backup scheduler at :01 past each hour,
         # flush cache stats at :05 past each hour, and prune old data daily at 4 AM
         "cron_jobs": [
-            CronJob(hourly_sync_scheduler, cron="0 * * * *", unique=True),
+            CronJob(hourly_import_scheduler, cron="0 * * * *", unique=True),
             CronJob(hourly_backup_scheduler, cron="1 * * * *", unique=True),
             CronJob(flush_cache_stats, cron="5 * * * *", unique=True),
             CronJob(prune_old_data, cron="0 4 * * *", unique=True),

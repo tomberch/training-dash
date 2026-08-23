@@ -102,11 +102,11 @@ For automatic syncing, go to **Settings > Integrations**:
 **Garmin Connect:**
 1. Enter your Garmin Connect email and password
 2. If you have MFA enabled, you'll be prompted for a code
-3. Activities sync automatically at 3 AM daily
+3. Activities import automatically at 3 AM daily
 
 **Xert:**
 1. Enter your Xert email and password
-2. Activities sync automatically at 2 AM daily
+2. Activities import automatically at 2 AM daily
 
 ### 4. Explore Your Data
 
@@ -144,15 +144,15 @@ Run migrations manually:
 docker compose exec app alembic upgrade head
 ```
 
-### Garmin sync fails with MFA
+### Garmin import fails with MFA
 
 Garmin MFA codes are time-sensitive. Enter the code within 30 seconds of receiving it.
 
-### Activities missing after sync
+### Activities missing after import
 
 Check the worker logs:
 ```bash
 docker compose logs worker
 ```
 
-Syncs run at 2 AM (Xert) and 3 AM (Garmin). To trigger a manual sync, go to **Admin** and click the sync button for the desired user.
+Imports run at 2 AM (Xert) and 3 AM (Garmin). To trigger a manual import, go to **Admin** and click the import button for the desired user.

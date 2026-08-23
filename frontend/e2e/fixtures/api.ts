@@ -39,7 +39,7 @@ export async function getCurrentUser(page: Page): Promise<{ id: number; email: s
 
 /**
  * Wait for activities to appear in the list.
- * Used after Xert sync to verify activities were imported.
+ * Used after Xert import to verify activities were imported.
  */
 export async function waitForActivities(
   page: Page,

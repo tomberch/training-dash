@@ -10,7 +10,7 @@ vi.mock("./api", () => ({
   approveUser: vi.fn(),
   rejectUser: vi.fn(),
   resetUserPassword: vi.fn(),
-  triggerUserSync: vi.fn(),
+  triggerUserImport: vi.fn(),
   updateAdminSetting: vi.fn(),
 }));
 
@@ -20,7 +20,7 @@ import {
   fetchAdminSettings,
   createUser, 
   resetUserPassword, 
-  triggerUserSync 
+  triggerUserImport 
 } from "./api";
 
 const mockFetchAdminUsers = vi.mocked(fetchAdminUsers);
@@ -28,7 +28,7 @@ const mockFetchPendingUsers = vi.mocked(fetchPendingUsers);
 const mockFetchAdminSettings = vi.mocked(fetchAdminSettings);
 const mockCreateUser = vi.mocked(createUser);
 vi.mocked(resetUserPassword);
-const mockTriggerUserSync = vi.mocked(triggerUserSync);
+const mockTriggerUserImport = vi.mocked(triggerUserImport);
 
 const mockUsers = [
   { id: 1, email: "admin@example.com", display_name: null, is_admin: true, is_approved: true, created_at: "2024-01-01T00:00:00" },
@@ -110,31 +110,31 @@ describe("AdminView", () => {
     });
   });
 
-  it("shows sync button for each user", async () => {
+  it("shows import button for each user", async () => {
     mockFetchAdminUsers.mockResolvedValue(mockUsers);
 
     render(<AdminView onBack={() => {}} />);
 
     await waitFor(() => {
-      expect(screen.getByTestId("sync-btn-1")).toBeInTheDocument();
-      expect(screen.getByTestId("sync-btn-2")).toBeInTheDocument();
+      expect(screen.getByTestId("import-btn-1")).toBeInTheDocument();
+      expect(screen.getByTestId("import-btn-2")).toBeInTheDocument();
     });
   });
 
-  it("triggers sync when sync button is clicked", async () => {
+  it("triggers import when import button is clicked", async () => {
     mockFetchAdminUsers.mockResolvedValue(mockUsers);
-    mockTriggerUserSync.mockResolvedValue({ job_id: "job123" });
+    mockTriggerUserImport.mockResolvedValue({ job_id: "job123" });
 
     render(<AdminView onBack={() => {}} />);
 
     await waitFor(() => {
-      expect(screen.getByTestId("sync-btn-2")).toBeInTheDocument();
+      expect(screen.getByTestId("import-btn-2")).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByTestId("sync-btn-2"));
+    fireEvent.click(screen.getByTestId("import-btn-2"));
 
     await waitFor(() => {
-      expect(mockTriggerUserSync).toHaveBeenCalledWith(2);
+      expect(mockTriggerUserImport).toHaveBeenCalledWith(2);
     });
   });
 

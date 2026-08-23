@@ -42,7 +42,10 @@ class SyncProvider(ABC, Generic[TActivity]):
     Abstract base class for sync providers (Xert, Garmin, etc).
 
     Subclasses implement provider-specific authentication and activity fetching,
-    while the common sync orchestration logic lives in the SyncFromProvider use case.
+    while the common sync orchestration logic lives in the ImportFromProvider use case.
+
+    Note: This class is aliased as ImportProvider for clarity - both names refer
+    to the same interface. The operation imports activities from external providers.
     """
 
     @property
@@ -60,7 +63,7 @@ class SyncProvider(ABC, Generic[TActivity]):
     @abstractmethod
     def extract_credentials(self, creds: Any) -> CredentialInfo:
         """
-        Extract all credential fields needed by the SyncFromProvider use case from the model.
+        Extract all credential fields needed by the ImportFromProvider use case from the model.
 
         Hides the field-name differences between providers (e.g.
         XertCredentials.xert_email vs GarminCredentials.garmin_email).
@@ -113,3 +116,7 @@ class SyncProvider(ABC, Generic[TActivity]):
     def make_source_ref(self, activity_id: str) -> str:
         """Generate source_ref for an activity."""
         return f"{self.source_name}:{activity_id}"
+
+
+# Alias for clarity - ImportProvider is the preferred name
+ImportProvider = SyncProvider

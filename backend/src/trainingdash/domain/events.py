@@ -41,9 +41,13 @@ class EventType(StrEnum):
     ACTIVITY_INGESTED = "activity.ingested"
     ACTIVITY_DELETED = "activity.deleted"
 
-    # Sync operations
+    # Sync operations (legacy - kept for backward compatibility)
     SYNC_STARTED = "sync.started"
     SYNC_COMPLETED = "sync.completed"
+
+    # Import operations (preferred naming)
+    IMPORT_STARTED = "import.started"
+    IMPORT_COMPLETED = "import.completed"
 
     # Route matching
     ROUTE_MATCHED = "route.matched"
@@ -94,9 +98,12 @@ EVENT_VALID_OUTCOMES: dict[EventType, set[EventOutcome]] = {
     # Activity lifecycle
     EventType.ACTIVITY_INGESTED: {EventOutcome.SUCCESS, EventOutcome.FAILURE},
     EventType.ACTIVITY_DELETED: {EventOutcome.INFO},
-    # Sync operations
+    # Sync operations (legacy)
     EventType.SYNC_STARTED: {EventOutcome.INFO},
     EventType.SYNC_COMPLETED: {EventOutcome.SUCCESS, EventOutcome.FAILURE},
+    # Import operations
+    EventType.IMPORT_STARTED: {EventOutcome.INFO},
+    EventType.IMPORT_COMPLETED: {EventOutcome.SUCCESS, EventOutcome.FAILURE},
     # Route matching
     EventType.ROUTE_MATCHED: {EventOutcome.SUCCESS, EventOutcome.FAILURE},
     # Threshold & Recalculation

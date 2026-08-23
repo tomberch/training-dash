@@ -105,13 +105,13 @@ export async function deleteAvatar(): Promise<void> {
   return apiDelete("/me/avatar", "Failed to delete avatar");
 }
 
-// Sync triggers
-export async function triggerGarminSync(): Promise<{ success: boolean; job_id?: string }> {
-  return apiPost("/me/sync/garmin", undefined, "Failed to trigger Garmin sync");
+// Import triggers
+export async function triggerGarminImport(): Promise<{ success: boolean; job_id?: string }> {
+  return apiPost("/me/import/garmin", undefined, "Failed to trigger Garmin import");
 }
 
-export async function triggerXertSync(): Promise<{ success: boolean; job_id?: string }> {
-  return apiPost("/me/sync/xert", undefined, "Failed to trigger Xert sync");
+export async function triggerXertImport(): Promise<{ success: boolean; job_id?: string }> {
+  return apiPost("/me/import/xert", undefined, "Failed to trigger Xert import");
 }
 
 // Metric Recalculation

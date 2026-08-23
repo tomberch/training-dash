@@ -3,7 +3,7 @@
  *
  * Tests Xert and Garmin integration UI:
  * - Connect form renders correctly
- * - Auto-sync toggle appears when connected
+ * - Auto-import toggle appears when connected
  * - Garmin connect button has proper width (not full-width)
  * - Disconnect flow works
  *
@@ -42,7 +42,7 @@ test.describe('Settings - Provider Integrations', () => {
       await expect(page.getByTestId('xert-connect')).toBeVisible();
     });
 
-    test('xert auto-sync toggle appears after connecting', async ({ page }) => {
+    test('xert auto-import toggle appears after connecting', async ({ page }) => {
       await loginViaApi(page, testUser);
       await page.goto('/settings');
 
@@ -68,15 +68,15 @@ test.describe('Settings - Provider Integrations', () => {
         await expect(page.getByText('Xert connected successfully')).toBeVisible({ timeout: 10000 });
       }
 
-      // Sync toggle should now be visible (label is "Sync from Xert")
-      await expect(page.getByText('Sync from Xert')).toBeVisible({ timeout: 5000 });
+      // Import toggle should now be visible (label is "Import from Xert")
+      await expect(page.getByText('Import from Xert')).toBeVisible({ timeout: 5000 });
       
       // Toggle button should be present (aria-pressed attribute indicates it's a toggle)
-      const syncToggle = page.locator('button[aria-pressed]').first();
-      await expect(syncToggle).toBeVisible();
+      const importToggle = page.locator('button[aria-pressed]').first();
+      await expect(importToggle).toBeVisible();
     });
 
-    test('xert auto-sync toggle can be switched', async ({ page }) => {
+    test('xert auto-import toggle can be switched', async ({ page }) => {
       await loginViaApi(page, testUser);
       await page.goto('/settings');
 
@@ -103,15 +103,15 @@ test.describe('Settings - Provider Integrations', () => {
       }
 
       // Find the toggle - it's a button with aria-pressed that's enabled (not disabled during save)
-      const syncToggle = page.locator('button[aria-pressed]:not([disabled])').first();
-      await expect(syncToggle).toBeVisible();
-      await expect(syncToggle).toBeEnabled();
+      const importToggle = page.locator('button[aria-pressed]:not([disabled])').first();
+      await expect(importToggle).toBeVisible();
+      await expect(importToggle).toBeEnabled();
 
       // Get initial state
-      const initialState = await syncToggle.getAttribute('aria-pressed');
+      const initialState = await importToggle.getAttribute('aria-pressed');
 
       // Click to toggle
-      await syncToggle.click();
+      await importToggle.click();
 
       // Wait for the API call to complete and state to update
       await page.waitForTimeout(1500);
@@ -122,7 +122,7 @@ test.describe('Settings - Provider Integrations', () => {
       expect(newState).not.toBe(initialState);
     });
 
-    test('xert shows Update, Sync Now, and Disconnect when connected', async ({ page }) => {
+    test('xert shows Update, Import Now, and Disconnect when connected', async ({ page }) => {
       await loginViaApi(page, testUser);
       await page.goto('/settings');
 
@@ -157,21 +157,21 @@ test.describe('Settings - Provider Integrations', () => {
       // Update/Save Password button should NOT be visible when password is empty
       await expect(page.getByTestId('xert-save-password')).not.toBeVisible();
       
-      // "Sync from Xert" toggle label should be visible
-      await expect(page.getByText('Sync from Xert')).toBeVisible({ timeout: 5000 });
+      // "Import from Xert" toggle label should be visible
+      await expect(page.getByText('Import from Xert')).toBeVisible({ timeout: 5000 });
       
-      // Sync Now button only appears when sync is enabled
-      // First enable sync by clicking the toggle
-      const syncToggle = page.locator('button[aria-pressed]').first();
-      const isSyncEnabled = await syncToggle.getAttribute('aria-pressed') === 'true';
+      // Import Now button only appears when import is enabled
+      // First enable import by clicking the toggle
+      const importToggle = page.locator('button[aria-pressed]').first();
+      const isImportEnabled = await importToggle.getAttribute('aria-pressed') === 'true';
       
-      if (!isSyncEnabled) {
-        await syncToggle.click();
+      if (!isImportEnabled) {
+        await importToggle.click();
         await page.waitForTimeout(500); // Wait for state update
       }
       
-      // Now Sync Now should be visible
-      await expect(page.getByRole('button', { name: /Sync Now/i })).toBeVisible({ timeout: 5000 });
+      // Now Import Now should be visible
+      await expect(page.getByRole('button', { name: /Import Now/i })).toBeVisible({ timeout: 5000 });
     });
 
     test('xert shows Save Password button when password entered', async ({ page }) => {
@@ -213,7 +213,7 @@ test.describe('Settings - Provider Integrations', () => {
       await expect(page.getByTestId('xert-save-password')).toHaveText('Save Password');
     });
 
-    test('xert disconnect removes auto-sync toggle', async ({ page }) => {
+    test('xert disconnect removes auto-import toggle', async ({ page }) => {
       await loginViaApi(page, testUser);
       await page.goto('/settings');
 
@@ -238,8 +238,8 @@ test.describe('Settings - Provider Integrations', () => {
         await expect(page.getByText('Xert connected successfully')).toBeVisible({ timeout: 10000 });
       }
 
-      // Sync toggle should be visible (label is "Sync from Xert")
-      await expect(page.getByText('Sync from Xert')).toBeVisible({ timeout: 5000 });
+      // Import toggle should be visible (label is "Import from Xert")
+      await expect(page.getByText('Import from Xert')).toBeVisible({ timeout: 5000 });
 
       // Disconnect
       await page.getByTestId('xert-disconnect').click();
@@ -247,8 +247,8 @@ test.describe('Settings - Provider Integrations', () => {
       // Wait for disconnect to complete
       await expect(page.getByText(/disconnected|removed/i)).toBeVisible({ timeout: 10000 });
 
-      // Sync toggle should no longer be visible
-      await expect(page.getByText('Sync from Xert')).not.toBeVisible();
+      // Import toggle should no longer be visible
+      await expect(page.getByText('Import from Xert')).not.toBeVisible();
     });
   });
 
@@ -286,7 +286,7 @@ test.describe('Settings - Provider Integrations', () => {
       }
     });
 
-    test('garmin auto-sync toggle appears when connected', async ({ page }) => {
+    test('garmin auto-import toggle appears when connected', async ({ page }) => {
       await loginViaApi(page, testUser);
       await page.goto('/settings');
 
@@ -295,12 +295,12 @@ test.describe('Settings - Provider Integrations', () => {
 
       await expect(page.getByRole('heading', { name: 'Garmin', level: 3 })).toBeVisible();
 
-      // Check if already connected by looking for auto-sync toggle
-      const autoSyncLabel = page.getByText('Auto-sync from Garmin');
+      // Check if already connected by looking for auto-import toggle
+      const autoImportLabel = page.getByText('Import from Garmin');
       
-      if (await autoSyncLabel.isVisible().catch(() => false)) {
-        // Already connected - verify toggle is present (auto-sync section exists)
-        await expect(autoSyncLabel).toBeVisible();
+      if (await autoImportLabel.isVisible().catch(() => false)) {
+        // Already connected - verify toggle is present (auto-import section exists)
+        await expect(autoImportLabel).toBeVisible();
       } else {
         // Not connected - this is expected for a fresh user
         // Garmin OAuth flow can't be automated in E2E, so we just verify the button exists

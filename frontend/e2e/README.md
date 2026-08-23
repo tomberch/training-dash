@@ -35,7 +35,7 @@ e2e/
 │   ├── J001-smoke.spec.ts
 │   ├── J002-auth.spec.ts
 │   ├── J003-manual-onboarding.spec.ts
-│   ├── J004-xert-sync.spec.ts
+│   ├── J004-xert-import.spec.ts
 │   ├── J005-breakthrough.spec.ts
 │   ├── J006-admin-approval.spec.ts
 │   ├── J007-upload-to-provider.spec.ts
@@ -78,9 +78,9 @@ Register → Set FTP manually (250W) → Upload FIT → See TSS/IF metrics
 - File upload flow
 - Metric calculations with manual FTP
 
-### J004: Xert Sync
+### J004: Xert Import
 ```
-Register → Connect Xert → Sync activities → Auto-threshold ≈220W → Backfill metrics
+Register → Connect Xert → Import activities → Auto-threshold ≈220W → Backfill metrics
 ```
 - OAuth mock flow
 - Activity import from external service
@@ -104,7 +104,7 @@ Admin enables approval → New user registers → Sees pending screen → Admin 
 - User approval workflow
 
 ### J007: Upload to Provider
-File upload with provider sync integration.
+File upload with provider import integration.
 
 ### J008: Events
 ```
@@ -138,7 +138,7 @@ J002-auth                                               │
     │                                                   │
     ├───────────────────┬───────────────────┐           │
     v                   v                   v           v
-J003-manual        J004-xert-sync      J006-admin    views/*
+J003-manual        J004-xert-import      J006-admin    views/*
                         │                            api/*
                         v
                    J005-breakthrough

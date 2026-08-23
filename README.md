@@ -18,8 +18,8 @@ Self-hosted fitness analytics for cyclists and endurance athletes. Analyze your 
 
 **Activity Management**
 - Upload and parse Garmin FIT files directly
-- Automatic sync from Garmin Connect (with MFA support)
-- Automatic sync from Xert
+- Automatic import from Garmin Connect (with MFA support)
+- Automatic import from Xert
 - Activity list with route map thumbnails
 - Detailed activity view with interactive map and charts
 - Delete individual activities (with async fitness recalculation)
@@ -110,7 +110,7 @@ docker compose up
 
 Open http://localhost:8000 and register your account. The first user automatically becomes admin.
 
-To sync activities from Garmin or Xert, go to **Settings > Integrations**.
+To import activities from Garmin or Xert, go to **Settings > Integrations**.
 
 ## Tech Stack
 

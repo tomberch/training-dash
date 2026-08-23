@@ -82,13 +82,13 @@ backend/src/trainingdash/
 ├── use_cases/          # Application business operations
 │   ├── ingest_activity.py    # FIT file parsing and storage
 │   ├── delete_activity.py    # Activity deletion with cleanup
-│   ├── sync_from_provider.py # External provider sync
+│   ├── import_from_provider.py # External provider import
 │   └── recalculate_metrics.py # Batch metric recalculation
 │
 ├── routers/            # HTTP API endpoints
 │   ├── activities.py   # /api/activities/* (CRUD, upload, detail)
 │   ├── analytics.py    # /api/analytics/* (PMC, power curve, records)
-│   ├── admin.py        # /api/admin/* (user management, sync)
+│   ├── admin.py        # /api/admin/* (user management, import)
 │   ├── auth.py         # /api/auth/* (login, logout)
 │   ├── user.py         # /api/me/* (preferences, integrations)
 │   ├── metrics.py      # /api/me/metrics/* (thresholds, zones)
@@ -169,7 +169,7 @@ frontend/src/
 7. Generates polyline for map thumbnail via `polyline.py`
 8. Returns activity ID to frontend
 
-### Background Sync
+### Background Import
 
 1. Scheduled job runs at 2 AM (Xert) or 3 AM (Garmin)
 2. Worker picks up job from Redis queue
@@ -222,7 +222,7 @@ Route matching needs spatial operations. Hausdorff distance between simplified p
 
 ### Why SAQ + Postgres?
 
-Background sync jobs can take minutes (fetching from Garmin, parsing large FIT files). SAQ provides reliable job processing with retries, using Postgres as the queue backend — eliminating the need for a separate Redis instance and simplifying operations.
+Background import jobs can take minutes (fetching from Garmin, parsing large FIT files). SAQ provides reliable job processing with retries, using Postgres as the queue backend — eliminating the need for a separate Redis instance and simplifying operations.
 
 ### Why Polyline Thumbnails?
 

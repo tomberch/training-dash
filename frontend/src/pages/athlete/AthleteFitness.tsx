@@ -205,7 +205,7 @@ export function AthleteFitness() {
             <div className="py-8 text-center">
               <p className="text-muted-foreground mb-2">No VO2 Max data yet</p>
               <p className="text-body-secondary mb-4">
-                Add manually or sync from Garmin (coming soon)
+                Add manually or import from Garmin (coming soon)
               </p>
               <Button variant="outline" onClick={openAddModal}>
                 Add VO2 Max

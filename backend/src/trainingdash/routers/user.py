@@ -841,35 +841,35 @@ async def delete_avatar(db: DbSession, user: CurrentUser):
 # --- User Sync ---
 
 
-@router.post("/me/sync/garmin")
-async def trigger_garmin_sync(garmin_repo: GarminCredentialsRepoD, user: CurrentUser):
-    """Trigger a Garmin sync for the current user. Requires sync_enabled=true."""
-    from trainingdash.jobs import enqueue_sync_garmin_job
+@router.post("/me/import/garmin")
+async def trigger_garmin_import(garmin_repo: GarminCredentialsRepoD, user: CurrentUser):
+    """Trigger a Garmin import for the current user. Requires sync_enabled=true."""
+    from trainingdash.jobs import enqueue_import_garmin_job
 
     creds = await garmin_repo.get_by_user_id(user.id)
     if creds is None:
         raise HTTPException(status_code=400, detail="No Garmin credentials configured")
     if not creds.sync_enabled:
-        raise HTTPException(status_code=400, detail="Garmin sync is disabled")
+        raise HTTPException(status_code=400, detail="Garmin import is disabled")
 
-    job_id = await enqueue_sync_garmin_job(user.id)
+    job_id = await enqueue_import_garmin_job(user.id)
     if job_id is None:
         raise HTTPException(status_code=503, detail="Job queue not available")
     return {"success": True, "job_id": job_id}
 
 
-@router.post("/me/sync/xert")
-async def trigger_xert_sync(xert_repo: XertCredentialsRepoD, user: CurrentUser):
-    """Trigger a Xert sync for the current user. Requires sync_enabled=true."""
-    from trainingdash.jobs import enqueue_sync_xert_job
+@router.post("/me/import/xert")
+async def trigger_xert_import(xert_repo: XertCredentialsRepoD, user: CurrentUser):
+    """Trigger a Xert import for the current user. Requires sync_enabled=true."""
+    from trainingdash.jobs import enqueue_import_xert_job
 
     creds = await xert_repo.get_by_user_id(user.id)
     if creds is None:
         raise HTTPException(status_code=400, detail="No Xert credentials configured")
     if not creds.sync_enabled:
-        raise HTTPException(status_code=400, detail="Xert sync is disabled")
+        raise HTTPException(status_code=400, detail="Xert import is disabled")
 
-    job_id = await enqueue_sync_xert_job(user.id)
+    job_id = await enqueue_import_xert_job(user.id)
     if job_id is None:
         raise HTTPException(status_code=503, detail="Job queue not available")
     return {"success": True, "job_id": job_id}

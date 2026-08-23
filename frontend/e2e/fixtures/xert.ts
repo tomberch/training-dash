@@ -5,7 +5,7 @@
  * (activated by MOCK_XERT_ENABLED=true in docker-compose.e2e.yml).
  *
  * This module provides helper functions for E2E tests that exercise
- * Xert sync functionality.
+ * Xert import functionality.
  *
  * Mock behavior:
  * - login() always succeeds unless password is "invalid"
@@ -27,7 +27,7 @@ import { APIRequestContext } from '@playwright/test';
 /**
  * Set up Xert credentials for a user via the settings API.
  *
- * This configures the user to sync from Xert. When MOCK_XERT_ENABLED=true,
+ * This configures the user to import from Xert. When MOCK_XERT_ENABLED=true,
  * the backend will use MockXertClient instead of the real Xert API.
  *
  * @param request - Playwright API request context (must be authenticated)
@@ -53,22 +53,22 @@ export async function setXertCredentials(
 }
 
 /**
- * Trigger a Xert sync for the current user.
+ * Trigger a Xert import for the current user.
  *
- * This enqueues a sync job that will use MockXertClient when
+ * This enqueues an import job that will use MockXertClient when
  * MOCK_XERT_ENABLED=true.
  *
  * @param request - Playwright API request context (must be authenticated)
- * @returns The job result from the sync endpoint
+ * @returns The job result from the import endpoint
  */
-export async function triggerXertSync(
+export async function triggerXertImport(
   request: APIRequestContext
 ): Promise<{ success: boolean; job_id?: string; error?: string }> {
-  const response = await request.post('/api/me/sync-xert');
+  const response = await request.post('/api/me/import/xert');
 
   if (!response.ok()) {
     const body = await response.text();
-    throw new Error(`Failed to trigger Xert sync: ${response.status()} ${body}`);
+    throw new Error(`Failed to trigger Xert import: ${response.status()} ${body}`);
   }
 
   return response.json();

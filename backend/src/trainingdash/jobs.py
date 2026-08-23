@@ -57,37 +57,37 @@ async def get_job_status(job_key: str) -> dict:
     }
 
 
-async def enqueue_sync_xert_job(user_id: int, scheduled: float | None = None) -> str | None:
-    """Enqueue a Xert sync job for a user. Returns job key or None if queue not available.
+async def enqueue_import_xert_job(user_id: int, scheduled: float | None = None) -> str | None:
+    """Enqueue a Xert import job for a user. Returns job key or None if queue not available.
 
     Pass ``scheduled`` (unix seconds) to defer the job.
     """
     if not queue_available():
         return None
     queue = await get_queue()
-    # Sync jobs need longer timeout for external API calls and FIT file processing
+    # Import jobs need longer timeout for external API calls and FIT file processing
     # Only pass scheduled if explicitly set (None would cause NOT NULL violation)
     kwargs = {"user_id": user_id, "timeout": 300}
     if scheduled is not None:
         kwargs["scheduled"] = scheduled
-    job = await queue.enqueue("sync_xert_job", **kwargs)
+    job = await queue.enqueue("import_xert_job", **kwargs)
     return job.key if job else None
 
 
-async def enqueue_sync_garmin_job(user_id: int, scheduled: float | None = None) -> str | None:
-    """Enqueue a Garmin sync job for a user. Returns job key or None if queue not available.
+async def enqueue_import_garmin_job(user_id: int, scheduled: float | None = None) -> str | None:
+    """Enqueue a Garmin import job for a user. Returns job key or None if queue not available.
 
     Pass ``scheduled`` (unix seconds) to defer the job.
     """
     if not queue_available():
         return None
     queue = await get_queue()
-    # Sync jobs need longer timeout for external API calls and FIT file processing
+    # Import jobs need longer timeout for external API calls and FIT file processing
     # Only pass scheduled if explicitly set (None would cause NOT NULL violation)
     kwargs = {"user_id": user_id, "timeout": 300}
     if scheduled is not None:
         kwargs["scheduled"] = scheduled
-    job = await queue.enqueue("sync_garmin_job", **kwargs)
+    job = await queue.enqueue("import_garmin_job", **kwargs)
     return job.key if job else None
 
 

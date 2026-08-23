@@ -11,8 +11,8 @@ import {
   completeGarminMfa,
   deleteMyGarminCredentials,
   updateGarminSyncEnabled,
-  triggerGarminSync,
-  triggerXertSync,
+  triggerGarminImport,
+  triggerXertImport,
   fetchOAuthLinks,
   disconnectOAuthProvider,
   setPassword,
@@ -27,7 +27,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { FeedbackAlert } from "./FeedbackAlert";
 import { PasswordInput } from "./PasswordInput";
-import { notifySyncSettingsChanged } from "@/components/SyncButton";
+import { notifyImportSettingsChanged } from "@/components/ImportButton";
 
 interface IntegrationsSettingsProps {
   user: User;
@@ -109,34 +109,34 @@ function SyncScheduleSection({ user, onUserUpdate }: { user: User; onUserUpdate:
   );
 }
 
-function SyncButton({ onSync, label }: { onSync: () => Promise<{ success: boolean; job_id?: string }>; label: string }) {
-  const [syncing, setSyncing] = useState(false);
+function ImportNowButton({ onImport, label }: { onImport: () => Promise<{ success: boolean; job_id?: string }>; label: string }) {
+  const [importing, setImporting] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
-  async function handleSync() {
-    setSyncing(true);
+  async function handleImport() {
+    setImporting(true);
     setFeedback(null);
     try {
-      const result = await onSync();
+      const result = await onImport();
       if (result.success) {
-        setFeedback({ type: "success", message: "Sync started" });
+        setFeedback({ type: "success", message: "Import started" });
         setTimeout(() => setFeedback(null), 3000);
       } else {
-        setFeedback({ type: "error", message: "Failed to start sync" });
+        setFeedback({ type: "error", message: "Failed to start import" });
       }
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : "Failed to start sync";
+      const message = err instanceof ApiError ? err.message : "Failed to start import";
       setFeedback({ type: "error", message });
       setTimeout(() => setFeedback(null), 5000);
     } finally {
-      setSyncing(false);
+      setImporting(false);
     }
   }
 
   return (
     <div className="relative">
-      <Button variant="outline" onClick={handleSync} disabled={syncing} className="border-success/50 text-success hover:bg-success/10">
-        {syncing ? "Syncing..." : label}
+      <Button variant="outline" onClick={handleImport} disabled={importing} className="border-success/50 text-success hover:bg-success/10">
+        {importing ? "Importing..." : label}
       </Button>
       {feedback && (
         <div
@@ -301,8 +301,8 @@ function XertIntegrationCard() {
               
               <div className="flex items-center justify-between py-3 border-t border-border">
                 <div>
-                  <p className="font-medium text-sm">Sync from Xert</p>
-                  <p className="text-xs text-muted-foreground">Import new activities via sync</p>
+                  <p className="font-medium text-sm">Import from Xert</p>
+                  <p className="text-xs text-muted-foreground">Import new activities automatically</p>
                 </div>
                 <button
                   onClick={async () => {
@@ -310,9 +310,9 @@ function XertIntegrationCard() {
                       const newValue = !xertStatus.sync_enabled;
                       await updateXertSyncEnabled(newValue);
                       setXertStatus({ ...xertStatus, sync_enabled: newValue });
-                      notifySyncSettingsChanged();
+                      notifyImportSettingsChanged();
                     } catch {
-                      setFeedback({ type: "error", message: "Failed to update sync setting" });
+                      setFeedback({ type: "error", message: "Failed to update import setting" });
                     }
                   }}
                   disabled={saving}
@@ -328,7 +328,7 @@ function XertIntegrationCard() {
               </div>
               
               <div className="flex gap-3 pt-2">
-                {xertStatus.sync_enabled && <SyncButton onSync={triggerXertSync} label="Sync Now" />}
+                {xertStatus.sync_enabled && <ImportNowButton onImport={triggerXertImport} label="Import Now" />}
                 <Button variant="destructive" onClick={handleDisconnect} disabled={saving} data-testid="xert-disconnect">Disconnect</Button>
               </div>
             </>
@@ -456,15 +456,15 @@ function GarminIntegrationCard() {
     setFeedback(null);
   }
 
-  async function handleToggleSync() {
+  async function handleToggleImport() {
     if (!garminStatus?.configured) return;
     const newValue = !garminStatus.sync_enabled;
     try {
       await updateGarminSyncEnabled(newValue);
       setGarminStatus({ ...garminStatus, sync_enabled: newValue });
-      notifySyncSettingsChanged();
+      notifyImportSettingsChanged();
     } catch {
-      setFeedback({ type: "error", message: "Failed to update sync setting" });
+      setFeedback({ type: "error", message: "Failed to update import setting" });
     }
   }
 
@@ -514,7 +514,7 @@ function GarminIntegrationCard() {
             email={email} setEmail={setEmail} password={password} setPassword={setPassword}
             syncSince={syncSince} setSyncSince={setSyncSince} saving={saving}
             configured={garminStatus?.configured ?? false} syncEnabled={garminStatus?.sync_enabled ?? true}
-            onConnect={handleConnect} onDisconnect={handleDisconnect} onToggleSync={handleToggleSync}
+            onConnect={handleConnect} onDisconnect={handleDisconnect} onToggleImport={handleToggleImport}
           />
         )}
         <FeedbackAlert feedback={feedback} />
@@ -542,11 +542,11 @@ function MfaForm({ mfaCode, setMfaCode, saving, onSubmit, onCancel }: {
 }
 
 function GarminCredentialsForm({
-  email, setEmail, password, setPassword, syncSince, setSyncSince, saving, configured, syncEnabled, onConnect, onDisconnect, onToggleSync
+  email, setEmail, password, setPassword, syncSince, setSyncSince, saving, configured, syncEnabled, onConnect, onDisconnect, onToggleImport
 }: {
   email: string; setEmail: (v: string) => void; password: string; setPassword: (v: string) => void;
   syncSince: string; setSyncSince: (v: string) => void; saving: boolean; configured: boolean; syncEnabled: boolean;
-  onConnect: () => void; onDisconnect: () => void; onToggleSync: () => void;
+  onConnect: () => void; onDisconnect: () => void; onToggleImport: () => void;
 }) {
   return (
     <div className="space-y-4">
@@ -574,16 +574,16 @@ function GarminCredentialsForm({
           {password && <Button onClick={onConnect} disabled={saving} data-testid="garmin-save-password">{saving ? "Saving..." : "Save Password"}</Button>}
           <div className="flex items-center justify-between py-3 border-t border-border">
             <div>
-              <p className="font-medium text-sm">Sync from Garmin</p>
-              <p className="text-xs text-muted-foreground">Import new activities via sync</p>
+              <p className="font-medium text-sm">Import from Garmin</p>
+              <p className="text-xs text-muted-foreground">Import new activities automatically</p>
             </div>
-            <button onClick={onToggleSync} disabled={saving} aria-pressed={syncEnabled}
+            <button onClick={onToggleImport} disabled={saving} aria-pressed={syncEnabled}
               className={cn("relative inline-flex h-6 w-12 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2", syncEnabled ? "bg-primary" : "bg-muted", saving && "opacity-50 cursor-not-allowed")}>
               <span className={cn("pointer-events-none absolute left-1 bottom-1 w-4 h-4 transform rounded-full bg-muted-foreground shadow transition duration-200 ease-in-out", syncEnabled ? "translate-x-6 bg-white" : "translate-x-0")} />
             </button>
           </div>
           <div className="flex gap-3 pt-2">
-            {syncEnabled && <SyncButton onSync={triggerGarminSync} label="Sync Now" />}
+            {syncEnabled && <ImportNowButton onImport={triggerGarminImport} label="Import Now" />}
             <Button variant="destructive" onClick={onDisconnect} disabled={saving} data-testid="garmin-disconnect">Disconnect</Button>
           </div>
         </>

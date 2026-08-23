@@ -1,7 +1,7 @@
 import type { JSX } from "react";
 import { Logo } from "./components/Logo";
 import { NotificationBell } from "./components/NotificationBell";
-import { SyncButton } from "./components/SyncButton";
+import { ImportButton } from "./components/ImportButton";
 import { UploadButton } from "./components/UploadButton";
 import { UserMenu } from "./components/UserMenu";
 
@@ -32,7 +32,7 @@ export function Header({
         <Logo size="md" showText={true} />
         
         <div className="flex items-center gap-4">
-          <SyncButton className="gap-2" />
+          <ImportButton className="gap-2" />
           
           {showUpload && (
             <UploadButton
