@@ -13,6 +13,7 @@ import type { PowerCurvePoint, FitnessResponse } from "../api";
 import { fetchPowerCurve, fetchFitness, fetchMe } from "../api";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Tooltip as InfoTooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { formatAxisDuration } from "@/lib/chartUtils";
 
 // Key durations to label (in seconds)
@@ -271,7 +272,9 @@ export function PowerCurveView() {
           Power Curve
         </h1>
         <p className="text-body-secondary mt-1">
-          Your best power output at each duration
+          {showModel 
+            ? "Recorded efforts vs. CP model estimate" 
+            : "Your best recorded efforts"}
         </p>
       </div>
 
@@ -311,15 +314,36 @@ export function PowerCurveView() {
 
             {/* Model toggle */}
             {fitness?.current && (
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={showModel}
-                  onChange={(e) => setShowModel(e.target.checked)}
-                  className="rounded border-border text-primary focus:ring-ring"
-                />
-                <span className="text-sm text-foreground">Show model</span>
-              </label>
+              <div className="flex items-center gap-1">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={showModel}
+                    onChange={(e) => setShowModel(e.target.checked)}
+                    className="rounded border-border text-primary focus:ring-ring"
+                  />
+                  <span className="text-sm text-foreground">CP estimate</span>
+                </label>
+                <InfoTooltip>
+                  <TooltipTrigger asChild>
+                    <button 
+                      type="button" 
+                      className="text-muted-foreground hover:text-foreground transition-fast"
+                      aria-label="What is CP estimate?"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-xs">
+                    <p>
+                      The CP model estimates power you could sustain based on your 2–12 minute efforts. 
+                      It may differ from recorded bests at durations where you haven't done all-out efforts.
+                    </p>
+                  </TooltipContent>
+                </InfoTooltip>
+              </div>
             )}
 
             {/* Comparison toggle */}
@@ -433,9 +457,17 @@ export function PowerCurveView() {
                       <div className="space-y-1 text-sm">
                         {point[valueKey] !== null && (
                           <div className="flex justify-between gap-4">
-                            <span className="text-indigo-600">Power</span>
+                            <span className="text-indigo-600">Recorded</span>
                             <span className="font-medium">
                               {showWkg ? point[valueKey]?.toFixed(2) : point[valueKey]} {unit}
+                            </span>
+                          </div>
+                        )}
+                        {showModel && point[modelKey] !== null && (
+                          <div className="flex justify-between gap-4">
+                            <span className="text-purple-600">CP estimate</span>
+                            <span className="font-medium">
+                              {showWkg ? point[modelKey]?.toFixed(2) : Math.round(point[modelKey])} {unit}
                             </span>
                           </div>
                         )}
