@@ -33,12 +33,6 @@ export type {
   WbalPoint,
   WbalResponse,
   JobStatus,
-  CalcTrace,
-  CalcTracePowerZone,
-  CalcTraceHrZone,
-  PeakWindow,
-  WhatIfRequest,
-  WhatIfResponse,
 } from "./types";
 export { ACTIVITY_TYPES, ACTIVITY_TYPE_LABELS, BIKE_TYPES, BIKE_TYPE_LABELS } from "./types";
 
@@ -65,7 +59,6 @@ export {
   fetchJobStatus,
   fetchFitDevices,
   uploadToProvider,
-  fetchWhatIf,
 } from "./activities";
 
 // Auth API

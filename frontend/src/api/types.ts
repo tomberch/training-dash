@@ -157,62 +157,6 @@ export interface Activity {
   estimated_crr: number | null;
   aero_confidence: number | null;
   weather_status: "pending" | "fetched" | "failed" | "not_applicable" | null;
-  // Effective thresholds at activity time
-  effective_ftp: number | null;
-  effective_lthr: number | null;
-  // Calc trace (only present when ?include=calc_trace)
-  calc_trace?: CalcTrace;
-}
-
-export interface CalcTrace {
-  power_zones: CalcTracePowerZone[] | null;
-  hr_zones: CalcTraceHrZone[] | null;
-  power_zone_times: Record<number, number> | null;
-  hr_zone_times: Record<number, number> | null;
-  wbal_curve: CalcTraceWbalPoint[] | null;
-  w_prime_joules: number | null;
-  cp_watts: number | null;
-  peak_windows: PeakWindow[];
-}
-
-export interface CalcTracePowerZone {
-  zone: number;
-  name: string;
-  min_watts: number;
-  max_watts: number | null;
-}
-
-export interface CalcTraceHrZone {
-  zone: number;
-  name: string;
-  min_bpm: number;
-  max_bpm: number | null;
-}
-
-export interface CalcTraceWbalPoint {
-  elapsed_s: number;
-  wbal_joules: number;
-  wbal_pct: number;
-}
-
-export interface PeakWindow {
-  duration_seconds: number;
-  watts: number;
-  start_index: number;
-  end_index: number;
-}
-
-export interface WhatIfRequest {
-  ftp?: number | null;
-  lthr?: number | null;
-  cp?: number | null;
-  w_prime?: number | null;
-}
-
-export interface WhatIfResponse {
-  activity_id: string;
-  what_if_params: WhatIfRequest;
-  calc_trace: CalcTrace;
 }
 
 export interface PaginationMeta {

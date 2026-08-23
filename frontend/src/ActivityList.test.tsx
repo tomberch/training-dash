@@ -64,8 +64,6 @@ const baseActivity = {
   estimated_crr: null,
   aero_confidence: null,
   weather_status: null,
-  effective_ftp: null,
-  effective_lthr: null,
 };
 
 // Helper to render with router

@@ -139,14 +139,6 @@ function CloseIcon() {
   );
 }
 
-function CalculatorIcon() {
-  return (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-    </svg>
-  );
-}
-
 function ChevronLeftIcon() {
   return (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -237,30 +229,23 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
   // Navigation structure with sections
   const dashboardItem = { to: "/", icon: <HomeIcon />, label: "Dashboard" };
   
-  const trainingSection = [
+  const activitiesSection = [
     { to: "/activities", icon: <ListIcon />, label: "Activities" },
     { to: "/analyze", icon: <LayersIcon />, label: "Analyze" },
+    { to: "/compare", icon: <ArrowsLeftRightIcon />, label: "Compare" },
     { to: "/query", icon: <SearchIcon />, label: "Query" },
   ];
   
-  const performanceSection = [
+  const insightsSection = [
     { to: "/pmc", icon: <ChartIcon />, label: "PMC" },
     { to: "/power-curve", icon: <BoltIcon />, label: "Power Curve" },
     { to: "/records", icon: <TrophyIcon />, label: "Records" },
-    { to: "/calc-lab", icon: <CalculatorIcon />, label: "Calc Lab" },
-  ];
-  
-  const racingSection = [
     { to: "/events", icon: <CalendarIcon />, label: "Events" },
     { to: "/race-planner", icon: <MapIcon />, label: "Race Planner" },
-    { to: "/compare", icon: <ArrowsLeftRightIcon />, label: "Compare" },
-  ];
-  
-  const profileSection = [
     { to: "/athlete", icon: <UserIcon />, label: "Athlete" },
-    { to: "/gear", icon: <WrenchIcon />, label: "Gear" },
   ];
   
+  const gearItem = { to: "/gear", icon: <WrenchIcon />, label: "Gear" };
   const settingsItem = { to: "/settings", icon: <CogIcon />, label: "Settings" };
   const adminItem = { to: "/admin", icon: <AdminIcon />, label: "Admin" };
 
@@ -305,9 +290,9 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
           />
         </div>
 
-        {/* Training Section */}
-        <NavSection title="Training" collapsed={collapsed && !isMobile}>
-          {trainingSection.map((item) => (
+        {/* Activities Section */}
+        <NavSection title="Activities" collapsed={collapsed && !isMobile}>
+          {activitiesSection.map((item) => (
             <NavItem
               key={item.to}
               to={item.to}
@@ -319,9 +304,9 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
           ))}
         </NavSection>
 
-        {/* Performance Section */}
-        <NavSection title="Performance" collapsed={collapsed && !isMobile}>
-          {performanceSection.map((item) => (
+        {/* Insights Section */}
+        <NavSection title="Insights" collapsed={collapsed && !isMobile}>
+          {insightsSection.map((item) => (
             <NavItem
               key={item.to}
               to={item.to}
@@ -333,36 +318,15 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
           ))}
         </NavSection>
 
-        {/* Racing Section */}
-        <NavSection title="Racing" collapsed={collapsed && !isMobile}>
-          {racingSection.map((item) => (
-            <NavItem
-              key={item.to}
-              to={item.to}
-              icon={item.icon}
-              label={item.label}
-              collapsed={collapsed && !isMobile}
-              onClick={isMobile ? () => setMobileOpen(false) : undefined}
-            />
-          ))}
-        </NavSection>
-
-        {/* Profile Section */}
-        <NavSection title="Profile" collapsed={collapsed && !isMobile}>
-          {profileSection.map((item) => (
-            <NavItem
-              key={item.to}
-              to={item.to}
-              icon={item.icon}
-              label={item.label}
-              collapsed={collapsed && !isMobile}
-              onClick={isMobile ? () => setMobileOpen(false) : undefined}
-            />
-          ))}
-        </NavSection>
-
-        {/* Settings (standalone at bottom of nav) */}
+        {/* Gear & Settings (standalone at bottom of nav) */}
         <div className="mt-4 pt-4 border-t border-border space-y-1">
+          <NavItem
+            to={gearItem.to}
+            icon={gearItem.icon}
+            label={gearItem.label}
+            collapsed={collapsed && !isMobile}
+            onClick={isMobile ? () => setMobileOpen(false) : undefined}
+          />
           <NavItem
             to={settingsItem.to}
             icon={settingsItem.icon}

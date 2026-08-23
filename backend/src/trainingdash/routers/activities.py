@@ -4,11 +4,11 @@ from uuid import UUID
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sqlalchemy import func, select
 
 from trainingdash.auth import CurrentUser, DbSession
-from trainingdash.dependencies import ActivityRepoD, BikeRepoD, DeleteActivityD, RecordRepoD, ThresholdRepoD
+from trainingdash.dependencies import ActivityRepoD, BikeRepoD, DeleteActivityD, ThresholdRepoD
 from trainingdash.domain.activity_type import validate_activity_type
 from trainingdash.domain.fit_modifier import FitModifications
 from trainingdash.repositories.postgres.models import Activity, ActivityPeakPower, Record
@@ -61,29 +61,6 @@ class UploadToProviderRequest(BaseModel):
     device_product_id: int | None = None  # Optional device spoofing
 
 
-class WhatIfRequest(BaseModel):
-    """Request body for what-if calculation.
-    
-    All fields are optional - only provided fields are used for recalculation.
-    Omitted fields use the activity's effective values.
-    """
-
-    ftp: int | None = Field(None, ge=50, le=500, description="FTP in watts (50-500)")
-    lthr: int | None = Field(None, ge=100, le=220, description="LTHR in bpm (100-220)")
-    cp: int | None = Field(None, ge=50, le=500, description="Critical Power in watts (50-500)")
-    w_prime: int | None = Field(None, ge=5000, le=50000, description="W' in joules (5000-50000)")
-
-    model_config = {
-        "json_schema_extra": {
-            "example": {
-                "ftp": 280,
-                "cp": 270,
-                "w_prime": 20000,
-            }
-        }
-    }
-
-
 async def _get_owned_activity(repo: ActivityRepoD, user: CurrentUser, activity_id: UUID) -> Activity:
     """Fetch an activity owned by the current user or raise 404."""
     activity = await repo.get_by_id(activity_id, user.id)
@@ -128,32 +105,10 @@ async def list_activities(
 
 
 @router.get("/activities/{activity_id}")
-async def get_activity(
-    db: DbSession,
-    repo: ActivityRepoD,
-    threshold_repo: ThresholdRepoD,
-    record_repo: RecordRepoD,
-    user: CurrentUser,
-    activity_id: UUID,
-    include: str | None = Query(default=None, description="Optional: 'calc_trace' for calculation transparency data"),
-):
-    """Get full details for an activity including peak powers.
-    
-    When include=calc_trace, adds:
-    - zone_boundaries: Power and HR zones computed from effective thresholds
-    - wbal_curve: W'bal trajectory sampled every 30s
-    - peak_windows: Start/end indices for each peak duration
-    """
-    from trainingdash.use_cases.build_calc_trace import BuildCalcTrace, PeakInfo
-
+async def get_activity(db: DbSession, repo: ActivityRepoD, user: CurrentUser, activity_id: UUID):
+    """Get full details for an activity including peak powers."""
     activity = await _get_owned_activity(repo, user, activity_id)
     result = activity_detail(activity)
-
-    # Get effective thresholds for this activity's date
-    activity_date = activity.started_at.date()
-    thresholds = await threshold_repo.get_for_date(user.id, activity_date)
-    result["effective_ftp"] = thresholds.ftp_watts
-    result["effective_lthr"] = thresholds.lthr_bpm
 
     # Fetch peak powers for this activity
     peaks_result = await db.execute(
@@ -191,90 +146,7 @@ async def get_activity(
         for p in peaks
     ]
 
-    # Add calc_trace data if requested (via use case)
-    if include == "calc_trace":
-        use_case = BuildCalcTrace(record_repo)
-        peak_infos = [PeakInfo(p.duration_seconds, p.watts) for p in peaks]
-        calc_trace_result = await use_case.execute(activity_id, thresholds, peak_infos)
-        
-        result["calc_trace"] = {
-            "power_zones": calc_trace_result.power_zones,
-            "hr_zones": calc_trace_result.hr_zones,
-            "power_zone_times": calc_trace_result.power_zone_times,
-            "hr_zone_times": calc_trace_result.hr_zone_times,
-            "wbal_curve": calc_trace_result.wbal_curve,
-            "w_prime_joules": calc_trace_result.w_prime_joules,
-            "cp_watts": calc_trace_result.cp_watts,
-            "peak_windows": calc_trace_result.peak_windows,
-        }
-
     return result
-
-
-@router.post("/activities/{activity_id}/what-if")
-async def what_if_calculation(
-    repo: ActivityRepoD,
-    record_repo: RecordRepoD,
-    threshold_repo: ThresholdRepoD,
-    user: CurrentUser,
-    activity_id: UUID,
-    db: DbSession,
-    request: WhatIfRequest,
-):
-    """Recalculate activity metrics with hypothetical threshold values.
-    
-    This endpoint allows exploring "what if my FTP was X?" scenarios
-    without persisting any changes. Returns the same calc_trace structure
-    as GET /activities/{id}?include=calc_trace but with recalculated values.
-    
-    All request body fields are optional. Omitted fields use the activity's
-    effective threshold values at the time of the activity.
-    """
-    from trainingdash.use_cases.build_calc_trace import BuildCalcTrace, PeakInfo, WhatIfParams
-
-    activity = await _get_owned_activity(repo, user, activity_id)
-
-    # Get effective thresholds for this activity date
-    thresholds = await threshold_repo.get_for_date(user.id, activity.started_at)
-
-    # Get peaks for this activity
-    peaks_result = await db.execute(
-        select(ActivityPeakPower).where(ActivityPeakPower.activity_id == activity_id)
-    )
-    peaks = peaks_result.scalars().all()
-
-    # Build what-if params from request
-    what_if = WhatIfParams(
-        ftp=request.ftp,
-        lthr=request.lthr,
-        cp=request.cp,
-        w_prime=request.w_prime,
-    )
-
-    # Execute calculation with what-if params
-    use_case = BuildCalcTrace(record_repo)
-    peak_infos = [PeakInfo(p.duration_seconds, p.watts) for p in peaks]
-    calc_trace_result = await use_case.execute(activity_id, thresholds, peak_infos, what_if)
-
-    return {
-        "activity_id": str(activity_id),
-        "what_if_params": {
-            "ftp": request.ftp,
-            "lthr": request.lthr,
-            "cp": request.cp,
-            "w_prime": request.w_prime,
-        },
-        "calc_trace": {
-            "power_zones": calc_trace_result.power_zones,
-            "hr_zones": calc_trace_result.hr_zones,
-            "power_zone_times": calc_trace_result.power_zone_times,
-            "hr_zone_times": calc_trace_result.hr_zone_times,
-            "wbal_curve": calc_trace_result.wbal_curve,
-            "w_prime_joules": calc_trace_result.w_prime_joules,
-            "cp_watts": calc_trace_result.cp_watts,
-            "peak_windows": calc_trace_result.peak_windows,
-        },
-    }
 
 
 @router.patch("/activities/{activity_id}")
