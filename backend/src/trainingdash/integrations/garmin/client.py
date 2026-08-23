@@ -38,11 +38,6 @@ def _mask_email(email: str) -> str:
     return f"{masked_local}@{domain}"
 
 
-def _sanitize_log_value(value: str) -> str:
-    """Sanitize value for logging - remove control characters to prevent log injection."""
-    return re.sub(r"[\r\n\t\x00-\x1f\x7f-\x9f]", "", str(value))
-
-
 class GarminAPIError(Exception):
     """Raised when Garmin API returns an error."""
 
@@ -145,10 +140,10 @@ class GarminClient:
                 prompt_mfa=self._mfa_callback,
             )
             self._client.login()
-            # Security: email is masked before logging to avoid PII exposure
-            # and sanitized to prevent log injection attacks
+            # Security: use %r (repr) to escape special characters and truncate to prevent log injection
+            # Email is masked to avoid PII exposure
             masked = _mask_email(email)
-            logger.info("Garmin login successful for %s", _sanitize_log_value(masked))
+            logger.info("Garmin login successful for %r", masked[:50])
             return True
         except GarminMFARequired:
             # Re-raise our own exception

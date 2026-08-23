@@ -13,7 +13,6 @@ This use case handles the complete flow of creating a race course:
 """
 
 import logging
-import re
 from dataclasses import dataclass
 
 import numpy as np
@@ -178,11 +177,10 @@ class CreateCourse:
 
         saved_course = await self._course_repo.save(course)
 
-        # Security: sanitize user-provided course_name to prevent log injection
-        safe_name = re.sub(r"[\r\n\t\x00-\x1f\x7f-\x9f]", "", course_name)
+        # Security: use %r (repr) to escape special characters and truncate to prevent log injection
         logger.info(
-            "Created course '%s' for user %d: %.1fkm, %.0fm gain, %d segments, %d climbs",
-            safe_name,
+            "Created course %r for user %d: %.1fkm, %.0fm gain, %d segments, %d climbs",
+            course_name[:100],
             user_id,
             parsed.total_distance_m / 1000,
             elevation_gain,

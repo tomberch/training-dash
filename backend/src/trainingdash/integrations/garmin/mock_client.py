@@ -22,7 +22,6 @@ from trainingdash.integrations.garmin.client import (
     GarminActivity,
     GarminAPIError,
     _mask_email,
-    _sanitize_log_value,
 )
 
 logger = logging.getLogger(__name__)
@@ -55,10 +54,10 @@ class MockGarminClient:
             raise GarminAPIError("Invalid Garmin credentials")
         self._logged_in = True
         self._email = email
-        # Security: email is masked before logging to avoid PII exposure
-        # and sanitized to prevent log injection attacks
+        # Security: use %r (repr) to escape special characters and truncate to prevent log injection
+        # Email is masked to avoid PII exposure
         masked = _mask_email(email)
-        logger.info("MockGarminClient: login successful for %s", _sanitize_log_value(masked))
+        logger.info("MockGarminClient: login successful for %r", masked[:50])
         return True
 
     def complete_mfa(self, code: str) -> None:
