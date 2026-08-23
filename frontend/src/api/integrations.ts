@@ -44,8 +44,8 @@ export async function deleteMyXertCredentials(): Promise<void> {
   return apiDelete("/me/xert-credentials", "Failed to disconnect Xert");
 }
 
-export async function updateXertSyncEnabled(sync_enabled: boolean): Promise<{ success: boolean; sync_enabled: boolean }> {
-  return apiPatch<{ success: boolean; sync_enabled: boolean }>("/me/xert-credentials", { sync_enabled }, "Failed to update sync setting");
+export async function updateXertImportEnabled(enabled: boolean): Promise<{ success: boolean; sync_enabled: boolean }> {
+  return apiPatch<{ success: boolean; sync_enabled: boolean }>("/me/xert-credentials", { sync_enabled: enabled }, "Failed to update import setting");
 }
 
 // Garmin API
@@ -75,6 +75,6 @@ export async function deleteMyGarminCredentials(): Promise<void> {
   return apiDelete("/me/garmin-credentials", "Failed to disconnect Garmin");
 }
 
-export async function updateGarminSyncEnabled(sync_enabled: boolean): Promise<{ success: boolean; sync_enabled: boolean }> {
-  return apiPatch<{ success: boolean; sync_enabled: boolean }>("/me/garmin-credentials", { sync_enabled }, "Failed to update sync setting");
+export async function updateGarminImportEnabled(enabled: boolean): Promise<{ success: boolean; sync_enabled: boolean }> {
+  return apiPatch<{ success: boolean; sync_enabled: boolean }>("/me/garmin-credentials", { sync_enabled: enabled }, "Failed to update import setting");
 }

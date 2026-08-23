@@ -245,7 +245,7 @@ export function AthleteFitness() {
       <div className="p-4 rounded-lg bg-muted/50 border border-border text-sm">
         <p className="text-muted-foreground">
           <span className="font-medium text-foreground">About VO2 Max</span>
-          {" "} VO2 Max estimates can be synced automatically from Garmin devices. Manual entry is also supported for data from other sources.
+          {" "} VO2 Max estimates can be imported automatically from Garmin devices. Manual entry is also supported for data from other sources.
         </p>
       </div>
 

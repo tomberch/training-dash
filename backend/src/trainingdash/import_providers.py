@@ -51,6 +51,12 @@ class XertImportProvider(ImportProvider):
         )
 
     async def connect(self, email: str, password: str) -> None:
+        """
+        Establish connection to Xert API.
+
+        Logs in using the provided credentials, establishing both the OAuth2
+        token for API calls and the web session cookie for FIT downloads.
+        """
         from trainingdash.integrations.xert import get_xert_client
 
         self._client = get_xert_client()
@@ -58,7 +64,16 @@ class XertImportProvider(ImportProvider):
         await self._client.login(email, password)
 
     async def list_activities(self, start_date: datetime, end_date: datetime) -> list[ProviderActivity]:
-        """List Xert activities in date range via OAuth API."""
+        """
+        List Xert activities in date range via OAuth API.
+
+        Args:
+            start_date: Start of date range (inclusive)
+            end_date: End of date range (inclusive)
+
+        Returns:
+            List of ProviderActivity objects with basic metadata
+        """
         from_ts = int(start_date.timestamp())
         to_ts = int(end_date.timestamp())
 
@@ -120,6 +135,7 @@ class XertImportProvider(ImportProvider):
             return None
 
     async def close(self) -> None:
+        """Close the Xert client and release resources."""
         if self._client:
             await self._client.close()
             self._client = None
@@ -153,6 +169,16 @@ class GarminImportProvider(ImportProvider):
         )
 
     async def connect(self, email: str, password: str) -> None:
+        """
+        Establish connection to Garmin Connect.
+
+        Args:
+            email: Garmin account email
+            password: Garmin account password
+
+        Raises:
+            RuntimeError: If MFA is required (user must re-authenticate in settings)
+        """
         from trainingdash.integrations.garmin import GarminMFARequired, get_garmin_client
 
         self._client = get_garmin_client()
@@ -162,7 +188,16 @@ class GarminImportProvider(ImportProvider):
             raise RuntimeError("MFA required - please re-authenticate in settings")
 
     async def list_activities(self, start_date: datetime, end_date: datetime) -> list[ProviderActivity]:
-        """List Garmin activities in date range."""
+        """
+        List Garmin activities in date range.
+
+        Args:
+            start_date: Start of date range (inclusive)
+            end_date: End of date range (inclusive)
+
+        Returns:
+            List of ProviderActivity objects with basic metadata
+        """
         activities = self._client.list_activities(start_date=start_date, end_date=end_date)
 
         # Wrap in ProviderActivity with common fields
@@ -201,9 +236,10 @@ class GarminImportProvider(ImportProvider):
             return await ingest_fit(db, user_id, fit_bytes, "garmin", source_ref, batch_mode)
 
         except GarminAPIError as e:
-            logger.warning(f"Failed to download Garmin activity {activity.id}: {e}")
+            logger.warning("Failed to download Garmin activity %s: %s", activity.id, e)
             return None
 
     async def close(self) -> None:
+        """Release Garmin client resources."""
         # Garmin client doesn't need explicit close
         self._client = None

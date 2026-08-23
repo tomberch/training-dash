@@ -130,12 +130,12 @@ export {
   fetchMyXertCredentials,
   saveMyXertCredentials,
   deleteMyXertCredentials,
-  updateXertSyncEnabled,
+  updateXertImportEnabled,
   fetchMyGarminCredentials,
   saveMyGarminCredentials,
   completeGarminMfa,
   deleteMyGarminCredentials,
-  updateGarminSyncEnabled,
+  updateGarminImportEnabled,
 } from "./integrations";
 
 // Analytics API

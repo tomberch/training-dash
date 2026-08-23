@@ -5,12 +5,12 @@ import {
   fetchMyXertCredentials,
   saveMyXertCredentials,
   deleteMyXertCredentials,
-  updateXertSyncEnabled,
+  updateXertImportEnabled,
   fetchMyGarminCredentials,
   saveMyGarminCredentials,
   completeGarminMfa,
   deleteMyGarminCredentials,
-  updateGarminSyncEnabled,
+  updateGarminImportEnabled,
   triggerGarminImport,
   triggerXertImport,
   fetchOAuthLinks,
@@ -37,7 +37,7 @@ interface IntegrationsSettingsProps {
 export function IntegrationsSettings({ user, onUserUpdate }: IntegrationsSettingsProps) {
   return (
     <div className="space-y-6">
-      <SyncScheduleSection user={user} onUserUpdate={onUserUpdate} />
+      <ImportScheduleSection user={user} onUserUpdate={onUserUpdate} />
       <XertIntegrationCard />
       <GarminIntegrationCard />
       <ConnectedAccountsSection />
@@ -45,8 +45,8 @@ export function IntegrationsSettings({ user, onUserUpdate }: IntegrationsSetting
   );
 }
 
-function SyncScheduleSection({ user, onUserUpdate }: { user: User; onUserUpdate: (user: User) => void }) {
-  const [syncHour, setSyncHour] = useState(user.sync_hour);
+function ImportScheduleSection({ user, onUserUpdate }: { user: User; onUserUpdate: (user: User) => void }) {
+  const [importHour, setImportHour] = useState(user.sync_hour);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
@@ -54,12 +54,12 @@ function SyncScheduleSection({ user, onUserUpdate }: { user: User; onUserUpdate:
     setSaving(true);
     setFeedback(null);
     try {
-      const updated = await updatePreferences({ sync_hour: syncHour });
+      const updated = await updatePreferences({ sync_hour: importHour });
       onUserUpdate(updated);
-      setFeedback({ type: "success", message: "Sync schedule updated" });
+      setFeedback({ type: "success", message: "Import schedule updated" });
       setTimeout(() => setFeedback(null), 3000);
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : "Failed to update sync schedule";
+      const message = err instanceof ApiError ? err.message : "Failed to update import schedule";
       setFeedback({ type: "error", message });
     } finally {
       setSaving(false);
@@ -67,11 +67,11 @@ function SyncScheduleSection({ user, onUserUpdate }: { user: User; onUserUpdate:
   }
 
   useEffect(() => {
-    if (syncHour !== user.sync_hour) {
+    if (importHour !== user.sync_hour) {
       handleSave();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [syncHour]);
+  }, [importHour]);
 
 
   return (
@@ -81,15 +81,15 @@ function SyncScheduleSection({ user, onUserUpdate }: { user: User; onUserUpdate:
           <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          Sync Schedule
+          Import Schedule
         </CardTitle>
       </CardHeader>
       <CardContent>
         <div className="max-w-md">
-          <Label className="text-muted-foreground">Daily Sync Time</Label>
+          <Label className="text-muted-foreground">Daily Import Time</Label>
           <select
-            value={syncHour}
-            onChange={(e) => setSyncHour(parseInt(e.target.value))}
+            value={importHour}
+            onChange={(e) => setImportHour(parseInt(e.target.value))}
             disabled={saving}
             className="w-full h-11 px-4 mt-1.5 rounded-lg border border-input bg-muted text-base focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
           >
@@ -100,7 +100,7 @@ function SyncScheduleSection({ user, onUserUpdate }: { user: User; onUserUpdate:
             ))}
           </select>
           <p className="text-caption mt-1.5">
-            Your integrations (Xert, Garmin) will sync automatically at this hour
+            Your integrations (Xert, Garmin) will import activities automatically at this hour
           </p>
         </div>
         <FeedbackAlert feedback={feedback} />
@@ -161,7 +161,7 @@ function XertIntegrationCard() {
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [syncSince, setSyncSince] = useState(() => {
+  const [importSince, setImportSince] = useState(() => {
     const date = new Date();
     date.setDate(date.getDate() - 90);
     return date.toISOString().split("T")[0];
@@ -177,7 +177,7 @@ function XertIntegrationCard() {
           setEmail(status.xert_email);
         }
         if (status.sync_since) {
-          setSyncSince(status.sync_since);
+          setImportSince(status.sync_since);
         }
       })
       .catch(() => {
@@ -191,8 +191,8 @@ function XertIntegrationCard() {
     setSaving(true);
     setFeedback(null);
     try {
-      await saveMyXertCredentials(email, password, syncSince);
-      setXertStatus({ configured: true, xert_email: email, sync_since: syncSince, sync_enabled: xertStatus?.sync_enabled ?? true });
+      await saveMyXertCredentials(email, password, importSince);
+      setXertStatus({ configured: true, xert_email: email, sync_since: importSince, sync_enabled: xertStatus?.sync_enabled ?? true });
       setPassword("");
       setFeedback({ type: "success", message: "Xert connected successfully" });
       setTimeout(() => setFeedback(null), 3000);
@@ -285,8 +285,8 @@ function XertIntegrationCard() {
           
           {!xertStatus?.configured && (
             <div className="space-y-1.5">
-              <Label className="text-muted-foreground text-sm font-medium">Sync activities since</Label>
-              <Input type="date" value={syncSince} onChange={(e) => setSyncSince(e.target.value)} data-testid="xert-sync-since" className="h-11 px-4 text-base md:text-base bg-muted" />
+              <Label className="text-muted-foreground text-sm font-medium">Import activities since</Label>
+              <Input type="date" value={importSince} onChange={(e) => setImportSince(e.target.value)} data-testid="xert-import-since" className="h-11 px-4 text-base md:text-base bg-muted" />
               <p className="text-xs text-muted-foreground mt-1.5">Activities from this date onwards will be imported</p>
             </div>
           )}
@@ -308,7 +308,7 @@ function XertIntegrationCard() {
                   onClick={async () => {
                     try {
                       const newValue = !xertStatus.sync_enabled;
-                      await updateXertSyncEnabled(newValue);
+                      await updateXertImportEnabled(newValue);
                       setXertStatus({ ...xertStatus, sync_enabled: newValue });
                       notifyImportSettingsChanged();
                     } catch {
@@ -352,7 +352,7 @@ function GarminIntegrationCard() {
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [syncSince, setSyncSince] = useState(() => {
+  const [importSince, setImportSince] = useState(() => {
     const date = new Date();
     date.setDate(date.getDate() - 90);
     return date.toISOString().split("T")[0];
@@ -370,7 +370,7 @@ function GarminIntegrationCard() {
           setEmail(status.garmin_email);
         }
         if (status.sync_since) {
-          setSyncSince(status.sync_since);
+          setImportSince(status.sync_since);
         }
       })
       .catch(() => {
@@ -384,12 +384,12 @@ function GarminIntegrationCard() {
     setSaving(true);
     setFeedback(null);
     try {
-      const response = await saveMyGarminCredentials(email, password, syncSince);
+      const response = await saveMyGarminCredentials(email, password, importSince);
       if (response.mfa_required) {
         setMfaRequired(true);
         setFeedback({ type: "success", message: "MFA required — enter the code from your authenticator app or email" });
       } else {
-        setGarminStatus({ configured: true, garmin_email: email, sync_since: syncSince, sync_enabled: garminStatus?.sync_enabled ?? true });
+        setGarminStatus({ configured: true, garmin_email: email, sync_since: importSince, sync_enabled: garminStatus?.sync_enabled ?? true });
         setPassword("");
         setMfaRequired(false);
         setMfaCode("");
@@ -413,7 +413,7 @@ function GarminIntegrationCard() {
     setFeedback(null);
     try {
       await completeGarminMfa(mfaCode);
-      setGarminStatus({ configured: true, garmin_email: email, sync_since: syncSince, sync_enabled: garminStatus?.sync_enabled ?? true });
+      setGarminStatus({ configured: true, garmin_email: email, sync_since: importSince, sync_enabled: garminStatus?.sync_enabled ?? true });
       setPassword("");
       setMfaRequired(false);
       setMfaCode("");
@@ -460,7 +460,7 @@ function GarminIntegrationCard() {
     if (!garminStatus?.configured) return;
     const newValue = !garminStatus.sync_enabled;
     try {
-      await updateGarminSyncEnabled(newValue);
+      await updateGarminImportEnabled(newValue);
       setGarminStatus({ ...garminStatus, sync_enabled: newValue });
       notifyImportSettingsChanged();
     } catch {
@@ -512,8 +512,8 @@ function GarminIntegrationCard() {
         ) : (
           <GarminCredentialsForm
             email={email} setEmail={setEmail} password={password} setPassword={setPassword}
-            syncSince={syncSince} setSyncSince={setSyncSince} saving={saving}
-            configured={garminStatus?.configured ?? false} syncEnabled={garminStatus?.sync_enabled ?? true}
+            importSince={importSince} setImportSince={setImportSince} saving={saving}
+            configured={garminStatus?.configured ?? false} importEnabled={garminStatus?.sync_enabled ?? true}
             onConnect={handleConnect} onDisconnect={handleDisconnect} onToggleImport={handleToggleImport}
           />
         )}
@@ -542,10 +542,10 @@ function MfaForm({ mfaCode, setMfaCode, saving, onSubmit, onCancel }: {
 }
 
 function GarminCredentialsForm({
-  email, setEmail, password, setPassword, syncSince, setSyncSince, saving, configured, syncEnabled, onConnect, onDisconnect, onToggleImport
+  email, setEmail, password, setPassword, importSince, setImportSince, saving, configured, importEnabled, onConnect, onDisconnect, onToggleImport
 }: {
   email: string; setEmail: (v: string) => void; password: string; setPassword: (v: string) => void;
-  syncSince: string; setSyncSince: (v: string) => void; saving: boolean; configured: boolean; syncEnabled: boolean;
+  importSince: string; setImportSince: (v: string) => void; saving: boolean; configured: boolean; importEnabled: boolean;
   onConnect: () => void; onDisconnect: () => void; onToggleImport: () => void;
 }) {
   return (
@@ -564,8 +564,8 @@ function GarminCredentialsForm({
       </div>
       {!configured && (
         <div className="space-y-1.5">
-          <Label className="text-muted-foreground text-sm font-medium">Sync activities since</Label>
-          <Input type="date" value={syncSince} onChange={(e) => setSyncSince(e.target.value)} data-testid="garmin-sync-since" className="h-11 px-4 text-base md:text-base bg-muted" />
+          <Label className="text-muted-foreground text-sm font-medium">Import activities since</Label>
+          <Input type="date" value={importSince} onChange={(e) => setImportSince(e.target.value)} data-testid="garmin-import-since" className="h-11 px-4 text-base md:text-base bg-muted" />
           <p className="text-xs text-muted-foreground mt-1.5">Activities from this date onwards will be imported</p>
         </div>
       )}
@@ -577,13 +577,13 @@ function GarminCredentialsForm({
               <p className="font-medium text-sm">Import from Garmin</p>
               <p className="text-xs text-muted-foreground">Import new activities automatically</p>
             </div>
-            <button onClick={onToggleImport} disabled={saving} aria-pressed={syncEnabled}
-              className={cn("relative inline-flex h-6 w-12 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2", syncEnabled ? "bg-primary" : "bg-muted", saving && "opacity-50 cursor-not-allowed")}>
-              <span className={cn("pointer-events-none absolute left-1 bottom-1 w-4 h-4 transform rounded-full bg-muted-foreground shadow transition duration-200 ease-in-out", syncEnabled ? "translate-x-6 bg-white" : "translate-x-0")} />
+            <button onClick={onToggleImport} disabled={saving} aria-pressed={importEnabled}
+              className={cn("relative inline-flex h-6 w-12 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2", importEnabled ? "bg-primary" : "bg-muted", saving && "opacity-50 cursor-not-allowed")}>
+              <span className={cn("pointer-events-none absolute left-1 bottom-1 w-4 h-4 transform rounded-full bg-muted-foreground shadow transition duration-200 ease-in-out", importEnabled ? "translate-x-6 bg-white" : "translate-x-0")} />
             </button>
           </div>
           <div className="flex gap-3 pt-2">
-            {syncEnabled && <ImportNowButton onImport={triggerGarminImport} label="Import Now" />}
+            {importEnabled && <ImportNowButton onImport={triggerGarminImport} label="Import Now" />}
             <Button variant="destructive" onClick={onDisconnect} disabled={saving} data-testid="garmin-disconnect">Disconnect</Button>
           </div>
         </>

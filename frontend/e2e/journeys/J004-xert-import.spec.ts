@@ -45,7 +45,7 @@ test.describe.serial('J004: Xert Import Flow', () => {
     const ninetyDaysAgo = new Date();
     ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
     const importSinceDate = ninetyDaysAgo.toISOString().split('T')[0];
-    await page.getByTestId('xert-sync-since').fill(importSinceDate);
+    await page.getByTestId('xert-import-since').fill(importSinceDate);
 
     // Click Connect
     await page.getByTestId('xert-connect').click();
