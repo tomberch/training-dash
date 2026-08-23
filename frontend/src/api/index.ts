@@ -172,6 +172,8 @@ export type {
   BackupHistoryResponse,
   BackupStatus,
   TriggerBackupResponse,
+  WeatherBackfillStatus,
+  WeatherBackfillResponse,
 } from "./admin";
 export {
   fetchAdminUsers,
@@ -195,6 +197,8 @@ export {
   fetchBackupHistory,
   fetchBackupStatus,
   triggerBackup,
+  fetchWeatherBackfillStatus,
+  triggerWeatherBackfill,
 } from "./admin";
 
 // Query DSL API

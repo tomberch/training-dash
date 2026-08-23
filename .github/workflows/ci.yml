@@ -462,7 +462,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           container: training-dash
           dry-run: false
-          keep-last: 5
+          keep-last: 1
           keep-tags-regexes: |
             ^v?\d+\.\d+\.\d+
             ^latest$
