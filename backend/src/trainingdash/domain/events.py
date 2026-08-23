@@ -69,6 +69,7 @@ class EventType(StrEnum):
     ADMIN_NUKE_ACTIVITIES = "admin.nuke_activities"
     ADMIN_NUKE_INTEGRATIONS = "admin.nuke_integrations"
     ADMIN_NUKE_ACCOUNT = "admin.nuke_account"
+    ADMIN_WEATHER_BACKFILL = "admin.weather_backfill"
 
     # Scheduler
     SCHEDULER_TRIGGERED = "scheduler.triggered"

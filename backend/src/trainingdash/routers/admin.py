@@ -689,7 +689,7 @@ async def admin_trigger_weather_backfill(
 
     # Log the backfill action
     await event_repo.log(
-        event_type=EventType.ADMIN_TRIGGER_SYNC.value,  # Reuse existing event type
+        event_type=EventType.ADMIN_WEATHER_BACKFILL.value,
         outcome=EventOutcome.INFO.value,
         user_id=user_id,
         payload={
