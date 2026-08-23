@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import timezone
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 from uuid import UUID
 
@@ -324,7 +324,7 @@ class FetchActivityWeather:
         return True
 
     def _find_hourly_gps_positions(
-        self, records: list[Record], start_ts, duration_hours: int
+        self, records: list[Record], start_ts: datetime, duration_hours: int
     ) -> list[tuple[int, float, float]]:
         """Find GPS positions for each hour of an activity.
 
@@ -429,14 +429,18 @@ class FetchActivityWeather:
         total_mass = float(user.weight_kg) + bike_weight
 
         # Prepare data points with wind correction
-        data_points, warnings = prepare_data_points(activity_records, weather_snapshots)
+        data_points, data_quality, warnings = prepare_data_points(activity_records, weather_snapshots)
 
         if len(data_points) < 10:
             logger.info(f"Activity {activity.id} has insufficient valid data points: {len(data_points)}")
             return False
 
         # Run estimation
-        estimation = estimate_cda_crr(data_points, total_mass)
+        estimation = estimate_cda_crr(
+            data_points,
+            total_mass,
+            weather_coverage_pct=data_quality.weather_coverage_pct,
+        )
 
         # Store results
         activity.estimated_cda = estimation.cda

@@ -298,6 +298,18 @@ class TestEstimateCdaCrr:
 
         assert result_large.confidence >= result_small.confidence
 
+    def test_confidence_decreases_with_low_weather_coverage(self):
+        """Low weather coverage should reduce confidence."""
+        points = self._make_data_points(n_points=500, grade_variation=6.0)
+
+        result_full = estimate_cda_crr(points, total_mass_kg=84.0, weather_coverage_pct=100.0)
+        result_partial = estimate_cda_crr(points, total_mass_kg=84.0, weather_coverage_pct=50.0)
+        result_none = estimate_cda_crr(points, total_mass_kg=84.0, weather_coverage_pct=0.0)
+
+        # Confidence should decrease with lower weather coverage
+        assert result_full.confidence >= result_partial.confidence
+        assert result_partial.confidence >= result_none.confidence
+
 
 class TestPrepareDataPoints:
     """Tests for converting activity records to calibration data points."""
@@ -311,7 +323,7 @@ class TestPrepareDataPoints:
         ]
         weather = [WeatherSnapshot(0, 5.0, 90.0, 1010.0, 50.0, 20.0)]
 
-        points, warnings = prepare_data_points(records, weather)
+        points, _data_quality, warnings = prepare_data_points(records, weather)
         # Should have fewer points due to filtering
         assert len(points) <= 2
 
@@ -324,7 +336,7 @@ class TestPrepareDataPoints:
         ]
         weather = [WeatherSnapshot(0, 5.0, 90.0, 1010.0, 50.0, 20.0)]
 
-        points, warnings = prepare_data_points(records, weather)
+        points, _data_quality, warnings = prepare_data_points(records, weather)
         assert len(points) <= 2
 
     def test_uses_fit_temperature_over_weather(self):
@@ -335,7 +347,7 @@ class TestPrepareDataPoints:
         ]
         weather = [WeatherSnapshot(0, 5.0, 90.0, 1010.0, 50.0, 15.0)]  # Weather temp = 15°C
 
-        points, warnings = prepare_data_points(records, weather)
+        points, _data_quality, warnings = prepare_data_points(records, weather)
 
         if points:
             # Air density at 30°C is lower than at 15°C
@@ -350,5 +362,6 @@ class TestPrepareDataPoints:
             ActivityRecord(1.0, 47.0001, 8.0001, 200, 8.0, 501.0, 20, None),
         ]
 
-        points, warnings = prepare_data_points(records, [])
+        points, data_quality, warnings = prepare_data_points(records, [])
         assert any("weather" in w.lower() for w in warnings)
+        assert data_quality.weather_coverage_pct == 0.0

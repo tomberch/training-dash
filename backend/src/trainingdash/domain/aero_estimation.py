@@ -80,6 +80,21 @@ class WindCorrectedDataPoint:
 
 
 @dataclass(frozen=True, slots=True)
+class DataQuality:
+    """Quality metrics from data preparation.
+
+    Attributes:
+        weather_coverage_pct: Percentage of data points with weather data (0-100).
+        gps_coverage_pct: Percentage of records with valid GPS (0-100).
+        power_coverage_pct: Percentage of records with valid power (0-100).
+    """
+
+    weather_coverage_pct: float
+    gps_coverage_pct: float
+    power_coverage_pct: float
+
+
+@dataclass(frozen=True, slots=True)
 class AeroEstimationResult:
     """Result of wind-corrected CdA/Crr estimation.
 
@@ -354,7 +369,7 @@ def prepare_data_points(
     max_speed_mps: float = 20.0,
     min_power_w: float = 50.0,
     max_power_w: float = 600.0,
-) -> tuple[list[WindCorrectedDataPoint], list[str]]:
+) -> tuple[list[WindCorrectedDataPoint], DataQuality, list[str]]:
     """Convert activity records and weather to calibration data points.
 
     Args:
@@ -364,14 +379,14 @@ def prepare_data_points(
         default_humidity_pct: Default humidity if no weather data.
 
     Returns:
-        Tuple of (data_points, warnings).
+        Tuple of (data_points, data_quality, warnings).
     """
     warnings: list[str] = []
     data_points: list[WindCorrectedDataPoint] = []
 
     if len(records) < 2:
         warnings.append("Insufficient records for estimation")
-        return [], warnings
+        return [], DataQuality(0.0, 0.0, 0.0), warnings
 
     # Pre-compute grades if not provided
     altitudes = [r.altitude_m for r in records]
@@ -390,6 +405,8 @@ def prepare_data_points(
     wind_speeds: list[float] = []
     missing_gps = 0
     missing_power = 0
+    points_with_weather = 0
+    points_without_weather = 0
 
     for i in range(1, len(records)):
         r = records[i]
@@ -425,6 +442,7 @@ def prepare_data_points(
         weather = interpolate_weather(r.timestamp_s, weather_snapshots)
 
         if weather:
+            points_with_weather += 1
             wind_speeds.append(weather.wind_speed_mps)
 
             # Calculate headwind component
@@ -442,6 +460,7 @@ def prepare_data_points(
             )
         else:
             # No weather data - use defaults
+            points_without_weather += 1
             apparent_speed = r.speed_mps
             temp_c = float(r.temperature_c) if r.temperature_c is not None else 20.0
             air_density = calculate_air_density(temp_c, default_pressure_hpa, default_humidity_pct)
@@ -470,7 +489,19 @@ def prepare_data_points(
     if not weather_snapshots:
         warnings.append("No weather data - using default air density, no wind correction")
 
-    return data_points, warnings
+    # Calculate quality metrics
+    total_points = points_with_weather + points_without_weather
+    weather_coverage = (points_with_weather / total_points * 100) if total_points > 0 else 0.0
+    gps_coverage = ((total - missing_gps) / total * 100) if total > 0 else 0.0
+    power_coverage = ((total - missing_power) / total * 100) if total > 0 else 0.0
+
+    data_quality = DataQuality(
+        weather_coverage_pct=weather_coverage,
+        gps_coverage_pct=gps_coverage,
+        power_coverage_pct=power_coverage,
+    )
+
+    return data_points, data_quality, warnings
 
 
 def estimate_cda_crr(
@@ -478,6 +509,7 @@ def estimate_cda_crr(
     total_mass_kg: float,
     initial_cda: float = 0.32,
     initial_crr: float = 0.005,
+    weather_coverage_pct: float = 100.0,
 ) -> AeroEstimationResult:
     """Estimate CdA and Crr from wind-corrected data points.
 
@@ -489,6 +521,7 @@ def estimate_cda_crr(
         total_mass_kg: Total mass (rider + bike) in kg.
         initial_cda: Initial guess for CdA.
         initial_crr: Initial guess for Crr.
+        weather_coverage_pct: Percentage of data points with weather data (0-100).
 
     Returns:
         AeroEstimationResult with fitted parameters and diagnostics.
@@ -603,6 +636,7 @@ def estimate_cda_crr(
         grade_range=grade_range,
         avg_wind_mps=avg_wind,
         rms_error_pct=rms_error,
+        weather_coverage_pct=weather_coverage_pct,
     )
 
     return AeroEstimationResult(
@@ -622,6 +656,7 @@ def _calculate_confidence(
     grade_range: float,
     avg_wind_mps: float,
     rms_error_pct: float,
+    weather_coverage_pct: float = 100.0,
 ) -> float:
     """Calculate confidence score (0.0-1.0) for the estimation.
 
@@ -630,12 +665,14 @@ def _calculate_confidence(
     - Wider grade range (better CdA/Crr separation)
     - Lower wind speed
     - Lower fitting error
+    - Higher weather data coverage
 
     Args:
         n_points: Number of data points used.
         grade_range: Difference between max and min grade.
         avg_wind_mps: Average wind speed.
         rms_error_pct: RMS fitting error as percentage.
+        weather_coverage_pct: Percentage of points with weather data (0-100).
 
     Returns:
         Confidence score between 0.0 and 1.0.
@@ -673,6 +710,15 @@ def _calculate_confidence(
         score *= 0.7
     elif rms_error_pct > 5:
         score *= 0.9
+
+    # Weather coverage factor - incomplete weather data reduces confidence
+    # Without weather, wind correction is missing, so estimate is less reliable
+    if weather_coverage_pct < 50:
+        score *= 0.5  # Significant penalty for <50% coverage
+    elif weather_coverage_pct < 80:
+        score *= 0.7  # Moderate penalty for 50-80% coverage
+    elif weather_coverage_pct < 95:
+        score *= 0.9  # Small penalty for 80-95% coverage
 
     return round(max(0.0, min(1.0, score)), 2)
 

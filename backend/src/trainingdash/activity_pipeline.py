@@ -849,7 +849,7 @@ class ActivityPipeline:
         total_mass = float(user.weight_kg) + bike_weight
 
         # Prepare data points with wind correction
-        data_points, prep_warnings = prepare_data_points(
+        data_points, data_quality, prep_warnings = prepare_data_points(
             activity_records,
             weather_snapshots,
         )
@@ -862,6 +862,7 @@ class ActivityPipeline:
         estimation: DomainAeroResult = estimate_cda_crr(
             data_points,
             total_mass,
+            weather_coverage_pct=data_quality.weather_coverage_pct,
         )
 
         # Store results
