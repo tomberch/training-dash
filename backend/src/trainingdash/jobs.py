@@ -151,6 +151,34 @@ async def enqueue_fetch_weather_job(user_id: int, activity_id: str | None = None
     return job.key if job else None
 
 
+async def enqueue_batch_weather_job(user_id: int, throttle_seconds: float = 1.0) -> str | None:
+    """
+    Enqueue a batch weather fetch job for all pending activities.
+
+    This job processes all activities with pending weather status using
+    throttling to avoid API rate limits. Designed for use after bulk imports.
+
+    Args:
+        user_id: User to process activities for
+        throttle_seconds: Delay between API calls (default 1.0s)
+
+    Returns:
+        Job key or None if queue is not available
+    """
+    if not queue_available():
+        return None
+    queue = await get_queue()
+    # Batch weather can take a long time for many activities
+    # 1000 activities × 3 hours avg × 1s throttle = ~50 minutes
+    job = await queue.enqueue(
+        "batch_weather_job",
+        user_id=user_id,
+        throttle_seconds=throttle_seconds,
+        timeout=7200,  # 2 hour timeout
+    )
+    return job.key if job else None
+
+
 async def enqueue_backup_job() -> str | None:
     """
     Enqueue a backup job to run on the worker.

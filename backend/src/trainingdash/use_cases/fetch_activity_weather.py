@@ -118,6 +118,77 @@ class FetchActivityWeather:
         await self._db.commit()
         return result
 
+    async def execute_batch(
+        self,
+        user_id: int,
+        throttle_seconds: float = 1.0,
+        limit: int | None = None,
+    ) -> FetchWeatherResult:
+        """
+        Fetch weather for pending activities with throttling for bulk operations.
+
+        This method is designed for batch imports where many activities need
+        weather data. It applies rate limiting to avoid hitting API limits.
+
+        Args:
+            user_id: User to process activities for
+            throttle_seconds: Delay between API calls (default 1.0s)
+            limit: Maximum activities to process (None = all pending)
+
+        Returns:
+            FetchWeatherResult with counts and any errors
+        """
+        from sqlalchemy import or_
+
+        result = FetchWeatherResult(errors=[])
+
+        # Find all pending activities
+        query = (
+            select(Activity)
+            .where(
+                Activity.user_id == user_id,
+                or_(
+                    Activity.weather_status == WeatherStatus.PENDING,
+                    Activity.weather_status.is_(None),
+                ),
+            )
+            .order_by(Activity.started_at.asc())  # Process oldest first
+        )
+        if limit:
+            query = query.limit(limit)
+
+        activities = (await self._db.execute(query)).scalars().all()
+
+        result.activities_processed = len(activities)
+        logger.info(f"Starting batch weather fetch for {len(activities)} activities")
+
+        for i, activity in enumerate(activities):
+            try:
+                # Log progress periodically
+                if (i + 1) % 10 == 0:
+                    logger.info(f"Batch weather progress: {i + 1}/{len(activities)}")
+
+                success = await self._process_activity(activity, throttle_seconds)
+                if success:
+                    result.weather_fetched += 1
+                    if await self._run_aero_estimation(activity):
+                        result.aero_estimated += 1
+
+                # Commit periodically to avoid long transactions
+                if (i + 1) % 10 == 0:
+                    await self._db.commit()
+
+            except Exception as e:
+                logger.exception(f"Error processing activity {activity.id}")
+                result.errors.append(f"{activity.id}: {e}")
+
+        await self._db.commit()
+        logger.info(
+            f"Batch weather complete: {result.weather_fetched}/{result.activities_processed} "
+            f"fetched, {result.aero_estimated} aero estimated"
+        )
+        return result
+
     async def execute_single(self, activity_id: UUID) -> FetchWeatherResult:
         """
         Fetch weather for a single activity.
@@ -150,9 +221,21 @@ class FetchActivityWeather:
         await self._db.commit()
         return result
 
-    async def _process_activity(self, activity: Activity) -> bool:
-        """Fetch and store weather for a single activity."""
-        # Get first GPS point for location
+    async def _process_activity(
+        self, activity: Activity, throttle_seconds: float = 0.0
+    ) -> bool:
+        """Fetch and store weather for a single activity.
+
+        Fetches weather at the GPS position for each hour of the activity,
+        providing more accurate wind data for long rides.
+
+        Args:
+            activity: The activity to process
+            throttle_seconds: Delay between API calls for rate limiting
+        """
+        import asyncio
+
+        # Get all GPS records for the activity
         record_query = (
             select(Record)
             .where(
@@ -161,11 +244,10 @@ class FetchActivityWeather:
                 Record.lon.isnot(None),
             )
             .order_by(Record.timestamp)
-            .limit(1)
         )
-        first_record = (await self._db.execute(record_query)).scalar_one_or_none()
+        records = (await self._db.execute(record_query)).scalars().all()
 
-        if not first_record or first_record.lat is None or first_record.lon is None:
+        if not records:
             logger.info(f"Activity {activity.id} has no GPS data for weather fetch")
             activity.weather_status = WeatherStatus.NOT_APPLICABLE
             return False
@@ -173,26 +255,53 @@ class FetchActivityWeather:
         # Calculate duration in hours
         duration_hours = max(1, int((activity.elapsed_time_s or 3600) / 3600) + 1)
 
-        # Fetch weather
-        weather_result = await fetch_activity_weather(
-            lat=first_record.lat,
-            lon=first_record.lon,
-            start_time=activity.started_at.replace(tzinfo=timezone.utc),
-            duration_hours=duration_hours,
-        )
+        # Find GPS position for each hour
+        start_ts = records[0].timestamp
+        hourly_positions = self._find_hourly_gps_positions(records, start_ts, duration_hours)
 
-        if not weather_result.success:
-            logger.warning(f"Weather fetch failed for {activity.id}: {weather_result.error_message}")
-            activity.weather_status = WeatherStatus.FAILED
+        if not hourly_positions:
+            logger.info(f"Activity {activity.id} has no valid hourly GPS positions")
+            activity.weather_status = WeatherStatus.NOT_APPLICABLE
             return False
 
-        # Store hourly weather data
-        for hourly in weather_result.hourly_data:
+        # Fetch weather for each hour at its GPS position
+        activity_start = activity.started_at.replace(tzinfo=timezone.utc)
+        weather_count = 0
+
+        for hour_offset, lat, lon in hourly_positions:
+            # Rate limiting for batch operations
+            if throttle_seconds > 0 and weather_count > 0:
+                await asyncio.sleep(throttle_seconds)
+
+            # Fetch weather for this specific hour and location
+            weather_result = await fetch_activity_weather(
+                lat=lat,
+                lon=lon,
+                start_time=activity_start,
+                duration_hours=hour_offset,
+            )
+
+            if not weather_result.success:
+                logger.debug(
+                    f"Weather fetch failed for {activity.id} hour {hour_offset}: "
+                    f"{weather_result.error_message}"
+                )
+                continue
+
+            # Get weather data for this hour
+            hourly = next(
+                (h for h in weather_result.hourly_data if h.hour_offset == hour_offset),
+                None,
+            )
+            if not hourly:
+                continue
+
+            # Store with actual GPS position
             weather_row = ActivityWeather(
                 activity_id=activity.id,
-                hour_offset=hourly.hour_offset,
-                lat=weather_result.lat,
-                lon=weather_result.lon,
+                hour_offset=hour_offset,
+                lat=lat,
+                lon=lon,
                 temperature_c=hourly.temperature_c,
                 wind_speed_mps=hourly.wind_speed_mps,
                 wind_direction_deg=hourly.wind_direction_deg,
@@ -201,12 +310,53 @@ class FetchActivityWeather:
                 air_density=hourly.air_density,
             )
             self._db.add(weather_row)
+            weather_count += 1
+
+        if weather_count == 0:
+            logger.warning(f"No weather data retrieved for activity {activity.id}")
+            activity.weather_status = WeatherStatus.FAILED
+            return False
 
         activity.weather_status = WeatherStatus.FETCHED
         await self._db.flush()
 
-        logger.info(f"Stored {len(weather_result.hourly_data)} weather snapshots for activity {activity.id}")
+        logger.info(f"Stored {weather_count} weather snapshots for activity {activity.id}")
         return True
+
+    def _find_hourly_gps_positions(
+        self, records: list[Record], start_ts, duration_hours: int
+    ) -> list[tuple[int, float, float]]:
+        """Find GPS positions for each hour of an activity.
+
+        Args:
+            records: List of Record objects with lat, lon, timestamp
+            start_ts: Activity start timestamp
+            duration_hours: Number of hours to find positions for
+
+        Returns:
+            List of (hour_offset, lat, lon) tuples
+        """
+        hourly_positions: list[tuple[int, float, float]] = []
+
+        for hour_offset in range(duration_hours + 1):
+            target_seconds = hour_offset * 3600
+
+            # Find the GPS point closest to this time offset
+            best_record = None
+            best_diff = float("inf")
+
+            for r in records:
+                elapsed = (r.timestamp - start_ts).total_seconds()
+                diff = abs(elapsed - target_seconds)
+                if diff < best_diff:
+                    best_diff = diff
+                    best_record = r
+
+            # Only include if within 30 minutes of target time
+            if best_record and best_diff < 1800:
+                hourly_positions.append((hour_offset, best_record.lat, best_record.lon))
+
+        return hourly_positions
 
     async def _run_aero_estimation(self, activity: Activity) -> bool:
         """Run CdA/Crr estimation using stored weather data."""

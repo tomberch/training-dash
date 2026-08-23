@@ -943,8 +943,9 @@ class ActivityPipeline:
         """
         Fetch weather data inline during ingestion.
 
-        Fetches hourly weather for the activity duration at the start location.
-        Weather is interpolated by time during aero estimation.
+        For each hour of the activity, finds the GPS position at that time
+        and fetches weather for that specific location. This provides more
+        accurate wind data for long rides that cover significant distance.
 
         Args:
             activity_records: List of ActivityRecord objects from the pipeline
@@ -954,7 +955,7 @@ class ActivityPipeline:
 
         Note:
             In batch_mode, weather fetch is skipped to avoid API rate limits
-            during bulk imports. A backfill job handles those activities later.
+            during bulk imports. A throttled backfill job handles those later.
         """
         from datetime import timezone
 
@@ -967,14 +968,17 @@ class ActivityPipeline:
             self.activity.weather_status = WeatherStatus.PENDING
             return None
 
-        # Find first GPS point from records (already in memory)
-        first_gps = None
+        # Build list of GPS points with timestamps
+        gps_points: list[dict] = []
         for r in self.records:
-            if r.get("lat") is not None and r.get("lon") is not None:
-                first_gps = r
-                break
+            if (
+                r.get("lat") is not None
+                and r.get("lon") is not None
+                and r.get("timestamp") is not None
+            ):
+                gps_points.append(r)
 
-        if not first_gps:
+        if not gps_points:
             logger.info(f"Activity {self.activity.id} has no GPS data for weather fetch")
             self.activity.weather_status = WeatherStatus.NOT_APPLICABLE
             return None
@@ -982,28 +986,49 @@ class ActivityPipeline:
         # Calculate duration in hours
         duration_hours = max(1, int((self.activity.elapsed_time_s or 3600) / 3600) + 1)
 
-        # Fetch weather from Open-Meteo (single request for all hours)
-        weather_result = await fetch_activity_weather(
-            lat=first_gps["lat"],
-            lon=first_gps["lon"],
-            start_time=self.activity.started_at.replace(tzinfo=timezone.utc),
-            duration_hours=duration_hours,
-        )
+        # Find GPS position for each hour offset
+        start_ts = gps_points[0]["timestamp"]
+        hourly_positions = _find_hourly_gps_positions(gps_points, start_ts, duration_hours)
 
-        if not weather_result.success:
-            logger.warning(
-                f"Weather fetch failed for {self.activity.id}: {weather_result.error_message}"
-            )
-            self.activity.weather_status = WeatherStatus.FAILED
+        if not hourly_positions:
+            logger.info(f"Activity {self.activity.id} has no valid hourly GPS positions")
+            self.activity.weather_status = WeatherStatus.NOT_APPLICABLE
             return None
 
-        # Store hourly weather data in database
-        for hourly in weather_result.hourly_data:
+        # Fetch weather for each hour at its GPS position
+        activity_start = self.activity.started_at.replace(tzinfo=timezone.utc)
+        weather_snapshots: list[WeatherSnapshot] = []
+
+        for hour_offset, lat, lon in hourly_positions:
+            # Fetch weather for this specific hour and location
+            weather_result = await fetch_activity_weather(
+                lat=lat,
+                lon=lon,
+                start_time=activity_start,
+                duration_hours=hour_offset,
+            )
+
+            if not weather_result.success:
+                logger.debug(
+                    f"Weather fetch failed for {self.activity.id} hour {hour_offset}: "
+                    f"{weather_result.error_message}"
+                )
+                continue
+
+            # Get weather data for this hour
+            hourly = next(
+                (h for h in weather_result.hourly_data if h.hour_offset == hour_offset),
+                None,
+            )
+            if not hourly:
+                continue
+
+            # Store in database with actual GPS position
             weather_row = ActivityWeather(
                 activity_id=self.activity.id,
-                hour_offset=hourly.hour_offset,
-                lat=weather_result.lat,
-                lon=weather_result.lon,
+                hour_offset=hour_offset,
+                lat=lat,
+                lon=lon,
                 temperature_c=hourly.temperature_c,
                 wind_speed_mps=hourly.wind_speed_mps,
                 wind_direction_deg=hourly.wind_direction_deg,
@@ -1013,28 +1038,72 @@ class ActivityPipeline:
             )
             self.db.add(weather_row)
 
+            weather_snapshots.append(
+                WeatherSnapshot(
+                    hour_offset=hour_offset,
+                    wind_speed_mps=hourly.wind_speed_mps,
+                    wind_direction_deg=hourly.wind_direction_deg,
+                    pressure_hpa=hourly.pressure_hpa,
+                    humidity_pct=hourly.humidity_pct,
+                    temperature_c=hourly.temperature_c,
+                )
+            )
+
+        if not weather_snapshots:
+            logger.warning(f"No weather data retrieved for activity {self.activity.id}")
+            self.activity.weather_status = WeatherStatus.FAILED
+            return None
+
         self.activity.weather_status = WeatherStatus.FETCHED
         await self.db.flush()
 
         logger.info(
-            f"Fetched {len(weather_result.hourly_data)} weather snapshots for activity {self.activity.id}"
+            f"Fetched {len(weather_snapshots)} weather snapshots for activity {self.activity.id}"
         )
 
-        # Convert to domain objects for aero estimation
-        return [
-            WeatherSnapshot(
-                hour_offset=h.hour_offset,
-                wind_speed_mps=h.wind_speed_mps,
-                wind_direction_deg=h.wind_direction_deg,
-                pressure_hpa=h.pressure_hpa,
-                humidity_pct=h.humidity_pct,
-                temperature_c=h.temperature_c,
-            )
-            for h in weather_result.hourly_data
-        ]
+        return weather_snapshots
 
 
 # --- Helper Functions ---
+
+
+def _find_hourly_gps_positions(
+    gps_points: list[dict],
+    start_ts: datetime,
+    duration_hours: int,
+) -> list[tuple[int, float, float]]:
+    """
+    Find GPS positions for each hour of an activity.
+
+    Args:
+        gps_points: List of record dicts with lat, lon, timestamp
+        start_ts: Activity start timestamp
+        duration_hours: Number of hours to find positions for
+
+    Returns:
+        List of (hour_offset, lat, lon) tuples
+    """
+    hourly_positions: list[tuple[int, float, float]] = []
+
+    for hour_offset in range(duration_hours + 1):
+        target_seconds = hour_offset * 3600
+
+        # Find the GPS point closest to this time offset
+        best_point = None
+        best_diff = float("inf")
+
+        for p in gps_points:
+            elapsed = (p["timestamp"] - start_ts).total_seconds()
+            diff = abs(elapsed - target_seconds)
+            if diff < best_diff:
+                best_diff = diff
+                best_point = p
+
+        # Only include if within 30 minutes of target time
+        if best_point and best_diff < 1800:
+            hourly_positions.append((hour_offset, best_point["lat"], best_point["lon"]))
+
+    return hourly_positions
 
 
 def _time_of_day_title(started_at: datetime) -> str:

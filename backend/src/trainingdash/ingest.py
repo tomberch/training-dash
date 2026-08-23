@@ -694,6 +694,7 @@ async def finalize_batch_import(
 
     Called after ingesting multiple activities in batch_mode=True.
     """
+    from trainingdash.jobs import enqueue_batch_weather_job
     from trainingdash.use_cases.breakthrough_evaluator import BreakthroughEvaluator
     from trainingdash.use_cases.fitness_model_updater import FitnessModelUpdater
 
@@ -727,6 +728,10 @@ async def finalize_batch_import(
 
     # Backfill metrics for activities that are missing them
     await backfill_activity_metrics(db, user_id)
+
+    # Enqueue batch weather fetch job for activities with pending weather
+    # This runs with throttling to avoid API rate limits
+    await enqueue_batch_weather_job(user_id)
 
 
 async def _auto_create_threshold_if_needed(

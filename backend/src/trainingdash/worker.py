@@ -279,6 +279,37 @@ async def fetch_weather_job(ctx: dict, *, user_id: int, activity_id: str | None 
         }
 
 
+@tracked_job("batch_weather")
+async def batch_weather_job(ctx: dict, *, user_id: int, throttle_seconds: float = 1.0) -> dict:
+    """
+    Fetch weather data for all pending activities with throttling.
+
+    Designed for batch imports where many activities need weather data.
+    Uses per-hour GPS positions for more accurate wind data, and applies
+    rate limiting to avoid hitting API limits.
+
+    Args:
+        user_id: User to process activities for
+        throttle_seconds: Delay between API calls (default 1.0s)
+
+    Returns:
+        Dict with success flag, counts, and any errors
+    """
+    from trainingdash.use_cases.fetch_activity_weather import FetchActivityWeather
+
+    async with worker_db_session(ctx) as db:
+        use_case = FetchActivityWeather(db)
+        result = await use_case.execute_batch(user_id, throttle_seconds=throttle_seconds)
+
+        return {
+            "success": not result.errors,
+            "activities_processed": result.activities_processed,
+            "weather_fetched": result.weather_fetched,
+            "aero_estimated": result.aero_estimated,
+            "errors": result.errors[:10] if result.errors else None,  # Limit errors in response
+        }
+
+
 @tracked_job("recalculate_metrics")
 async def recalculate_metrics_job(ctx: dict, *, user_id: int) -> dict:
     """
@@ -576,6 +607,7 @@ def settings():
             recalculate_after_delete_job,
             recalculate_metrics_job,
             fetch_weather_job,
+            batch_weather_job,
             sync_xert_job,
             sync_garmin_job,
             backup_job,

@@ -144,12 +144,9 @@ class IngestActivity:
             },
         )
 
-        # Enqueue weather fetch if activity is eligible (weather_status='pending')
-        from trainingdash.domain.aero_estimation import WeatherStatus
-
-        if activity.weather_status == WeatherStatus.PENDING:
-            from trainingdash.jobs import enqueue_fetch_weather_job
-
-            await enqueue_fetch_weather_job(user_id, str(activity.id))
+        # In batch mode, weather fetch is handled by finalize_batch_import()
+        # to avoid flooding the queue with individual jobs. For single uploads,
+        # weather is fetched inline during the pipeline, so no job is needed
+        # (weather_status will be FETCHED, not PENDING).
 
         return activity
