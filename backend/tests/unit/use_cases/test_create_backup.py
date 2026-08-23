@@ -175,7 +175,9 @@ class TestCreateBackupExecution:
                 with mock.patch.object(use_case, "_ensure_repo_initialized"):
                     with mock.patch.object(use_case, "_backup_database", return_value={"snapshot_id": "abc123"}):
                         with mock.patch.object(use_case, "_backup_metadata", return_value={"snapshot_id": "meta123"}):
-                            with mock.patch.object(use_case, "_backup_uploads", return_value={"snapshot_id": "def456", "summary": {}}):
+                            with mock.patch.object(
+                                use_case, "_backup_uploads", return_value={"snapshot_id": "def456", "summary": {}}
+                            ):
                                 with mock.patch.object(use_case, "_apply_retention"):
                                     result = await use_case.execute(trigger_type="manual")
 
@@ -201,10 +203,14 @@ class TestCreateBackupExecution:
                 with mock.patch.object(use_case, "_ensure_repo_initialized"):
                     with mock.patch.object(use_case, "_backup_database", return_value={"snapshot_id": "abc123"}):
                         with mock.patch.object(use_case, "_backup_metadata", return_value={"snapshot_id": "meta123"}):
-                            with mock.patch.object(use_case, "_backup_uploads", return_value={
-                                "snapshot_id": "def456",
-                                "summary": {"files_new": 10, "files_changed": 5, "data_added": 1024}
-                            }):
+                            with mock.patch.object(
+                                use_case,
+                                "_backup_uploads",
+                                return_value={
+                                    "snapshot_id": "def456",
+                                    "summary": {"files_new": 10, "files_changed": 5, "data_added": 1024},
+                                },
+                            ):
                                 with mock.patch.object(use_case, "_apply_retention"):
                                     result = await use_case.execute()
 

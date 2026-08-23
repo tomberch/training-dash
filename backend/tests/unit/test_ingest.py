@@ -3,12 +3,10 @@
 import sys
 from pathlib import Path
 
-import pytest
-
 # Add fixtures directory to path for FIT generator
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "tests" / "fixtures"))
 
-from trainingdash.ingest import _compute_moving_time, _compute_extended_metrics
+from trainingdash.ingest import _compute_extended_metrics, _compute_moving_time
 
 
 class TestComputeMovingTime:
@@ -39,12 +37,12 @@ class TestComputeMovingTime:
     def test_mixed_moving_and_stopped(self):
         """Mix of moving and stopped records counts only moving."""
         records = [
-            {"speed_mps": 0.0},   # stopped
-            {"speed_mps": 5.0},   # moving
-            {"speed_mps": 0.3},   # stopped
-            {"speed_mps": 8.0},   # moving
-            {"speed_mps": 0.0},   # stopped
-            {"speed_mps": 6.0},   # moving
+            {"speed_mps": 0.0},  # stopped
+            {"speed_mps": 5.0},  # moving
+            {"speed_mps": 0.3},  # stopped
+            {"speed_mps": 8.0},  # moving
+            {"speed_mps": 0.0},  # stopped
+            {"speed_mps": 6.0},  # moving
         ]
         assert _compute_moving_time(records) == 3
 
@@ -74,7 +72,7 @@ class TestComputeExtendedMetricsCadence:
         """No cadence records returns None for all cadence metrics."""
         records = [{"speed_mps": 5.0}, {"speed_mps": 6.0}]
         result = _compute_extended_metrics(records, 1000.0, 100)
-        
+
         assert result["avg_cadence_rpm"] is None
         assert result["avg_cadence_pedaling_rpm"] is None
         assert result["max_cadence_rpm"] is None
@@ -87,7 +85,7 @@ class TestComputeExtendedMetricsCadence:
             {"cadence_rpm": 100},
         ]
         result = _compute_extended_metrics(records, 1000.0, 100)
-        
+
         assert result["avg_cadence_rpm"] == 90
         assert result["avg_cadence_pedaling_rpm"] == 90
         assert result["max_cadence_rpm"] == 100
@@ -95,14 +93,14 @@ class TestComputeExtendedMetricsCadence:
     def test_mixed_pedaling_and_coasting(self):
         """Mix of pedaling and coasting - avg includes zeros, pedaling avg excludes."""
         records = [
-            {"cadence_rpm": 0},    # coasting
-            {"cadence_rpm": 80},   # pedaling
-            {"cadence_rpm": 0},    # coasting
+            {"cadence_rpm": 0},  # coasting
+            {"cadence_rpm": 80},  # pedaling
+            {"cadence_rpm": 0},  # coasting
             {"cadence_rpm": 100},  # pedaling
-            {"cadence_rpm": 0},    # coasting
+            {"cadence_rpm": 0},  # coasting
         ]
         result = _compute_extended_metrics(records, 1000.0, 100)
-        
+
         # avg_cadence_rpm: (0 + 80 + 0 + 100 + 0) / 5 = 36
         assert result["avg_cadence_rpm"] == 36
         # avg_cadence_pedaling_rpm: (80 + 100) / 2 = 90
@@ -117,7 +115,7 @@ class TestComputeExtendedMetricsCadence:
             {"cadence_rpm": 0},
         ]
         result = _compute_extended_metrics(records, 1000.0, 100)
-        
+
         assert result["avg_cadence_rpm"] == 0
         assert result["avg_cadence_pedaling_rpm"] is None  # No pedaling samples
         assert result["max_cadence_rpm"] == 0
@@ -129,10 +127,10 @@ class TestComputeExtendedMetricsCadence:
         coasting_records = [{"cadence_rpm": 0} for _ in range(30)]
         # Add some high cadence sprints
         sprint_records = [{"cadence_rpm": 110}]
-        
+
         records = pedaling_records + coasting_records + sprint_records
         result = _compute_extended_metrics(records, 50000.0, 7200)
-        
+
         # avg_cadence_rpm: (70*85 + 30*0 + 1*110) / 101 ≈ 60
         assert 58 <= result["avg_cadence_rpm"] <= 62
         # avg_cadence_pedaling_rpm: (70*85 + 1*110) / 71 ≈ 85.4
@@ -147,21 +145,21 @@ class TestComputeExtendedMetricsMovingSpeed:
         """Moving speed equals distance / moving_time."""
         records = [{"speed_mps": 5.0}]  # Need at least one record
         result = _compute_extended_metrics(records, 10000.0, 1000)  # 10km in 1000s
-        
+
         assert result["avg_speed_moving_mps"] == 10.0  # 10000 / 1000
 
     def test_zero_moving_time_returns_none(self):
         """Zero moving time returns None for moving speed."""
         records = [{"speed_mps": 5.0}]
         result = _compute_extended_metrics(records, 10000.0, 0)
-        
+
         assert result["avg_speed_moving_mps"] is None
 
     def test_zero_distance_returns_none(self):
         """Zero distance returns None for moving speed."""
         records = [{"speed_mps": 5.0}]
         result = _compute_extended_metrics(records, 0.0, 1000)
-        
+
         assert result["avg_speed_moving_mps"] is None
 
 
@@ -172,7 +170,7 @@ class TestComputeExtendedMetricsTemperature:
         """No temperature records returns None for all temp metrics."""
         records = [{"speed_mps": 5.0}]
         result = _compute_extended_metrics(records, 1000.0, 100)
-        
+
         assert result["avg_temperature_c"] is None
         assert result["min_temperature_c"] is None
         assert result["max_temperature_c"] is None
@@ -186,7 +184,7 @@ class TestComputeExtendedMetricsTemperature:
             {"temperature_c": 18},
         ]
         result = _compute_extended_metrics(records, 1000.0, 100)
-        
+
         assert result["avg_temperature_c"] == 21.2  # (20+25+22+18) / 4
         assert result["min_temperature_c"] == 18
         assert result["max_temperature_c"] == 25
@@ -199,7 +197,7 @@ class TestComputeExtendedMetricsAltitude:
         """No altitude records returns None for altitude metrics."""
         records = [{"speed_mps": 5.0}]
         result = _compute_extended_metrics(records, 1000.0, 100)
-        
+
         assert result["min_altitude_m"] is None
         assert result["max_altitude_m"] is None
         assert result["elevation_loss_m"] is None
@@ -213,7 +211,7 @@ class TestComputeExtendedMetricsAltitude:
             {"altitude_m": 520},
         ]
         result = _compute_extended_metrics(records, 1000.0, 100)
-        
+
         assert result["min_altitude_m"] == 480
         assert result["max_altitude_m"] == 550
 
@@ -225,12 +223,12 @@ class TestComputeExtendedMetricsAltitude:
         # Climb: 500 -> 600 (20 points)
         for i in range(20):
             records.append({"altitude_m": 500 + i * 5})
-        # Descent: 600 -> 450 (30 points) 
+        # Descent: 600 -> 450 (30 points)
         for i in range(30):
             records.append({"altitude_m": 600 - i * 5})
-        
+
         result = _compute_extended_metrics(records, 5000.0, 500)
-        
+
         # Elevation loss should be approximately 150m (600 - 450)
         # Allow some tolerance due to smoothing
         assert result["elevation_loss_m"] is not None
@@ -244,7 +242,7 @@ class TestComputeExtendedMetricsPower:
         """No power records returns None for max power."""
         records = [{"speed_mps": 5.0}]
         result = _compute_extended_metrics(records, 1000.0, 100)
-        
+
         assert result["max_power_w"] is None
 
     def test_max_power_computed(self):
@@ -256,7 +254,7 @@ class TestComputeExtendedMetricsPower:
             {"power_w": 150},
         ]
         result = _compute_extended_metrics(records, 1000.0, 100)
-        
+
         assert result["max_power_w"] == 350
 
     def test_zero_power_ignored(self):
@@ -267,9 +265,8 @@ class TestComputeExtendedMetricsPower:
             {"power_w": 0},
         ]
         result = _compute_extended_metrics(records, 1000.0, 100)
-        
-        assert result["max_power_w"] == 200
 
+        assert result["max_power_w"] == 200
 
 
 class TestParseRecordsIntegration:
@@ -278,18 +275,19 @@ class TestParseRecordsIntegration:
     def test_moving_time_computed_when_fit_lacks_total_moving_time(self):
         """
         When FIT file lacks total_moving_time, moving_time is computed from records.
-        
+
         This tests the fix for the bug where we used timer_time as fallback,
         which included time when the rider was stopped but timer was running.
         """
         from generate_fit import make_test_fit
-        
+
         # Create a FIT file with speed data
         fit_bytes = make_test_fit(num_records=100)
-        
+
         from trainingdash.ingest import parse_records
+
         result = parse_records(fit_bytes)
-        
+
         # Verify moving_time is computed
         # (the test FIT generator creates records with speed, so all should be "moving")
         assert result["moving_time_s"] is not None
@@ -298,34 +296,36 @@ class TestParseRecordsIntegration:
     def test_cadence_metrics_computed_correctly(self):
         """
         Cadence metrics: avg includes zeros, pedaling avg excludes zeros.
-        
+
         This tests the fix for the bug where both metrics showed the same value.
         """
         from generate_fit import make_test_fit
-        
+
         # Create a FIT file with cadence data
         fit_bytes = make_test_fit(num_records=100)
-        
+
         from trainingdash.ingest import parse_records
+
         result = parse_records(fit_bytes)
-        
+
         # Verify cadence metrics are present
         assert result["avg_cadence_rpm"] is not None
         assert result["avg_cadence_pedaling_rpm"] is not None
         assert result["max_cadence_rpm"] is not None
-        
+
         # max_cadence should be >= pedaling_avg
         assert result["max_cadence_rpm"] >= result["avg_cadence_pedaling_rpm"]
 
     def test_max_cadence_captured(self):
         """max_cadence_rpm captures the highest cadence value."""
         from generate_fit import make_test_fit
-        
+
         fit_bytes = make_test_fit(num_records=100)
-        
+
         from trainingdash.ingest import parse_records
+
         result = parse_records(fit_bytes)
-        
+
         # Verify max cadence is in reasonable range for cycling
         # make_test_fit uses cadence = 80 + (i % 20), so max should be 99
         assert result["max_cadence_rpm"] is not None

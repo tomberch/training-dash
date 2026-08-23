@@ -6,7 +6,7 @@ parameters, and pacing algorithms (heuristic or optimized).
 """
 
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 from trainingdash.domain.aero_selection import AeroSource, BikeAeroData, select_aero_params
@@ -210,7 +210,7 @@ class GenerateRacePlan:
                     target_hour=request.target_hour,
                 )
                 forecast_conditions = forecast_result.conditions or get_calm_conditions()
-                conditions_fetched_at = datetime.now(timezone.utc)
+                conditions_fetched_at = datetime.now(UTC)
                 forecast_stale = not forecast_result.forecast_available
 
                 if forecast_result.error_message:

@@ -179,9 +179,7 @@ def calibrate_from_data_points(
 
     # Filter out steep descents where braking dominates physics
     # Keep grades from -4% to +15%
-    filtered_points = [
-        dp for dp in data_points if -4 <= dp.grade_pct <= 15 and dp.power_w > 30
-    ]
+    filtered_points = [dp for dp in data_points if -4 <= dp.grade_pct <= 15 and dp.power_w > 30]
 
     if len(filtered_points) < 3:
         raise ValueError(
@@ -273,8 +271,7 @@ def calibrate_from_data_points(
         )
     elif fitted_cda > 0.55:
         warnings.append(
-            f"Fitted CdA ({fitted_cda:.3f}) is quite high - indicates very upright position "
-            "or possible data issues."
+            f"Fitted CdA ({fitted_cda:.3f}) is quite high - indicates very upright position or possible data issues."
         )
 
     if fitted_crr < 0.003:
@@ -284,8 +281,7 @@ def calibrate_from_data_points(
         )
     elif fitted_crr > 0.008:
         warnings.append(
-            f"Fitted Crr ({fitted_crr:.4f}) is high - indicates rough roads, "
-            "low tire pressure, or wider tires."
+            f"Fitted Crr ({fitted_crr:.4f}) is high - indicates rough roads, low tire pressure, or wider tires."
         )
 
     return PhysicsCalibrationResult(

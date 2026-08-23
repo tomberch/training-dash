@@ -347,7 +347,6 @@ class TestClimbDataclass:
         assert climb.name is None
 
 
-
 class TestAssignSegmentBearings:
     """Tests for assign_segment_bearings function."""
 
@@ -470,11 +469,11 @@ class TestAssignSegmentBearings:
         )
         # Zurich area coordinates going NE then E
         points = [
-            (47.3769, 8.5417, 0.0),      # Start
-            (47.3850, 8.5550, 1000.0),   # Midpoint seg1
-            (47.3930, 8.5680, 2000.0),   # End seg1 / Start seg2
-            (47.3935, 8.5900, 3000.0),   # Midpoint seg2
-            (47.3940, 8.6120, 4000.0),   # End seg2
+            (47.3769, 8.5417, 0.0),  # Start
+            (47.3850, 8.5550, 1000.0),  # Midpoint seg1
+            (47.3930, 8.5680, 2000.0),  # End seg1 / Start seg2
+            (47.3935, 8.5900, 3000.0),  # Midpoint seg2
+            (47.3940, 8.6120, 4000.0),  # End seg2
         ]
 
         assign_segment_bearings([seg1, seg2], points)

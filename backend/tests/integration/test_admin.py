@@ -151,7 +151,6 @@ class TestAdminEndpoints:
             assert response.status_code == 401
 
 
-
 class TestWeatherBackfillEndpoints:
     """Tests for admin weather backfill endpoints."""
 
@@ -207,9 +206,7 @@ class TestWeatherBackfillEndpoints:
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_weather_backfill_trigger_sets_pending_and_queues_job(
-        self, auth_client, seed_user, db_session
-    ):
+    async def test_weather_backfill_trigger_sets_pending_and_queues_job(self, auth_client, seed_user, db_session):
         """Test that triggering backfill sets statuses to pending."""
         from datetime import datetime
 
@@ -260,9 +257,7 @@ class TestWeatherBackfillEndpoints:
         await db_session.commit()
 
         # With include_failed=true, both are processed
-        response = await auth_client.post(
-            f"/api/admin/users/{seed_user.id}/weather-backfill?include_failed=true"
-        )
+        response = await auth_client.post(f"/api/admin/users/{seed_user.id}/weather-backfill?include_failed=true")
         assert response.status_code == 200
         data = response.json()
         assert data["activities_queued"] == 2
@@ -274,9 +269,7 @@ class TestWeatherBackfillEndpoints:
             assert activity.weather_status == "pending"
 
     @pytest.mark.asyncio
-    async def test_weather_backfill_trigger_no_activities_needing_backfill(
-        self, auth_client, seed_user, db_session
-    ):
+    async def test_weather_backfill_trigger_no_activities_needing_backfill(self, auth_client, seed_user, db_session):
         """Test that backfill returns success with 0 when nothing to process."""
         from datetime import datetime
 
@@ -309,9 +302,7 @@ class TestWeatherBackfillEndpoints:
         await db_session.commit()
 
         # Login as non-admin
-        login_response = await app_client.post(
-            "/api/login", json={"email": "nonadmin@example.com", "password": "pass"}
-        )
+        login_response = await app_client.post("/api/login", json={"email": "nonadmin@example.com", "password": "pass"})
         assert login_response.status_code == 200
 
         # Try to access weather backfill endpoints

@@ -131,7 +131,6 @@ async def enqueue_match_route_job(activity_id: str, user_id: int) -> str | None:
     return job.key if job else None
 
 
-
 async def enqueue_fetch_weather_job(user_id: int, activity_id: str | None = None) -> str | None:
     """
     Enqueue a weather fetch job for activities pending weather data.

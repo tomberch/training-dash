@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from typing import TYPE_CHECKING
 
 import httpx
@@ -25,7 +25,7 @@ import httpx
 from trainingdash.domain.aero_estimation import calculate_air_density
 
 if TYPE_CHECKING:
-    from uuid import UUID
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -116,8 +116,8 @@ async def fetch_activity_weather(
 
     # Convert to UTC if needed
     if start_time.tzinfo is None:
-        start_time = start_time.replace(tzinfo=timezone.utc)
-    start_utc = start_time.astimezone(timezone.utc)
+        start_time = start_time.replace(tzinfo=UTC)
+    start_utc = start_time.astimezone(UTC)
 
     # Open-Meteo needs date range (same day for short activities)
     start_date = start_utc.date()
@@ -284,7 +284,7 @@ def _find_closest_hour_index(times: list[str], target: datetime) -> int | None:
 
     for i, time_str in enumerate(times):
         try:
-            hour_dt = datetime.fromisoformat(time_str).replace(tzinfo=timezone.utc)
+            hour_dt = datetime.fromisoformat(time_str).replace(tzinfo=UTC)
             diff = abs(hour_dt.timestamp() - target_ts)
             if diff < closest_diff:
                 closest_diff = diff
@@ -297,7 +297,6 @@ def _find_closest_hour_index(times: list[str], target: datetime) -> int | None:
         return None
 
     return closest_idx
-
 
 
 # =============================================================================
@@ -345,7 +344,7 @@ class ForecastConditions:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ForecastConditions":
+    def from_dict(cls, data: dict) -> ForecastConditions:
         """Create from dictionary (JSONB storage)."""
         return cls(
             temperature_c=data["temperature_c"],

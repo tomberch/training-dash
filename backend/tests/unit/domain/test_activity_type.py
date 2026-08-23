@@ -60,7 +60,7 @@ class TestDetectActivityType:
 
     def test_ebike_sport_defaults_to_road(self):
         """E-bike sport is treated as cycling and defaults to road.
-        
+
         E-bike exclusion from analysis is handled via bike_type, not activity_type.
         """
         assert detect_activity_type("e_biking", None) == "road"
@@ -126,7 +126,7 @@ class TestActivityTypeConstants:
 
     def test_all_types_defined(self):
         """All expected activity types are in ACTIVITY_TYPES.
-        
+
         Note: ebike is NOT an activity type. E-bike exclusion is via bike_type.
         """
         expected = {"road", "gravel", "mtb", "virtual", "indoor", "commute", "other"}

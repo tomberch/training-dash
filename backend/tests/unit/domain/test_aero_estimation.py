@@ -1,6 +1,5 @@
 """Unit tests for wind-corrected CdA/Crr estimation."""
 
-
 import pytest
 
 from trainingdash.domain.aero_estimation import (
@@ -203,20 +202,14 @@ class TestCheckEstimationRequirements:
 
     def test_gps_coverage_requirement(self):
         """Must have at least 50% GPS coverage."""
-        records = [
-            ActivityRecord(i * 1.0, None, None, 200, 8.0, 500.0, 20, None)
-            for i in range(1500)
-        ]
+        records = [ActivityRecord(i * 1.0, None, None, 200, 8.0, 500.0, 20, None) for i in range(1500)]
         can_estimate, reasons = check_estimation_requirements(records, "measured")
         assert not can_estimate
         assert any("GPS" in r for r in reasons)
 
     def test_power_coverage_requirement(self):
         """Must have at least 50% power coverage."""
-        records = [
-            ActivityRecord(i * 1.0, 47.0 + i * 0.0001, 8.0, None, 8.0, 500.0, 20, None)
-            for i in range(1500)
-        ]
+        records = [ActivityRecord(i * 1.0, 47.0 + i * 0.0001, 8.0, None, 8.0, 500.0, 20, None) for i in range(1500)]
         can_estimate, reasons = check_estimation_requirements(records, "measured")
         assert not can_estimate
         assert any("Power coverage" in r for r in reasons)

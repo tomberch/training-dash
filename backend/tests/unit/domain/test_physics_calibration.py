@@ -291,8 +291,6 @@ class TestAggregateRecordsToDataPoints:
         grade = np.array([0.0] * 10)
         timestamps = np.arange(10, dtype=float)
 
-        points = aggregate_records_to_data_points(
-            power, speed, grade, timestamps, window_size=60
-        )
+        points = aggregate_records_to_data_points(power, speed, grade, timestamps, window_size=60)
 
         assert len(points) == 0

@@ -562,9 +562,7 @@ async def hourly_backup_scheduler(ctx: dict) -> dict:
             return {"triggered": False, "reason": "wrong_hour"}
 
         # Check if backup is already running
-        running = await db.execute(
-            select(BackupHistory.id).where(BackupHistory.status == "running").limit(1)
-        )
+        running = await db.execute(select(BackupHistory.id).where(BackupHistory.status == "running").limit(1))
         if running.scalar_one_or_none() is not None:
             logger.info("hourly_backup_scheduler: backup already running, skipping")
             return {"triggered": False, "reason": "already_running"}

@@ -17,7 +17,6 @@ import contextlib
 import io
 import logging
 import os
-import re
 import tempfile
 import zipfile
 from dataclasses import dataclass

@@ -300,7 +300,6 @@ def _categorize_climb(length_m: float, avg_grade_pct: float) -> str | None:
         return None
 
 
-
 def assign_segment_bearings(
     segments: list[CourseSegment],
     points: list[tuple[float, float, float]],  # (lat, lon, distance_m)

@@ -214,11 +214,11 @@ def make_varied_terrain_records(
     # Define terrain segments with (grade_pct, duration_fraction, power_multiplier)
     # Total adds up to 1.0
     terrain_segments = [
-        (0.0, 0.25, 1.0),   # Flat: 0% grade, base power
-        (5.0, 0.30, 1.4),   # Climb: 5% grade, higher power
-        (8.0, 0.15, 1.6),   # Steeper climb: 8% grade
+        (0.0, 0.25, 1.0),  # Flat: 0% grade, base power
+        (5.0, 0.30, 1.4),  # Climb: 5% grade, higher power
+        (8.0, 0.15, 1.6),  # Steeper climb: 8% grade
         (-2.0, 0.15, 0.6),  # Gentle descent: -2% grade
-        (0.0, 0.15, 1.0),   # Flat finish
+        (0.0, 0.15, 1.0),  # Flat finish
     ]
 
     total_mass = 104.0  # rider + bike

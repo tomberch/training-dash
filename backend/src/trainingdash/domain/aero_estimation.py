@@ -204,9 +204,7 @@ def calculate_rider_heading(
     dlon_rad = math.radians(lon2 - lon1)
 
     x = math.sin(dlon_rad) * math.cos(lat2_rad)
-    y = math.cos(lat1_rad) * math.sin(lat2_rad) - math.sin(lat1_rad) * math.cos(
-        lat2_rad
-    ) * math.cos(dlon_rad)
+    y = math.cos(lat1_rad) * math.sin(lat2_rad) - math.sin(lat1_rad) * math.cos(lat2_rad) * math.cos(dlon_rad)
 
     heading_rad = math.atan2(x, y)
     heading_deg = math.degrees(heading_rad)
@@ -446,18 +444,14 @@ def prepare_data_points(
             wind_speeds.append(weather.wind_speed_mps)
 
             # Calculate headwind component
-            headwind = calculate_headwind_component(
-                heading, weather.wind_direction_deg, weather.wind_speed_mps
-            )
+            headwind = calculate_headwind_component(heading, weather.wind_direction_deg, weather.wind_speed_mps)
 
             # Apparent speed for aero calculation
             apparent_speed = r.speed_mps + headwind
 
             # Air density: prefer FIT temperature, use weather pressure
             temp_c = float(r.temperature_c) if r.temperature_c is not None else weather.temperature_c
-            air_density = calculate_air_density(
-                temp_c, weather.pressure_hpa, weather.humidity_pct
-            )
+            air_density = calculate_air_density(temp_c, weather.pressure_hpa, weather.humidity_pct)
         else:
             # No weather data - use defaults
             points_without_weather += 1
@@ -546,10 +540,7 @@ def estimate_cda_crr(
     grade_range = max_grade - min_grade
 
     if grade_range < MIN_GRADE_RANGE_PCT:
-        warnings.append(
-            f"Limited grade range ({min_grade:.1f}% to {max_grade:.1f}%). "
-            "CdA/Crr separation may be poor."
-        )
+        warnings.append(f"Limited grade range ({min_grade:.1f}% to {max_grade:.1f}%). CdA/Crr separation may be poor.")
 
     # Calculate average wind for confidence scoring
     # Estimate from apparent vs ground speed difference
@@ -568,7 +559,7 @@ def estimate_cda_crr(
             f_gravity = total_mass_kg * GRAVITY * math.sin(theta)
             f_rolling = total_mass_kg * GRAVITY * crr * math.cos(theta)
             # Aero uses apparent speed (ground + headwind)
-            f_aero = 0.5 * dp.air_density * cda * dp.apparent_speed_mps ** 2
+            f_aero = 0.5 * dp.air_density * cda * dp.apparent_speed_mps**2
 
             # Power required to maintain ground speed
             f_total = f_gravity + f_rolling + f_aero
@@ -609,26 +600,18 @@ def estimate_cda_crr(
 
     # Calculate RMS error
     final_residuals = residuals(np.array([fitted_cda, fitted_crr]))
-    rms_error = float(np.sqrt(np.mean(final_residuals ** 2)) * 100)
+    rms_error = float(np.sqrt(np.mean(final_residuals**2)) * 100)
 
     # Sanity check results
     if fitted_cda < 0.22:
-        warnings.append(
-            f"CdA ({fitted_cda:.3f}) is very low - typical only in full aero TT position"
-        )
+        warnings.append(f"CdA ({fitted_cda:.3f}) is very low - typical only in full aero TT position")
     elif fitted_cda > 0.50:
-        warnings.append(
-            f"CdA ({fitted_cda:.3f}) is high - indicates upright position or data issues"
-        )
+        warnings.append(f"CdA ({fitted_cda:.3f}) is high - indicates upright position or data issues")
 
     if fitted_crr < 0.003:
-        warnings.append(
-            f"Crr ({fitted_crr:.4f}) is very low - only achievable with race tires on smooth roads"
-        )
+        warnings.append(f"Crr ({fitted_crr:.4f}) is very low - only achievable with race tires on smooth roads")
     elif fitted_crr > 0.008:
-        warnings.append(
-            f"Crr ({fitted_crr:.4f}) is high - indicates rough roads or wide tires"
-        )
+        warnings.append(f"Crr ({fitted_crr:.4f}) is high - indicates rough roads or wide tires")
 
     # Calculate confidence score
     confidence = _calculate_confidence(

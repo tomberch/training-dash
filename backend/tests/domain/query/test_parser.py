@@ -628,7 +628,6 @@ class TestCaseSensitivity:
         assert result.projection.aggregates[0].func == "AVG"
 
 
-
 class TestTemperatureUnits:
     """Test temperature unit parsing."""
 

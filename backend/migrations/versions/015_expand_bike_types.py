@@ -21,7 +21,7 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     # Drop the old constraint
     op.drop_constraint("valid_bike_type", "bikes", type_="check")
-    
+
     # Add the expanded constraint
     op.create_check_constraint(
         "valid_bike_type",
@@ -33,7 +33,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     # Drop the expanded constraint
     op.drop_constraint("valid_bike_type", "bikes", type_="check")
-    
+
     # Restore the original constraint
     op.create_check_constraint(
         "valid_bike_type",

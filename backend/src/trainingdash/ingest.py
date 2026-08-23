@@ -307,9 +307,7 @@ def parse_records(fit_bytes: bytes) -> dict[str, Any]:
         timer_time = _safe_float(msg.get("total_timer_time"))
         elapsed_time = _safe_float(msg.get("total_elapsed_time"))
         moving_time = _safe_float(msg.get("total_moving_time"))
-        logger.debug(
-            f"FIT session: timer_time={timer_time}, elapsed_time={elapsed_time}, moving_time={moving_time}"
-        )
+        logger.debug(f"FIT session: timer_time={timer_time}, elapsed_time={elapsed_time}, moving_time={moving_time}")
         session_data = {
             "started_at": _to_naive_utc(msg.get("start_time")),
             "total_distance_m": _safe_float(msg.get("total_distance")) or 0,

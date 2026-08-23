@@ -83,19 +83,13 @@ class CreateCourseFromActivity:
         # Step 2: Get records
         records = await self._record_repo.list_for_activity(activity_id)
         if len(records) < 10:
-            raise CourseFromActivityError(
-                "Activity has too few GPS points for a course. Need at least 10 points."
-            )
+            raise CourseFromActivityError("Activity has too few GPS points for a course. Need at least 10 points.")
 
         # Step 3: Extract coordinates and elevation
-        points_with_gps = [
-            r for r in records if r.lat is not None and r.lon is not None
-        ]
+        points_with_gps = [r for r in records if r.lat is not None and r.lon is not None]
 
         if len(points_with_gps) < 10:
-            raise CourseFromActivityError(
-                "Activity has insufficient GPS data for a course."
-            )
+            raise CourseFromActivityError("Activity has insufficient GPS data for a course.")
 
         lats = [r.lat for r in points_with_gps]
         lons = [r.lon for r in points_with_gps]
@@ -114,10 +108,7 @@ class CreateCourseFromActivity:
         elevations = np.array(elevations)
 
         if not has_elevation:
-            warnings.append(
-                "Activity has no elevation data. Elevation set to 0m. "
-                "Pacing accuracy will be limited."
-            )
+            warnings.append("Activity has no elevation data. Elevation set to 0m. Pacing accuracy will be limited.")
 
         # Step 4: Smooth elevation and calculate grades
         smoothed_elevations = smooth_elevation(elevations)
@@ -215,10 +206,7 @@ class CreateCourseFromActivity:
         elevations: np.ndarray,
     ) -> WKTElement:
         """Build PostGIS 3D LineString geometry."""
-        coords = [
-            f"{lon} {lat} {elev}"
-            for lon, lat, elev in zip(lons, lats, elevations)
-        ]
+        coords = [f"{lon} {lat} {elev}" for lon, lat, elev in zip(lons, lats, elevations)]
         wkt = f"LINESTRING Z({', '.join(coords)})"
         return WKTElement(wkt, srid=4326)
 

@@ -107,8 +107,12 @@ async def create_bike(
         weight_kg=request.weight_kg,
         cda=request.cda,
         crr=request.crr,
-        cda_source=request.cda_source if request.cda and request.cda_source in ("manual", "calibrated") else ("manual" if request.cda else None),
-        crr_source=request.crr_source if request.crr and request.crr_source in ("manual", "calibrated") else ("manual" if request.crr else None),
+        cda_source=request.cda_source
+        if request.cda and request.cda_source in ("manual", "calibrated")
+        else ("manual" if request.cda else None),
+        crr_source=request.crr_source
+        if request.crr and request.crr_source in ("manual", "calibrated")
+        else ("manual" if request.crr else None),
     )
 
     saved = await bike_repo.save(bike)

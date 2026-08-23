@@ -12,18 +12,16 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 
 from trainingdash.domain.aero_estimation import (
     ActivityRecord,
     WeatherSnapshot,
     WeatherStatus,
-    calculate_air_density,
     check_estimation_requirements,
     estimate_cda_crr,
     prepare_data_points,
@@ -221,9 +219,7 @@ class FetchActivityWeather:
         await self._db.commit()
         return result
 
-    async def _process_activity(
-        self, activity: Activity, throttle_seconds: float = 0.0
-    ) -> bool:
+    async def _process_activity(self, activity: Activity, throttle_seconds: float = 0.0) -> bool:
         """Fetch and store weather for a single activity.
 
         Fetches weather at the GPS position for each hour of the activity,
@@ -265,7 +261,7 @@ class FetchActivityWeather:
             return False
 
         # Fetch weather for each hour at its GPS position
-        activity_start = activity.started_at.replace(tzinfo=timezone.utc)
+        activity_start = activity.started_at.replace(tzinfo=UTC)
         weather_count = 0
 
         for hour_offset, lat, lon in hourly_positions:
@@ -283,8 +279,7 @@ class FetchActivityWeather:
 
             if not weather_result.success:
                 logger.debug(
-                    f"Weather fetch failed for {activity.id} hour {hour_offset}: "
-                    f"{weather_result.error_message}"
+                    f"Weather fetch failed for {activity.id} hour {hour_offset}: {weather_result.error_message}"
                 )
                 continue
 
@@ -361,11 +356,7 @@ class FetchActivityWeather:
     async def _run_aero_estimation(self, activity: Activity) -> bool:
         """Run CdA/Crr estimation using stored weather data."""
         # Load records for this activity
-        records_query = (
-            select(Record)
-            .where(Record.activity_id == activity.id)
-            .order_by(Record.timestamp)
-        )
+        records_query = select(Record).where(Record.activity_id == activity.id).order_by(Record.timestamp)
         records = (await self._db.execute(records_query)).scalars().all()
 
         if len(records) < 100:

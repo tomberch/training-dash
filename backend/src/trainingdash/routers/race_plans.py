@@ -1,6 +1,6 @@
 """Race plans endpoints: generate and manage race pacing plans."""
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
@@ -16,7 +16,6 @@ from trainingdash.dependencies import (
     UserRepoD,
 )
 from trainingdash.integrations.weather import (
-    ForecastConditions,
     fetch_race_day_forecast,
     get_calm_conditions,
 )
@@ -70,7 +69,9 @@ class GeneratePlanRequestSchema(BaseModel):
     target_date: date | None = Field(None, description="Event date for weather forecast")
     target_hour: int = Field(10, ge=0, le=23, description="Hour of day for forecast (0-23)")
     wind_override_speed_mps: float | None = Field(None, ge=0, le=30, description="Manual wind speed override (m/s)")
-    wind_override_direction_deg: float | None = Field(None, ge=0, le=360, description="Manual wind direction override (degrees)")
+    wind_override_direction_deg: float | None = Field(
+        None, ge=0, le=360, description="Manual wind direction override (degrees)"
+    )
 
     def to_domain(self) -> GeneratePlanRequest:
         """Convert to domain request object."""
@@ -418,7 +419,7 @@ async def get_plan(
     # Check if forecast is stale (> 24 hours old)
     forecast_stale = False
     if plan.target_date and plan.conditions_fetched_at:
-        age = datetime.now(timezone.utc) - plan.conditions_fetched_at
+        age = datetime.now(UTC) - plan.conditions_fetched_at
         forecast_stale = age.total_seconds() > 86400  # 24 hours
 
     return RacePlanDetailResponse(
@@ -623,7 +624,7 @@ async def refresh_weather(
     )
 
     conditions = result.conditions or get_calm_conditions()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # Update plan in database
     plan.target_conditions = conditions.to_dict()

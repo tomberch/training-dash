@@ -193,13 +193,9 @@ class CalibrateFromActivities:
             InsufficientDataError: If not enough valid data found.
         """
         if method == "physics":
-            return await self._execute_physics_based(
-                user_id, bike_id, max_activities, min_confidence, rider_mass_kg
-            )
+            return await self._execute_physics_based(user_id, bike_id, max_activities, min_confidence, rider_mass_kg)
         else:
-            return await self._execute_segment_based(
-                user_id, bike_id, max_activities, min_confidence, rider_mass_kg
-            )
+            return await self._execute_segment_based(user_id, bike_id, max_activities, min_confidence, rider_mass_kg)
 
     async def _execute_physics_based(
         self,
@@ -256,9 +252,7 @@ class CalibrateFromActivities:
             power, speed, grade, timestamps, avg_altitude = self._extract_arrays(records)
 
             if len(power) < 60:
-                rejection_reasons["insufficient_valid_data"] = (
-                    rejection_reasons.get("insufficient_valid_data", 0) + 1
-                )
+                rejection_reasons["insufficient_valid_data"] = rejection_reasons.get("insufficient_valid_data", 0) + 1
                 continue
 
             air_density = air_density_from_altitude(avg_altitude)
@@ -304,9 +298,7 @@ class CalibrateFromActivities:
             await self._bike_repo.update_calibration(bike_id, user_id, result.cda, result.crr)
             updated = True
         else:
-            warnings.append(
-                f"Confidence '{result.confidence}' is below minimum '{min_confidence}'. Bike not updated."
-            )
+            warnings.append(f"Confidence '{result.confidence}' is below minimum '{min_confidence}'. Bike not updated.")
             updated = False
 
         return CalibrationResult(

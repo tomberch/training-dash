@@ -102,9 +102,7 @@ class CreateBackup:
         """
         self._backup_repo = backup_repo
         self._database_url = database_url
-        self._uploads_dir = uploads_dir or Path(
-            os.environ.get("TRAININGDASH_UPLOADS_DIR", "/app/uploads")
-        )
+        self._uploads_dir = uploads_dir or Path(os.environ.get("TRAININGDASH_UPLOADS_DIR", "/app/uploads"))
 
     async def execute(
         self,

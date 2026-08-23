@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -760,12 +760,14 @@ class ActivityPipeline:
         """
         from trainingdash.domain.aero_estimation import (
             ActivityRecord,
-            AeroEstimationResult as DomainAeroResult,
             WeatherSnapshot,
             WeatherStatus,
             check_estimation_requirements,
             estimate_cda_crr,
             prepare_data_points,
+        )
+        from trainingdash.domain.aero_estimation import (
+            AeroEstimationResult as DomainAeroResult,
         )
         from trainingdash.repositories.postgres.models import ActivityWeather
 
@@ -969,11 +971,7 @@ class ActivityPipeline:
         # Build list of GPS points with timestamps
         gps_points: list[dict] = []
         for r in self.records:
-            if (
-                r.get("lat") is not None
-                and r.get("lon") is not None
-                and r.get("timestamp") is not None
-            ):
+            if r.get("lat") is not None and r.get("lon") is not None and r.get("timestamp") is not None:
                 gps_points.append(r)
 
         if not gps_points:
@@ -994,7 +992,7 @@ class ActivityPipeline:
             return None
 
         # Fetch weather for each hour at its GPS position
-        activity_start = self.activity.started_at.replace(tzinfo=timezone.utc)
+        activity_start = self.activity.started_at.replace(tzinfo=UTC)
         weather_snapshots: list[WeatherSnapshot] = []
 
         for hour_offset, lat, lon in hourly_positions:
@@ -1008,8 +1006,7 @@ class ActivityPipeline:
 
             if not weather_result.success:
                 logger.debug(
-                    f"Weather fetch failed for {self.activity.id} hour {hour_offset}: "
-                    f"{weather_result.error_message}"
+                    f"Weather fetch failed for {self.activity.id} hour {hour_offset}: {weather_result.error_message}"
                 )
                 continue
 
@@ -1055,9 +1052,7 @@ class ActivityPipeline:
         self.activity.weather_status = WeatherStatus.FETCHED
         await self.db.flush()
 
-        logger.info(
-            f"Fetched {len(weather_snapshots)} weather snapshots for activity {self.activity.id}"
-        )
+        logger.info(f"Fetched {len(weather_snapshots)} weather snapshots for activity {self.activity.id}")
 
         return weather_snapshots
 

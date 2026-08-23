@@ -151,9 +151,7 @@ class PostgresBackupRepo:
 
     async def get_history(self, limit: int = 20) -> list[BackupHistory]:
         """List backup history entries, most recent first."""
-        result = await self._db.execute(
-            select(BackupHistory).order_by(BackupHistory.started_at.desc()).limit(limit)
-        )
+        result = await self._db.execute(select(BackupHistory).order_by(BackupHistory.started_at.desc()).limit(limit))
         return list(result.scalars().all())
 
     async def get_history_entry(self, entry_id: int) -> BackupHistory | None:
@@ -173,9 +171,7 @@ class PostgresBackupRepo:
 
     async def is_backup_running(self) -> bool:
         """Check if a backup is currently running."""
-        result = await self._db.execute(
-            select(BackupHistory.id).where(BackupHistory.status == "running").limit(1)
-        )
+        result = await self._db.execute(select(BackupHistory.id).where(BackupHistory.status == "running").limit(1))
         return result.scalar_one_or_none() is not None
 
     async def get_migration_version(self) -> str | None:

@@ -8,7 +8,7 @@ Tests cover:
 - Hour index finding
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, Mock, patch
 
 import httpx
@@ -17,7 +17,6 @@ import pytest
 from trainingdash.integrations.weather import (
     ARCHIVE_API_URL,
     HourlyWeather,
-    WeatherFetchResult,
     _find_closest_hour_index,
     _parse_hourly_response,
     fetch_activity_weather,
@@ -53,7 +52,7 @@ class TestFetchActivityWeather:
             result = await fetch_activity_weather(
                 lat=47.5,
                 lon=8.5,
-                start_time=datetime(2024, 6, 15, 10, 30, tzinfo=timezone.utc),
+                start_time=datetime(2024, 6, 15, 10, 30, tzinfo=UTC),
                 duration_hours=2,
             )
 
@@ -82,7 +81,7 @@ class TestFetchActivityWeather:
             result = await fetch_activity_weather(
                 lat=47.5,
                 lon=8.5,
-                start_time=datetime(2024, 6, 15, 10, 0, tzinfo=timezone.utc),
+                start_time=datetime(2024, 6, 15, 10, 0, tzinfo=UTC),
                 duration_hours=1,
             )
 
@@ -108,7 +107,7 @@ class TestFetchActivityWeather:
             result = await fetch_activity_weather(
                 lat=47.5,
                 lon=8.5,
-                start_time=datetime(2024, 6, 15, 10, 0, tzinfo=timezone.utc),
+                start_time=datetime(2024, 6, 15, 10, 0, tzinfo=UTC),
                 duration_hours=1,
             )
 
@@ -132,7 +131,7 @@ class TestFetchActivityWeather:
             result = await fetch_activity_weather(
                 lat=47.5,
                 lon=8.5,
-                start_time=datetime(2024, 6, 15, 10, 0, tzinfo=timezone.utc),
+                start_time=datetime(2024, 6, 15, 10, 0, tzinfo=UTC),
                 duration_hours=1,
             )
 
@@ -190,7 +189,7 @@ class TestParseHourlyResponse:
             }
         }
 
-        start_utc = datetime(2024, 6, 15, 9, 0, tzinfo=timezone.utc)
+        start_utc = datetime(2024, 6, 15, 9, 0, tzinfo=UTC)
         result = _parse_hourly_response(data, start_utc, duration_hours=1)
 
         assert len(result) == 2  # 09:00 and 10:00
@@ -213,7 +212,7 @@ class TestParseHourlyResponse:
             }
         }
 
-        start_utc = datetime(2024, 6, 15, 10, 0, tzinfo=timezone.utc)
+        start_utc = datetime(2024, 6, 15, 10, 0, tzinfo=UTC)
         result = _parse_hourly_response(data, start_utc, duration_hours=0)
 
         assert len(result) == 1
@@ -227,7 +226,7 @@ class TestParseHourlyResponse:
     def test_parse_empty_response_returns_empty(self):
         """Empty hourly data should return empty list."""
         data = {"hourly": {"time": []}}
-        start_utc = datetime(2024, 6, 15, 10, 0, tzinfo=timezone.utc)
+        start_utc = datetime(2024, 6, 15, 10, 0, tzinfo=UTC)
         result = _parse_hourly_response(data, start_utc, duration_hours=1)
         assert result == []
 
@@ -244,7 +243,7 @@ class TestParseHourlyResponse:
             }
         }
 
-        start_utc = datetime(2024, 6, 15, 10, 0, tzinfo=timezone.utc)
+        start_utc = datetime(2024, 6, 15, 10, 0, tzinfo=UTC)
         result = _parse_hourly_response(data, start_utc, duration_hours=0)
 
         # At 25°C, 1010 hPa, 50% humidity, air density should be ~1.17 kg/m³
@@ -257,7 +256,7 @@ class TestFindClosestHourIndex:
     def test_find_exact_match(self):
         """Should find exact hour match."""
         times = ["2024-06-15T08:00", "2024-06-15T09:00", "2024-06-15T10:00"]
-        target = datetime(2024, 6, 15, 9, 0, tzinfo=timezone.utc)
+        target = datetime(2024, 6, 15, 9, 0, tzinfo=UTC)
         result = _find_closest_hour_index(times, target)
         assert result == 1
 
@@ -265,7 +264,7 @@ class TestFindClosestHourIndex:
         """Should find closest hour when target is between hours."""
         times = ["2024-06-15T08:00", "2024-06-15T09:00", "2024-06-15T10:00"]
         # 09:20 should match 09:00
-        target = datetime(2024, 6, 15, 9, 20, tzinfo=timezone.utc)
+        target = datetime(2024, 6, 15, 9, 20, tzinfo=UTC)
         result = _find_closest_hour_index(times, target)
         assert result == 1
 
@@ -273,13 +272,13 @@ class TestFindClosestHourIndex:
         """Should return None if closest hour is > 2 hours away."""
         times = ["2024-06-15T08:00", "2024-06-15T09:00"]
         # 14:00 is 5 hours from 09:00
-        target = datetime(2024, 6, 15, 14, 0, tzinfo=timezone.utc)
+        target = datetime(2024, 6, 15, 14, 0, tzinfo=UTC)
         result = _find_closest_hour_index(times, target)
         assert result is None
 
     def test_handles_empty_list(self):
         """Should return None for empty times list."""
-        result = _find_closest_hour_index([], datetime(2024, 6, 15, 10, 0, tzinfo=timezone.utc))
+        result = _find_closest_hour_index([], datetime(2024, 6, 15, 10, 0, tzinfo=UTC))
         assert result is None
 
 
@@ -313,7 +312,7 @@ class TestWindSpeedConversion:
             result = await fetch_activity_weather(
                 lat=47.5,
                 lon=8.5,
-                start_time=datetime(2024, 6, 15, 10, 0, tzinfo=timezone.utc),
+                start_time=datetime(2024, 6, 15, 10, 0, tzinfo=UTC),
                 duration_hours=0,
             )
 
@@ -341,7 +340,6 @@ class TestHourlyWeatherDataclass:
             weather.temperature_c = 25.0
 
 
-
 # =============================================================================
 # Forecast API Tests
 # =============================================================================
@@ -352,7 +350,6 @@ from trainingdash.integrations.weather import (
     FORECAST_API_URL,
     MAX_FORECAST_DAYS,
     ForecastConditions,
-    ForecastResult,
     _parse_forecast_response,
     fetch_race_day_forecast,
     get_calm_conditions,
@@ -514,9 +511,7 @@ class TestFetchRaceDayForecast:
         """Target date in the past should return calm conditions."""
         past_date = date.today() - timedelta(days=5)
 
-        result = await fetch_race_day_forecast(
-            lat=47.5, lon=8.5, target_date=past_date
-        )
+        result = await fetch_race_day_forecast(lat=47.5, lon=8.5, target_date=past_date)
 
         assert result.success is True
         assert result.forecast_available is False
@@ -528,9 +523,7 @@ class TestFetchRaceDayForecast:
         """Target date beyond forecast range should return calm conditions."""
         far_future = date.today() + timedelta(days=MAX_FORECAST_DAYS + 10)
 
-        result = await fetch_race_day_forecast(
-            lat=47.5, lon=8.5, target_date=far_future
-        )
+        result = await fetch_race_day_forecast(lat=47.5, lon=8.5, target_date=far_future)
 
         assert result.success is True
         assert result.forecast_available is False
@@ -561,9 +554,7 @@ class TestFetchRaceDayForecast:
             mock_instance.get.return_value = mock_response_obj
 
             target = date.today() + timedelta(days=5)
-            result = await fetch_race_day_forecast(
-                lat=47.5, lon=8.5, target_date=target, target_hour=10
-            )
+            result = await fetch_race_day_forecast(lat=47.5, lon=8.5, target_date=target, target_hour=10)
 
         assert result.success is True
         assert result.forecast_available is True
@@ -580,9 +571,7 @@ class TestFetchRaceDayForecast:
             mock_instance.get.side_effect = httpx.TimeoutException("Timeout")
 
             target = date.today() + timedelta(days=3)
-            result = await fetch_race_day_forecast(
-                lat=47.5, lon=8.5, target_date=target
-            )
+            result = await fetch_race_day_forecast(lat=47.5, lon=8.5, target_date=target)
 
         assert result.success is False
         assert result.conditions.wind_speed_mps == 0.0
@@ -602,9 +591,7 @@ class TestFetchRaceDayForecast:
             )
 
             target = date.today() + timedelta(days=3)
-            result = await fetch_race_day_forecast(
-                lat=47.5, lon=8.5, target_date=target
-            )
+            result = await fetch_race_day_forecast(lat=47.5, lon=8.5, target_date=target)
 
         assert result.success is False
         assert result.conditions.wind_speed_mps == 0.0

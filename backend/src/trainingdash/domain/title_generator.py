@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 ROUNDTRIP_THRESHOLD_M = 1000  # Start/end within 1km = roundtrip
 WAYPOINT_MIN_SPACING_M = 5000  # Minimum 5km between waypoints
 SAMPLE_INTERVAL_M = 200  # Sample route every 200m (was 500m) for better accuracy
-PASS_MATCH_THRESHOLD_M = 200  # Match passes within 200m of route
+PASS_MATCH_THRESHOLD_M = 300  # Match passes within 300m of route
 PLACE_PROXIMITY_THRESHOLD_M = 500  # Only include places within 500m of actual route
 
 # Maximum waypoints in title

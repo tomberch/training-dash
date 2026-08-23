@@ -181,7 +181,7 @@ async def get_backup_config(
     configured = host_path is not None
     path_valid = is_backup_path_valid() if configured else False
     path_error = get_path_error() if configured else None
-    
+
     # Get stored config for schedule/retention (may not exist yet)
     config = await backup_repo.get_config()
 

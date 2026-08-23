@@ -551,7 +551,6 @@ async def admin_nuke_account(
     return {"success": True, "deleted": summary}
 
 
-
 # --- Weather backfill ---
 
 
@@ -598,10 +597,12 @@ async def admin_get_weather_backfill_status(
     aero_result = await db.execute(
         select(
             func.count().filter(Activity.estimated_cda.isnot(None)).label("with_aero"),
-            func.count().filter(
+            func.count()
+            .filter(
                 Activity.weather_status == "fetched",
                 Activity.estimated_cda.is_(None),
-            ).label("pending_aero"),
+            )
+            .label("pending_aero"),
         ).where(Activity.user_id == user_id)
     )
     aero_row = aero_result.one()
@@ -661,9 +662,7 @@ async def admin_trigger_weather_backfill(
 
     # Count activities needing backfill
     count_result = await db.execute(
-        select(func.count())
-        .select_from(Activity)
-        .where(Activity.user_id == user_id, or_(*status_filters))
+        select(func.count()).select_from(Activity).where(Activity.user_id == user_id, or_(*status_filters))
     )
     backfill_count = count_result.scalar() or 0
 
@@ -677,9 +676,7 @@ async def admin_trigger_weather_backfill(
 
     # Update matching activities to 'pending' status
     await db.execute(
-        update(Activity)
-        .where(Activity.user_id == user_id, or_(*status_filters))
-        .values(weather_status="pending")
+        update(Activity).where(Activity.user_id == user_id, or_(*status_filters)).values(weather_status="pending")
     )
     await db.commit()
 

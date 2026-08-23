@@ -799,7 +799,6 @@ class RacePlan(Base):
     bike: Mapped["Bike | None"] = relationship("Bike", lazy="select")
 
 
-
 # =============================================================================
 # Backup Models
 # =============================================================================
@@ -813,9 +812,7 @@ class BackupConfig(Base):
     """
 
     __tablename__ = "backup_config"
-    __table_args__ = (
-        sa.CheckConstraint("id = 1", name="backup_config_singleton"),
-    )
+    __table_args__ = (sa.CheckConstraint("id = 1", name="backup_config_singleton"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")

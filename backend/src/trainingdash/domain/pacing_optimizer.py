@@ -468,12 +468,16 @@ def optimize_pacing_for_time(
     # Check feasibility: can we achieve this time at all?
     # Best case: max power on all segments
     max_powers = np.full(n_segments, max_power)
-    min_possible_times = _compute_segment_times(max_powers, segments, rider_params, env_params, segment_env_params, speed_cache)
+    min_possible_times = _compute_segment_times(
+        max_powers, segments, rider_params, env_params, segment_env_params, speed_cache
+    )
     min_possible_time = np.sum(min_possible_times)
 
     # Worst case: min power on all segments
     min_powers = np.full(n_segments, min_power)
-    max_possible_times = _compute_segment_times(min_powers, segments, rider_params, env_params, segment_env_params, speed_cache)
+    max_possible_times = _compute_segment_times(
+        min_powers, segments, rider_params, env_params, segment_env_params, speed_cache
+    )
     max_possible_time = np.sum(max_possible_times)
 
     if target_time_s < min_possible_time:

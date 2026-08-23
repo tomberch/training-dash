@@ -39,7 +39,6 @@ from .ast import (
 from .fields import FIELD_DEFINITIONS
 from .validator import ValidatedQuery
 
-
 # Zone field patterns for extracting zone number from field name
 POWER_ZONE_PATTERN = re.compile(r"^power_zone_(\d+)_s$")
 HR_ZONE_PATTERN = re.compile(r"^hr_zone_(\d+)_s$")
