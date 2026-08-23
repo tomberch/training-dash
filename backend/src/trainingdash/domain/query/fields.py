@@ -73,6 +73,7 @@ def convert_temperature(value: float, from_unit: str) -> float:
         return (value - 32) * 5 / 9
     raise ValueError(f"Unknown temperature unit: {from_unit}")
 
+
 # Map internal unit suffixes to the standard internal unit
 INTERNAL_UNIT_MAP: dict[str, str] = {
     "_m": "m",  # meters
