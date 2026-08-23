@@ -90,6 +90,7 @@ def generate_heuristic_pacing(
     rider_params: RiderParams | None = None,
     env_params: EnvironmentParams | None = None,
     segment_env_params: list[EnvironmentParams] | None = None,
+    max_descent_speed_mps: float | None = None,
 ) -> PacingPlan:
     """
     Generate pacing plan using grade-based heuristics.
@@ -112,6 +113,8 @@ def generate_heuristic_pacing(
             If None, uses typical values (83kg, 0.32 CdA, 0.004 Crr).
         env_params: Environmental conditions. If None, uses sea level.
         segment_env_params: Optional per-segment environment params (for wind).
+        max_descent_speed_mps: Maximum descent speed cap in m/s. If None, no cap.
+            Typical values: 15-18 m/s (54-65 km/h).
 
     Returns:
         PacingPlan with per-segment targets and overall metrics.
@@ -153,6 +156,7 @@ def generate_heuristic_pacing(
             segment.avg_grade_pct,
             rider_params,
             seg_env,
+            max_descent_speed_mps=max_descent_speed_mps,
         )
 
         # Calculate time for segment

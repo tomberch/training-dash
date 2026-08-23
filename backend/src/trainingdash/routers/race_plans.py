@@ -72,6 +72,9 @@ class GeneratePlanRequestSchema(BaseModel):
     wind_override_direction_deg: float | None = Field(
         None, ge=0, le=360, description="Manual wind direction override (degrees)"
     )
+    max_descent_speed_mps: float | None = Field(
+        None, ge=5, le=30, description="Max descent speed cap (m/s). Default ~18 m/s = 65 km/h"
+    )
 
     def to_domain(self) -> GeneratePlanRequest:
         """Convert to domain request object."""
@@ -92,6 +95,7 @@ class GeneratePlanRequestSchema(BaseModel):
             target_hour=self.target_hour,
             wind_override_speed_mps=self.wind_override_speed_mps,
             wind_override_direction_deg=self.wind_override_direction_deg,
+            max_descent_speed_mps=self.max_descent_speed_mps,
         )
 
 
@@ -207,6 +211,7 @@ class RacePlanDetailResponse(RacePlanResponse):
     forecast_stale: bool = False  # True if fetched > 24h ago or target_date changed
     wind_override_speed_mps: float | None = None
     wind_override_direction_deg: float | None = None
+    max_descent_speed_mps: float | None = None
 
 
 class PlanUpdateSchema(BaseModel):
@@ -458,6 +463,7 @@ async def get_plan(
         forecast_stale=forecast_stale,
         wind_override_speed_mps=plan.wind_override_speed_mps,
         wind_override_direction_deg=plan.wind_override_direction_deg,
+        max_descent_speed_mps=plan.max_descent_speed_mps,
     )
 
 

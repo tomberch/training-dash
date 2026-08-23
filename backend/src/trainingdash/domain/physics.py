@@ -195,6 +195,7 @@ def speed_from_power(
     grade_pct: float,
     rider: RiderParams,
     env: EnvironmentParams | None = None,
+    max_descent_speed_mps: float | None = None,
     tol: float = 1e-6,
     max_iter: int = 50,
 ) -> float:
@@ -210,12 +211,18 @@ def speed_from_power(
     Note: On steep descents with low power, gravity can exceed resistance at
     moderate speeds, meaning even zero power would produce motion. In this case,
     we find the speed where the given power is required, which may be quite high.
+    Use max_descent_speed_mps to cap descent speeds to realistic values.
 
     Args:
         power_w: Power at the pedals in watts.
         grade_pct: Road gradient as percentage.
         rider: Rider and bike parameters.
         env: Environmental conditions. Defaults to sea-level, no wind.
+        max_descent_speed_mps: Maximum descent speed in m/s. If None, no limit
+            is applied (beyond the solver's 50 m/s cap). Typical values:
+            - 15 m/s (54 km/h): Conservative, technical descents
+            - 18 m/s (65 km/h): Moderate, familiar roads
+            - 22 m/s (80 km/h): Aggressive, open roads
         tol: Convergence tolerance in watts. Default 1e-6.
         max_iter: Maximum iterations. Default 50.
 
@@ -295,6 +302,9 @@ def speed_from_power(
         residual, derivative = f_and_df(v)
 
         if abs(residual) < tol:
+            # Apply descent speed cap if on a descent and cap is specified
+            if max_descent_speed_mps is not None and grade_pct < 0:
+                v = min(v, max_descent_speed_mps)
             return v
 
         # Avoid division by zero or very small derivative
@@ -315,11 +325,17 @@ def speed_from_power(
 
         # Check for convergence
         if abs(v_new - v) < tol * 0.01:
+            # Apply descent speed cap if on a descent and cap is specified
+            if max_descent_speed_mps is not None and grade_pct < 0:
+                v_new = min(v_new, max_descent_speed_mps)
             return v_new
 
         v = v_new
 
     # If we get here, return best estimate (shouldn't happen for valid inputs)
+    # Apply descent speed cap if on a descent and cap is specified
+    if max_descent_speed_mps is not None and grade_pct < 0:
+        v = min(v, max_descent_speed_mps)
     return v
 
 

@@ -63,6 +63,7 @@ class GeneratePlanRequest:
     target_hour: int = 10  # Hour of day for forecast (0-23)
     wind_override_speed_mps: float | None = None  # Manual wind speed override
     wind_override_direction_deg: float | None = None  # Manual wind direction override
+    max_descent_speed_mps: float | None = None  # Cap descent speed (e.g., 18 m/s = 65 km/h)
 
 
 @dataclass
@@ -299,6 +300,7 @@ class GenerateRacePlan:
                 rider_params=rider_params,
                 env_params=env_params,
                 segment_env_params=segment_env_params,
+                max_descent_speed_mps=request.max_descent_speed_mps,
             )
 
             total_time_s = optimized.total_time_s
@@ -344,6 +346,7 @@ class GenerateRacePlan:
                 rider_params=rider_params,
                 env_params=env_params,
                 segment_env_params=segment_env_params,
+                max_descent_speed_mps=request.max_descent_speed_mps,
             )
 
             total_time_s = optimized.total_time_s
@@ -381,6 +384,7 @@ class GenerateRacePlan:
                 rider_params=rider_params,
                 env_params=env_params,
                 segment_env_params=segment_env_params,
+                max_descent_speed_mps=request.max_descent_speed_mps,
             )
 
             total_time_s = heuristic.total_time_s
@@ -456,6 +460,7 @@ class GenerateRacePlan:
             conditions_fetched_at=conditions_fetched_at,
             wind_override_speed_mps=request.wind_override_speed_mps,
             wind_override_direction_deg=request.wind_override_direction_deg,
+            max_descent_speed_mps=request.max_descent_speed_mps,
         )
 
         saved_plan = await self._plan_repo.save(plan)

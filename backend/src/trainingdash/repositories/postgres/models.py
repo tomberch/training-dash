@@ -689,7 +689,7 @@ class RaceCourse(Base):
     __tablename__ = "race_courses"
     __table_args__ = (
         sa.CheckConstraint(
-            "source_type IN ('gpx', 'fit', 'manual')",
+            "source_type IN ('gpx', 'fit', 'manual', 'activity')",
             name="valid_source_type",
         ),
     )
@@ -698,7 +698,7 @@ class RaceCourse(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    source_type: Mapped[str] = mapped_column(String(20), nullable=False)  # gpx, fit, manual
+    source_type: Mapped[str] = mapped_column(String(20), nullable=False)  # gpx, fit, manual, activity
     source_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # Course metrics
@@ -768,6 +768,7 @@ class RacePlan(Base):
     # Plan configuration
     target_intensity: Mapped[Decimal | None] = mapped_column(Numeric(3, 2), nullable=True)  # e.g., 0.85 for 85% IF
     optimization_method: Mapped[str | None] = mapped_column(String(20), nullable=True)  # heuristic, optimized
+    max_descent_speed_mps: Mapped[float | None] = mapped_column(Float, nullable=True)  # Cap descent speed
 
     # Results
     total_time_s: Mapped[float] = mapped_column(Float, nullable=False)

@@ -467,6 +467,7 @@ export function GeneratePlan(): JSX.Element {
   const [targetTime, setTargetTime] = useState<string>("");
   const [useOptimizer, setUseOptimizer] = useState(false);
   const [planName, setPlanName] = useState("");
+  const [maxDescentSpeed, setMaxDescentSpeed] = useState<number | null>(null);
 
   // Generation state
   const [generating, setGenerating] = useState(false);
@@ -569,6 +570,7 @@ export function GeneratePlan(): JSX.Element {
     request.cp_watts = cp ? parseInt(cp) : Math.round(ftpValue * 0.95);
     request.w_prime_joules = wPrime ? parseInt(wPrime) : 20000;
     if (planName.trim()) request.name = planName.trim();
+    if (maxDescentSpeed !== null) request.max_descent_speed_mps = maxDescentSpeed;
 
     try {
       const planResult = await generateRacePlan(request);
@@ -796,6 +798,54 @@ export function GeneratePlan(): JSX.Element {
                 </p>
               </div>
             )}
+
+            {/* Max Descent Speed Cap */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="max-descent-speed" className="text-sm font-medium">
+                    Cap Descent Speed
+                  </Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Limit max speed on descents for more realistic times
+                  </p>
+                </div>
+                <Switch
+                  id="max-descent-speed-toggle"
+                  checked={maxDescentSpeed !== null}
+                  onCheckedChange={(checked) => setMaxDescentSpeed(checked ? 18 : null)}
+                />
+              </div>
+              {maxDescentSpeed !== null && (
+                <div className="space-y-2 pt-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm">
+                      {maxDescentSpeed.toFixed(0)} m/s ({(maxDescentSpeed * 3.6).toFixed(0)} km/h)
+                    </span>
+                    <span className="text-sm text-muted-foreground">
+                      {maxDescentSpeed <= 15 ? "Conservative" :
+                       maxDescentSpeed <= 18 ? "Moderate" :
+                       maxDescentSpeed <= 22 ? "Fast" : "Very fast"}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    id="max-descent-speed"
+                    min="10"
+                    max="25"
+                    step="1"
+                    value={maxDescentSpeed}
+                    onChange={(e) => setMaxDescentSpeed(parseFloat(e.target.value))}
+                    className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
+                  />
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>36 km/h</span>
+                    <span>65 km/h</span>
+                    <span>90 km/h</span>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </section>
 

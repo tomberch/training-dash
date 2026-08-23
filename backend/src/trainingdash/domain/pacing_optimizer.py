@@ -105,6 +105,7 @@ def _compute_segment_times(
     env_params: EnvironmentParams,
     segment_env_params: list[EnvironmentParams] | None = None,
     _cache: dict | None = None,
+    max_descent_speed_mps: float | None = None,
 ) -> np.ndarray:
     """Compute time for each segment given power distribution.
 
@@ -115,6 +116,7 @@ def _compute_segment_times(
         env_params: Default environment params (used if segment_env_params not provided).
         segment_env_params: Optional per-segment environment params (for wind variation).
         _cache: Optional cache keyed by (power, grade, wind) tuples.
+        max_descent_speed_mps: Optional cap on descent speed (m/s).
 
     Returns:
         Array of times in seconds for each segment.
@@ -127,14 +129,19 @@ def _compute_segment_times(
         # Use per-segment env params if provided, else default
         seg_env = segment_env_params[i] if segment_env_params else env_params
 
-        # Check cache (include wind in key for per-segment variation)
+        # Check cache (include wind and max_descent_speed in key for per-segment variation)
         if _cache is not None:
-            cache_key = (round(power, 1), round(grade, 2), round(seg_env.wind_speed_mps, 2))
+            cache_key = (
+                round(power, 1),
+                round(grade, 2),
+                round(seg_env.wind_speed_mps, 2),
+                round(max_descent_speed_mps, 1) if max_descent_speed_mps else None,
+            )
             if cache_key in _cache:
                 times[i] = seg.length_m / _cache[cache_key]
                 continue
 
-        speed = speed_from_power(power, grade, rider_params, seg_env)
+        speed = speed_from_power(power, grade, rider_params, seg_env, max_descent_speed_mps)
 
         # Store in cache
         if _cache is not None:
@@ -194,6 +201,7 @@ def optimize_pacing(
     segment_env_params: list[EnvironmentParams] | None = None,
     config: OptimizationConfig | None = None,
     initial_guess: PacingPlan | None = None,
+    max_descent_speed_mps: float | None = None,
 ) -> OptimizedPlan:
     """
     Optimize power distribution to minimize total time.
@@ -255,13 +263,16 @@ def optimize_pacing(
             target_intensity=target_intensity,
             rider_params=rider_params,
             env_params=env_params,
+            max_descent_speed_mps=max_descent_speed_mps,
         )
 
     # Extract initial powers and scale to match energy budget
     x0 = np.array([t.target_power_w for t in initial_guess.targets])
 
     # Scale initial guess to roughly match energy budget
-    init_times = _compute_segment_times(x0, segments, rider_params, env_params, segment_env_params)
+    init_times = _compute_segment_times(
+        x0, segments, rider_params, env_params, segment_env_params, max_descent_speed_mps=max_descent_speed_mps
+    )
     init_energy = np.sum(x0 * init_times)
     if init_energy > 0:
         scale_factor = target_energy_j / init_energy
@@ -277,23 +288,29 @@ def optimize_pacing(
     # Clip initial guess to bounds
     x0 = np.clip(x0, min_power, max_power)
 
-    # Speed cache for performance - keyed by (power, grade, wind)
-    speed_cache: dict[tuple[float, float, float], float] = {}
+    # Speed cache for performance - keyed by (power, grade, wind, max_descent_speed)
+    speed_cache: dict[tuple[float, float, float, float | None], float] = {}
 
     # Objective function
     def objective(powers: np.ndarray) -> float:
-        times = _compute_segment_times(powers, segments, rider_params, env_params, segment_env_params, speed_cache)
+        times = _compute_segment_times(
+            powers, segments, rider_params, env_params, segment_env_params, speed_cache, max_descent_speed_mps
+        )
         return np.sum(times)
 
     # Energy equality constraint: sum(power * time) = target
     def energy_constraint(powers: np.ndarray) -> float:
-        times = _compute_segment_times(powers, segments, rider_params, env_params, segment_env_params, speed_cache)
+        times = _compute_segment_times(
+            powers, segments, rider_params, env_params, segment_env_params, speed_cache, max_descent_speed_mps
+        )
         total_energy = np.sum(powers * times)
         return total_energy - target_energy_j
 
     # W'bal inequality constraint: min_wbal >= threshold
     def wbal_constraint(powers: np.ndarray) -> float:
-        times = _compute_segment_times(powers, segments, rider_params, env_params, segment_env_params, speed_cache)
+        times = _compute_segment_times(
+            powers, segments, rider_params, env_params, segment_env_params, speed_cache, max_descent_speed_mps
+        )
         min_wbal = _compute_wbal_min_fast(powers, times, rider_cp, rider_w_prime)
         return min_wbal - config.wbal_min_threshold
 
@@ -328,7 +345,9 @@ def optimize_pacing(
     optimized_powers = np.array(result.x)
 
     # Build pacing targets from optimized powers
-    targets = _build_targets(optimized_powers, segments, rider_params, env_params, segment_env_params)
+    targets = _build_targets(
+        optimized_powers, segments, rider_params, env_params, segment_env_params, max_descent_speed_mps
+    )
     total_time = sum(t.estimated_time_s for t in targets)
     total_distance = sum(t.distance_m for t in targets)
 
@@ -372,13 +391,14 @@ def _build_targets(
     rider_params: RiderParams,
     env_params: EnvironmentParams,
     segment_env_params: list[EnvironmentParams] | None = None,
+    max_descent_speed_mps: float | None = None,
 ) -> list[PacingTarget]:
     """Build PacingTarget list from optimized powers."""
     targets = []
     for i, seg in enumerate(segments):
         # Use per-segment env params if provided
         seg_env = segment_env_params[i] if segment_env_params else env_params
-        speed = speed_from_power(powers[i], seg.avg_grade_pct, rider_params, seg_env)
+        speed = speed_from_power(powers[i], seg.avg_grade_pct, rider_params, seg_env, max_descent_speed_mps)
         time = seg.length_m / speed if speed > 0 else float("inf")
 
         targets.append(
@@ -407,6 +427,7 @@ def optimize_pacing_for_time(
     env_params: EnvironmentParams | None = None,
     segment_env_params: list[EnvironmentParams] | None = None,
     config: OptimizationConfig | None = None,
+    max_descent_speed_mps: float | None = None,
 ) -> OptimizedPlan:
     """
     Optimize power distribution to achieve a target finish time.
@@ -463,20 +484,20 @@ def optimize_pacing_for_time(
     bounds = [(min_power, max_power) for _ in range(n_segments)]
 
     # Speed cache for performance
-    speed_cache: dict[tuple[float, float, float], float] = {}
+    speed_cache: dict[tuple[float, float, float, float | None], float] = {}
 
     # Check feasibility: can we achieve this time at all?
     # Best case: max power on all segments
     max_powers = np.full(n_segments, max_power)
     min_possible_times = _compute_segment_times(
-        max_powers, segments, rider_params, env_params, segment_env_params, speed_cache
+        max_powers, segments, rider_params, env_params, segment_env_params, speed_cache, max_descent_speed_mps
     )
     min_possible_time = np.sum(min_possible_times)
 
     # Worst case: min power on all segments
     min_powers = np.full(n_segments, min_power)
     max_possible_times = _compute_segment_times(
-        min_powers, segments, rider_params, env_params, segment_env_params, speed_cache
+        min_powers, segments, rider_params, env_params, segment_env_params, speed_cache, max_descent_speed_mps
     )
     max_possible_time = np.sum(max_possible_times)
 
@@ -497,7 +518,8 @@ def optimize_pacing_for_time(
     # Binary search to find constant power that achieves target time
     # This gives us a good starting point
     constant_power = _find_constant_power_for_time(
-        segments, target_time_s, rider_params, env_params, min_power, max_power, segment_env_params
+        segments, target_time_s, rider_params, env_params, min_power, max_power, segment_env_params,
+        max_descent_speed_mps
     )
     if constant_power is None:
         constant_power = (min_power + max_power) / 2
@@ -523,7 +545,9 @@ def optimize_pacing_for_time(
     time_penalty_weight = 1000.0  # Heavy penalty for missing target time
 
     def objective(powers: np.ndarray) -> float:
-        times = _compute_segment_times(powers, segments, rider_params, env_params, segment_env_params, speed_cache)
+        times = _compute_segment_times(
+            powers, segments, rider_params, env_params, segment_env_params, speed_cache, max_descent_speed_mps
+        )
         total_time = np.sum(times)
         total_energy = np.sum(powers * times)
 
@@ -533,7 +557,9 @@ def optimize_pacing_for_time(
 
     # W'bal inequality constraint
     def wbal_constraint(powers: np.ndarray) -> float:
-        times = _compute_segment_times(powers, segments, rider_params, env_params, segment_env_params, speed_cache)
+        times = _compute_segment_times(
+            powers, segments, rider_params, env_params, segment_env_params, speed_cache, max_descent_speed_mps
+        )
         min_wbal = _compute_wbal_min_fast(powers, times, rider_cp, rider_w_prime)
         return min_wbal - config.wbal_min_threshold
 
@@ -559,7 +585,9 @@ def optimize_pacing_for_time(
     optimized_powers = np.array(result.x)
 
     # Build pacing targets
-    targets = _build_targets(optimized_powers, segments, rider_params, env_params, segment_env_params)
+    targets = _build_targets(
+        optimized_powers, segments, rider_params, env_params, segment_env_params, max_descent_speed_mps
+    )
     total_time = sum(t.estimated_time_s for t in targets)
     total_distance_m = sum(t.distance_m for t in targets)
 
@@ -609,13 +637,16 @@ def _find_constant_power_for_time(
     min_power: float,
     max_power: float,
     segment_env_params: list[EnvironmentParams] | None = None,
+    max_descent_speed_mps: float | None = None,
 ) -> float | None:
     """Binary search for constant power that achieves target time."""
-    cache: dict[tuple[float, float, float], float] = {}
+    cache: dict[tuple[float, float, float, float | None], float] = {}
 
     def total_time_at_power(power: float) -> float:
         powers = np.full(len(segments), power)
-        times = _compute_segment_times(powers, segments, rider_params, env_params, segment_env_params, cache)
+        times = _compute_segment_times(
+            powers, segments, rider_params, env_params, segment_env_params, cache, max_descent_speed_mps
+        )
         return np.sum(times)
 
     # Binary search

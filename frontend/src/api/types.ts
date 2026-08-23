@@ -369,6 +369,7 @@ export interface GeneratePlanRequest {
   target_time_s?: number | null; // Target finish time in seconds (overrides intensity)
   use_optimizer?: boolean;
   name?: string | null;
+  max_descent_speed_mps?: number | null; // Cap descent speed (m/s), e.g. 18 = 65 km/h
 }
 
 export interface RacePlanResponse {
