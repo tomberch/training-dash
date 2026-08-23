@@ -127,14 +127,26 @@ export interface Activity {
   title_source: "auto" | "manual" | "pending";
   started_at: string;
   total_distance_m: number;
+  // Time metrics
   moving_time_s: number;
+  timer_time_s: number | null;
   elapsed_time_s: number;
+  // Elevation metrics
   elevation_gain_m: number;
+  elevation_loss_m: number | null;
+  min_altitude_m: number | null;
+  max_altitude_m: number | null;
+  max_grade_pct: number | null;
+  // Speed metrics
   avg_speed_mps: number;
-  avg_hr_bpm: number | null;
-  avg_power_w: number | null;
+  avg_speed_moving_mps: number | null;
   max_speed_mps: number;
+  // HR metrics
+  avg_hr_bpm: number | null;
   max_hr_bpm: number | null;
+  // Power metrics
+  avg_power_w: number | null;
+  max_power_w: number | null;
   np_power_w: number | null;
   intensity_factor: number | null;
   tss: number | null;
@@ -145,8 +157,17 @@ export interface Activity {
   wbal_min_pct: number | null;
   power_source: "measured" | "hr_derived" | null;
   power_confidence: number | null;
+  // Cadence metrics
+  avg_cadence_rpm: number | null;
+  avg_cadence_pedaling_rpm: number | null;
+  // Temperature metrics
+  avg_temperature_c: number | null;
+  min_temperature_c: number | null;
+  max_temperature_c: number | null;
+  // Peak powers
   peaks: PeakPower[];
   is_breakthrough: boolean;
+  // Display
   map_polyline: string | null;
   utc_offset_minutes: number | null;
   activity_type: ActivityType | null;

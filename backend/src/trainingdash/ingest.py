@@ -82,6 +82,116 @@ def _compute_moving_time(records: list[dict]) -> int:
     return sum(1 for r in records if (r.get("speed_mps") or 0) > MOVING_SPEED_THRESHOLD)
 
 
+def _compute_extended_metrics(
+    records: list[dict],
+    total_distance_m: float,
+    moving_time_s: int,
+) -> dict[str, Any]:
+    """
+    Compute extended metrics from activity records.
+
+    Returns dict with:
+    - elevation_loss_m, min_altitude_m, max_altitude_m, max_grade_pct
+    - avg_speed_moving_mps
+    - max_power_w
+    - avg_cadence_rpm, avg_cadence_pedaling_rpm
+    - avg_temperature_c, min_temperature_c, max_temperature_c
+    """
+    result: dict[str, Any] = {
+        "elevation_loss_m": None,
+        "min_altitude_m": None,
+        "max_altitude_m": None,
+        "max_grade_pct": None,
+        "avg_speed_moving_mps": None,
+        "max_power_w": None,
+        "avg_cadence_rpm": None,
+        "avg_cadence_pedaling_rpm": None,
+        "avg_temperature_c": None,
+        "min_temperature_c": None,
+        "max_temperature_c": None,
+    }
+
+    if not records:
+        return result
+
+    # Compute avg_speed_moving from distance and moving time
+    if moving_time_s > 0 and total_distance_m > 0:
+        result["avg_speed_moving_mps"] = round(total_distance_m / moving_time_s, 3)
+
+    # Collect altitude values for min/max and elevation loss
+    altitudes = [r["altitude_m"] for r in records if r.get("altitude_m") is not None]
+    if altitudes:
+        result["min_altitude_m"] = min(altitudes)
+        result["max_altitude_m"] = max(altitudes)
+
+        # Compute elevation loss (sum of negative altitude changes)
+        # Apply simple smoothing to reduce GPS noise
+        smooth_window = 5
+        smoothed = []
+        for i in range(len(altitudes)):
+            start = max(0, i - smooth_window // 2)
+            end = min(len(altitudes), i + smooth_window // 2 + 1)
+            smoothed.append(sum(altitudes[start:end]) / (end - start))
+
+        elev_loss = 0.0
+        for i in range(1, len(smoothed)):
+            diff = smoothed[i] - smoothed[i - 1]
+            if diff < 0:
+                elev_loss += abs(diff)
+        result["elevation_loss_m"] = round(elev_loss, 1)
+
+    # Compute max grade (steepest gradient over ~200m segments)
+    # Need both altitude and distance
+    records_with_data = [
+        (r.get("distance_m"), r.get("altitude_m"))
+        for r in records
+        if r.get("distance_m") is not None and r.get("altitude_m") is not None
+    ]
+    if len(records_with_data) > 10:
+        segment_length = 200  # meters
+        max_grade = 0.0
+        i = 0
+        while i < len(records_with_data):
+            start_dist, start_alt = records_with_data[i]
+            # Find end of segment
+            j = i + 1
+            while j < len(records_with_data):
+                end_dist, end_alt = records_with_data[j]
+                dist_diff = end_dist - start_dist
+                if dist_diff >= segment_length:
+                    if dist_diff > 0:
+                        grade = ((end_alt - start_alt) / dist_diff) * 100
+                        if grade > max_grade:
+                            max_grade = grade
+                    break
+                j += 1
+            i += 1
+        if max_grade > 0:
+            result["max_grade_pct"] = round(max_grade, 1)
+
+    # Max power
+    powers = [r["power_w"] for r in records if r.get("power_w") is not None and r["power_w"] > 0]
+    if powers:
+        result["max_power_w"] = max(powers)
+
+    # Cadence: avg overall and avg while pedaling
+    cadences = [r["cadence_rpm"] for r in records if r.get("cadence_rpm") is not None]
+    if cadences:
+        result["avg_cadence_rpm"] = int(sum(cadences) / len(cadences))
+        pedaling_cadences = [c for c in cadences if c > 0]
+        if pedaling_cadences:
+            result["avg_cadence_pedaling_rpm"] = int(sum(pedaling_cadences) / len(pedaling_cadences))
+
+    # Temperature
+    temps = [r["temperature_c"] for r in records if r.get("temperature_c") is not None]
+    if temps:
+        result["avg_temperature_c"] = round(sum(temps) / len(temps), 1)
+        result["min_temperature_c"] = min(temps)
+        result["max_temperature_c"] = max(temps)
+
+    return result
+
+
 def _derive_utc_offset(
     local_timestamp: Any,
     utc_timestamp: Any,
@@ -205,11 +315,15 @@ def parse_records(fit_bytes: bytes) -> dict[str, Any]:
             "total_timer_time": timer_time,
             "total_elapsed_time": elapsed_time,
             "total_ascent": _safe_int(msg.get("total_ascent")),
+            "total_descent": _safe_int(msg.get("total_descent")),
             "avg_speed": _safe_float(msg.get("enhanced_avg_speed") or msg.get("avg_speed")),
             "max_speed": _safe_float(msg.get("enhanced_max_speed") or msg.get("max_speed")),
             "avg_hr": _safe_int(msg.get("avg_heart_rate")),
             "max_hr": _safe_int(msg.get("max_heart_rate")),
             "avg_power": _safe_int(msg.get("avg_power")),
+            "max_power": _safe_int(msg.get("max_power")),
+            "avg_cadence": _safe_int(msg.get("avg_cadence")),
+            "avg_temperature": _safe_int(msg.get("avg_temperature")),
             # Sport/sub_sport for activity type detection
             "sport": msg.get("sport"),
             "sub_sport": msg.get("sub_sport"),
@@ -232,6 +346,7 @@ def parse_records(fit_bytes: bytes) -> dict[str, Any]:
             or session_data["total_timer_time"]
             or 0
         )
+        timer_time = int(session_data["total_timer_time"] or 0) if session_data["total_timer_time"] else None
         elapsed_time = int(session_data["total_elapsed_time"] or 0)
 
         # If moving_time is 0 but we have records, compute from records
@@ -242,23 +357,39 @@ def parse_records(fit_bytes: bytes) -> dict[str, Any]:
                 logger.debug(f"Computed moving_time from records: {moving_time}s (elapsed: {elapsed_time}s)")
 
         elev_gain = session_data["total_ascent"] or 0
+        elev_loss = session_data["total_descent"]
         avg_speed = session_data["avg_speed"] or 0
         avg_hr = session_data["avg_hr"]
         avg_power = session_data["avg_power"]
+        max_power = session_data["max_power"]
         max_speed = session_data["max_speed"] or 0
         max_hr = session_data["max_hr"]
+        avg_cadence = session_data["avg_cadence"]
+        avg_temperature = session_data["avg_temperature"]
     else:
         # Fallback: compute from records
         started_at = records[0]["timestamp"] if records else datetime.utcnow()
         total_distance = records[-1]["distance_m"] if records else 0
         moving_time = _compute_moving_time(records)
+        timer_time = None
         elapsed_time = len(records) if records else 0
         elev_gain = 0
+        elev_loss = None
         avg_speed = 0
         avg_hr = None
         avg_power = None
+        max_power = None
         max_speed = 0
         max_hr = None
+        avg_cadence = None
+        avg_temperature = None
+
+    # Compute extended metrics from records
+    extended = _compute_extended_metrics(records, total_distance, moving_time)
+
+    # Use FIT session values if available, otherwise use computed values
+    if elev_loss is None:
+        elev_loss = extended["elevation_loss_m"]
 
     # Detect activity type from FIT sport/sub_sport fields
     sport = session_data.get("sport") if session_data else None
@@ -268,14 +399,34 @@ def parse_records(fit_bytes: bytes) -> dict[str, Any]:
     return {
         "started_at": started_at,
         "total_distance_m": float(total_distance),
+        # Time metrics
         "moving_time_s": moving_time,
+        "timer_time_s": timer_time,
         "elapsed_time_s": elapsed_time,
+        # Elevation metrics
         "elevation_gain_m": float(elev_gain),
+        "elevation_loss_m": elev_loss,
+        "min_altitude_m": extended["min_altitude_m"],
+        "max_altitude_m": extended["max_altitude_m"],
+        "max_grade_pct": extended["max_grade_pct"],
+        # Speed metrics
         "avg_speed_mps": float(avg_speed),
-        "avg_hr_bpm": avg_hr,
-        "avg_power_w": avg_power,
+        "avg_speed_moving_mps": extended["avg_speed_moving_mps"],
         "max_speed_mps": float(max_speed),
+        # HR metrics
+        "avg_hr_bpm": avg_hr,
         "max_hr_bpm": max_hr,
+        # Power metrics
+        "avg_power_w": avg_power,
+        "max_power_w": max_power if max_power else extended["max_power_w"],
+        # Cadence metrics
+        "avg_cadence_rpm": avg_cadence if avg_cadence else extended["avg_cadence_rpm"],
+        "avg_cadence_pedaling_rpm": extended["avg_cadence_pedaling_rpm"],
+        # Temperature metrics
+        "avg_temperature_c": avg_temperature if avg_temperature else extended["avg_temperature_c"],
+        "min_temperature_c": extended["min_temperature_c"],
+        "max_temperature_c": extended["max_temperature_c"],
+        # Metadata
         "utc_offset_minutes": utc_offset_minutes,
         "activity_type": activity_type,
         "records": records,
@@ -403,14 +554,34 @@ async def _store_parsed_fit(
         source_ref=source_ref,
         started_at=parsed["started_at"],
         total_distance_m=parsed["total_distance_m"],
+        # Time metrics
         moving_time_s=parsed["moving_time_s"],
+        timer_time_s=parsed["timer_time_s"],
         elapsed_time_s=parsed["elapsed_time_s"],
+        # Elevation metrics
         elevation_gain_m=parsed["elevation_gain_m"],
+        elevation_loss_m=parsed["elevation_loss_m"],
+        min_altitude_m=parsed["min_altitude_m"],
+        max_altitude_m=parsed["max_altitude_m"],
+        max_grade_pct=parsed["max_grade_pct"],
+        # Speed metrics
         avg_speed_mps=parsed["avg_speed_mps"],
-        avg_hr_bpm=parsed["avg_hr_bpm"],
-        avg_power_w=parsed["avg_power_w"],
+        avg_speed_moving_mps=parsed["avg_speed_moving_mps"],
         max_speed_mps=parsed["max_speed_mps"],
+        # HR metrics
+        avg_hr_bpm=parsed["avg_hr_bpm"],
         max_hr_bpm=parsed["max_hr_bpm"],
+        # Power metrics
+        avg_power_w=parsed["avg_power_w"],
+        max_power_w=parsed["max_power_w"],
+        # Cadence metrics
+        avg_cadence_rpm=parsed["avg_cadence_rpm"],
+        avg_cadence_pedaling_rpm=parsed["avg_cadence_pedaling_rpm"],
+        # Temperature metrics
+        avg_temperature_c=parsed["avg_temperature_c"],
+        min_temperature_c=parsed["min_temperature_c"],
+        max_temperature_c=parsed["max_temperature_c"],
+        # Other
         map_polyline=generate_map_polyline(parsed["records"]),
         raw_fit=fit_bytes,
         utc_offset_minutes=parsed["utc_offset_minutes"],

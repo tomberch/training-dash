@@ -65,17 +65,38 @@ def activity_summary(a: Activity) -> dict[str, Any]:
         "started_at": utc_str(a.started_at),
         "utc_offset_minutes": a.utc_offset_minutes,
         "total_distance_m": a.total_distance_m,
+        # Time metrics
         "moving_time_s": a.moving_time_s,
+        "timer_time_s": a.timer_time_s,
         "elapsed_time_s": a.elapsed_time_s,
+        # Elevation metrics
         "elevation_gain_m": a.elevation_gain_m,
+        "elevation_loss_m": a.elevation_loss_m,
+        "min_altitude_m": a.min_altitude_m,
+        "max_altitude_m": a.max_altitude_m,
+        "max_grade_pct": a.max_grade_pct,
+        # Speed metrics
         "avg_speed_mps": a.avg_speed_mps,
-        "avg_hr_bpm": a.avg_hr_bpm,
-        "avg_power_w": a.avg_power_w,
-        "power_source": a.power_source,
+        "avg_speed_moving_mps": a.avg_speed_moving_mps,
         "max_speed_mps": a.max_speed_mps,
+        # HR metrics
+        "avg_hr_bpm": a.avg_hr_bpm,
         "max_hr_bpm": a.max_hr_bpm,
+        # Power metrics
+        "avg_power_w": a.avg_power_w,
+        "max_power_w": a.max_power_w,
+        "power_source": a.power_source,
+        # Cadence metrics
+        "avg_cadence_rpm": a.avg_cadence_rpm,
+        "avg_cadence_pedaling_rpm": a.avg_cadence_pedaling_rpm,
+        # Temperature metrics
+        "avg_temperature_c": a.avg_temperature_c,
+        "min_temperature_c": a.min_temperature_c,
+        "max_temperature_c": a.max_temperature_c,
+        # Training metrics
         "tss": a.tss,
         "is_breakthrough": a.is_breakthrough,
+        # Display
         "map_polyline": a.map_polyline,
         "activity_type": a.activity_type,
         "bike_id": a.bike_id,

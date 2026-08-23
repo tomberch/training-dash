@@ -165,17 +165,36 @@ class Activity(Base):
     source_ref: Mapped[str] = mapped_column(Text, nullable=False)
     started_at: Mapped[datetime] = mapped_column(nullable=False)
     total_distance_m: Mapped[float] = mapped_column(Float, nullable=False, default=0)
+    # Time metrics: moving < timer < elapsed
     moving_time_s: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    timer_time_s: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Time with timer running
     elapsed_time_s: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Elevation metrics
     elevation_gain_m: Mapped[float] = mapped_column(Float, nullable=False, default=0)
+    elevation_loss_m: Mapped[float | None] = mapped_column(Float, nullable=True)
+    min_altitude_m: Mapped[float | None] = mapped_column(Float, nullable=True)
+    max_altitude_m: Mapped[float | None] = mapped_column(Float, nullable=True)
+    max_grade_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Speed metrics
     avg_speed_mps: Mapped[float] = mapped_column(Float, nullable=False, default=0)
+    avg_speed_moving_mps: Mapped[float | None] = mapped_column(Float, nullable=True)  # distance / moving_time
+    max_speed_mps: Mapped[float] = mapped_column(Float, nullable=False, default=0)
+    # Heart rate metrics
     avg_hr_bpm: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_hr_bpm: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Power metrics
     avg_power_w: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_power_w: Mapped[int | None] = mapped_column(Integer, nullable=True)
     np_power_w: Mapped[int | None] = mapped_column(Integer, nullable=True)
     power_source: Mapped[str | None] = mapped_column(String(20), nullable=True)  # "measured" or "hr_derived"
     power_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)  # 0.0-1.0 for hr_derived
-    max_speed_mps: Mapped[float] = mapped_column(Float, nullable=False, default=0)
-    max_hr_bpm: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Cadence metrics
+    avg_cadence_rpm: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    avg_cadence_pedaling_rpm: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Only when cadence > 0
+    # Temperature metrics
+    avg_temperature_c: Mapped[float | None] = mapped_column(Float, nullable=True)
+    min_temperature_c: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_temperature_c: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Training metrics
     intensity_factor: Mapped[float | None] = mapped_column(Float, nullable=True)
     tss: Mapped[float | None] = mapped_column(Float, nullable=True)
