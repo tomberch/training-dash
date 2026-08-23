@@ -626,3 +626,136 @@ class TestCaseSensitivity:
     def test_aggregation_func_case_insensitive(self):
         result = parse("avg(tss)")
         assert result.projection.aggregates[0].func == "AVG"
+
+
+
+class TestTemperatureUnits:
+    """Test temperature unit parsing."""
+
+    def test_celsius_unit(self):
+        result = parse("temp > 20c")
+        assert isinstance(result.conditions, Comparison)
+        assert result.conditions.value == NumberValue(value=20.0, unit="c")
+
+    def test_fahrenheit_unit(self):
+        result = parse("temp > 68f")
+        assert isinstance(result.conditions, Comparison)
+        assert result.conditions.value == NumberValue(value=68.0, unit="f")
+
+    def test_temperature_case_insensitive(self):
+        result = parse("temp > 68F")
+        # Unit is lowercased by the lexer
+        assert result.conditions.value == NumberValue(value=68.0, unit="f")
+
+    def test_temperature_between(self):
+        result = parse("temperature BETWEEN 50f AND 86f")
+        assert isinstance(result.conditions, Between)
+        assert result.conditions.low == NumberValue(value=50.0, unit="f")
+        assert result.conditions.high == NumberValue(value=86.0, unit="f")
+
+
+class TestNewFieldNameParsing:
+    """Test that new field names parse correctly."""
+
+    def test_activity_type_field(self):
+        result = parse('activity_type = "road"')
+        assert result.conditions.field == "activity_type"
+
+    def test_bike_id_field(self):
+        result = parse("bike_id = 1")
+        assert result.conditions.field == "bike_id"
+
+    def test_cadence_fields(self):
+        result = parse("avg_cadence_rpm > 90")
+        assert result.conditions.field == "avg_cadence_rpm"
+
+        result = parse("max_cadence_rpm > 110")
+        assert result.conditions.field == "max_cadence_rpm"
+
+    def test_temperature_fields(self):
+        result = parse("avg_temperature_c > 20")
+        assert result.conditions.field == "avg_temperature_c"
+
+        result = parse("min_temperature_c > 10")
+        assert result.conditions.field == "min_temperature_c"
+
+    def test_max_power_field(self):
+        result = parse("max_power_w > 500")
+        assert result.conditions.field == "max_power_w"
+
+    def test_elevation_loss_field(self):
+        result = parse("elevation_loss_m > 500")
+        assert result.conditions.field == "elevation_loss_m"
+
+    def test_aero_fields(self):
+        result = parse("estimated_cda < 0.3")
+        assert result.conditions.field == "estimated_cda"
+
+        result = parse("estimated_crr < 0.005")
+        assert result.conditions.field == "estimated_crr"
+
+
+class TestZoneTimeFieldParsing:
+    """Test zone time field name parsing."""
+
+    def test_power_zone_field(self):
+        result = parse("power_zone_5_s > 600")
+        assert result.conditions.field == "power_zone_5_s"
+
+    def test_hr_zone_field(self):
+        result = parse("hr_zone_3_s > 300")
+        assert result.conditions.field == "hr_zone_3_s"
+
+    def test_zone_field_with_duration_unit(self):
+        result = parse("power_zone_5_s > 10min")
+        assert result.conditions.field == "power_zone_5_s"
+        assert result.conditions.value == NumberValue(value=10.0, unit="min")
+
+    def test_zone_aggregation(self):
+        result = parse("SUM(power_zone_5_s)")
+        assert result.type == "aggregate"
+        assert result.projection.aggregates[0].field == "power_zone_5_s"
+
+    def test_zone_aggregation_grouped(self):
+        result = parse("SUM(power_zone_5_s) GROUP BY month")
+        assert result.type == "aggregate"
+        assert result.group_by[0].kind == "time_bucket"
+        assert result.group_by[0].value == "month"
+
+
+class TestAggFuncDoesNotConflictWithFieldNames:
+    """Test that AGG_FUNC doesn't capture field names starting with min/max/avg/sum/count."""
+
+    def test_max_power_not_captured_as_agg(self):
+        result = parse("max_power_w > 500")
+        assert result.type == "list"
+        assert result.conditions.field == "max_power_w"
+
+    def test_min_temperature_not_captured_as_agg(self):
+        result = parse("min_temperature_c > 10")
+        assert result.type == "list"
+        assert result.conditions.field == "min_temperature_c"
+
+    def test_avg_cadence_not_captured_as_agg(self):
+        result = parse("avg_cadence_rpm > 90")
+        assert result.type == "list"
+        assert result.conditions.field == "avg_cadence_rpm"
+
+    def test_avg_hr_not_captured_as_agg(self):
+        result = parse("avg_hr_bpm > 140")
+        assert result.type == "list"
+        assert result.conditions.field == "avg_hr_bpm"
+
+    def test_max_hr_not_captured_as_agg(self):
+        result = parse("max_hr_bpm > 180")
+        assert result.type == "list"
+        assert result.conditions.field == "max_hr_bpm"
+
+    def test_real_agg_still_works(self):
+        result = parse("MAX(power)")
+        assert result.type == "aggregate"
+        assert result.projection.aggregates[0].func == "MAX"
+
+        result = parse("AVG(cadence)")
+        assert result.type == "aggregate"
+        assert result.projection.aggregates[0].func == "AVG"
