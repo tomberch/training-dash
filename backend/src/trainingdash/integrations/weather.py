@@ -122,13 +122,14 @@ async def fetch_activity_weather(
     # Open-Meteo needs date range (same day for short activities)
     start_date = start_utc.date()
     # For multi-day activities, extend end date
-    end_date = date(
-        start_utc.year,
-        start_utc.month,
-        min(start_utc.day + (duration_hours // 24), 28),  # Crude, but safe
-    )
-    if end_date.month != start_date.month:
-        end_date = start_date  # Stay within month for simplicity
+    days_to_add = duration_hours // 24
+    end_date = start_date
+    if days_to_add > 0:
+        try:
+            end_date = date(start_utc.year, start_utc.month, start_utc.day + days_to_add)
+        except ValueError:
+            # Day overflow - just use start_date (weather won't change much)
+            end_date = start_date
 
     params = {
         "latitude": lat,
@@ -155,7 +156,12 @@ async def fetch_activity_weather(
             lon=lon,
         )
     except httpx.HTTPStatusError as e:
-        logger.warning(f"Weather API HTTP error for ({lat}, {lon}): {e.response.status_code}")
+        error_detail = ""
+        try:
+            error_detail = f" - {e.response.text[:200]}"
+        except (TypeError, AttributeError):
+            pass
+        logger.warning(f"Weather API HTTP error for ({lat}, {lon}): {e.response.status_code}{error_detail}")
         return WeatherFetchResult(
             success=False,
             hourly_data=[],
