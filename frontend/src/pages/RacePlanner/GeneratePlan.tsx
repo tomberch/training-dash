@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { fetchCourses, fetchCourse, generateRacePlan } from "@/api/race-plans";
@@ -803,10 +804,10 @@ export function GeneratePlan(): JSX.Element {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <Label htmlFor="max-descent-speed" className="text-sm font-medium">
+                  <Label htmlFor="max-descent-speed-toggle">
                     Cap Descent Speed
                   </Label>
-                  <p className="text-xs text-muted-foreground mt-0.5">
+                  <p className="text-caption">
                     Limit max speed on descents for more realistic times
                   </p>
                 </div>
@@ -819,26 +820,24 @@ export function GeneratePlan(): JSX.Element {
               {maxDescentSpeed !== null && (
                 <div className="space-y-2 pt-2">
                   <div className="flex justify-between items-center">
-                    <span className="text-sm">
+                    <span className="text-body">
                       {maxDescentSpeed.toFixed(0)} m/s ({(maxDescentSpeed * 3.6).toFixed(0)} km/h)
                     </span>
-                    <span className="text-sm text-muted-foreground">
+                    <span className="text-body-secondary">
                       {maxDescentSpeed <= 15 ? "Conservative" :
                        maxDescentSpeed <= 18 ? "Moderate" :
                        maxDescentSpeed <= 22 ? "Fast" : "Very fast"}
                     </span>
                   </div>
-                  <input
-                    type="range"
+                  <Slider
                     id="max-descent-speed"
-                    min="10"
-                    max="25"
-                    step="1"
-                    value={maxDescentSpeed}
-                    onChange={(e) => setMaxDescentSpeed(parseFloat(e.target.value))}
-                    className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
+                    min={10}
+                    max={25}
+                    step={1}
+                    value={[maxDescentSpeed]}
+                    onValueChange={(value) => setMaxDescentSpeed(value[0])}
                   />
-                  <div className="flex justify-between text-xs text-muted-foreground">
+                  <div className="flex justify-between text-caption">
                     <span>36 km/h</span>
                     <span>65 km/h</span>
                     <span>90 km/h</span>

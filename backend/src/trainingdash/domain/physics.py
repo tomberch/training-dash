@@ -302,10 +302,7 @@ def speed_from_power(
         residual, derivative = f_and_df(v)
 
         if abs(residual) < tol:
-            # Apply descent speed cap if on a descent and cap is specified
-            if max_descent_speed_mps is not None and grade_pct < 0:
-                v = min(v, max_descent_speed_mps)
-            return v
+            break
 
         # Avoid division by zero or very small derivative
         if abs(derivative) < 1e-10:
@@ -325,17 +322,15 @@ def speed_from_power(
 
         # Check for convergence
         if abs(v_new - v) < tol * 0.01:
-            # Apply descent speed cap if on a descent and cap is specified
-            if max_descent_speed_mps is not None and grade_pct < 0:
-                v_new = min(v_new, max_descent_speed_mps)
-            return v_new
+            v = v_new
+            break
 
         v = v_new
 
-    # If we get here, return best estimate (shouldn't happen for valid inputs)
     # Apply descent speed cap if on a descent and cap is specified
     if max_descent_speed_mps is not None and grade_pct < 0:
         v = min(v, max_descent_speed_mps)
+
     return v
 
 
