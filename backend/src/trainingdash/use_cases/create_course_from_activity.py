@@ -8,6 +8,7 @@ which is often more convenient than uploading a separate GPX/FIT file.
 import logging
 import re
 from dataclasses import dataclass
+from uuid import UUID
 
 import numpy as np
 from geoalchemy2 import WKTElement
@@ -75,13 +76,16 @@ class CreateCourseFromActivity:
         """
         warnings: list[str] = []
 
+        # Convert string activity_id to UUID
+        activity_uuid = UUID(activity_id)
+
         # Step 1: Get activity
-        activity = await self._activity_repo.get_by_id(activity_id, user_id)
+        activity = await self._activity_repo.get_by_id(activity_uuid, user_id)
         if activity is None:
             raise CourseFromActivityError(f"Activity {activity_id} not found")
 
         # Step 2: Get records
-        records = await self._record_repo.list_for_activity(activity_id)
+        records = await self._record_repo.list_for_activity(activity_uuid)
         if len(records) < 10:
             raise CourseFromActivityError("Activity has too few GPS points for a course. Need at least 10 points.")
 
@@ -214,9 +218,9 @@ class CreateCourseFromActivity:
         """Convert CourseSegment objects to dicts for JSONB storage."""
         return [
             {
-                "start_m": s.start_m,
-                "end_m": s.end_m,
-                "distance_m": s.distance_m,
+                "start_m": s.start_distance_m,
+                "end_m": s.end_distance_m,
+                "distance_m": s.length_m,
                 "avg_grade_pct": s.avg_grade_pct,
                 "elevation_gain_m": s.elevation_gain_m,
                 "elevation_loss_m": s.elevation_loss_m,
@@ -230,9 +234,9 @@ class CreateCourseFromActivity:
         return [
             {
                 "name": c.name,
-                "start_m": c.start_m,
-                "end_m": c.end_m,
-                "distance_m": c.distance_m,
+                "start_m": c.start_distance_m,
+                "end_m": c.end_distance_m,
+                "distance_m": c.length_m,
                 "avg_grade_pct": c.avg_grade_pct,
                 "elevation_gain_m": c.elevation_gain_m,
                 "max_grade_pct": c.max_grade_pct,
