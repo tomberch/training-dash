@@ -32,7 +32,7 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.optimize import minimize
 
-from trainingdash.domain.course_segmentation import CourseSegment
+from trainingdash.domain.course_segmentation import CourseSegment, calculate_course_punchiness
 from trainingdash.domain.pacing import (
     PacingPlan,
     PacingTarget,
@@ -355,9 +355,12 @@ def optimize_pacing(
     total_energy_j_actual = sum(t.target_power_w * t.estimated_time_s for t in targets)
     avg_power = total_energy_j_actual / total_time if total_time > 0 else 0
 
-    # NP approximation (time-weighted 4th power mean)
-    weighted_4th = sum(t.target_power_w**4 * t.estimated_time_s for t in targets) / total_time
-    np_power = weighted_4th**0.25
+    # Calculate course punchiness for VI-corrected NP
+    punchiness = calculate_course_punchiness(segments)
+
+    # NP with VI correction for terrain variability
+    # This accounts for intra-segment power variations not captured by constant-power segments
+    np_power = avg_power * punchiness.expected_vi
 
     intensity_factor = np_power / rider_ftp if rider_ftp > 0 else 0
 
@@ -601,9 +604,11 @@ def optimize_pacing_for_time(
     total_energy_j = sum(t.target_power_w * t.estimated_time_s for t in targets)
     avg_power = total_energy_j / total_time if total_time > 0 else 0
 
-    # NP approximation
-    weighted_4th = sum(t.target_power_w**4 * t.estimated_time_s for t in targets) / total_time
-    np_power = weighted_4th**0.25
+    # Calculate course punchiness for VI-corrected NP
+    punchiness = calculate_course_punchiness(segments)
+
+    # NP with VI correction for terrain variability
+    np_power = avg_power * punchiness.expected_vi
 
     intensity_factor = np_power / rider_ftp if rider_ftp > 0 else 0
 

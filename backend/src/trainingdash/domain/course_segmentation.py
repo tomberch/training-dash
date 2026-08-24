@@ -2,6 +2,9 @@
 
 This module provides utilities for splitting a course into segments
 based on grade changes, and detecting/categorizing climbs.
+
+Also provides course "punchiness" calculation for estimating expected
+Variability Index (VI = NP/Avg Power) on varied terrain.
 """
 
 from collections.abc import Sequence
@@ -10,6 +13,152 @@ from dataclasses import dataclass
 import numpy as np
 
 from trainingdash.domain.grade import classify_terrain
+
+
+@dataclass(frozen=True)
+class CoursePunchiness:
+    """Metrics describing course gradient variability ("punchiness").
+
+    Punchiness affects the expected Variability Index (VI = NP/Avg Power).
+    More variable terrain requires more power surges, increasing NP relative
+    to average power even at the same overall effort level.
+
+    Research shows expected VI by course type:
+    - Flat TT: 1.02-1.05
+    - Rolling: 1.04-1.07
+    - Hilly: 1.05-1.10
+    - Mountain: 1.10-1.20+
+
+    Attributes:
+        grade_stddev: Standard deviation of segment grades (percentage points).
+        grade_change_stddev: Stddev of grade changes between adjacent segments.
+        climb_density: Climbing segments per km of course.
+        steep_climb_fraction: Fraction of distance on grades > 8%.
+        expected_vi: Estimated Variability Index for this course profile.
+        course_type: Classification: flat, rolling, hilly, or mountain.
+    """
+
+    grade_stddev: float
+    grade_change_stddev: float
+    climb_density: float
+    steep_climb_fraction: float
+    expected_vi: float
+    course_type: str
+
+
+def calculate_course_punchiness(segments: list["CourseSegment"]) -> CoursePunchiness:
+    """Calculate course punchiness metrics from segments.
+
+    Punchiness quantifies how "punchy" or variable a course is, which
+    directly affects the expected Variability Index (VI = NP/Avg Power).
+
+    The calculation considers:
+    1. Grade variability (stddev of segment grades)
+    2. Grade change rate (stddev of grade differences between segments)
+    3. Climb density (climbing segments per km)
+    4. Steep climb fraction (% of course on grades > 8%)
+
+    These are combined into an expected VI using empirically-derived
+    coefficients based on research into course types and observed VI values.
+
+    Args:
+        segments: List of CourseSegment objects from segment_course().
+
+    Returns:
+        CoursePunchiness with metrics and expected VI.
+    """
+    if not segments:
+        return CoursePunchiness(
+            grade_stddev=0.0,
+            grade_change_stddev=0.0,
+            climb_density=0.0,
+            steep_climb_fraction=0.0,
+            expected_vi=1.02,
+            course_type="flat",
+        )
+
+    grades = np.array([s.avg_grade_pct for s in segments])
+    lengths = np.array([s.length_m for s in segments])
+    total_distance_m = np.sum(lengths)
+
+    # 1. Grade standard deviation (weighted by segment length)
+    if total_distance_m > 0:
+        weighted_mean = np.sum(grades * lengths) / total_distance_m
+        grade_variance = np.sum(lengths * (grades - weighted_mean) ** 2) / total_distance_m
+        grade_stddev = float(np.sqrt(grade_variance))
+    else:
+        grade_stddev = 0.0
+
+    # 2. Grade change stddev (how abruptly grade changes between segments)
+    if len(grades) > 1:
+        grade_changes = np.diff(grades)
+        grade_change_stddev = float(np.std(grade_changes))
+    else:
+        grade_change_stddev = 0.0
+
+    # 3. Climb density (climbing segments per km)
+    climb_segments = sum(1 for s in segments if s.avg_grade_pct > 3.0)
+    total_distance_km = total_distance_m / 1000.0
+    climb_density = climb_segments / total_distance_km if total_distance_km > 0 else 0.0
+
+    # 4. Steep climb fraction (distance on grades > 8%)
+    steep_distance = sum(s.length_m for s in segments if s.avg_grade_pct > 8.0)
+    steep_climb_fraction = steep_distance / total_distance_m if total_distance_m > 0 else 0.0
+
+    # Calculate expected VI using empirical model
+    # Base VI for steady riding (even flat TTs have some variability)
+    base_vi = 1.02
+
+    # Contributions from each factor (coefficients tuned against real ride data)
+    #
+    # Grade variability: captures rolling terrain effect
+    # Each 1% grade stddev adds ~0.012 to VI
+    vi_from_grade_var = grade_stddev * 0.012
+
+    # Grade change rate: abrupt changes cause acceleration/deceleration
+    # which increases power variability
+    vi_from_grade_changes = grade_change_stddev * 0.010
+
+    # Steep climbs: the dominant factor for mountain courses
+    # Steep grades (>8%) cause disproportionate VI increase because
+    # riders can't maintain steady power - they surge on steep pitches
+    # and recover on easier sections.
+    #
+    # Use graduated coefficients: very steep (>10%) is even punchier
+    very_steep_distance = sum(s.length_m for s in segments if s.avg_grade_pct > 10.0)
+    moderate_steep_distance = sum(s.length_m for s in segments if 8.0 < s.avg_grade_pct <= 10.0)
+
+    very_steep_fraction = very_steep_distance / total_distance_m if total_distance_m > 0 else 0.0
+    moderate_steep_fraction = moderate_steep_distance / total_distance_m if total_distance_m > 0 else 0.0
+
+    vi_from_steep = moderate_steep_fraction * 0.60 + very_steep_fraction * 1.20
+
+    # Climb density: more climbs = more transitions = higher VI
+    vi_from_density = min(climb_density * 0.008, 0.05)  # Cap contribution
+
+    expected_vi = base_vi + vi_from_grade_var + vi_from_grade_changes + vi_from_steep + vi_from_density
+
+    # Clamp to reasonable range
+    expected_vi = max(1.02, min(1.35, expected_vi))
+
+    # Classify course type
+    if expected_vi < 1.05:
+        course_type = "flat"
+    elif expected_vi < 1.08:
+        course_type = "rolling"
+    elif expected_vi < 1.12:
+        course_type = "hilly"
+    else:
+        course_type = "mountain"
+
+    return CoursePunchiness(
+        grade_stddev=round(grade_stddev, 2),
+        grade_change_stddev=round(grade_change_stddev, 2),
+        climb_density=round(climb_density, 2),
+        steep_climb_fraction=round(steep_climb_fraction, 3),
+        expected_vi=round(expected_vi, 3),
+        course_type=course_type,
+    )
 
 
 @dataclass

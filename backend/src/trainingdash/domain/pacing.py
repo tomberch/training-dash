@@ -23,7 +23,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from trainingdash.domain.course_segmentation import CourseSegment
+from trainingdash.domain.course_segmentation import CourseSegment, calculate_course_punchiness
 from trainingdash.domain.physics import (
     EnvironmentParams,
     RiderParams,
@@ -187,8 +187,11 @@ def generate_heuristic_pacing(
     total_energy_j = sum(t.target_power_w * t.estimated_time_s for t in targets)
     avg_power = total_energy_j / total_time if total_time > 0 else 0
 
-    # Calculate NP from the segment powers and times
-    np_power = calculate_normalized_power_from_segments(targets)
+    # Calculate course punchiness to get expected VI for NP correction
+    punchiness = calculate_course_punchiness(segments)
+
+    # Calculate NP using VI correction for terrain variability
+    np_power = calculate_normalized_power_from_segments(targets, expected_vi=punchiness.expected_vi)
     intensity_factor = np_power / rider_ftp if rider_ftp > 0 else 0
 
     return PacingPlan(
@@ -241,7 +244,10 @@ def calculate_normalized_power(powers: np.ndarray, sample_rate_hz: float = 1.0) 
     return float(np_power)
 
 
-def calculate_normalized_power_from_segments(targets: list[PacingTarget]) -> float:
+def calculate_normalized_power_from_segments(
+    targets: list[PacingTarget],
+    expected_vi: float | None = None,
+) -> float:
     """
     Calculate Normalized Power from segment-based pacing targets.
 
@@ -249,11 +255,23 @@ def calculate_normalized_power_from_segments(targets: list[PacingTarget]) -> flo
     Instead, we use time-weighted 4th power mean which gives a good
     approximation when segments are reasonably long.
 
+    However, this segment-based calculation assumes constant power within
+    each segment, yielding VI (NP/Avg) ≈ 1.0. Real riding has intra-segment
+    power variability that increases NP significantly on variable terrain.
+
+    When expected_vi is provided (from course punchiness analysis), we apply
+    it as a correction factor: NP = Avg Power × expected_vi. This gives
+    much more accurate NP predictions on hilly/mountain courses.
+
     Args:
         targets: List of PacingTarget with power and time.
+        expected_vi: Expected Variability Index from course punchiness analysis.
+            If provided, NP = avg_power × expected_vi instead of 4th power calc.
+            Typical values: 1.02-1.05 (flat), 1.05-1.10 (rolling),
+            1.10-1.15 (hilly), 1.15-1.25 (mountain).
 
     Returns:
-        Approximate Normalized Power in watts.
+        Normalized Power in watts.
     """
     if not targets:
         return 0.0
@@ -262,9 +280,18 @@ def calculate_normalized_power_from_segments(targets: list[PacingTarget]) -> flo
     if total_time <= 0:
         return 0.0
 
-    # Time-weighted 4th power mean
-    weighted_4th_power = sum(t.target_power_w**4 * t.estimated_time_s for t in targets) / total_time
+    # Calculate time-weighted average power
+    total_energy = sum(t.target_power_w * t.estimated_time_s for t in targets)
+    avg_power = total_energy / total_time
 
+    if expected_vi is not None:
+        # Apply VI correction for terrain variability
+        # This accounts for intra-segment power variations not captured
+        # by constant-power segment modeling
+        return avg_power * expected_vi
+
+    # Fallback: time-weighted 4th power mean (underestimates NP on variable terrain)
+    weighted_4th_power = sum(t.target_power_w**4 * t.estimated_time_s for t in targets) / total_time
     return weighted_4th_power**0.25
 
 
