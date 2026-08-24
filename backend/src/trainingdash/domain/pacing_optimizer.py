@@ -32,10 +32,11 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.optimize import minimize
 
-from trainingdash.domain.course_segmentation import CourseSegment, calculate_course_punchiness
+from trainingdash.domain.course_segmentation import CourseSegment
 from trainingdash.domain.pacing import (
     PacingPlan,
     PacingTarget,
+    calculate_normalized_power_from_variable_targets,
     generate_heuristic_pacing,
 )
 from trainingdash.domain.physics import (
@@ -355,12 +356,10 @@ def optimize_pacing(
     total_energy_j_actual = sum(t.target_power_w * t.estimated_time_s for t in targets)
     avg_power = total_energy_j_actual / total_time if total_time > 0 else 0
 
-    # Calculate course punchiness for VI-corrected NP
-    punchiness = calculate_course_punchiness(segments)
-
-    # NP with VI correction for terrain variability
-    # This accounts for intra-segment power variations not captured by constant-power segments
-    np_power = avg_power * punchiness.expected_vi
+    # Calculate NP from actual variable power profile
+    # With fine-grained segments and variable power, the 4th power calculation
+    # naturally captures variability - no VI correction needed
+    np_power = calculate_normalized_power_from_variable_targets(targets)
 
     intensity_factor = np_power / rider_ftp if rider_ftp > 0 else 0
 
@@ -604,11 +603,8 @@ def optimize_pacing_for_time(
     total_energy_j = sum(t.target_power_w * t.estimated_time_s for t in targets)
     avg_power = total_energy_j / total_time if total_time > 0 else 0
 
-    # Calculate course punchiness for VI-corrected NP
-    punchiness = calculate_course_punchiness(segments)
-
-    # NP with VI correction for terrain variability
-    np_power = avg_power * punchiness.expected_vi
+    # Calculate NP from actual variable power profile
+    np_power = calculate_normalized_power_from_variable_targets(targets)
 
     intensity_factor = np_power / rider_ftp if rider_ftp > 0 else 0
 

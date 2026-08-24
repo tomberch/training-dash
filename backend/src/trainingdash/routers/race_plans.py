@@ -55,6 +55,9 @@ class GeneratePlanRequestSchema(BaseModel):
     course_id: int
     bike_id: int | None = None
     rider_weight_kg: float | None = None
+    gear_weight_kg: float | None = Field(
+        None, ge=0, le=15, description="Gear weight in kg (clothing, shoes, bottles, etc.). Default 3.0 kg"
+    )
     ftp_watts: int = Field(..., ge=100, le=600)
     cp_watts: int | None = Field(None, ge=100, le=600)
     w_prime_joules: int | None = Field(None, ge=5000, le=50000)
@@ -82,6 +85,7 @@ class GeneratePlanRequestSchema(BaseModel):
             course_id=self.course_id,
             bike_id=self.bike_id,
             rider_weight_kg=self.rider_weight_kg,
+            gear_weight_kg=self.gear_weight_kg,
             ftp_watts=self.ftp_watts,
             cp_watts=self.cp_watts,
             w_prime_joules=self.w_prime_joules,

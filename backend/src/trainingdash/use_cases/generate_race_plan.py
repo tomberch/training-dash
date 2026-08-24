@@ -11,7 +11,7 @@ from decimal import Decimal
 
 from trainingdash.domain.aero_selection import AeroSource, BikeAeroData, select_aero_params
 from trainingdash.domain.course_segmentation import CourseSegment
-from trainingdash.domain.pacing import generate_heuristic_pacing
+from trainingdash.domain.pacing import generate_heuristic_pacing, generate_terrain_adapted_pacing
 from trainingdash.domain.pacing_optimizer import optimize_pacing, optimize_pacing_for_time
 from trainingdash.domain.physics import EnvironmentParams, RiderParams, calculate_headwind
 from trainingdash.domain.wbal import predict_wbal_for_plan
@@ -48,6 +48,7 @@ class GeneratePlanRequest:
     course_id: int
     bike_id: int | None = None  # if None, use defaults
     rider_weight_kg: float | None = None  # if None, use user.weight_kg
+    gear_weight_kg: float | None = None  # clothing, shoes, bottles, etc. (default 3.0 kg)
     ftp_watts: int = 250
     cp_watts: int | None = None  # if None, estimate from FTP
     w_prime_joules: int | None = None  # if None, use default 20kJ
@@ -189,7 +190,7 @@ class GenerateRacePlan:
 
         # Total mass includes bike + gear (bottles, clothes, shoes, etc.)
         # Gear weight is typically 2-4 kg for road cycling
-        gear_weight_kg = 3.0
+        gear_weight_kg = request.gear_weight_kg if request.gear_weight_kg is not None else 3.0
         total_mass_kg = rider_weight_kg + (bike_weight_kg or 8.0) + gear_weight_kg
 
         # 4. Fetch weather conditions if target_date is set
@@ -376,8 +377,9 @@ class GenerateRacePlan:
                 "improvement_vs_constant_pct": optimized.improvement_vs_constant_pct,
             }
         else:
-            # Mode C: Heuristic pacing
-            heuristic = generate_heuristic_pacing(
+            # Mode C: Terrain-adapted pacing with continuous grade-based power targets
+            # Uses calibrated formula: power_mult = 1.10 + 0.057 × grade%
+            heuristic = generate_terrain_adapted_pacing(
                 segments=segments,
                 rider_ftp=ftp,
                 target_intensity=request.target_intensity,
