@@ -255,9 +255,12 @@ from trainingdash.use_cases.ensure_default_thresholds import EnsureDefaultThresh
 from trainingdash.use_cases.ingest_activity import IngestActivity
 
 
-async def get_ingest_activity_use_case(db: DbSession) -> IngestActivity:
+async def get_ingest_activity_use_case(
+    db: DbSession,
+    pacing_repo: PacingCoefficientsRepoD,
+) -> IngestActivity:
     """Create an IngestActivity use case bound to the current session."""
-    return IngestActivity(db)
+    return IngestActivity(db, pacing_repo)
 
 
 async def get_delete_activity_use_case(

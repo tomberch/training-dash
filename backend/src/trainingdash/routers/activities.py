@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 
 from trainingdash.auth import CurrentUser, DbSession
-from trainingdash.dependencies import ActivityRepoD, BikeRepoD, DeleteActivityD, ThresholdRepoD
+from trainingdash.dependencies import ActivityRepoD, BikeRepoD, DeleteActivityD, PacingCoefficientsRepoD, ThresholdRepoD
 from trainingdash.domain.activity_type import validate_activity_type
 from trainingdash.domain.fit_modifier import FitModifications
 from trainingdash.repositories.postgres.models import Activity, ActivityPeakPower, Record
@@ -433,7 +433,12 @@ async def compare_activities(
 
 
 @router.post("/upload")
-async def upload_activity(db: DbSession, user: CurrentUser, file: UploadFile = File(...)):
+async def upload_activity(
+    db: DbSession,
+    user: CurrentUser,
+    pacing_repo: PacingCoefficientsRepoD,
+    file: UploadFile = File(...),
+):
     """Upload a FIT file for processing."""
     fit_bytes = await file.read()
     source_ref = file.filename or "upload.fit"
@@ -449,7 +454,7 @@ async def upload_activity(db: DbSession, user: CurrentUser, file: UploadFile = F
 
     from trainingdash.use_cases import IngestActivity
 
-    use_case = IngestActivity(db)
+    use_case = IngestActivity(db, pacing_repo)
     activity = await use_case.execute(user.id, fit_bytes, "upload", source_ref)
     if activity is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to parse FIT file")

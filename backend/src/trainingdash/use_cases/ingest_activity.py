@@ -6,6 +6,7 @@ This use case handles the complete flow of ingesting a FIT file:
 2. Check for duplicate activities
 3. Store Activity, Lap, and Record rows
 4. Run pipeline for metrics, peaks, route matching, and title generation
+5. Trigger pacing calibration (if activity has measured power)
 
 The use case can be called by HTTP routers or background workers.
 """
@@ -17,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from trainingdash.domain.events import EventOutcome, EventType
 from trainingdash.repositories.postgres.event_repo import PostgresEventRepo
 from trainingdash.repositories.postgres.models import Activity
+from trainingdash.repositories.protocols import PacingCoefficientsRepo
 
 logger = logging.getLogger(__name__)
 
@@ -41,15 +43,22 @@ class IngestActivity:
         )
     """
 
-    def __init__(self, db: AsyncSession) -> None:
+    def __init__(
+        self,
+        db: AsyncSession,
+        pacing_repo: PacingCoefficientsRepo | None = None,
+    ) -> None:
         """
         Initialize the use case with dependencies.
 
         Args:
             db: Database session for persistence
+            pacing_repo: Optional pacing coefficients repo for calibration.
+                         If None, calibration is skipped.
         """
         self._db = db
         self._event_repo = PostgresEventRepo(db)
+        self._pacing_repo = pacing_repo
 
     async def execute(
         self,
@@ -144,9 +153,61 @@ class IngestActivity:
             },
         )
 
+        # Step 5: Trigger pacing calibration for single uploads with measured power
+        # In batch mode, calibration is handled once by finalize_batch_import()
+        if not batch_mode and self._pacing_repo is not None:
+            await self._maybe_calibrate_pacing(activity)
+
         # In batch mode, weather fetch is handled by finalize_batch_import()
         # to avoid flooding the queue with individual jobs. For single uploads,
         # weather is fetched inline during the pipeline, so no job is needed
         # (weather_status will be FETCHED, not PENDING).
 
         return activity
+
+    async def _maybe_calibrate_pacing(self, activity: Activity) -> None:
+        """
+        Trigger pacing calibration if the activity qualifies.
+
+        Only calibrates for activities with measured power data and sufficient
+        distance/elevation to contribute meaningful data points.
+        """
+        # Check if activity qualifies for calibration
+        if activity.power_source != "measured":
+            logger.debug(f"Skipping calibration: activity {activity.id} has no measured power")
+            return
+
+        if activity.avg_power_w is None:
+            logger.debug(f"Skipping calibration: activity {activity.id} has no avg_power")
+            return
+
+        if activity.elevation_gain_m is None or activity.elevation_gain_m < 100:
+            logger.debug(f"Skipping calibration: activity {activity.id} has insufficient elevation")
+            return
+
+        # Import here to avoid circular imports
+        from trainingdash.use_cases.calibrate_pacing import CalibratePacing
+
+        try:
+            calibrate = CalibratePacing(self._db, self._pacing_repo)
+
+            # Calibrate for the specific bike if assigned
+            if activity.bike_id is not None:
+                stats = await calibrate.execute(activity.user_id, bike_id=activity.bike_id)
+                if stats.coefficients_updated:
+                    logger.info(
+                        f"Updated pacing coefficients for user={activity.user_id} "
+                        f"bike={activity.bike_id} after activity {activity.id}"
+                    )
+
+            # Always update user default (all bikes combined)
+            stats = await calibrate.execute(activity.user_id, bike_id=None)
+            if stats.coefficients_updated:
+                logger.info(
+                    f"Updated user default pacing coefficients for user={activity.user_id} "
+                    f"after activity {activity.id}"
+                )
+
+        except Exception as e:
+            # Log but don't fail the ingestion if calibration fails
+            logger.warning(f"Pacing calibration failed for activity {activity.id}: {e}")

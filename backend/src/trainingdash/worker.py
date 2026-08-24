@@ -151,13 +151,15 @@ async def ingest_job(ctx: dict, *, user_id: int, fit_bytes_b64: str, source: str
     """
     import base64
 
+    from trainingdash.repositories.postgres.pacing_coefficients_repo import PostgresPacingCoefficientsRepo
     from trainingdash.use_cases import IngestActivity
 
     # Decode base64 back to bytes
     fit_bytes = base64.b64decode(fit_bytes_b64)
 
     async with worker_db_session(ctx) as db:
-        use_case = IngestActivity(db)
+        pacing_repo = PostgresPacingCoefficientsRepo(db)
+        use_case = IngestActivity(db, pacing_repo)
         activity = await use_case.execute(user_id, fit_bytes, source, source_ref)
         if activity is None:
             return {"success": False, "activity_id": None}

@@ -688,12 +688,15 @@ async def finalize_batch_import(
 ) -> None:
     """
     Finalize a batch import: detect breakthroughs, update fitness model once,
-    auto-create threshold if needed, backfill metrics, and create summary notification.
+    auto-create threshold if needed, backfill metrics, calibrate pacing coefficients,
+    and create summary notification.
 
     Called after ingesting multiple activities in batch_mode=True.
     """
     from trainingdash.jobs import enqueue_batch_weather_job
+    from trainingdash.repositories.postgres.pacing_coefficients_repo import PostgresPacingCoefficientsRepo
     from trainingdash.use_cases.breakthrough_evaluator import BreakthroughEvaluator
+    from trainingdash.use_cases.calibrate_pacing import CalibratePacing
     from trainingdash.use_cases.fitness_model_updater import FitnessModelUpdater
 
     # Re-evaluate breakthrough flags across all activities
@@ -730,6 +733,22 @@ async def finalize_batch_import(
     # Enqueue batch weather fetch job for activities with pending weather
     # This runs with throttling to avoid API rate limits
     await enqueue_batch_weather_job(user_id)
+
+    # Calibrate pacing coefficients from the accumulated ride data
+    # This runs once for all bikes rather than per-activity to avoid redundant work
+    pacing_repo = PostgresPacingCoefficientsRepo(db)
+    calibrate = CalibratePacing(db, pacing_repo)
+    try:
+        results = await calibrate.execute_for_all_bikes(user_id)
+        updated_count = sum(1 for stats in results.values() if stats.coefficients_updated)
+        if updated_count > 0:
+            logger.info(
+                f"Calibrated pacing coefficients for user={user_id}: "
+                f"{updated_count} bike(s) updated after batch import"
+            )
+    except Exception as e:
+        # Log but don't fail the batch import if calibration fails
+        logger.warning(f"Pacing calibration failed for user={user_id} during batch import: {e}")
 
 
 async def _auto_create_threshold_if_needed(
