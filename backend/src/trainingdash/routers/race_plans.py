@@ -11,6 +11,7 @@ from trainingdash.dependencies import (
     ActivityRepoD,
     BikeRepoD,
     CourseRepoD,
+    PacingCoefficientsRepoD,
     RacePlanRepoD,
     RecordRepoD,
     UserRepoD,
@@ -330,6 +331,7 @@ async def generate_plan(
     bike_repo: BikeRepoD,
     user_repo: UserRepoD,
     plan_repo: RacePlanRepoD,
+    pacing_coefficients_repo: PacingCoefficientsRepoD,
 ):
     """
     Generate a new race pacing plan.
@@ -341,7 +343,7 @@ async def generate_plan(
     - Target intensity defaults to 0.85 (85% of FTP)
     - Uses heuristic pacing by default (use_optimizer=false)
     """
-    use_case = GenerateRacePlan(course_repo, bike_repo, user_repo, plan_repo)
+    use_case = GenerateRacePlan(course_repo, bike_repo, user_repo, plan_repo, pacing_coefficients_repo)
 
     try:
         result = await use_case.execute(current_user.id, request.to_domain())
@@ -495,6 +497,7 @@ async def regenerate_plan(
     bike_repo: BikeRepoD,
     user_repo: UserRepoD,
     plan_repo: RacePlanRepoD,
+    pacing_coefficients_repo: PacingCoefficientsRepoD,
     updates: PlanUpdateSchema | None = None,
 ):
     """
@@ -545,7 +548,7 @@ async def regenerate_plan(
     )
 
     # Generate new plan
-    use_case = GenerateRacePlan(course_repo, bike_repo, user_repo, plan_repo)
+    use_case = GenerateRacePlan(course_repo, bike_repo, user_repo, plan_repo, pacing_coefficients_repo)
 
     try:
         result = await use_case.execute(current_user.id, new_request)

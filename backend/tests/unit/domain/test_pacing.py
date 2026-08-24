@@ -649,3 +649,183 @@ class TestEdgeCases:
         # At high altitude, less air resistance = higher speed for same power
         # Flat segment speed comparison
         assert plan_high.targets[0].estimated_speed_mps > plan_sea.targets[0].estimated_speed_mps
+
+
+# =============================================================================
+# Tests for Personalized Coefficients
+# =============================================================================
+
+
+class TestPacingCoefficients:
+    """Tests for PacingCoefficients dataclass and get_grade_power_multiplier."""
+
+    def test_default_coefficients(self):
+        """Default coefficients match expected values."""
+        from trainingdash.domain.pacing import PacingCoefficients
+
+        defaults = PacingCoefficients.defaults()
+
+        assert defaults.grade_power_intercept == 1.10
+        assert defaults.grade_power_slope == 0.035
+        assert defaults.max_descent_speed_mps == 18.0
+        assert defaults.descent_power_multiplier == 0.50
+        assert defaults.curvature_speed_coefficient == -68.0
+
+    def test_get_grade_power_multiplier_with_defaults(self):
+        """get_grade_power_multiplier uses defaults when no coefficients provided."""
+        from trainingdash.domain.pacing import get_grade_power_multiplier
+
+        # Flat (0%)
+        assert get_grade_power_multiplier(0) == pytest.approx(1.10, rel=0.01)
+
+        # 5% climb
+        expected = 1.10 + 0.035 * 5
+        assert get_grade_power_multiplier(5) == pytest.approx(expected, rel=0.01)
+
+    def test_get_grade_power_multiplier_with_custom_coefficients(self):
+        """get_grade_power_multiplier uses provided coefficients."""
+        from trainingdash.domain.pacing import PacingCoefficients, get_grade_power_multiplier
+
+        custom = PacingCoefficients(
+            grade_power_intercept=1.20,
+            grade_power_slope=0.05,
+        )
+
+        # Flat (0%)
+        assert get_grade_power_multiplier(0, custom) == pytest.approx(1.20, rel=0.01)
+
+        # 5% climb
+        expected = 1.20 + 0.05 * 5  # 1.45
+        assert get_grade_power_multiplier(5, custom) == pytest.approx(expected, rel=0.01)
+
+    def test_get_grade_power_multiplier_clamped(self):
+        """Power multiplier is clamped to valid range."""
+        from trainingdash.domain.pacing import (
+            MAX_POWER_MULTIPLIER,
+            MIN_POWER_MULTIPLIER,
+            get_grade_power_multiplier,
+        )
+
+        # Very steep descent should clamp to minimum
+        assert get_grade_power_multiplier(-20) >= MIN_POWER_MULTIPLIER
+
+        # Very steep climb should clamp to maximum
+        assert get_grade_power_multiplier(20) <= MAX_POWER_MULTIPLIER
+
+
+class TestTerrainAdaptedPacingWithCoefficients:
+    """Tests for generate_terrain_adapted_pacing with custom coefficients."""
+
+    @pytest.fixture
+    def mixed_segments(self) -> list[CourseSegment]:
+        """Course with flat, climb, and descent."""
+        return [
+            CourseSegment(
+                start_distance_m=0,
+                end_distance_m=2000,
+                length_m=2000,
+                avg_grade_pct=0.0,
+                elevation_gain_m=0,
+                elevation_loss_m=0,
+                terrain_type="flat",
+            ),
+            CourseSegment(
+                start_distance_m=2000,
+                end_distance_m=4000,
+                length_m=2000,
+                avg_grade_pct=8.0,
+                elevation_gain_m=160,
+                elevation_loss_m=0,
+                terrain_type="steep_climb",
+            ),
+            CourseSegment(
+                start_distance_m=4000,
+                end_distance_m=6000,
+                length_m=2000,
+                avg_grade_pct=-5.0,
+                elevation_gain_m=0,
+                elevation_loss_m=100,
+                terrain_type="descent",
+            ),
+        ]
+
+    def test_uses_custom_coefficients(self, mixed_segments):
+        """generate_terrain_adapted_pacing uses custom coefficients."""
+        from trainingdash.domain.pacing import (
+            PacingCoefficients,
+            generate_terrain_adapted_pacing,
+        )
+
+        # Custom coefficients with higher intercept
+        custom = PacingCoefficients(
+            grade_power_intercept=1.20,  # Higher base
+            grade_power_slope=0.04,
+        )
+
+        plan_default = generate_terrain_adapted_pacing(
+            mixed_segments,
+            rider_ftp=250,
+            target_intensity=0.85,
+        )
+
+        plan_custom = generate_terrain_adapted_pacing(
+            mixed_segments,
+            rider_ftp=250,
+            target_intensity=0.85,
+            coefficients=custom,
+        )
+
+        # With higher intercept, flat segments should have higher power
+        flat_target_default = plan_default.targets[0].target_power_w
+        flat_target_custom = plan_custom.targets[0].target_power_w
+
+        # Custom has 1.20 intercept vs 1.10 default = ~9% higher
+        assert flat_target_custom > flat_target_default
+
+    def test_uses_custom_max_descent_speed(self, mixed_segments):
+        """generate_terrain_adapted_pacing respects custom max descent speed."""
+        from trainingdash.domain.pacing import (
+            PacingCoefficients,
+            generate_terrain_adapted_pacing,
+        )
+
+        # Custom coefficients with lower max descent speed
+        custom = PacingCoefficients(
+            max_descent_speed_mps=12.0,  # Much slower descents
+        )
+
+        plan = generate_terrain_adapted_pacing(
+            mixed_segments,
+            rider_ftp=250,
+            target_intensity=0.85,
+            coefficients=custom,
+        )
+
+        # Descent segment should be capped at custom speed
+        descent_target = plan.targets[2]  # The descent segment
+        assert descent_target.estimated_speed_mps <= 12.0
+
+    def test_explicit_max_descent_overrides_coefficients(self, mixed_segments):
+        """Explicit max_descent_speed_mps parameter overrides coefficients."""
+        from trainingdash.domain.pacing import (
+            PacingCoefficients,
+            generate_terrain_adapted_pacing,
+        )
+
+        # Coefficients say 20 m/s
+        custom = PacingCoefficients(
+            max_descent_speed_mps=20.0,
+        )
+
+        # But explicit param says 10 m/s
+        plan = generate_terrain_adapted_pacing(
+            mixed_segments,
+            rider_ftp=250,
+            target_intensity=0.85,
+            coefficients=custom,
+            max_descent_speed_mps=10.0,  # Explicit override
+        )
+
+        # Descent segment should be capped at explicit value
+        descent_target = plan.targets[2]
+        assert descent_target.estimated_speed_mps <= 10.0

@@ -33,6 +33,7 @@ from trainingdash.repositories.postgres.event_repo import PostgresEventRepo
 from trainingdash.repositories.postgres.geocoding_cache_repo import PostgresGeocodingCacheRepo
 from trainingdash.repositories.postgres.notification_repo import PostgresNotificationRepo
 from trainingdash.repositories.postgres.oauth_link_repo import PostgresOAuthLinkRepo
+from trainingdash.repositories.postgres.pacing_coefficients_repo import PostgresPacingCoefficientsRepo
 from trainingdash.repositories.postgres.race_plan_repo import PostgresRacePlanRepo
 from trainingdash.repositories.postgres.recalculation_job_repo import (
     PostgresRecalculationJobRepo,
@@ -63,6 +64,7 @@ from trainingdash.repositories.protocols import (
     JournalEntryRepo,
     NotificationRepo,
     OAuthLinkRepo,
+    PacingCoefficientsRepo,
     RacePlanRepo,
     RecalculationJobRepo,
     RecordRepo,
@@ -161,6 +163,11 @@ async def get_race_plan_repo(db: DbSession) -> RacePlanRepo:
     return PostgresRacePlanRepo(db)
 
 
+async def get_pacing_coefficients_repo(db: DbSession) -> PacingCoefficientsRepo:
+    """Create a PacingCoefficientsRepo bound to the current session."""
+    return PostgresPacingCoefficientsRepo(db)
+
+
 async def get_record_repo(db: DbSession) -> RecordRepo:
     """Create a RecordRepo bound to the current session."""
     return PostgresRecordRepo(db)
@@ -228,6 +235,7 @@ EventRepoD = Annotated[EventRepo, Depends(get_event_repo)]
 RecalculationJobRepoD = Annotated[RecalculationJobRepo, Depends(get_recalculation_job_repo)]
 OAuthLinkRepoD = Annotated[OAuthLinkRepo, Depends(get_oauth_link_repo)]
 RacePlanRepoD = Annotated[RacePlanRepo, Depends(get_race_plan_repo)]
+PacingCoefficientsRepoD = Annotated[PacingCoefficientsRepo, Depends(get_pacing_coefficients_repo)]
 ThresholdRepoD = Annotated[ThresholdRepo, Depends(get_threshold_repo)]
 SavedFilterRepoD = Annotated[SavedFilterRepo, Depends(get_saved_filter_repo)]
 RecordRepoD = Annotated[RecordRepo, Depends(get_record_repo)]
@@ -275,7 +283,19 @@ async def get_batch_link_activities_use_case(
     return BatchLinkActivities(event_repo, entry_repo, activity_repo, activity_link_repo)
 
 
+from trainingdash.use_cases.calibrate_pacing import CalibratePacing
+
+
+async def get_calibrate_pacing_use_case(
+    db: DbSession,
+    pacing_repo: PacingCoefficientsRepoD,
+) -> CalibratePacing:
+    """Create a CalibratePacing use case with its dependencies."""
+    return CalibratePacing(db, pacing_repo)
+
+
 IngestActivityD = Annotated[IngestActivity, Depends(get_ingest_activity_use_case)]
 DeleteActivityD = Annotated[DeleteActivity, Depends(get_delete_activity_use_case)]
 EnsureDefaultThresholdsD = Annotated[EnsureDefaultThresholds, Depends(get_ensure_default_thresholds_use_case)]
 BatchLinkActivitiesD = Annotated[BatchLinkActivities, Depends(get_batch_link_activities_use_case)]
+CalibratePacingD = Annotated[CalibratePacing, Depends(get_calibrate_pacing_use_case)]

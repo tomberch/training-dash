@@ -1216,6 +1216,93 @@ class BackupRepo(Protocol):
         ...
 
 
+class PacingCoefficientsRepo(Protocol):
+    """
+    Repository protocol for personalized pacing coefficients.
+
+    Stores per-user and optionally per-bike pacing model coefficients
+    learned from actual ride data.
+
+    Fallback chain for get_for_user_bike:
+    1. Bike-specific coefficients (if bike_id provided and exists)
+    2. User default coefficients (bike_id=NULL)
+    3. None (caller should use global defaults)
+    """
+
+    async def get_for_user_bike(
+        self,
+        user_id: int,
+        bike_id: int | None = None,
+    ) -> "PacingCoefficients | None":
+        """
+        Get pacing coefficients with fallback chain.
+
+        Tries bike-specific first (if bike_id provided), then user default.
+        Returns None if no coefficients found (use global defaults).
+        """
+        ...
+
+    async def get_user_default(self, user_id: int) -> "PacingCoefficients | None":
+        """
+        Get user's default coefficients (bike_id=NULL).
+
+        Returns None if not yet created.
+        """
+        ...
+
+    async def get_for_bike(self, user_id: int, bike_id: int) -> "PacingCoefficients | None":
+        """
+        Get bike-specific coefficients only (no fallback).
+
+        Returns None if no bike-specific coefficients exist.
+        """
+        ...
+
+    async def list_for_user(self, user_id: int) -> list["PacingCoefficients"]:
+        """
+        List all coefficients for a user (default + all bikes).
+
+        Ordered by bike_id (NULL first, then by bike_id).
+        """
+        ...
+
+    async def save(self, coefficients: "PacingCoefficients") -> "PacingCoefficients":
+        """
+        Persist coefficients (insert or update).
+
+        Returns the saved coefficients with any DB-generated fields populated.
+        """
+        ...
+
+    async def upsert(
+        self,
+        user_id: int,
+        bike_id: int | None,
+        grade_power_intercept: float,
+        grade_power_slope: float,
+        max_descent_speed_mps: float,
+        descent_power_multiplier: float,
+        curvature_speed_coefficient: float,
+        climb_sample_count: int,
+        descent_sample_count: int,
+        activity_count: int,
+    ) -> "PacingCoefficients":
+        """
+        Insert or update coefficients for a user/bike combination.
+
+        Uses ON CONFLICT to atomically upsert.
+        """
+        ...
+
+    async def delete(self, user_id: int, bike_id: int | None) -> bool:
+        """
+        Delete coefficients for a user/bike combination.
+
+        Returns True if deleted, False if not found.
+        """
+        ...
+
+
 # Import types for type hints (avoid circular import at runtime)
 from datetime import date, datetime
 from typing import TYPE_CHECKING, Any
@@ -1235,6 +1322,7 @@ if TYPE_CHECKING:
         JournalEntry,
         JournalEntryActivity,
         Notification,
+        PacingCoefficients,
         RaceCourse,
         RacePlan,
         RecalculationJob,

@@ -32,6 +32,33 @@ from trainingdash.domain.physics import (
 
 
 @dataclass
+class PacingCoefficients:
+    """Personalized pacing model coefficients.
+
+    These parameters control how power targets are calculated based on terrain.
+    They can be learned from actual ride data via the calibration pipeline.
+    """
+
+    # Climb coefficients (grade-power relationship)
+    grade_power_intercept: float = 1.10  # Base multiplier at 0% grade
+    grade_power_slope: float = 0.035  # Additional multiplier per 1% grade
+
+    # Descent coefficients
+    max_descent_speed_mps: float = 18.0  # Absolute speed limit on descents
+    descent_power_multiplier: float = 0.50  # Power on descents (grade < -3%)
+    curvature_speed_coefficient: float = -68.0  # Speed reduction per unit curvature
+
+    @classmethod
+    def defaults(cls) -> "PacingCoefficients":
+        """Return global defaults."""
+        return cls()
+
+
+# Global defaults (backward compatibility)
+DEFAULT_COEFFICIENTS = PacingCoefficients.defaults()
+
+
+@dataclass
 class PacingTarget:
     """Power target for a single course segment."""
 
@@ -90,11 +117,14 @@ MIN_POWER_MULTIPLIER = 0.50  # Minimum for descents (coasting with some pedaling
 MAX_POWER_MULTIPLIER = 1.50  # Maximum for very steep climbs (realistic ceiling)
 
 
-def get_grade_power_multiplier(grade_pct: float) -> float:
+def get_grade_power_multiplier(
+    grade_pct: float,
+    coefficients: PacingCoefficients | None = None,
+) -> float:
     """Calculate power multiplier based on grade using calibrated formula.
 
     Uses continuous formula derived from regression against real ride data:
-        power_mult = 1.10 + 0.057 × grade%
+        power_mult = intercept + slope × grade%
 
     This captures the natural power distribution pattern where riders push
     harder on climbs (where aero drag is low) and ease off on descents
@@ -102,20 +132,24 @@ def get_grade_power_multiplier(grade_pct: float) -> float:
 
     Args:
         grade_pct: Road gradient as percentage (e.g., 5.0 for 5% grade).
+        coefficients: Personalized coefficients. If None, uses global defaults.
 
     Returns:
         Power multiplier relative to base power (FTP × target_intensity).
-        Clamped to [0.30, 1.80] range.
+        Clamped to [MIN_POWER_MULTIPLIER, MAX_POWER_MULTIPLIER] range.
 
     Examples:
         >>> get_grade_power_multiplier(0)   # Flat
         1.10
         >>> get_grade_power_multiplier(10)  # 10% climb
-        1.67
+        1.45
         >>> get_grade_power_multiplier(-8)  # 8% descent
-        0.64
+        0.50
     """
-    multiplier = GRADE_POWER_INTERCEPT + GRADE_POWER_SLOPE * grade_pct
+    if coefficients is None:
+        coefficients = DEFAULT_COEFFICIENTS
+
+    multiplier = coefficients.grade_power_intercept + coefficients.grade_power_slope * grade_pct
     return max(MIN_POWER_MULTIPLIER, min(MAX_POWER_MULTIPLIER, multiplier))
 
 
@@ -397,7 +431,6 @@ def estimate_tss(np_watts: float, ftp: float, duration_s: float) -> float:
     return tss
 
 
-
 def generate_terrain_adapted_pacing(
     segments: list[CourseSegment],
     rider_ftp: float,
@@ -407,6 +440,7 @@ def generate_terrain_adapted_pacing(
     segment_env_params: list[EnvironmentParams] | None = None,
     max_descent_speed_mps: float | None = None,
     power_cap_ftp_pct: float = 1.05,
+    coefficients: PacingCoefficients | None = None,
 ) -> PacingPlan:
     """
     Generate pacing plan using continuous grade-based power allocation.
@@ -414,17 +448,13 @@ def generate_terrain_adapted_pacing(
     Unlike generate_heuristic_pacing which uses discrete terrain categories,
     this function uses a continuous formula calibrated from real ride data:
 
-        power_mult = 1.10 + 0.057 × grade%
+        power_mult = intercept + slope × grade%
 
     This gives more realistic power targets, especially on steep climbs where
     riders naturally push harder (aero drag is low, so extra watts are efficient).
 
-    The formula was calibrated against 135,000+ data points from real rides,
-    yielding these typical multipliers:
-        - 0% grade (flat):     1.10× base power
-        - 5% grade (climb):    1.39× base power
-        - 10% grade (steep):   1.67× base power
-        - -5% grade (descent): 0.82× base power
+    Coefficients can be personalized per user/bike via the calibration pipeline,
+    or the global defaults are used.
 
     Args:
         segments: Course segments (ideally 25m resolution for accuracy).
@@ -434,8 +464,10 @@ def generate_terrain_adapted_pacing(
         env_params: Environmental conditions. If None, uses sea level.
         segment_env_params: Optional per-segment environment params (for wind).
         max_descent_speed_mps: Maximum descent speed cap in m/s.
+            If None, uses coefficients.max_descent_speed_mps.
         power_cap_ftp_pct: Cap power at this fraction of FTP (default 1.05).
             Prevents unsustainably high targets on steep climbs.
+        coefficients: Personalized pacing coefficients. If None, uses defaults.
 
     Returns:
         PacingPlan with per-segment targets and overall metrics.
@@ -452,6 +484,10 @@ def generate_terrain_adapted_pacing(
     if not 0 < target_intensity <= 1.5:
         raise ValueError("target_intensity must be between 0 and 1.5")
 
+    # Use default coefficients if not provided
+    if coefficients is None:
+        coefficients = DEFAULT_COEFFICIENTS
+
     # Default rider params if not provided
     if rider_params is None:
         rider_params = RiderParams(mass_kg=83, cda=0.32, crr=0.004)
@@ -459,13 +495,18 @@ def generate_terrain_adapted_pacing(
     if env_params is None:
         env_params = EnvironmentParams()
 
+    # Use coefficients' max descent speed if not explicitly provided
+    effective_max_descent_speed = (
+        max_descent_speed_mps if max_descent_speed_mps is not None else coefficients.max_descent_speed_mps
+    )
+
     base_power = rider_ftp * target_intensity
     power_cap = rider_ftp * power_cap_ftp_pct
     targets: list[PacingTarget] = []
 
     for idx, segment in enumerate(segments):
-        # Calculate power multiplier based on grade
-        multiplier = get_grade_power_multiplier(segment.avg_grade_pct)
+        # Calculate power multiplier based on grade using personalized coefficients
+        multiplier = get_grade_power_multiplier(segment.avg_grade_pct, coefficients)
 
         # Calculate target power, capped at power_cap
         target_power = base_power * multiplier
@@ -481,7 +522,7 @@ def generate_terrain_adapted_pacing(
             segment.avg_grade_pct,
             rider_params,
             seg_env,
-            max_descent_speed_mps=max_descent_speed_mps,
+            max_descent_speed_mps=effective_max_descent_speed,
         )
 
         # Calculate time for segment

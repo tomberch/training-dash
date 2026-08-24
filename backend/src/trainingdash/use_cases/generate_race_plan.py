@@ -11,7 +11,10 @@ from decimal import Decimal
 
 from trainingdash.domain.aero_selection import AeroSource, BikeAeroData, select_aero_params
 from trainingdash.domain.course_segmentation import CourseSegment
-from trainingdash.domain.pacing import generate_heuristic_pacing, generate_terrain_adapted_pacing
+from trainingdash.domain.pacing import (
+    PacingCoefficients,
+    generate_terrain_adapted_pacing,
+)
 from trainingdash.domain.pacing_optimizer import optimize_pacing, optimize_pacing_for_time
 from trainingdash.domain.physics import EnvironmentParams, RiderParams, calculate_headwind
 from trainingdash.domain.wbal import predict_wbal_for_plan
@@ -21,7 +24,13 @@ from trainingdash.integrations.weather import (
     get_calm_conditions,
 )
 from trainingdash.repositories.postgres.models import RacePlan
-from trainingdash.repositories.protocols import BikeRepo, CourseRepo, RacePlanRepo, UserRepo
+from trainingdash.repositories.protocols import (
+    BikeRepo,
+    CourseRepo,
+    PacingCoefficientsRepo,
+    RacePlanRepo,
+    UserRepo,
+)
 
 
 @dataclass
@@ -97,11 +106,13 @@ class GenerateRacePlan:
         bike_repo: BikeRepo,
         user_repo: UserRepo,
         plan_repo: RacePlanRepo,
+        pacing_coefficients_repo: PacingCoefficientsRepo | None = None,
     ) -> None:
         self._course_repo = course_repo
         self._bike_repo = bike_repo
         self._user_repo = user_repo
         self._plan_repo = plan_repo
+        self._pacing_coefficients_repo = pacing_coefficients_repo
 
     async def execute(
         self,
@@ -284,6 +295,19 @@ class GenerateRacePlan:
         if request.w_prime_joules is None:
             warnings.append("W' using default: 20kJ")
 
+        # Load personalized pacing coefficients (if available)
+        pacing_coefficients: PacingCoefficients | None = None
+        if self._pacing_coefficients_repo is not None:
+            db_coefficients = await self._pacing_coefficients_repo.get_for_user_bike(user_id, bike_id=bike_id)
+            if db_coefficients is not None:
+                pacing_coefficients = PacingCoefficients(
+                    grade_power_intercept=float(db_coefficients.grade_power_intercept),
+                    grade_power_slope=float(db_coefficients.grade_power_slope),
+                    max_descent_speed_mps=float(db_coefficients.max_descent_speed_mps),
+                    descent_power_multiplier=float(db_coefficients.descent_power_multiplier),
+                    curvature_speed_coefficient=float(db_coefficients.curvature_speed_coefficient),
+                )
+
         # 6. Generate pacing plan
         # Three modes:
         # A) Target time mode: optimize power to hit specific finish time
@@ -378,7 +402,7 @@ class GenerateRacePlan:
             }
         else:
             # Mode C: Terrain-adapted pacing with continuous grade-based power targets
-            # Uses calibrated formula: power_mult = 1.10 + 0.057 × grade%
+            # Uses personalized coefficients if available, otherwise global defaults
             heuristic = generate_terrain_adapted_pacing(
                 segments=segments,
                 rider_ftp=ftp,
@@ -387,6 +411,7 @@ class GenerateRacePlan:
                 env_params=env_params,
                 segment_env_params=segment_env_params,
                 max_descent_speed_mps=request.max_descent_speed_mps,
+                coefficients=pacing_coefficients,
             )
 
             total_time_s = heuristic.total_time_s

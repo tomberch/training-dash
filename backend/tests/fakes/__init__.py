@@ -35,6 +35,7 @@ from tests.fakes.credentials_repo import FakeGarminCredentialsRepo, FakeXertCred
 from tests.fakes.event_repo import FakeEventRepo
 from tests.fakes.notification_repo import FakeNotificationRepo
 from tests.fakes.oauth_link_repo import FakeOAuthLinkRepo
+from tests.fakes.pacing_coefficients_repo import FakePacingCoefficientsRepo
 from tests.fakes.recalculation_job_repo import FakeRecalculationJobRepo
 from tests.fakes.ride_event_repo import (
     FakeJournalEntryActivityRepo,
@@ -57,6 +58,7 @@ __all__ = [
     "FakeJournalEntryRepo",
     "FakeNotificationRepo",
     "FakeOAuthLinkRepo",
+    "FakePacingCoefficientsRepo",
     "FakeRecalculationJobRepo",
     "FakeRideEventLinkRepo",
     "FakeRideEventMediaRepo",

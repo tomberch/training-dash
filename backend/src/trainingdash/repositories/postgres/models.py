@@ -862,3 +862,96 @@ class BackupHistory(Base):
     db_migration_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
     # Error info
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class PacingCoefficients(Base):
+    """Personalized pacing model coefficients per user/bike.
+
+    Stores coefficients learned from actual ride data to enable
+    personalized power and speed predictions. Each user can have:
+    - One user-default row (bike_id=NULL) that applies to all bikes
+    - Additional bike-specific rows that override the default
+
+    Fallback chain: bike-specific → user default → global defaults
+    """
+
+    __tablename__ = "pacing_coefficients"
+    __table_args__ = (
+        sa.UniqueConstraint("user_id", "bike_id", name="uq_pacing_coefficients_user_bike"),
+        sa.Index(
+            "ix_pacing_coefficients_user_default",
+            "user_id",
+            unique=True,
+            postgresql_where=sa.text("bike_id IS NULL"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    bike_id: Mapped[int | None] = mapped_column(
+        ForeignKey("bikes.id", ondelete="CASCADE"),
+        nullable=True,
+        comment="NULL = user default (applies to all bikes without specific coefficients)",
+    )
+
+    # Climb coefficients
+    grade_power_intercept: Mapped[Decimal] = mapped_column(
+        Numeric(4, 3),
+        nullable=False,
+        server_default=text("1.100"),
+        comment="Base power multiplier at 0% grade",
+    )
+    grade_power_slope: Mapped[Decimal] = mapped_column(
+        Numeric(5, 4),
+        nullable=False,
+        server_default=text("0.0350"),
+        comment="Power multiplier increase per 1% grade",
+    )
+
+    # Descent coefficients
+    max_descent_speed_mps: Mapped[Decimal] = mapped_column(
+        Numeric(4, 1),
+        nullable=False,
+        server_default=text("18.0"),
+        comment="Absolute speed limit on descents (m/s)",
+    )
+    descent_power_multiplier: Mapped[Decimal] = mapped_column(
+        Numeric(3, 2),
+        nullable=False,
+        server_default=text("0.50"),
+        comment="Power multiplier on descents (grade < -3%)",
+    )
+    curvature_speed_coefficient: Mapped[Decimal] = mapped_column(
+        Numeric(6, 1),
+        nullable=False,
+        server_default=text("-68.0"),
+        comment="Speed reduction per unit curvature (m/s per 1/m)",
+    )
+
+    # Learning metadata
+    climb_sample_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        server_default=text("0"),
+        comment="Number of climb data points used for regression",
+    )
+    descent_sample_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        server_default=text("0"),
+        comment="Number of descent data points used for regression",
+    )
+    activity_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        server_default=text("0"),
+        comment="Number of activities contributing to coefficients",
+    )
+    last_calibrated_at: Mapped[datetime | None] = mapped_column(
+        nullable=True,
+        comment="When coefficients were last updated",
+    )
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
+    updated_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))

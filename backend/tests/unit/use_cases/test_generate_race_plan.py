@@ -374,3 +374,113 @@ class TestGenerateRacePlanWbal:
         assert result.plan.wbal_min is not None
         assert result.plan.wbal_min >= 0
         assert result.plan.wbal_min <= 20000
+
+
+class TestGenerateRacePlanPersonalizedCoefficients:
+    """Tests for personalized pacing coefficients."""
+
+    @pytest.fixture
+    def pacing_coefficients_repo(self):
+        from decimal import Decimal
+
+        from tests.fakes.pacing_coefficients_repo import FakePacingCoefficientsRepo
+        from trainingdash.repositories.postgres.models import PacingCoefficients
+
+        repo = FakePacingCoefficientsRepo()
+        # Add user default coefficients
+        repo.add(
+            PacingCoefficients(
+                id=1,
+                user_id=1,
+                bike_id=None,  # User default
+                grade_power_intercept=Decimal("1.15"),  # Higher than default 1.10
+                grade_power_slope=Decimal("0.045"),  # Higher than default 0.035
+                max_descent_speed_mps=Decimal("16.0"),  # Lower than default 18.0
+                descent_power_multiplier=Decimal("0.40"),
+                curvature_speed_coefficient=Decimal("-70.0"),
+                climb_sample_count=5000,
+                descent_sample_count=3000,
+                activity_count=25,
+            )
+        )
+        # Add bike-specific coefficients for bike 1
+        repo.add(
+            PacingCoefficients(
+                id=2,
+                user_id=1,
+                bike_id=1,
+                grade_power_intercept=Decimal("1.08"),  # Different from user default
+                grade_power_slope=Decimal("0.030"),
+                max_descent_speed_mps=Decimal("20.0"),  # Faster descent
+                descent_power_multiplier=Decimal("0.55"),
+                curvature_speed_coefficient=Decimal("-60.0"),
+                climb_sample_count=2000,
+                descent_sample_count=1500,
+                activity_count=10,
+            )
+        )
+        return repo
+
+    @pytest.fixture
+    def use_case_with_coefficients(self, course_repo, bike_repo, user_repo, plan_repo, pacing_coefficients_repo):
+        return GenerateRacePlan(course_repo, bike_repo, user_repo, plan_repo, pacing_coefficients_repo)
+
+    @pytest.mark.asyncio
+    async def test_uses_user_default_coefficients_when_no_bike(self, use_case_with_coefficients):
+        """Uses user default coefficients when no bike specified."""
+        request = GeneratePlanRequest(
+            course_id=1,
+            bike_id=None,  # No bike = user default
+            ftp_watts=250,
+        )
+
+        result = await use_case_with_coefficients.execute(user_id=1, request=request)
+
+        # Plan should be generated successfully
+        assert result.plan is not None
+        assert result.plan.total_time_s > 0
+
+    @pytest.mark.asyncio
+    async def test_uses_bike_specific_coefficients(self, use_case_with_coefficients):
+        """Uses bike-specific coefficients when bike specified."""
+        request = GeneratePlanRequest(
+            course_id=1,
+            bike_id=1,  # Has specific coefficients
+            ftp_watts=250,
+        )
+
+        result = await use_case_with_coefficients.execute(user_id=1, request=request)
+
+        # Plan should be generated successfully
+        assert result.plan is not None
+        assert result.plan.total_time_s > 0
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_user_default_for_unknown_bike(self, use_case_with_coefficients):
+        """Falls back to user default when bike has no specific coefficients."""
+        request = GeneratePlanRequest(
+            course_id=1,
+            bike_id=999,  # Non-existent bike
+            ftp_watts=250,
+        )
+
+        result = await use_case_with_coefficients.execute(user_id=1, request=request)
+
+        # Plan should still be generated using fallback
+        assert result.plan is not None
+        assert any("not found" in w for w in result.warnings)
+
+    @pytest.mark.asyncio
+    async def test_works_without_coefficients_repo(self, use_case):
+        """Works when no coefficients repo is provided (uses global defaults)."""
+        request = GeneratePlanRequest(
+            course_id=1,
+            bike_id=1,
+            ftp_watts=250,
+        )
+
+        # use_case fixture doesn't have coefficients repo
+        result = await use_case.execute(user_id=1, request=request)
+
+        assert result.plan is not None
+        assert result.plan.total_time_s > 0

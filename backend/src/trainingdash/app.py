@@ -31,6 +31,7 @@ from trainingdash.routers import (
     health,
     metrics,
     oauth,
+    pacing_coefficients,
     query,
     race_plans,
     saved_filters,
@@ -105,6 +106,7 @@ def create_app() -> FastAPI:
     app.include_router(metrics.router)
     app.include_router(query.router)
     app.include_router(race_plans.router)
+    app.include_router(pacing_coefficients.router)
     app.include_router(saved_filters.router)
     app.include_router(tiles.router)
 
