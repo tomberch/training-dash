@@ -1,7 +1,7 @@
 # TrainDash
 
 [![Build](https://github.com/tomberch/training-dash/actions/workflows/ci.yml/badge.svg)](https://github.com/tomberch/training-dash/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
 [![React 19](https://img.shields.io/badge/react-19-61dafb.svg)](https://react.dev/)
 [![Docker](https://img.shields.io/badge/docker-compose-2496ed.svg)](https://docs.docker.com/compose/)
@@ -168,4 +168,4 @@ cd frontend && npm run dev
 
 ## License
 
-[MIT](LICENSE)
+[AGPL-3.0](LICENSE)
