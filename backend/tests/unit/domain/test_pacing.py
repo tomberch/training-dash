@@ -829,3 +829,179 @@ class TestTerrainAdaptedPacingWithCoefficients:
         # Descent segment should be capped at explicit value
         descent_target = plan.targets[2]
         assert descent_target.estimated_speed_mps <= 10.0
+
+
+
+# =============================================================================
+# Test Fine-Grained Pacing Integration
+# =============================================================================
+
+
+class TestFineGrainedPacingIntegration:
+    """Tests for fine-grained pacing integration with generate_terrain_adapted_pacing."""
+
+    @pytest.fixture
+    def sample_elevation_profile(self) -> list[dict]:
+        """Create a sample elevation profile with realistic data."""
+        # 2km course with varied terrain:
+        # 0-500m: flat (100m elevation)
+        # 500-1000m: climb to 150m
+        # 1000-1500m: flat at 150m
+        # 1500-2000m: descent back to 100m
+        points = []
+        for i in range(0, 2001, 10):  # 10m spacing
+            if i <= 500:
+                elev = 100.0
+            elif i <= 1000:
+                # Climb: gain 50m over 500m = 10% grade
+                elev = 100.0 + 50.0 * (i - 500) / 500
+            elif i <= 1500:
+                elev = 150.0
+            else:
+                # Descent: lose 50m over 500m = -10% grade
+                elev = 150.0 - 50.0 * (i - 1500) / 500
+
+            points.append({
+                "distance_m": float(i),
+                "elevation_m": elev,
+                "grade_pct": 0.0,  # Not used, grades recalculated
+            })
+        return points
+
+    @pytest.fixture
+    def sample_segments(self) -> list:
+        """Create segments matching the elevation profile."""
+        from trainingdash.domain.course_segmentation import CourseSegment
+
+        return [
+            CourseSegment(0, 500, 500, 0.0, 0, 0, "flat"),
+            CourseSegment(500, 1000, 500, 10.0, 50, 0, "climb"),
+            CourseSegment(1000, 1500, 500, 0.0, 0, 0, "flat"),
+            CourseSegment(1500, 2000, 500, -10.0, 0, 50, "descent"),
+        ]
+
+    def test_uses_fine_grained_when_profile_provided(
+        self, sample_segments, sample_elevation_profile
+    ):
+        """With elevation_profile, uses fine-grained pacing."""
+        from trainingdash.domain.pacing import generate_terrain_adapted_pacing
+
+        plan_coarse = generate_terrain_adapted_pacing(
+            segments=sample_segments,
+            rider_ftp=250,
+            target_intensity=0.85,
+            elevation_profile=None,  # Coarse mode
+        )
+
+        plan_fine = generate_terrain_adapted_pacing(
+            segments=sample_segments,
+            rider_ftp=250,
+            target_intensity=0.85,
+            elevation_profile=sample_elevation_profile,  # Fine mode
+        )
+
+        # Both should produce valid plans
+        assert len(plan_coarse.targets) == 4
+        assert len(plan_fine.targets) == 4
+
+        # Fine-grained should generally give more accurate time predictions
+        # (we can't assert exactly, but it should produce a valid result)
+        assert plan_fine.total_time_s > 0
+        assert plan_fine.total_distance_m == pytest.approx(2000.0, rel=0.1)
+
+    def test_fine_grained_produces_different_speeds(
+        self, sample_segments, sample_elevation_profile
+    ):
+        """Fine-grained mode produces different speed predictions."""
+        from trainingdash.domain.pacing import generate_terrain_adapted_pacing
+
+        plan_fine = generate_terrain_adapted_pacing(
+            segments=sample_segments,
+            rider_ftp=250,
+            target_intensity=0.85,
+            elevation_profile=sample_elevation_profile,
+        )
+
+        # Speeds should vary by terrain
+        speeds = [t.estimated_speed_mps for t in plan_fine.targets]
+
+        # Climb (index 1) should be slower than flat (index 0)
+        assert speeds[1] < speeds[0], "Climb should be slower than flat"
+
+        # Descent (index 3) should be faster than flat (index 0)
+        assert speeds[3] > speeds[0], "Descent should be faster than flat"
+
+    def test_fine_grained_respects_coefficients(
+        self, sample_segments, sample_elevation_profile
+    ):
+        """Fine-grained mode uses personalized coefficients."""
+        from trainingdash.domain.pacing import (
+            PacingCoefficients,
+            generate_terrain_adapted_pacing,
+        )
+
+        # Lower max descent speed
+        custom = PacingCoefficients(
+            max_descent_speed_mps=10.0,
+        )
+
+        plan = generate_terrain_adapted_pacing(
+            segments=sample_segments,
+            rider_ftp=250,
+            target_intensity=0.85,
+            elevation_profile=sample_elevation_profile,
+            coefficients=custom,
+        )
+
+        # Descent should be capped
+        descent_target = plan.targets[3]
+        assert descent_target.estimated_speed_mps <= 10.0 + 0.5  # Small tolerance
+
+    def test_fine_grained_calculates_np_from_variable_power(
+        self, sample_segments, sample_elevation_profile
+    ):
+        """Fine-grained NP is calculated from actual variable power."""
+        from trainingdash.domain.pacing import generate_terrain_adapted_pacing
+
+        plan = generate_terrain_adapted_pacing(
+            segments=sample_segments,
+            rider_ftp=250,
+            target_intensity=0.85,
+            elevation_profile=sample_elevation_profile,
+        )
+
+        # NP should be higher than average power on variable terrain
+        assert plan.normalized_power_w >= plan.avg_power_w * 0.99  # Allow small tolerance
+
+        # IF should be reasonable
+        assert 0.5 < plan.intensity_factor < 1.5
+
+    def test_empty_elevation_profile_uses_coarse_mode(self, sample_segments):
+        """Empty elevation profile falls back to coarse mode."""
+        from trainingdash.domain.pacing import generate_terrain_adapted_pacing
+
+        plan = generate_terrain_adapted_pacing(
+            segments=sample_segments,
+            rider_ftp=250,
+            target_intensity=0.85,
+            elevation_profile=[],  # Empty
+        )
+
+        # Should still produce valid plan
+        assert len(plan.targets) == 4
+        assert plan.total_time_s > 0
+
+    def test_single_point_elevation_profile_uses_coarse_mode(self, sample_segments):
+        """Single-point elevation profile falls back to coarse mode."""
+        from trainingdash.domain.pacing import generate_terrain_adapted_pacing
+
+        plan = generate_terrain_adapted_pacing(
+            segments=sample_segments,
+            rider_ftp=250,
+            target_intensity=0.85,
+            elevation_profile=[{"distance_m": 0, "elevation_m": 100, "grade_pct": 0}],
+        )
+
+        # Should still produce valid plan
+        assert len(plan.targets) == 4
+        assert plan.total_time_s > 0

@@ -24,6 +24,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from trainingdash.domain.course_segmentation import CourseSegment, calculate_course_punchiness
+from trainingdash.domain.fine_grained_pacing import generate_fine_grained_plan
 from trainingdash.domain.physics import (
     EnvironmentParams,
     RiderParams,
@@ -441,6 +442,7 @@ def generate_terrain_adapted_pacing(
     max_descent_speed_mps: float | None = None,
     power_cap_ftp_pct: float = 1.05,
     coefficients: PacingCoefficients | None = None,
+    elevation_profile: list[dict] | None = None,
 ) -> PacingPlan:
     """
     Generate pacing plan using continuous grade-based power allocation.
@@ -456,18 +458,27 @@ def generate_terrain_adapted_pacing(
     Coefficients can be personalized per user/bike via the calibration pipeline,
     or the global defaults are used.
 
+    When elevation_profile is provided, uses fine-grained pacing (~25m resolution)
+    for accurate speed predictions. This runs physics calculations at each fine
+    point, then aggregates back to display segments. Without elevation_profile,
+    falls back to segment-based calculations.
+
     Args:
-        segments: Course segments (ideally 25m resolution for accuracy).
+        segments: Course segments for display structure (used for output format).
         rider_ftp: Rider's Functional Threshold Power in watts.
         target_intensity: Target Intensity Factor (IF), default 0.85.
         rider_params: Rider physical parameters for physics calculations.
         env_params: Environmental conditions. If None, uses sea level.
         segment_env_params: Optional per-segment environment params (for wind).
+            Note: Wind adjustment not yet supported with fine-grained mode.
         max_descent_speed_mps: Maximum descent speed cap in m/s.
             If None, uses coefficients.max_descent_speed_mps.
         power_cap_ftp_pct: Cap power at this fraction of FTP (default 1.05).
             Prevents unsustainably high targets on steep climbs.
         coefficients: Personalized pacing coefficients. If None, uses defaults.
+        elevation_profile: Course elevation profile from RaceCourse.elevation_profile.
+            If provided, enables fine-grained (~25m) pacing for accurate speed
+            predictions. If None, uses segment-based calculation.
 
     Returns:
         PacingPlan with per-segment targets and overall metrics.
@@ -500,6 +511,25 @@ def generate_terrain_adapted_pacing(
         max_descent_speed_mps if max_descent_speed_mps is not None else coefficients.max_descent_speed_mps
     )
 
+    # =========================================================================
+    # Fine-grained mode: Use elevation profile for accurate speed predictions
+    # =========================================================================
+    if elevation_profile is not None and len(elevation_profile) >= 2:
+        return _generate_fine_grained_adapted_pacing(
+            segments=segments,
+            elevation_profile=elevation_profile,
+            rider_ftp=rider_ftp,
+            target_intensity=target_intensity,
+            rider_params=rider_params,
+            env_params=env_params,
+            effective_max_descent_speed=effective_max_descent_speed,
+            power_cap_ftp_pct=power_cap_ftp_pct,
+            coefficients=coefficients,
+        )
+
+    # =========================================================================
+    # Fallback: Segment-based calculation (original behavior)
+    # =========================================================================
     base_power = rider_ftp * target_intensity
     power_cap = rider_ftp * power_cap_ftp_pct
     targets: list[PacingTarget] = []
@@ -612,3 +642,144 @@ def calculate_normalized_power_from_variable_targets(
 
     # Calculate NP using standard algorithm
     return calculate_normalized_power(np.array(power_samples), sample_rate_hz=1.0)
+
+
+
+def _generate_fine_grained_adapted_pacing(
+    segments: list[CourseSegment],
+    elevation_profile: list[dict],
+    rider_ftp: float,
+    target_intensity: float,
+    rider_params: RiderParams,
+    env_params: EnvironmentParams,
+    effective_max_descent_speed: float,
+    power_cap_ftp_pct: float,
+    coefficients: PacingCoefficients,
+) -> PacingPlan:
+    """
+    Internal helper: Generate pacing plan using fine-grained elevation profile.
+
+    Runs physics calculations at ~25m resolution for accurate speed predictions,
+    then maps the results back onto the original segment structure.
+
+    This gives:
+    - Accurate per-segment speeds (not averaged over coarse segments)
+    - Accurate total time (sum of fine-grained segments)
+    - Accurate NP (from actual variable power profile)
+    """
+    # Generate fine-grained plan (~25m resolution)
+    fine_plan = generate_fine_grained_plan(
+        elevation_profile=elevation_profile,
+        rider_ftp=rider_ftp,
+        target_intensity=target_intensity,
+        rider_params=rider_params,
+        env_params=env_params,
+        grade_power_intercept=coefficients.grade_power_intercept,
+        grade_power_slope=coefficients.grade_power_slope,
+        max_descent_speed_mps=effective_max_descent_speed,
+        power_cap_ftp_pct=power_cap_ftp_pct,
+        target_spacing_m=25.0,
+    )
+
+    if not fine_plan.points:
+        # Fallback: return empty plan structure
+        return PacingPlan(
+            targets=[],
+            total_time_s=0,
+            total_distance_m=0,
+            avg_power_w=0,
+            normalized_power_w=0,
+            intensity_factor=0,
+        )
+
+    # Map fine-grained results onto original segment structure
+    # For each segment, find all fine points within it and aggregate
+    targets: list[PacingTarget] = []
+    fine_idx = 0
+    n_fine = len(fine_plan.points)
+
+    for seg_idx, segment in enumerate(segments):
+        seg_start = segment.start_distance_m
+        seg_end = segment.end_distance_m
+
+        # Find fine points within this segment
+        seg_powers: list[float] = []
+        seg_times: list[float] = []
+        seg_speeds: list[float] = []
+
+        while fine_idx < n_fine:
+            fp = fine_plan.points[fine_idx]
+            # Check if this fine point is within the segment
+            # Use a small tolerance for boundary conditions
+            if fp.distance_m < seg_start - 1.0:
+                fine_idx += 1
+                continue
+            if fp.distance_m >= seg_end + 1.0:
+                break
+
+            seg_powers.append(fp.power_w)
+            seg_times.append(fp.time_s)
+            seg_speeds.append(fp.speed_mps)
+            fine_idx += 1
+
+        # If we found fine points for this segment, aggregate them
+        if seg_powers and seg_times:
+            total_seg_time = sum(seg_times)
+            if total_seg_time > 0:
+                # Time-weighted averages
+                avg_power = sum(p * t for p, t in zip(seg_powers, seg_times)) / total_seg_time
+                avg_speed = sum(s * t for s, t in zip(seg_speeds, seg_times)) / total_seg_time
+            else:
+                avg_power = sum(seg_powers) / len(seg_powers) if seg_powers else 0
+                avg_speed = sum(seg_speeds) / len(seg_speeds) if seg_speeds else 1.0
+                total_seg_time = segment.length_m / avg_speed if avg_speed > 0 else 0
+        else:
+            # No fine points found - fall back to segment-based calculation
+            # This can happen if segment boundaries don't align with fine points
+            multiplier = get_grade_power_multiplier(segment.avg_grade_pct, coefficients)
+            base_power = rider_ftp * target_intensity
+            power_cap = rider_ftp * power_cap_ftp_pct
+            avg_power = min(base_power * multiplier, power_cap)
+            avg_power = max(0, avg_power)
+
+            from trainingdash.domain.physics import speed_from_power
+
+            avg_speed = speed_from_power(
+                avg_power,
+                segment.avg_grade_pct,
+                rider_params,
+                env_params,
+                max_descent_speed_mps=effective_max_descent_speed,
+            )
+            total_seg_time = segment.length_m / avg_speed if avg_speed > 0 else 0
+
+        targets.append(
+            PacingTarget(
+                segment_idx=seg_idx,
+                start_distance_m=seg_start,
+                end_distance_m=seg_end,
+                distance_m=segment.length_m,
+                grade_pct=segment.avg_grade_pct,
+                target_power_w=avg_power,
+                terrain_type=segment.terrain_type,
+                estimated_speed_mps=avg_speed,
+                estimated_time_s=total_seg_time,
+            )
+        )
+
+        # Reset fine_idx to allow overlap at segment boundaries
+        # (fine points exactly at segment boundary could belong to either)
+        if fine_idx > 0:
+            fine_idx -= 1
+
+    # Use aggregated metrics from fine-grained plan (more accurate)
+    intensity_factor = fine_plan.normalized_power_w / rider_ftp if rider_ftp > 0 else 0
+
+    return PacingPlan(
+        targets=targets,
+        total_time_s=fine_plan.total_time_s,
+        total_distance_m=fine_plan.total_distance_m,
+        avg_power_w=fine_plan.avg_power_w,
+        normalized_power_w=fine_plan.normalized_power_w,
+        intensity_factor=intensity_factor,
+    )

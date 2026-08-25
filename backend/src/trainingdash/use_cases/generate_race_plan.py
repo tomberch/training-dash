@@ -403,6 +403,8 @@ class GenerateRacePlan:
         else:
             # Mode C: Terrain-adapted pacing with continuous grade-based power targets
             # Uses personalized coefficients if available, otherwise global defaults
+            # When elevation_profile is available, uses fine-grained (~25m) pacing
+            # for accurate speed predictions
             heuristic = generate_terrain_adapted_pacing(
                 segments=segments,
                 rider_ftp=ftp,
@@ -412,6 +414,7 @@ class GenerateRacePlan:
                 segment_env_params=segment_env_params,
                 max_descent_speed_mps=request.max_descent_speed_mps,
                 coefficients=pacing_coefficients,
+                elevation_profile=course.elevation_profile,
             )
 
             total_time_s = heuristic.total_time_s
