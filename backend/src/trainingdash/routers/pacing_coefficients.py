@@ -43,7 +43,7 @@ class CoefficientsResponse(BaseModel):
     max_descent_speed_mps: float = Field(description="Maximum descent speed in m/s")
     max_descent_speed_kmh: float = Field(description="Maximum descent speed in km/h")
     descent_power_multiplier: float = Field(description="Power multiplier on descents")
-    curvature_speed_coefficient: float = Field(description="Speed reduction per unit curvature")
+    curvature_speed_coefficient: float = Field(description="Lateral acceleration comfort in corners (a_lat, m/s²)")
 
     # Confidence metrics
     climb_sample_count: int = Field(description="Number of climb data points used")

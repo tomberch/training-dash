@@ -18,7 +18,7 @@ import asyncio
 import csv
 import logging
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from statistics import mean, median, stdev
 
@@ -36,10 +36,18 @@ from trainingdash.domain.course_segmentation import (
 )
 from trainingdash.domain.elevation import smooth_elevation
 from trainingdash.domain.fine_grained_pacing import (
-    FineGrainedPlan,
     generate_fine_grained_plan,
 )
 from trainingdash.domain.grade import calculate_grade
+from trainingdash.domain.pacing_model import (
+    GRADE_POWER_INTERCEPT as DEFAULT_GRADE_POWER_INTERCEPT,
+)
+from trainingdash.domain.pacing_model import (
+    GRADE_POWER_SLOPE as DEFAULT_GRADE_POWER_SLOPE,
+)
+from trainingdash.domain.pacing_model import (
+    PacingCoefficients as _ModelCoefficients,
+)
 from trainingdash.domain.physics import EnvironmentParams, RiderParams
 from trainingdash.init_db import async_session
 from trainingdash.repositories.postgres.models import Activity, Bike, PacingCoefficients, Record, User
@@ -50,11 +58,8 @@ logger = logging.getLogger(__name__)
 
 from enum import StrEnum
 
-
-# Default pacing coefficients (global defaults)
-DEFAULT_GRADE_POWER_INTERCEPT = 1.10
-DEFAULT_GRADE_POWER_SLOPE = 0.035
-DEFAULT_MAX_DESCENT_SPEED_MPS = 18.0
+# Descent-speed default comes from the shared model's defaults (single source)
+DEFAULT_MAX_DESCENT_SPEED_MPS = _ModelCoefficients().max_descent_speed_mps
 
 
 class CoefficientsSource(StrEnum):
@@ -97,7 +102,7 @@ class ValidationContext:
 @dataclass
 class ActivityResult:
     """Result of validating one activity.
-    
+
     Attributes:
         activity_id: UUID of the activity.
         activity_title: Display name of the activity.
@@ -191,12 +196,12 @@ class ActivityResult:
         notes: str,
     ) -> "ActivityResult":
         """Create a skipped result for an activity that couldn't be validated.
-        
+
         Args:
             activity: The activity that was skipped.
             pedaling_metrics: Pedaling metrics if available, None otherwise.
             notes: Reason for skipping.
-            
+
         Returns:
             ActivityResult with status="skipped" and zeroed predictions.
         """
@@ -326,9 +331,7 @@ async def get_bike_for_activity(activity: Activity) -> tuple[float, float, float
         return bike_weight, cda, crr
 
 
-async def get_pacing_coefficients(
-    user_id: int, bike_id: int | None
-) -> ResolvedPacingCoefficients:
+async def get_pacing_coefficients(user_id: int, bike_id: int | None) -> ResolvedPacingCoefficients:
     """
     Get personalized pacing coefficients for a user/bike.
 
@@ -383,7 +386,7 @@ async def get_pacing_coefficients(
 @dataclass
 class PedalingMetrics:
     """Metrics tracking pedaling vs coasting/stopped time.
-    
+
     Used to separate physics-relevant riding time from total elapsed time,
     enabling more accurate model validation by comparing predictions against
     actual pedaling speed rather than overall average speed.
@@ -487,13 +490,15 @@ def create_segments_from_records(records: list[Record]) -> tuple[list[CourseSegm
     elevation_profile = []
     for i, (dist, elev) in enumerate(zip(distances, smoothed_elevations)):
         grade = grades[i] if i < len(grades) else 0.0
-        elevation_profile.append({
-            "distance_m": float(dist),
-            "elevation_m": float(elev),
-            "grade_pct": float(grade),
-            "lat": lats[i] if i < len(lats) else None,
-            "lon": lons[i] if i < len(lons) else None,
-        })
+        elevation_profile.append(
+            {
+                "distance_m": float(dist),
+                "elevation_m": float(elev),
+                "grade_pct": float(grade),
+                "lat": lats[i] if i < len(lats) else None,
+                "lon": lons[i] if i < len(lons) else None,
+            }
+        )
 
     # Segment the course
     segments = segment_course(distances, grades, smoothed_elevations)
@@ -543,9 +548,7 @@ def validate_activity(
     # Actual pedaling-only values (more meaningful for physics comparison)
     actual_pedaling_time_s = pedaling_metrics.pedaling_time_s
     actual_pedaling_speed_kmh = (
-        (actual_distance_m / actual_pedaling_time_s * 3.6)
-        if actual_pedaling_time_s > 0
-        else actual_avg_speed_kmh
+        (actual_distance_m / actual_pedaling_time_s * 3.6) if actual_pedaling_time_s > 0 else actual_avg_speed_kmh
     )
     pedaling_pct = pedaling_metrics.pedaling_pct
 
@@ -588,7 +591,9 @@ def validate_activity(
     # Calculate errors (vs total ride)
     np_error_pct = abs(pred_np - actual_np) / actual_np * 100 if actual_np > 0 else 0
     vi_error_pct = abs(pred_vi - actual_vi) / actual_vi * 100 if actual_vi > 0 else 0
-    speed_error_pct = abs(pred_avg_speed_kmh - actual_avg_speed_kmh) / actual_avg_speed_kmh * 100 if actual_avg_speed_kmh > 0 else 0
+    speed_error_pct = (
+        abs(pred_avg_speed_kmh - actual_avg_speed_kmh) / actual_avg_speed_kmh * 100 if actual_avg_speed_kmh > 0 else 0
+    )
     time_error_pct = abs(pred_time_s - actual_time_s) / actual_time_s * 100 if actual_time_s > 0 else 0
 
     # Calculate errors vs pedaling-only (more meaningful for physics validation)
@@ -680,9 +685,7 @@ async def run_calibration(
             bike_weight, cda, crr = await get_bike_for_activity(activity)
 
             # Get personalized pacing coefficients
-            pacing_coefficients = await get_pacing_coefficients(
-                activity.user_id, activity.bike_id
-            )
+            pacing_coefficients = await get_pacing_coefficients(activity.user_id, activity.bike_id)
 
             # Build validation context
             context = ValidationContext(
@@ -852,10 +855,14 @@ def print_summary(results: list[ActivityResult]) -> None:
     personalized = [r for r in successful if r.coefficients_source != "global_defaults"]
     if personalized:
         r = personalized[0]
-        print(f"\nPersonalized coefficients:")
-        print(f"  grade_power_intercept: {r.grade_power_intercept:.3f} (global default: {DEFAULT_GRADE_POWER_INTERCEPT:.3f})")
+        print("\nPersonalized coefficients:")
+        print(
+            f"  grade_power_intercept: {r.grade_power_intercept:.3f} (global default: {DEFAULT_GRADE_POWER_INTERCEPT:.3f})"
+        )
         print(f"  grade_power_slope: {r.grade_power_slope:.4f} (global default: {DEFAULT_GRADE_POWER_SLOPE:.4f})")
-        print(f"  max_descent_speed_mps: {r.max_descent_speed_mps:.1f} (global default: {DEFAULT_MAX_DESCENT_SPEED_MPS:.1f})")
+        print(
+            f"  max_descent_speed_mps: {r.max_descent_speed_mps:.1f} (global default: {DEFAULT_MAX_DESCENT_SPEED_MPS:.1f})"
+        )
 
     # Overall stats
     np_errors = [r.np_error_pct for r in successful]
@@ -925,7 +932,9 @@ def print_summary(results: list[ActivityResult]) -> None:
     print(f"\n  Bias vs total: {speed_bias:+.1f} km/h (positive = over-predicting)")
 
     if pedaling_speeds:
-        pedaling_bias = mean([r.pred_avg_speed_kmh - r.actual_pedaling_speed_kmh for r in successful if r.pedaling_pct > 0])
+        pedaling_bias = mean(
+            [r.pred_avg_speed_kmh - r.actual_pedaling_speed_kmh for r in successful if r.pedaling_pct > 0]
+        )
         print(f"  Bias vs pedaling: {pedaling_bias:+.1f} km/h (true physics error)")
 
     # By course type
@@ -955,7 +964,7 @@ def print_summary(results: list[ActivityResult]) -> None:
     # Identify speed outliers (>20% error vs pedaling)
     pedaling_outliers = [r for r in successful if r.pedaling_speed_error_pct > 20 and r.pedaling_pct > 0]
     if pedaling_outliers:
-        print(f"\n" + "-" * 70)
+        print("\n" + "-" * 70)
         print(f"PEDALING SPEED OUTLIERS (error >20%): {len(pedaling_outliers)}")
         print("-" * 70)
         for r in sorted(pedaling_outliers, key=lambda x: -x.pedaling_speed_error_pct)[:5]:
@@ -992,14 +1001,16 @@ def print_summary(results: list[ActivityResult]) -> None:
 
     # Speed bias analysis - focus on pedaling-only
     if pedaling_speeds:
-        pedaling_bias = mean([r.pred_avg_speed_kmh - r.actual_pedaling_speed_kmh for r in successful if r.pedaling_pct > 0])
+        pedaling_bias = mean(
+            [r.pred_avg_speed_kmh - r.actual_pedaling_speed_kmh for r in successful if r.pedaling_pct > 0]
+        )
         if abs(pedaling_bias) > 2.0:
             if pedaling_bias > 0:
                 print(f"\nPedaling speed is over-predicted by {pedaling_bias:.1f} km/h on average.")
                 print("  Possible causes:")
                 print("    - CdA too low (check wind tunnel / aero estimates)")
                 print("    - Crr too low (check tire/road conditions)")
-                print("    - Curves/hairpins not accounted for (curvature coefficient not applied)")
+                print("    - Curves/hairpins not accounted for (cornering limit not applied)")
             else:
                 print(f"\nPedaling speed is under-predicted by {abs(pedaling_bias):.1f} km/h on average.")
                 print("  Possible causes:")
@@ -1010,9 +1021,15 @@ def print_summary(results: list[ActivityResult]) -> None:
             print(f"\nPedaling speed prediction bias is excellent ({pedaling_bias:+.1f} km/h)!")
             print("  The physics model is accurate for active pedaling time.")
 
-        coasting_factor = mean([r.actual_avg_speed_kmh / r.actual_pedaling_speed_kmh for r in successful if r.pedaling_pct > 0 and r.actual_pedaling_speed_kmh > 0])
+        coasting_factor = mean(
+            [
+                r.actual_avg_speed_kmh / r.actual_pedaling_speed_kmh
+                for r in successful
+                if r.pedaling_pct > 0 and r.actual_pedaling_speed_kmh > 0
+            ]
+        )
         print(f"\n  Coasting/stop factor: {coasting_factor:.2f}x")
-        print(f"  (Multiply predicted time by {1/coasting_factor:.2f} to estimate total ride time)")
+        print(f"  (Multiply predicted time by {1 / coasting_factor:.2f} to estimate total ride time)")
     else:
         # Fall back to total ride analysis
         if abs(speed_bias) > 2.0:

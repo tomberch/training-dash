@@ -1,8 +1,9 @@
 """
 PostgreSQL implementation of PacingCoefficientsRepo.
 
-Handles personalized pacing coefficients with fallback chain logic:
-bike-specific → user default → global defaults (handled by caller).
+The repository is the adapter at the DB seam (ADR 0004): it translates
+between the domain PacingCoefficients (pacing_model.py) and the SQLAlchemy
+row. Callers never see ORM types.
 """
 
 from datetime import UTC, datetime
@@ -12,7 +13,40 @@ from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from trainingdash.repositories.postgres.models import PacingCoefficients
+from trainingdash.domain.pacing_model import PacingCoefficients
+from trainingdash.repositories.postgres.models import PacingCoefficients as PacingCoefficientsModel
+
+
+def _to_model(coef: PacingCoefficients) -> PacingCoefficientsModel:
+    """Translate a domain PacingCoefficients into an ORM row (partial: key fields only)."""
+    return PacingCoefficientsModel(
+        bike_id=coef.bike_id,
+        grade_power_intercept=Decimal(str(coef.grade_power_intercept)),
+        grade_power_slope=Decimal(str(coef.grade_power_slope)),
+        max_descent_speed_mps=Decimal(str(coef.max_descent_speed_mps)),
+        descent_power_multiplier=Decimal(str(coef.descent_power_multiplier)),
+        curvature_speed_coefficient=Decimal(str(coef.curvature_speed_coefficient)),
+        climb_sample_count=coef.climb_sample_count,
+        descent_sample_count=coef.descent_sample_count,
+        activity_count=coef.activity_count,
+        last_calibrated_at=coef.last_calibrated_at,
+    )
+
+
+def _from_model(model: PacingCoefficientsModel) -> PacingCoefficients:
+    """Translate an ORM row into a domain PacingCoefficients."""
+    return PacingCoefficients(
+        grade_power_intercept=float(model.grade_power_intercept),
+        grade_power_slope=float(model.grade_power_slope),
+        max_descent_speed_mps=float(model.max_descent_speed_mps),
+        descent_power_multiplier=float(model.descent_power_multiplier),
+        curvature_speed_coefficient=float(model.curvature_speed_coefficient),
+        bike_id=model.bike_id,
+        climb_sample_count=model.climb_sample_count,
+        descent_sample_count=model.descent_sample_count,
+        activity_count=model.activity_count,
+        last_calibrated_at=model.last_calibrated_at,
+    )
 
 
 class PostgresPacingCoefficientsRepo:
@@ -52,12 +86,13 @@ class PostgresPacingCoefficientsRepo:
         Returns None if not yet created.
         """
         result = await self._session.execute(
-            select(PacingCoefficients).where(
-                PacingCoefficients.user_id == user_id,
-                PacingCoefficients.bike_id.is_(None),
+            select(PacingCoefficientsModel).where(
+                PacingCoefficientsModel.user_id == user_id,
+                PacingCoefficientsModel.bike_id.is_(None),
             )
         )
-        return result.scalar_one_or_none()
+        row = result.scalar_one_or_none()
+        return _from_model(row) if row is not None else None
 
     async def get_for_bike(self, user_id: int, bike_id: int) -> PacingCoefficients | None:
         """
@@ -66,12 +101,13 @@ class PostgresPacingCoefficientsRepo:
         Returns None if no bike-specific coefficients exist.
         """
         result = await self._session.execute(
-            select(PacingCoefficients).where(
-                PacingCoefficients.user_id == user_id,
-                PacingCoefficients.bike_id == bike_id,
+            select(PacingCoefficientsModel).where(
+                PacingCoefficientsModel.user_id == user_id,
+                PacingCoefficientsModel.bike_id == bike_id,
             )
         )
-        return result.scalar_one_or_none()
+        row = result.scalar_one_or_none()
+        return _from_model(row) if row is not None else None
 
     async def list_for_user(self, user_id: int) -> list[PacingCoefficients]:
         """
@@ -80,37 +116,35 @@ class PostgresPacingCoefficientsRepo:
         Ordered by bike_id (NULL first, then by bike_id).
         """
         result = await self._session.execute(
-            select(PacingCoefficients)
-            .where(PacingCoefficients.user_id == user_id)
-            .order_by(PacingCoefficients.bike_id.nulls_first())
+            select(PacingCoefficientsModel)
+            .where(PacingCoefficientsModel.user_id == user_id)
+            .order_by(PacingCoefficientsModel.bike_id.nulls_first())
         )
-        return list(result.scalars().all())
+        return [_from_model(row) for row in result.scalars().all()]
 
     async def save(self, coefficients: PacingCoefficients) -> PacingCoefficients:
         """
         Persist coefficients (insert or update).
 
-        Returns the saved coefficients with any DB-generated fields populated.
+        Requires coefficients.user_id to be set. Returns the saved
+        coefficients with any DB-generated fields populated.
         """
+        if coefficients.user_id is None:
+            raise ValueError("user_id is required to save coefficients")
+
+        row = _to_model(coefficients)
+        row.user_id = coefficients.user_id
         # Use naive UTC datetime for TIMESTAMP WITHOUT TIME ZONE columns
-        coefficients.updated_at = datetime.now(UTC).replace(tzinfo=None)
-        self._session.add(coefficients)
+        row.updated_at = datetime.now(UTC).replace(tzinfo=None)
+        self._session.add(row)
         await self._session.commit()
-        await self._session.refresh(coefficients)
-        return coefficients
+        await self._session.refresh(row)
+        return _from_model(row)
 
     async def upsert(
         self,
         user_id: int,
-        bike_id: int | None,
-        grade_power_intercept: float,
-        grade_power_slope: float,
-        max_descent_speed_mps: float,
-        descent_power_multiplier: float,
-        curvature_speed_coefficient: float,
-        climb_sample_count: int,
-        descent_sample_count: int,
-        activity_count: int,
+        coefficients: PacingCoefficients,
     ) -> PacingCoefficients:
         """
         Insert or update coefficients for a user/bike combination.
@@ -118,36 +152,37 @@ class PostgresPacingCoefficientsRepo:
         Uses ON CONFLICT to atomically upsert. This is the preferred method
         for the learning pipeline to avoid race conditions.
 
-        For bike_id=NULL (user default), uses the partial unique index.
-        For bike_id != NULL (bike-specific), uses the unique constraint.
+        For bike_id=None (user default), uses the partial unique index.
+        For bike_id != None (bike-specific), uses the unique constraint.
         """
+        bike_id = coefficients.bike_id
         # Use naive UTC datetime for TIMESTAMP WITHOUT TIME ZONE columns
         now = datetime.now(UTC).replace(tzinfo=None)
 
         update_set = {
-            "grade_power_intercept": Decimal(str(round(grade_power_intercept, 3))),
-            "grade_power_slope": Decimal(str(round(grade_power_slope, 4))),
-            "max_descent_speed_mps": Decimal(str(round(max_descent_speed_mps, 1))),
-            "descent_power_multiplier": Decimal(str(round(descent_power_multiplier, 2))),
-            "curvature_speed_coefficient": Decimal(str(round(curvature_speed_coefficient, 1))),
-            "climb_sample_count": climb_sample_count,
-            "descent_sample_count": descent_sample_count,
-            "activity_count": activity_count,
+            "grade_power_intercept": Decimal(str(round(coefficients.grade_power_intercept, 3))),
+            "grade_power_slope": Decimal(str(round(coefficients.grade_power_slope, 4))),
+            "max_descent_speed_mps": Decimal(str(round(coefficients.max_descent_speed_mps, 1))),
+            "descent_power_multiplier": Decimal(str(round(coefficients.descent_power_multiplier, 2))),
+            "curvature_speed_coefficient": Decimal(str(round(coefficients.curvature_speed_coefficient, 1))),
+            "climb_sample_count": coefficients.climb_sample_count,
+            "descent_sample_count": coefficients.descent_sample_count,
+            "activity_count": coefficients.activity_count,
             "last_calibrated_at": now,
             "updated_at": now,
         }
 
-        stmt = insert(PacingCoefficients).values(
+        stmt = insert(PacingCoefficientsModel).values(
             user_id=user_id,
             bike_id=bike_id,
-            grade_power_intercept=Decimal(str(round(grade_power_intercept, 3))),
-            grade_power_slope=Decimal(str(round(grade_power_slope, 4))),
-            max_descent_speed_mps=Decimal(str(round(max_descent_speed_mps, 1))),
-            descent_power_multiplier=Decimal(str(round(descent_power_multiplier, 2))),
-            curvature_speed_coefficient=Decimal(str(round(curvature_speed_coefficient, 1))),
-            climb_sample_count=climb_sample_count,
-            descent_sample_count=descent_sample_count,
-            activity_count=activity_count,
+            grade_power_intercept=Decimal(str(round(coefficients.grade_power_intercept, 3))),
+            grade_power_slope=Decimal(str(round(coefficients.grade_power_slope, 4))),
+            max_descent_speed_mps=Decimal(str(round(coefficients.max_descent_speed_mps, 1))),
+            descent_power_multiplier=Decimal(str(round(coefficients.descent_power_multiplier, 2))),
+            curvature_speed_coefficient=Decimal(str(round(coefficients.curvature_speed_coefficient, 1))),
+            climb_sample_count=coefficients.climb_sample_count,
+            descent_sample_count=coefficients.descent_sample_count,
+            activity_count=coefficients.activity_count,
             last_calibrated_at=now,
             created_at=now,
             updated_at=now,
@@ -159,7 +194,7 @@ class PostgresPacingCoefficientsRepo:
         if bike_id is None:
             stmt = stmt.on_conflict_do_update(
                 index_elements=["user_id"],
-                index_where=PacingCoefficients.bike_id.is_(None),
+                index_where=PacingCoefficientsModel.bike_id.is_(None),
                 set_=update_set,
             )
         else:
@@ -168,7 +203,7 @@ class PostgresPacingCoefficientsRepo:
                 set_=update_set,
             )
 
-        stmt = stmt.returning(PacingCoefficients)
+        stmt = stmt.returning(PacingCoefficientsModel)
 
         result = await self._session.execute(stmt)
         await self._session.commit()
@@ -176,7 +211,7 @@ class PostgresPacingCoefficientsRepo:
         row = result.scalar_one()
         # Refresh to get actual DB values after ON CONFLICT UPDATE
         await self._session.refresh(row)
-        return row
+        return _from_model(row)
 
     async def delete(self, user_id: int, bike_id: int | None) -> bool:
         """
@@ -186,15 +221,15 @@ class PostgresPacingCoefficientsRepo:
         """
         if bike_id is None:
             # Delete user default
-            stmt = delete(PacingCoefficients).where(
-                PacingCoefficients.user_id == user_id,
-                PacingCoefficients.bike_id.is_(None),
+            stmt = delete(PacingCoefficientsModel).where(
+                PacingCoefficientsModel.user_id == user_id,
+                PacingCoefficientsModel.bike_id.is_(None),
             )
         else:
             # Delete bike-specific
-            stmt = delete(PacingCoefficients).where(
-                PacingCoefficients.user_id == user_id,
-                PacingCoefficients.bike_id == bike_id,
+            stmt = delete(PacingCoefficientsModel).where(
+                PacingCoefficientsModel.user_id == user_id,
+                PacingCoefficientsModel.bike_id == bike_id,
             )
 
         result = await self._session.execute(stmt)

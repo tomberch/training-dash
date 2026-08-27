@@ -1,0 +1,1906 @@
+{
+ "descent|calibrated|heuristic": {
+  "avg_power_w": "250.64260869065922",
+  "intensity_factor": "1.253213043453296",
+  "normalized_power_w": "350.89965216692286",
+  "targets": [
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "1000.0",
+    "estimated_speed_mps": "14.5",
+    "estimated_time_s": "68.96551724137932",
+    "grade_pct": "-760.0",
+    "segment_idx": 0,
+    "start_distance_m": "0.0",
+    "target_power_w": "166.6",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "2000.0",
+    "estimated_speed_mps": "14.5",
+    "estimated_time_s": "68.96551724137932",
+    "grade_pct": "-800.0",
+    "segment_idx": 1,
+    "start_distance_m": "1000.0",
+    "target_power_w": "166.6",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "3000.0",
+    "estimated_speed_mps": "14.5",
+    "estimated_time_s": "68.96551724137932",
+    "grade_pct": "-800.0",
+    "segment_idx": 2,
+    "start_distance_m": "2000.0",
+    "target_power_w": "166.6",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "4000.0",
+    "estimated_speed_mps": "14.5",
+    "estimated_time_s": "68.96551724137932",
+    "grade_pct": "-800.0",
+    "segment_idx": 3,
+    "start_distance_m": "3000.0",
+    "target_power_w": "166.6",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "5000.0",
+    "estimated_speed_mps": "14.5",
+    "estimated_time_s": "68.96551724137932",
+    "grade_pct": "-800.0",
+    "segment_idx": 4,
+    "start_distance_m": "4000.0",
+    "target_power_w": "166.6",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "6000.0",
+    "estimated_speed_mps": "0.30684378795912",
+    "estimated_time_s": "3258.9872737890573",
+    "grade_pct": "2175.0",
+    "segment_idx": 5,
+    "start_distance_m": "5000.0",
+    "target_power_w": "266.56",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "7000.0",
+    "estimated_speed_mps": "14.5",
+    "estimated_time_s": "68.96551724137932",
+    "grade_pct": "-300.0",
+    "segment_idx": 6,
+    "start_distance_m": "6000.0",
+    "target_power_w": "166.6",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "8000.0",
+    "estimated_speed_mps": "14.5",
+    "estimated_time_s": "68.96551724137932",
+    "grade_pct": "-300.0",
+    "segment_idx": 7,
+    "start_distance_m": "7000.0",
+    "target_power_w": "166.6",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "9000.0",
+    "estimated_speed_mps": "14.5",
+    "estimated_time_s": "68.96551724137932",
+    "grade_pct": "-300.0",
+    "segment_idx": 8,
+    "start_distance_m": "8000.0",
+    "target_power_w": "166.6",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "950.0",
+    "end_distance_m": "9950.0",
+    "estimated_speed_mps": "14.5",
+    "estimated_time_s": "65.51724137931035",
+    "grade_pct": "-300.0",
+    "segment_idx": 9,
+    "start_distance_m": "9000.0",
+    "target_power_w": "166.6",
+    "terrain_type": "descent"
+   }
+  ],
+  "total_distance_m": "9950.0",
+  "total_time_s": "3876.2286530994024"
+ },
+ "descent|calibrated|terrain_adapted": {
+  "avg_power_w": "np.float64(158.80199666467036)",
+  "intensity_factor": "0.7176984069332586",
+  "normalized_power_w": "200.95555394131242",
+  "targets": [
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "1000.0",
+    "estimated_speed_mps": "np.float64(14.499999999999996)",
+    "estimated_time_s": "np.float64(70.68965517241381)",
+    "grade_pct": "-760.0",
+    "segment_idx": 0,
+    "start_distance_m": "0.0",
+    "target_power_w": "np.float64(118.99999999999989)",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "2000.0",
+    "estimated_speed_mps": "np.float64(14.499999999999996)",
+    "estimated_time_s": "np.float64(70.68965517241381)",
+    "grade_pct": "-800.0",
+    "segment_idx": 1,
+    "start_distance_m": "1000.0",
+    "target_power_w": "np.float64(118.99999999999989)",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "3000.0",
+    "estimated_speed_mps": "np.float64(14.499999999999996)",
+    "estimated_time_s": "np.float64(70.68965517241381)",
+    "grade_pct": "-800.0",
+    "segment_idx": 2,
+    "start_distance_m": "2000.0",
+    "target_power_w": "np.float64(118.99999999999989)",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "4000.0",
+    "estimated_speed_mps": "np.float64(14.499999999999996)",
+    "estimated_time_s": "np.float64(70.68965517241381)",
+    "grade_pct": "-800.0",
+    "segment_idx": 3,
+    "start_distance_m": "3000.0",
+    "target_power_w": "np.float64(118.99999999999989)",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "5000.0",
+    "estimated_speed_mps": "np.float64(3.884994628066227)",
+    "estimated_time_s": "np.float64(263.83562865058536)",
+    "grade_pct": "-800.0",
+    "segment_idx": 4,
+    "start_distance_m": "4000.0",
+    "target_power_w": "np.float64(251.65835315348087)",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "6000.0",
+    "estimated_speed_mps": "np.float64(8.61594202898552)",
+    "estimated_time_s": "np.float64(118.96551724137913)",
+    "grade_pct": "2175.0",
+    "segment_idx": 5,
+    "start_distance_m": "5000.0",
+    "target_power_w": "np.float64(192.55072463768187)",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "7000.0",
+    "estimated_speed_mps": "np.float64(14.499999999999996)",
+    "estimated_time_s": "np.float64(70.68965517241381)",
+    "grade_pct": "-300.0",
+    "segment_idx": 6,
+    "start_distance_m": "6000.0",
+    "target_power_w": "np.float64(118.99999999999989)",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "8000.0",
+    "estimated_speed_mps": "np.float64(14.499999999999996)",
+    "estimated_time_s": "np.float64(70.68965517241381)",
+    "grade_pct": "-300.0",
+    "segment_idx": 7,
+    "start_distance_m": "7000.0",
+    "target_power_w": "np.float64(118.99999999999989)",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "9000.0",
+    "estimated_speed_mps": "np.float64(14.499999999999996)",
+    "estimated_time_s": "np.float64(70.68965517241381)",
+    "grade_pct": "-300.0",
+    "segment_idx": 8,
+    "start_distance_m": "8000.0",
+    "target_power_w": "np.float64(118.99999999999989)",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "950.0",
+    "end_distance_m": "9950.0",
+    "estimated_speed_mps": "np.float64(14.499999999999993)",
+    "estimated_time_s": "np.float64(65.51724137931038)",
+    "grade_pct": "-300.0",
+    "segment_idx": 9,
+    "start_distance_m": "9000.0",
+    "target_power_w": "np.float64(118.99999999999986)",
+    "terrain_type": "descent"
+   }
+  ],
+  "total_distance_m": "np.float64(9950.0)",
+  "total_time_s": "np.float64(879.3528700299048)"
+ },
+ "descent|defaults|heuristic": {
+  "avg_power_w": "253.3279549327288",
+  "intensity_factor": "1.2666397746636437",
+  "normalized_power_w": "354.6591369058203",
+  "targets": [
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "1000.0",
+    "estimated_speed_mps": "18.0",
+    "estimated_time_s": "55.55555555555556",
+    "grade_pct": "-760.0",
+    "segment_idx": 0,
+    "start_distance_m": "0.0",
+    "target_power_w": "166.6",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "2000.0",
+    "estimated_speed_mps": "18.0",
+    "estimated_time_s": "55.55555555555556",
+    "grade_pct": "-800.0",
+    "segment_idx": 1,
+    "start_distance_m": "1000.0",
+    "target_power_w": "166.6",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "3000.0",
+    "estimated_speed_mps": "18.0",
+    "estimated_time_s": "55.55555555555556",
+    "grade_pct": "-800.0",
+    "segment_idx": 2,
+    "start_distance_m": "2000.0",
+    "target_power_w": "166.6",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "4000.0",
+    "estimated_speed_mps": "18.0",
+    "estimated_time_s": "55.55555555555556",
+    "grade_pct": "-800.0",
+    "segment_idx": 3,
+    "start_distance_m": "3000.0",
+    "target_power_w": "166.6",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "5000.0",
+    "estimated_speed_mps": "18.0",
+    "estimated_time_s": "55.55555555555556",
+    "grade_pct": "-800.0",
+    "segment_idx": 4,
+    "start_distance_m": "4000.0",
+    "target_power_w": "166.6",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "6000.0",
+    "estimated_speed_mps": "0.30684378795912",
+    "estimated_time_s": "3258.9872737890573",
+    "grade_pct": "2175.0",
+    "segment_idx": 5,
+    "start_distance_m": "5000.0",
+    "target_power_w": "266.56",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "7000.0",
+    "estimated_speed_mps": "18.0",
+    "estimated_time_s": "55.55555555555556",
+    "grade_pct": "-300.0",
+    "segment_idx": 6,
+    "start_distance_m": "6000.0",
+    "target_power_w": "166.6",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "8000.0",
+    "estimated_speed_mps": "18.0",
+    "estimated_time_s": "55.55555555555556",
+    "grade_pct": "-300.0",
+    "segment_idx": 7,
+    "start_distance_m": "7000.0",
+    "target_power_w": "166.6",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "9000.0",
+    "estimated_speed_mps": "18.0",
+    "estimated_time_s": "55.55555555555556",
+    "grade_pct": "-300.0",
+    "segment_idx": 8,
+    "start_distance_m": "8000.0",
+    "target_power_w": "166.6",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "950.0",
+    "end_distance_m": "9950.0",
+    "estimated_speed_mps": "18.0",
+    "estimated_time_s": "52.77777777777778",
+    "grade_pct": "-300.0",
+    "segment_idx": 9,
+    "start_distance_m": "9000.0",
+    "target_power_w": "166.6",
+    "terrain_type": "descent"
+   }
+  ],
+  "total_distance_m": "9950.0",
+  "total_time_s": "3756.2094960112795"
+ },
+ "descent|defaults|terrain_adapted": {
+  "avg_power_w": "np.float64(165.8164796220138)",
+  "intensity_factor": "0.808176311342783",
+  "normalized_power_w": "226.28936717597924",
+  "targets": [
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "1000.0",
+    "estimated_speed_mps": "np.float64(18.000000000000018)",
+    "estimated_time_s": "np.float64(56.94444444444439)",
+    "grade_pct": "-760.0",
+    "segment_idx": 0,
+    "start_distance_m": "0.0",
+    "target_power_w": "np.float64(119.00000000000001)",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "2000.0",
+    "estimated_speed_mps": "np.float64(18.000000000000018)",
+    "estimated_time_s": "np.float64(56.94444444444439)",
+    "grade_pct": "-800.0",
+    "segment_idx": 1,
+    "start_distance_m": "1000.0",
+    "target_power_w": "np.float64(119.00000000000001)",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "3000.0",
+    "estimated_speed_mps": "np.float64(18.000000000000018)",
+    "estimated_time_s": "np.float64(56.94444444444439)",
+    "grade_pct": "-800.0",
+    "segment_idx": 2,
+    "start_distance_m": "2000.0",
+    "target_power_w": "np.float64(119.00000000000001)",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "4000.0",
+    "estimated_speed_mps": "np.float64(18.000000000000018)",
+    "estimated_time_s": "np.float64(56.94444444444439)",
+    "grade_pct": "-800.0",
+    "segment_idx": 3,
+    "start_distance_m": "3000.0",
+    "target_power_w": "np.float64(119.00000000000001)",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "5000.0",
+    "estimated_speed_mps": "np.float64(4.07123003198055)",
+    "estimated_time_s": "np.float64(251.7666631333439)",
+    "grade_pct": "-800.0",
+    "segment_idx": 4,
+    "start_distance_m": "4000.0",
+    "target_power_w": "np.float64(258.0176108481163)",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "6000.0",
+    "estimated_speed_mps": "np.float64(9.710526315789485)",
+    "estimated_time_s": "np.float64(105.55555555555543)",
+    "grade_pct": "2175.0",
+    "segment_idx": 5,
+    "start_distance_m": "5000.0",
+    "target_power_w": "np.float64(201.89473684210535)",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "7000.0",
+    "estimated_speed_mps": "np.float64(18.000000000000018)",
+    "estimated_time_s": "np.float64(56.94444444444439)",
+    "grade_pct": "-300.0",
+    "segment_idx": 6,
+    "start_distance_m": "6000.0",
+    "target_power_w": "np.float64(119.00000000000001)",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "8000.0",
+    "estimated_speed_mps": "np.float64(18.000000000000018)",
+    "estimated_time_s": "np.float64(56.94444444444439)",
+    "grade_pct": "-300.0",
+    "segment_idx": 7,
+    "start_distance_m": "7000.0",
+    "target_power_w": "np.float64(119.00000000000001)",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "9000.0",
+    "estimated_speed_mps": "np.float64(18.000000000000018)",
+    "estimated_time_s": "np.float64(56.94444444444439)",
+    "grade_pct": "-300.0",
+    "segment_idx": 8,
+    "start_distance_m": "8000.0",
+    "target_power_w": "np.float64(119.00000000000001)",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "950.0",
+    "end_distance_m": "9950.0",
+    "estimated_speed_mps": "np.float64(18.000000000000014)",
+    "estimated_time_s": "np.float64(52.777777777777736)",
+    "grade_pct": "-300.0",
+    "segment_idx": 9,
+    "start_distance_m": "9000.0",
+    "target_power_w": "np.float64(119.00000000000001)",
+    "terrain_type": "descent"
+   }
+  ],
+  "total_distance_m": "np.float64(9950.0)",
+  "total_time_s": "np.float64(747.599996466682)"
+ },
+ "flat|calibrated|heuristic": {
+  "avg_power_w": "238.0",
+  "intensity_factor": "0.952",
+  "normalized_power_w": "266.56",
+  "targets": [
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "1000.0",
+    "estimated_speed_mps": "10.219505614505632",
+    "estimated_time_s": "97.85209164918835",
+    "grade_pct": "0.0",
+    "segment_idx": 0,
+    "start_distance_m": "0.0",
+    "target_power_w": "238.0",
+    "terrain_type": "flat"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "2000.0",
+    "estimated_speed_mps": "10.219505614505632",
+    "estimated_time_s": "97.85209164918835",
+    "grade_pct": "0.0",
+    "segment_idx": 1,
+    "start_distance_m": "1000.0",
+    "target_power_w": "238.0",
+    "terrain_type": "flat"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "3000.0",
+    "estimated_speed_mps": "10.219505614505632",
+    "estimated_time_s": "97.85209164918835",
+    "grade_pct": "0.0",
+    "segment_idx": 2,
+    "start_distance_m": "2000.0",
+    "target_power_w": "238.0",
+    "terrain_type": "flat"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "4000.0",
+    "estimated_speed_mps": "10.219505614505632",
+    "estimated_time_s": "97.85209164918835",
+    "grade_pct": "0.0",
+    "segment_idx": 3,
+    "start_distance_m": "3000.0",
+    "target_power_w": "238.0",
+    "terrain_type": "flat"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "5000.0",
+    "estimated_speed_mps": "10.219505614505632",
+    "estimated_time_s": "97.85209164918835",
+    "grade_pct": "0.0",
+    "segment_idx": 4,
+    "start_distance_m": "4000.0",
+    "target_power_w": "238.0",
+    "terrain_type": "flat"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "6000.0",
+    "estimated_speed_mps": "10.219505614505632",
+    "estimated_time_s": "97.85209164918835",
+    "grade_pct": "0.0",
+    "segment_idx": 5,
+    "start_distance_m": "5000.0",
+    "target_power_w": "238.0",
+    "terrain_type": "flat"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "7000.0",
+    "estimated_speed_mps": "10.219505614505632",
+    "estimated_time_s": "97.85209164918835",
+    "grade_pct": "0.0",
+    "segment_idx": 6,
+    "start_distance_m": "6000.0",
+    "target_power_w": "238.0",
+    "terrain_type": "flat"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "8000.0",
+    "estimated_speed_mps": "10.219505614505632",
+    "estimated_time_s": "97.85209164918835",
+    "grade_pct": "0.0",
+    "segment_idx": 7,
+    "start_distance_m": "7000.0",
+    "target_power_w": "238.0",
+    "terrain_type": "flat"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "9000.0",
+    "estimated_speed_mps": "10.219505614505632",
+    "estimated_time_s": "97.85209164918835",
+    "grade_pct": "0.0",
+    "segment_idx": 8,
+    "start_distance_m": "8000.0",
+    "target_power_w": "238.0",
+    "terrain_type": "flat"
+   },
+   {
+    "distance_m": "950.0",
+    "end_distance_m": "9950.0",
+    "estimated_speed_mps": "10.219505614505632",
+    "estimated_time_s": "92.95948706672893",
+    "grade_pct": "0.0",
+    "segment_idx": 9,
+    "start_distance_m": "9000.0",
+    "target_power_w": "238.0",
+    "terrain_type": "flat"
+   }
+  ],
+  "total_distance_m": "9950.0",
+  "total_time_s": "973.6283119094242"
+ },
+ "flat|calibrated|terrain_adapted": {
+  "avg_power_w": "np.float64(294.0000000000004)",
+  "intensity_factor": "1.05",
+  "normalized_power_w": "294.0",
+  "targets": [
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "1000.0",
+    "estimated_speed_mps": "np.float64(11.078715785931452)",
+    "estimated_time_s": "np.float64(92.51974866090694)",
+    "grade_pct": "0.0",
+    "segment_idx": 0,
+    "start_distance_m": "0.0",
+    "target_power_w": "np.float64(294.0000000000003)",
+    "terrain_type": "flat"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "2000.0",
+    "estimated_speed_mps": "np.float64(11.078715785931452)",
+    "estimated_time_s": "np.float64(92.51974866090694)",
+    "grade_pct": "0.0",
+    "segment_idx": 1,
+    "start_distance_m": "1000.0",
+    "target_power_w": "np.float64(294.0000000000003)",
+    "terrain_type": "flat"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "3000.0",
+    "estimated_speed_mps": "np.float64(11.078715785931452)",
+    "estimated_time_s": "np.float64(92.51974866090694)",
+    "grade_pct": "0.0",
+    "segment_idx": 2,
+    "start_distance_m": "2000.0",
+    "target_power_w": "np.float64(294.0000000000003)",
+    "terrain_type": "flat"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "4000.0",
+    "estimated_speed_mps": "np.float64(11.078715785931452)",
+    "estimated_time_s": "np.float64(92.51974866090694)",
+    "grade_pct": "0.0",
+    "segment_idx": 3,
+    "start_distance_m": "3000.0",
+    "target_power_w": "np.float64(294.0000000000003)",
+    "terrain_type": "flat"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "5000.0",
+    "estimated_speed_mps": "np.float64(11.078715785931452)",
+    "estimated_time_s": "np.float64(92.51974866090694)",
+    "grade_pct": "0.0",
+    "segment_idx": 4,
+    "start_distance_m": "4000.0",
+    "target_power_w": "np.float64(294.0000000000003)",
+    "terrain_type": "flat"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "6000.0",
+    "estimated_speed_mps": "np.float64(11.078715785931452)",
+    "estimated_time_s": "np.float64(92.51974866090694)",
+    "grade_pct": "0.0",
+    "segment_idx": 5,
+    "start_distance_m": "5000.0",
+    "target_power_w": "np.float64(294.0000000000003)",
+    "terrain_type": "flat"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "7000.0",
+    "estimated_speed_mps": "np.float64(11.078715785931452)",
+    "estimated_time_s": "np.float64(92.51974866090694)",
+    "grade_pct": "0.0",
+    "segment_idx": 6,
+    "start_distance_m": "6000.0",
+    "target_power_w": "np.float64(294.0000000000003)",
+    "terrain_type": "flat"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "8000.0",
+    "estimated_speed_mps": "np.float64(11.078715785931452)",
+    "estimated_time_s": "np.float64(92.51974866090694)",
+    "grade_pct": "0.0",
+    "segment_idx": 7,
+    "start_distance_m": "7000.0",
+    "target_power_w": "np.float64(294.0000000000003)",
+    "terrain_type": "flat"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "9000.0",
+    "estimated_speed_mps": "np.float64(11.078715785931452)",
+    "estimated_time_s": "np.float64(92.51974866090694)",
+    "grade_pct": "0.0",
+    "segment_idx": 8,
+    "start_distance_m": "8000.0",
+    "target_power_w": "np.float64(294.0000000000003)",
+    "terrain_type": "flat"
+   },
+   {
+    "distance_m": "950.0",
+    "end_distance_m": "9950.0",
+    "estimated_speed_mps": "np.float64(11.07871578593145)",
+    "estimated_time_s": "np.float64(85.75001095401132)",
+    "grade_pct": "0.0",
+    "segment_idx": 9,
+    "start_distance_m": "9000.0",
+    "target_power_w": "np.float64(294.0000000000003)",
+    "terrain_type": "flat"
+   }
+  ],
+  "total_distance_m": "np.float64(9950.0)",
+  "total_time_s": "np.float64(898.1185357814865)"
+ },
+ "flat|defaults|heuristic": {
+  "avg_power_w": "238.0",
+  "intensity_factor": "0.952",
+  "normalized_power_w": "266.56",
+  "targets": [
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "1000.0",
+    "estimated_speed_mps": "10.219505614505632",
+    "estimated_time_s": "97.85209164918835",
+    "grade_pct": "0.0",
+    "segment_idx": 0,
+    "start_distance_m": "0.0",
+    "target_power_w": "238.0",
+    "terrain_type": "flat"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "2000.0",
+    "estimated_speed_mps": "10.219505614505632",
+    "estimated_time_s": "97.85209164918835",
+    "grade_pct": "0.0",
+    "segment_idx": 1,
+    "start_distance_m": "1000.0",
+    "target_power_w": "238.0",
+    "terrain_type": "flat"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "3000.0",
+    "estimated_speed_mps": "10.219505614505632",
+    "estimated_time_s": "97.85209164918835",
+    "grade_pct": "0.0",
+    "segment_idx": 2,
+    "start_distance_m": "2000.0",
+    "target_power_w": "238.0",
+    "terrain_type": "flat"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "4000.0",
+    "estimated_speed_mps": "10.219505614505632",
+    "estimated_time_s": "97.85209164918835",
+    "grade_pct": "0.0",
+    "segment_idx": 3,
+    "start_distance_m": "3000.0",
+    "target_power_w": "238.0",
+    "terrain_type": "flat"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "5000.0",
+    "estimated_speed_mps": "10.219505614505632",
+    "estimated_time_s": "97.85209164918835",
+    "grade_pct": "0.0",
+    "segment_idx": 4,
+    "start_distance_m": "4000.0",
+    "target_power_w": "238.0",
+    "terrain_type": "flat"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "6000.0",
+    "estimated_speed_mps": "10.219505614505632",
+    "estimated_time_s": "97.85209164918835",
+    "grade_pct": "0.0",
+    "segment_idx": 5,
+    "start_distance_m": "5000.0",
+    "target_power_w": "238.0",
+    "terrain_type": "flat"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "7000.0",
+    "estimated_speed_mps": "10.219505614505632",
+    "estimated_time_s": "97.85209164918835",
+    "grade_pct": "0.0",
+    "segment_idx": 6,
+    "start_distance_m": "6000.0",
+    "target_power_w": "238.0",
+    "terrain_type": "flat"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "8000.0",
+    "estimated_speed_mps": "10.219505614505632",
+    "estimated_time_s": "97.85209164918835",
+    "grade_pct": "0.0",
+    "segment_idx": 7,
+    "start_distance_m": "7000.0",
+    "target_power_w": "238.0",
+    "terrain_type": "flat"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "9000.0",
+    "estimated_speed_mps": "10.219505614505632",
+    "estimated_time_s": "97.85209164918835",
+    "grade_pct": "0.0",
+    "segment_idx": 8,
+    "start_distance_m": "8000.0",
+    "target_power_w": "238.0",
+    "terrain_type": "flat"
+   },
+   {
+    "distance_m": "950.0",
+    "end_distance_m": "9950.0",
+    "estimated_speed_mps": "10.219505614505632",
+    "estimated_time_s": "92.95948706672893",
+    "grade_pct": "0.0",
+    "segment_idx": 9,
+    "start_distance_m": "9000.0",
+    "target_power_w": "238.0",
+    "terrain_type": "flat"
+   }
+  ],
+  "total_distance_m": "9950.0",
+  "total_time_s": "973.6283119094242"
+ },
+ "flat|defaults|terrain_adapted": {
+  "avg_power_w": "np.float64(261.8000000000032)",
+  "intensity_factor": "0.9349999999999895",
+  "normalized_power_w": "261.79999999999706",
+  "targets": [
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "1000.0",
+    "estimated_speed_mps": "np.float64(10.617506859941832)",
+    "estimated_time_s": "np.float64(96.53867085004318)",
+    "grade_pct": "0.0",
+    "segment_idx": 0,
+    "start_distance_m": "0.0",
+    "target_power_w": "np.float64(261.79999999999995)",
+    "terrain_type": "flat"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "2000.0",
+    "estimated_speed_mps": "np.float64(10.617506859941832)",
+    "estimated_time_s": "np.float64(96.53867085004318)",
+    "grade_pct": "0.0",
+    "segment_idx": 1,
+    "start_distance_m": "1000.0",
+    "target_power_w": "np.float64(261.79999999999995)",
+    "terrain_type": "flat"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "3000.0",
+    "estimated_speed_mps": "np.float64(10.617506859941832)",
+    "estimated_time_s": "np.float64(96.53867085004318)",
+    "grade_pct": "0.0",
+    "segment_idx": 2,
+    "start_distance_m": "2000.0",
+    "target_power_w": "np.float64(261.79999999999995)",
+    "terrain_type": "flat"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "4000.0",
+    "estimated_speed_mps": "np.float64(10.617506859941832)",
+    "estimated_time_s": "np.float64(96.53867085004318)",
+    "grade_pct": "0.0",
+    "segment_idx": 3,
+    "start_distance_m": "3000.0",
+    "target_power_w": "np.float64(261.79999999999995)",
+    "terrain_type": "flat"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "5000.0",
+    "estimated_speed_mps": "np.float64(10.617506859941832)",
+    "estimated_time_s": "np.float64(96.53867085004318)",
+    "grade_pct": "0.0",
+    "segment_idx": 4,
+    "start_distance_m": "4000.0",
+    "target_power_w": "np.float64(261.79999999999995)",
+    "terrain_type": "flat"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "6000.0",
+    "estimated_speed_mps": "np.float64(10.617506859941832)",
+    "estimated_time_s": "np.float64(96.53867085004318)",
+    "grade_pct": "0.0",
+    "segment_idx": 5,
+    "start_distance_m": "5000.0",
+    "target_power_w": "np.float64(261.79999999999995)",
+    "terrain_type": "flat"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "7000.0",
+    "estimated_speed_mps": "np.float64(10.617506859941832)",
+    "estimated_time_s": "np.float64(96.53867085004318)",
+    "grade_pct": "0.0",
+    "segment_idx": 6,
+    "start_distance_m": "6000.0",
+    "target_power_w": "np.float64(261.79999999999995)",
+    "terrain_type": "flat"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "8000.0",
+    "estimated_speed_mps": "np.float64(10.617506859941832)",
+    "estimated_time_s": "np.float64(96.53867085004318)",
+    "grade_pct": "0.0",
+    "segment_idx": 7,
+    "start_distance_m": "7000.0",
+    "target_power_w": "np.float64(261.79999999999995)",
+    "terrain_type": "flat"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "9000.0",
+    "estimated_speed_mps": "np.float64(10.617506859941832)",
+    "estimated_time_s": "np.float64(96.53867085004318)",
+    "grade_pct": "0.0",
+    "segment_idx": 8,
+    "start_distance_m": "8000.0",
+    "target_power_w": "np.float64(261.79999999999995)",
+    "terrain_type": "flat"
+   },
+   {
+    "distance_m": "950.0",
+    "end_distance_m": "9950.0",
+    "estimated_speed_mps": "np.float64(10.61750685994183)",
+    "estimated_time_s": "np.float64(89.47486566589369)",
+    "grade_pct": "0.0",
+    "segment_idx": 9,
+    "start_distance_m": "9000.0",
+    "target_power_w": "np.float64(261.79999999999995)",
+    "terrain_type": "flat"
+   }
+  ],
+  "total_distance_m": "np.float64(9950.0)",
+  "total_time_s": "np.float64(937.1314877638322)"
+ },
+ "hc_climb|calibrated|heuristic": {
+  "avg_power_w": "266.56",
+  "intensity_factor": "1.070048",
+  "normalized_power_w": "299.61344",
+  "targets": [
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "1000.0",
+    "estimated_speed_mps": "3.3463251475361213",
+    "estimated_time_s": "298.8352762839839",
+    "grade_pct": "8.55",
+    "segment_idx": 0,
+    "start_distance_m": "0.0",
+    "target_power_w": "266.56",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "2000.0",
+    "estimated_speed_mps": "3.198449902998374",
+    "estimated_time_s": "312.6514500235111",
+    "grade_pct": "9.0",
+    "segment_idx": 1,
+    "start_distance_m": "1000.0",
+    "target_power_w": "266.56",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "3000.0",
+    "estimated_speed_mps": "3.198449902998374",
+    "estimated_time_s": "312.6514500235111",
+    "grade_pct": "9.0",
+    "segment_idx": 2,
+    "start_distance_m": "2000.0",
+    "target_power_w": "266.56",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "4000.0",
+    "estimated_speed_mps": "3.198449902998374",
+    "estimated_time_s": "312.6514500235111",
+    "grade_pct": "9.0",
+    "segment_idx": 3,
+    "start_distance_m": "3000.0",
+    "target_power_w": "266.56",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "5000.0",
+    "estimated_speed_mps": "3.198449902998374",
+    "estimated_time_s": "312.6514500235111",
+    "grade_pct": "9.0",
+    "segment_idx": 4,
+    "start_distance_m": "4000.0",
+    "target_power_w": "266.56",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "6000.0",
+    "estimated_speed_mps": "3.198449902998374",
+    "estimated_time_s": "312.6514500235111",
+    "grade_pct": "9.0",
+    "segment_idx": 5,
+    "start_distance_m": "5000.0",
+    "target_power_w": "266.56",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "7000.0",
+    "estimated_speed_mps": "3.198449902998374",
+    "estimated_time_s": "312.6514500235111",
+    "grade_pct": "9.0",
+    "segment_idx": 6,
+    "start_distance_m": "6000.0",
+    "target_power_w": "266.56",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "8000.0",
+    "estimated_speed_mps": "3.198449902998374",
+    "estimated_time_s": "312.6514500235111",
+    "grade_pct": "9.0",
+    "segment_idx": 7,
+    "start_distance_m": "7000.0",
+    "target_power_w": "266.56",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "9000.0",
+    "estimated_speed_mps": "3.198449902998374",
+    "estimated_time_s": "312.6514500235111",
+    "grade_pct": "9.0",
+    "segment_idx": 8,
+    "start_distance_m": "8000.0",
+    "target_power_w": "266.56",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "950.0",
+    "end_distance_m": "9950.0",
+    "estimated_speed_mps": "3.198449902998374",
+    "estimated_time_s": "297.0188775223355",
+    "grade_pct": "9.0",
+    "segment_idx": 9,
+    "start_distance_m": "9000.0",
+    "target_power_w": "266.56",
+    "terrain_type": "climb"
+   }
+  ],
+  "total_distance_m": "9950.0",
+  "total_time_s": "3097.065753994408"
+ },
+ "hc_climb|calibrated|terrain_adapted": {
+  "avg_power_w": "np.float64(294.0000000000001)",
+  "intensity_factor": "1.05",
+  "normalized_power_w": "294.0",
+  "targets": [
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "1000.0",
+    "estimated_speed_mps": "np.float64(3.530688722255364)",
+    "estimated_time_s": "np.float64(290.3116305719643)",
+    "grade_pct": "8.55",
+    "segment_idx": 0,
+    "start_distance_m": "0.0",
+    "target_power_w": "np.float64(294.0)",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "2000.0",
+    "estimated_speed_mps": "np.float64(3.5130273300473775)",
+    "estimated_time_s": "np.float64(291.7711431485438)",
+    "grade_pct": "9.0",
+    "segment_idx": 1,
+    "start_distance_m": "1000.0",
+    "target_power_w": "np.float64(294.0)",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "3000.0",
+    "estimated_speed_mps": "np.float64(3.5138164739883373)",
+    "estimated_time_s": "np.float64(291.7056162687346)",
+    "grade_pct": "9.0",
+    "segment_idx": 2,
+    "start_distance_m": "2000.0",
+    "target_power_w": "np.float64(294.00000000000006)",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "4000.0",
+    "estimated_speed_mps": "np.float64(3.5146014075522216)",
+    "estimated_time_s": "np.float64(291.64046819006745)",
+    "grade_pct": "9.0",
+    "segment_idx": 3,
+    "start_distance_m": "3000.0",
+    "target_power_w": "np.float64(293.99999999999994)",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "5000.0",
+    "estimated_speed_mps": "np.float64(3.515382137060972)",
+    "estimated_time_s": "np.float64(291.5756979003566)",
+    "grade_pct": "9.0",
+    "segment_idx": 4,
+    "start_distance_m": "4000.0",
+    "target_power_w": "np.float64(293.99999999999994)",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "6000.0",
+    "estimated_speed_mps": "np.float64(3.516158668941294)",
+    "estimated_time_s": "np.float64(291.51130438280956)",
+    "grade_pct": "9.0",
+    "segment_idx": 5,
+    "start_distance_m": "5000.0",
+    "target_power_w": "np.float64(294.0000000000001)",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "7000.0",
+    "estimated_speed_mps": "np.float64(3.5169310097241127)",
+    "estimated_time_s": "np.float64(291.44728661606774)",
+    "grade_pct": "9.0",
+    "segment_idx": 6,
+    "start_distance_m": "6000.0",
+    "target_power_w": "np.float64(293.99999999999983)",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "8000.0",
+    "estimated_speed_mps": "np.float64(3.5176991660440478)",
+    "estimated_time_s": "np.float64(291.38364357424564)",
+    "grade_pct": "9.0",
+    "segment_idx": 7,
+    "start_distance_m": "7000.0",
+    "target_power_w": "np.float64(294.00000000000006)",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "9000.0",
+    "estimated_speed_mps": "np.float64(3.518463144638831)",
+    "estimated_time_s": "np.float64(291.320374226974)",
+    "grade_pct": "9.0",
+    "segment_idx": 8,
+    "start_distance_m": "8000.0",
+    "target_power_w": "np.float64(294.0)",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "950.0",
+    "end_distance_m": "9950.0",
+    "estimated_speed_mps": "np.float64(3.5393046287639365)",
+    "estimated_time_s": "np.float64(268.41430722841653)",
+    "grade_pct": "9.0",
+    "segment_idx": 9,
+    "start_distance_m": "9000.0",
+    "target_power_w": "np.float64(293.99999999999994)",
+    "terrain_type": "climb"
+   }
+  ],
+  "total_distance_m": "np.float64(9950.0)",
+  "total_time_s": "np.float64(2827.08385682597)"
+ },
+ "hc_climb|defaults|heuristic": {
+  "avg_power_w": "266.56",
+  "intensity_factor": "1.070048",
+  "normalized_power_w": "299.61344",
+  "targets": [
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "1000.0",
+    "estimated_speed_mps": "3.3463251475361213",
+    "estimated_time_s": "298.8352762839839",
+    "grade_pct": "8.55",
+    "segment_idx": 0,
+    "start_distance_m": "0.0",
+    "target_power_w": "266.56",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "2000.0",
+    "estimated_speed_mps": "3.198449902998374",
+    "estimated_time_s": "312.6514500235111",
+    "grade_pct": "9.0",
+    "segment_idx": 1,
+    "start_distance_m": "1000.0",
+    "target_power_w": "266.56",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "3000.0",
+    "estimated_speed_mps": "3.198449902998374",
+    "estimated_time_s": "312.6514500235111",
+    "grade_pct": "9.0",
+    "segment_idx": 2,
+    "start_distance_m": "2000.0",
+    "target_power_w": "266.56",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "4000.0",
+    "estimated_speed_mps": "3.198449902998374",
+    "estimated_time_s": "312.6514500235111",
+    "grade_pct": "9.0",
+    "segment_idx": 3,
+    "start_distance_m": "3000.0",
+    "target_power_w": "266.56",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "5000.0",
+    "estimated_speed_mps": "3.198449902998374",
+    "estimated_time_s": "312.6514500235111",
+    "grade_pct": "9.0",
+    "segment_idx": 4,
+    "start_distance_m": "4000.0",
+    "target_power_w": "266.56",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "6000.0",
+    "estimated_speed_mps": "3.198449902998374",
+    "estimated_time_s": "312.6514500235111",
+    "grade_pct": "9.0",
+    "segment_idx": 5,
+    "start_distance_m": "5000.0",
+    "target_power_w": "266.56",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "7000.0",
+    "estimated_speed_mps": "3.198449902998374",
+    "estimated_time_s": "312.6514500235111",
+    "grade_pct": "9.0",
+    "segment_idx": 6,
+    "start_distance_m": "6000.0",
+    "target_power_w": "266.56",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "8000.0",
+    "estimated_speed_mps": "3.198449902998374",
+    "estimated_time_s": "312.6514500235111",
+    "grade_pct": "9.0",
+    "segment_idx": 7,
+    "start_distance_m": "7000.0",
+    "target_power_w": "266.56",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "9000.0",
+    "estimated_speed_mps": "3.198449902998374",
+    "estimated_time_s": "312.6514500235111",
+    "grade_pct": "9.0",
+    "segment_idx": 8,
+    "start_distance_m": "8000.0",
+    "target_power_w": "266.56",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "950.0",
+    "end_distance_m": "9950.0",
+    "estimated_speed_mps": "3.198449902998374",
+    "estimated_time_s": "297.0188775223355",
+    "grade_pct": "9.0",
+    "segment_idx": 9,
+    "start_distance_m": "9000.0",
+    "target_power_w": "266.56",
+    "terrain_type": "climb"
+   }
+  ],
+  "total_distance_m": "9950.0",
+  "total_time_s": "3097.065753994408"
+ },
+ "hc_climb|defaults|terrain_adapted": {
+  "avg_power_w": "np.float64(294.0000000000001)",
+  "intensity_factor": "1.05",
+  "normalized_power_w": "294.0",
+  "targets": [
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "1000.0",
+    "estimated_speed_mps": "np.float64(3.530688722255364)",
+    "estimated_time_s": "np.float64(290.3116305719643)",
+    "grade_pct": "8.55",
+    "segment_idx": 0,
+    "start_distance_m": "0.0",
+    "target_power_w": "np.float64(294.0)",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "2000.0",
+    "estimated_speed_mps": "np.float64(3.5130273300473775)",
+    "estimated_time_s": "np.float64(291.7711431485438)",
+    "grade_pct": "9.0",
+    "segment_idx": 1,
+    "start_distance_m": "1000.0",
+    "target_power_w": "np.float64(294.0)",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "3000.0",
+    "estimated_speed_mps": "np.float64(3.5138164739883373)",
+    "estimated_time_s": "np.float64(291.7056162687346)",
+    "grade_pct": "9.0",
+    "segment_idx": 2,
+    "start_distance_m": "2000.0",
+    "target_power_w": "np.float64(294.00000000000006)",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "4000.0",
+    "estimated_speed_mps": "np.float64(3.5146014075522216)",
+    "estimated_time_s": "np.float64(291.64046819006745)",
+    "grade_pct": "9.0",
+    "segment_idx": 3,
+    "start_distance_m": "3000.0",
+    "target_power_w": "np.float64(293.99999999999994)",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "5000.0",
+    "estimated_speed_mps": "np.float64(3.515382137060972)",
+    "estimated_time_s": "np.float64(291.5756979003566)",
+    "grade_pct": "9.0",
+    "segment_idx": 4,
+    "start_distance_m": "4000.0",
+    "target_power_w": "np.float64(293.99999999999994)",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "6000.0",
+    "estimated_speed_mps": "np.float64(3.516158668941294)",
+    "estimated_time_s": "np.float64(291.51130438280956)",
+    "grade_pct": "9.0",
+    "segment_idx": 5,
+    "start_distance_m": "5000.0",
+    "target_power_w": "np.float64(294.0000000000001)",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "7000.0",
+    "estimated_speed_mps": "np.float64(3.5169310097241127)",
+    "estimated_time_s": "np.float64(291.44728661606774)",
+    "grade_pct": "9.0",
+    "segment_idx": 6,
+    "start_distance_m": "6000.0",
+    "target_power_w": "np.float64(293.99999999999983)",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "8000.0",
+    "estimated_speed_mps": "np.float64(3.5176991660440478)",
+    "estimated_time_s": "np.float64(291.38364357424564)",
+    "grade_pct": "9.0",
+    "segment_idx": 7,
+    "start_distance_m": "7000.0",
+    "target_power_w": "np.float64(294.00000000000006)",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "9000.0",
+    "estimated_speed_mps": "np.float64(3.518463144638831)",
+    "estimated_time_s": "np.float64(291.320374226974)",
+    "grade_pct": "9.0",
+    "segment_idx": 8,
+    "start_distance_m": "8000.0",
+    "target_power_w": "np.float64(294.0)",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "950.0",
+    "end_distance_m": "9950.0",
+    "estimated_speed_mps": "np.float64(3.5393046287639365)",
+    "estimated_time_s": "np.float64(268.41430722841653)",
+    "grade_pct": "9.0",
+    "segment_idx": 9,
+    "start_distance_m": "9000.0",
+    "target_power_w": "np.float64(293.99999999999994)",
+    "terrain_type": "climb"
+   }
+  ],
+  "total_distance_m": "np.float64(9950.0)",
+  "total_time_s": "np.float64(2827.08385682597)"
+ },
+ "rolling|calibrated|heuristic": {
+  "avg_power_w": "232.83285928040925",
+  "intensity_factor": "1.008665208239773",
+  "normalized_power_w": "282.42625830713644",
+  "targets": [
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "1000.0",
+    "estimated_speed_mps": "6.832729077119218",
+    "estimated_time_s": "146.35440520372794",
+    "grade_pct": "2.5886649999999998",
+    "segment_idx": 0,
+    "start_distance_m": "0.0",
+    "target_power_w": "238.0",
+    "terrain_type": "rolling"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "2000.0",
+    "estimated_speed_mps": "14.5",
+    "estimated_time_s": "68.96551724137932",
+    "grade_pct": "-4.405405",
+    "segment_idx": 1,
+    "start_distance_m": "1000.0",
+    "target_power_w": "166.6",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "3000.0",
+    "estimated_speed_mps": "6.506713548360111",
+    "estimated_time_s": "153.68741724492088",
+    "grade_pct": "3.390285",
+    "segment_idx": 2,
+    "start_distance_m": "2000.0",
+    "target_power_w": "266.56",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "4000.0",
+    "estimated_speed_mps": "14.294534559318677",
+    "estimated_time_s": "69.95680732732183",
+    "grade_pct": "-3.519445",
+    "segment_idx": 3,
+    "start_distance_m": "3000.0",
+    "target_power_w": "166.6",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "5000.0",
+    "estimated_speed_mps": "7.728341225444528",
+    "estimated_time_s": "129.39387260847568",
+    "grade_pct": "1.839255",
+    "segment_idx": 4,
+    "start_distance_m": "4000.0",
+    "target_power_w": "238.0",
+    "terrain_type": "rolling"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "6000.0",
+    "estimated_speed_mps": "6.454839625872668",
+    "estimated_time_s": "154.92251674104205",
+    "grade_pct": "2.933185",
+    "segment_idx": 5,
+    "start_distance_m": "5000.0",
+    "target_power_w": "238.0",
+    "terrain_type": "rolling"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "7000.0",
+    "estimated_speed_mps": "14.5",
+    "estimated_time_s": "68.96551724137932",
+    "grade_pct": "-5.369425000000001",
+    "segment_idx": 6,
+    "start_distance_m": "6000.0",
+    "target_power_w": "166.6",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "8000.0",
+    "estimated_speed_mps": "6.22161004657255",
+    "estimated_time_s": "160.73009920493078",
+    "grade_pct": "3.68597",
+    "segment_idx": 7,
+    "start_distance_m": "7000.0",
+    "target_power_w": "266.56",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "9000.0",
+    "estimated_speed_mps": "13.494516701269733",
+    "estimated_time_s": "74.10417298649217",
+    "grade_pct": "-2.3449999999999998",
+    "segment_idx": 8,
+    "start_distance_m": "8000.0",
+    "target_power_w": "238.0",
+    "terrain_type": "rolling"
+   },
+   {
+    "distance_m": "950.0",
+    "end_distance_m": "9950.0",
+    "estimated_speed_mps": "8.823049756023586",
+    "estimated_time_s": "107.67251985079483",
+    "grade_pct": "1.0041789473684213",
+    "segment_idx": 9,
+    "start_distance_m": "9000.0",
+    "target_power_w": "238.0",
+    "terrain_type": "rolling"
+   }
+  ],
+  "total_distance_m": "9950.0",
+  "total_time_s": "1134.7528456504647"
+ },
+ "rolling|calibrated|terrain_adapted": {
+  "avg_power_w": "np.float64(290.4896038848573)",
+  "intensity_factor": "1.0369144866507627",
+  "normalized_power_w": "290.33605626221356",
+  "targets": [
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "1000.0",
+    "estimated_speed_mps": "np.float64(6.660799648887325)",
+    "estimated_time_s": "np.float64(153.8854272806756)",
+    "grade_pct": "2.5886649999999998",
+    "segment_idx": 0,
+    "start_distance_m": "0.0",
+    "target_power_w": "np.float64(293.6484630970517)",
+    "terrain_type": "rolling"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "2000.0",
+    "estimated_speed_mps": "np.float64(11.364568191889353)",
+    "estimated_time_s": "np.float64(90.19260412652726)",
+    "grade_pct": "-4.405405",
+    "segment_idx": 1,
+    "start_distance_m": "1000.0",
+    "target_power_w": "np.float64(281.87220932501043)",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "3000.0",
+    "estimated_speed_mps": "np.float64(5.371344505482387)",
+    "estimated_time_s": "np.float64(190.82745464451406)",
+    "grade_pct": "3.390285",
+    "segment_idx": 2,
+    "start_distance_m": "2000.0",
+    "target_power_w": "np.float64(293.6775542200093)",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "4000.0",
+    "estimated_speed_mps": "np.float64(9.761526259364475)",
+    "estimated_time_s": "np.float64(105.00407136811131)",
+    "grade_pct": "-3.519445",
+    "segment_idx": 3,
+    "start_distance_m": "3000.0",
+    "target_power_w": "np.float64(284.34753370754277)",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "5000.0",
+    "estimated_speed_mps": "np.float64(5.770354353483091)",
+    "estimated_time_s": "np.float64(177.63207200287297)",
+    "grade_pct": "1.839255",
+    "segment_idx": 4,
+    "start_distance_m": "4000.0",
+    "target_power_w": "np.float64(293.04288999495185)",
+    "terrain_type": "rolling"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "6000.0",
+    "estimated_speed_mps": "np.float64(7.1701830366178765)",
+    "estimated_time_s": "np.float64(142.95311497145337)",
+    "grade_pct": "2.933185",
+    "segment_idx": 5,
+    "start_distance_m": "5000.0",
+    "target_power_w": "np.float64(293.0459047550702)",
+    "terrain_type": "rolling"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "7000.0",
+    "estimated_speed_mps": "np.float64(12.463531278247011)",
+    "estimated_time_s": "np.float64(82.23993482400645)",
+    "grade_pct": "-5.369425000000001",
+    "segment_idx": 6,
+    "start_distance_m": "6000.0",
+    "target_power_w": "np.float64(280.11064228212257)",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "8000.0",
+    "estimated_speed_mps": "np.float64(5.300818893309149)",
+    "estimated_time_s": "np.float64(193.36634973396005)",
+    "grade_pct": "3.68597",
+    "segment_idx": 7,
+    "start_distance_m": "7000.0",
+    "target_power_w": "np.float64(293.9084969373123)",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "9000.0",
+    "estimated_speed_mps": "np.float64(8.525461403191585)",
+    "estimated_time_s": "np.float64(120.22809693517371)",
+    "grade_pct": "-2.3449999999999998",
+    "segment_idx": 8,
+    "start_distance_m": "8000.0",
+    "target_power_w": "np.float64(286.3617229124448)",
+    "terrain_type": "rolling"
+   },
+   {
+    "distance_m": "950.0",
+    "end_distance_m": "9950.0",
+    "estimated_speed_mps": "np.float64(6.066168572868712)",
+    "estimated_time_s": "np.float64(156.60626449599994)",
+    "grade_pct": "1.0041789473684213",
+    "segment_idx": 9,
+    "start_distance_m": "9000.0",
+    "target_power_w": "np.float64(291.75888092563696)",
+    "terrain_type": "rolling"
+   }
+  ],
+  "total_distance_m": "np.float64(9950.0)",
+  "total_time_s": "np.float64(1385.2045372214184)"
+ },
+ "rolling|defaults|heuristic": {
+  "avg_power_w": "233.63784318898473",
+  "intensity_factor": "1.0121525135294231",
+  "normalized_power_w": "283.4027037882385",
+  "targets": [
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "1000.0",
+    "estimated_speed_mps": "6.832729077119218",
+    "estimated_time_s": "146.35440520372794",
+    "grade_pct": "2.5886649999999998",
+    "segment_idx": 0,
+    "start_distance_m": "0.0",
+    "target_power_w": "238.0",
+    "terrain_type": "rolling"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "2000.0",
+    "estimated_speed_mps": "15.494928346246194",
+    "estimated_time_s": "64.53724584291223",
+    "grade_pct": "-4.405405",
+    "segment_idx": 1,
+    "start_distance_m": "1000.0",
+    "target_power_w": "166.6",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "3000.0",
+    "estimated_speed_mps": "6.506713548360111",
+    "estimated_time_s": "153.68741724492088",
+    "grade_pct": "3.390285",
+    "segment_idx": 2,
+    "start_distance_m": "2000.0",
+    "target_power_w": "266.56",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "4000.0",
+    "estimated_speed_mps": "14.294534559318677",
+    "estimated_time_s": "69.95680732732183",
+    "grade_pct": "-3.519445",
+    "segment_idx": 3,
+    "start_distance_m": "3000.0",
+    "target_power_w": "166.6",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "5000.0",
+    "estimated_speed_mps": "7.728341225444528",
+    "estimated_time_s": "129.39387260847568",
+    "grade_pct": "1.839255",
+    "segment_idx": 4,
+    "start_distance_m": "4000.0",
+    "target_power_w": "238.0",
+    "terrain_type": "rolling"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "6000.0",
+    "estimated_speed_mps": "6.454839625872668",
+    "estimated_time_s": "154.92251674104205",
+    "grade_pct": "2.933185",
+    "segment_idx": 5,
+    "start_distance_m": "5000.0",
+    "target_power_w": "238.0",
+    "terrain_type": "rolling"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "7000.0",
+    "estimated_speed_mps": "16.731420973061066",
+    "estimated_time_s": "59.767786705628914",
+    "grade_pct": "-5.369425000000001",
+    "segment_idx": 6,
+    "start_distance_m": "6000.0",
+    "target_power_w": "166.6",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "8000.0",
+    "estimated_speed_mps": "6.22161004657255",
+    "estimated_time_s": "160.73009920493078",
+    "grade_pct": "3.68597",
+    "segment_idx": 7,
+    "start_distance_m": "7000.0",
+    "target_power_w": "266.56",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "9000.0",
+    "estimated_speed_mps": "13.494516701269733",
+    "estimated_time_s": "74.10417298649217",
+    "grade_pct": "-2.3449999999999998",
+    "segment_idx": 8,
+    "start_distance_m": "8000.0",
+    "target_power_w": "238.0",
+    "terrain_type": "rolling"
+   },
+   {
+    "distance_m": "950.0",
+    "end_distance_m": "9950.0",
+    "estimated_speed_mps": "8.823049756023586",
+    "estimated_time_s": "107.67251985079483",
+    "grade_pct": "1.0041789473684213",
+    "segment_idx": 9,
+    "start_distance_m": "9000.0",
+    "target_power_w": "238.0",
+    "terrain_type": "rolling"
+   }
+  ],
+  "total_distance_m": "9950.0",
+  "total_time_s": "1121.1268437162473"
+ },
+ "rolling|defaults|terrain_adapted": {
+  "avg_power_w": "np.float64(273.34081270444796)",
+  "intensity_factor": "0.993049212244133",
+  "normalized_power_w": "278.05377942835725",
+  "targets": [
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "1000.0",
+    "estimated_speed_mps": "np.float64(6.648197894252788)",
+    "estimated_time_s": "np.float64(154.1771193192201)",
+    "grade_pct": "2.5886649999999998",
+    "segment_idx": 0,
+    "start_distance_m": "0.0",
+    "target_power_w": "np.float64(281.11040467873767)",
+    "terrain_type": "rolling"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "2000.0",
+    "estimated_speed_mps": "np.float64(12.154937646327795)",
+    "estimated_time_s": "np.float64(84.3278698603336)",
+    "grade_pct": "-4.405405",
+    "segment_idx": 1,
+    "start_distance_m": "1000.0",
+    "target_power_w": "np.float64(241.86278306222675)",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "3000.0",
+    "estimated_speed_mps": "np.float64(5.373735818355219)",
+    "estimated_time_s": "np.float64(190.74253641179735)",
+    "grade_pct": "3.390285",
+    "segment_idx": 2,
+    "start_distance_m": "2000.0",
+    "target_power_w": "np.float64(283.69566637336936)",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "4000.0",
+    "estimated_speed_mps": "np.float64(10.21975925873533)",
+    "estimated_time_s": "np.float64(100.29590463433688)",
+    "grade_pct": "-3.519445",
+    "segment_idx": 3,
+    "start_distance_m": "3000.0",
+    "target_power_w": "np.float64(255.0299428561662)",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "5000.0",
+    "estimated_speed_mps": "np.float64(5.810287252387736)",
+    "estimated_time_s": "np.float64(176.41124362289946)",
+    "grade_pct": "1.839255",
+    "segment_idx": 4,
+    "start_distance_m": "4000.0",
+    "target_power_w": "np.float64(282.0884702362462)",
+    "terrain_type": "rolling"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "6000.0",
+    "estimated_speed_mps": "np.float64(7.157637445505234)",
+    "estimated_time_s": "np.float64(143.2036768841466)",
+    "grade_pct": "2.933185",
+    "segment_idx": 5,
+    "start_distance_m": "5000.0",
+    "target_power_w": "np.float64(279.54498074335646)",
+    "terrain_type": "rolling"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "7000.0",
+    "estimated_speed_mps": "np.float64(13.564837047233409)",
+    "estimated_time_s": "np.float64(75.5630160857002)",
+    "grade_pct": "-5.369425000000001",
+    "segment_idx": 6,
+    "start_distance_m": "6000.0",
+    "target_power_w": "np.float64(230.7596199562781)",
+    "terrain_type": "descent"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "8000.0",
+    "estimated_speed_mps": "np.float64(5.266057372493965)",
+    "estimated_time_s": "np.float64(194.64277114675028)",
+    "grade_pct": "3.68597",
+    "segment_idx": 7,
+    "start_distance_m": "7000.0",
+    "target_power_w": "np.float64(285.91554802619765)",
+    "terrain_type": "climb"
+   },
+   {
+    "distance_m": "1000.0",
+    "end_distance_m": "9000.0",
+    "estimated_speed_mps": "np.float64(8.868321604938956)",
+    "estimated_time_s": "np.float64(115.57993109193919)",
+    "grade_pct": "-2.3449999999999998",
+    "segment_idx": 8,
+    "start_distance_m": "8000.0",
+    "target_power_w": "np.float64(262.6955965633841)",
+    "terrain_type": "rolling"
+   },
+   {
+    "distance_m": "950.0",
+    "end_distance_m": "9950.0",
+    "estimated_speed_mps": "np.float64(6.176920657066028)",
+    "estimated_time_s": "np.float64(153.7983167896542)",
+    "grade_pct": "1.0041789473684213",
+    "segment_idx": 9,
+    "start_distance_m": "9000.0",
+    "target_power_w": "np.float64(278.3330755426159)",
+    "terrain_type": "rolling"
+   }
+  ],
+  "total_distance_m": "np.float64(9950.0)",
+  "total_time_s": "np.float64(1361.7647198128645)"
+ }
+}

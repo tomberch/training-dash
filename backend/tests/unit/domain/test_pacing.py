@@ -669,7 +669,9 @@ class TestPacingCoefficients:
         assert defaults.grade_power_slope == 0.035
         assert defaults.max_descent_speed_mps == 18.0
         assert defaults.descent_power_multiplier == 0.50
-        assert defaults.curvature_speed_coefficient == -68.0
+        # a_lat in m/s² (ADR 0004 Phase B) — default matches the
+        # "training" aggressiveness mapping (70 → 4.8)
+        assert defaults.curvature_speed_coefficient == pytest.approx(4.8)
 
     def test_get_grade_power_multiplier_with_defaults(self):
         """get_grade_power_multiplier uses defaults when no coefficients provided."""
@@ -831,7 +833,6 @@ class TestTerrainAdaptedPacingWithCoefficients:
         assert descent_target.estimated_speed_mps <= 10.0
 
 
-
 # =============================================================================
 # Test Fine-Grained Pacing Integration
 # =============================================================================
@@ -861,11 +862,13 @@ class TestFineGrainedPacingIntegration:
                 # Descent: lose 50m over 500m = -10% grade
                 elev = 150.0 - 50.0 * (i - 1500) / 500
 
-            points.append({
-                "distance_m": float(i),
-                "elevation_m": elev,
-                "grade_pct": 0.0,  # Not used, grades recalculated
-            })
+            points.append(
+                {
+                    "distance_m": float(i),
+                    "elevation_m": elev,
+                    "grade_pct": 0.0,  # Not used, grades recalculated
+                }
+            )
         return points
 
     @pytest.fixture
@@ -880,9 +883,7 @@ class TestFineGrainedPacingIntegration:
             CourseSegment(1500, 2000, 500, -10.0, 0, 50, "descent"),
         ]
 
-    def test_uses_fine_grained_when_profile_provided(
-        self, sample_segments, sample_elevation_profile
-    ):
+    def test_uses_fine_grained_when_profile_provided(self, sample_segments, sample_elevation_profile):
         """With elevation_profile, uses fine-grained pacing."""
         from trainingdash.domain.pacing import generate_terrain_adapted_pacing
 
@@ -909,9 +910,7 @@ class TestFineGrainedPacingIntegration:
         assert plan_fine.total_time_s > 0
         assert plan_fine.total_distance_m == pytest.approx(2000.0, rel=0.1)
 
-    def test_fine_grained_produces_different_speeds(
-        self, sample_segments, sample_elevation_profile
-    ):
+    def test_fine_grained_produces_different_speeds(self, sample_segments, sample_elevation_profile):
         """Fine-grained mode produces different speed predictions."""
         from trainingdash.domain.pacing import generate_terrain_adapted_pacing
 
@@ -931,9 +930,7 @@ class TestFineGrainedPacingIntegration:
         # Descent (index 3) should be faster than flat (index 0)
         assert speeds[3] > speeds[0], "Descent should be faster than flat"
 
-    def test_fine_grained_respects_coefficients(
-        self, sample_segments, sample_elevation_profile
-    ):
+    def test_fine_grained_respects_coefficients(self, sample_segments, sample_elevation_profile):
         """Fine-grained mode uses personalized coefficients."""
         from trainingdash.domain.pacing import (
             PacingCoefficients,
@@ -957,9 +954,7 @@ class TestFineGrainedPacingIntegration:
         descent_target = plan.targets[3]
         assert descent_target.estimated_speed_mps <= 10.0 + 0.5  # Small tolerance
 
-    def test_fine_grained_calculates_np_from_variable_power(
-        self, sample_segments, sample_elevation_profile
-    ):
+    def test_fine_grained_calculates_np_from_variable_power(self, sample_segments, sample_elevation_profile):
         """Fine-grained NP is calculated from actual variable power."""
         from trainingdash.domain.pacing import generate_terrain_adapted_pacing
 
@@ -1005,7 +1000,6 @@ class TestFineGrainedPacingIntegration:
         # Should still produce valid plan
         assert len(plan.targets) == 4
         assert plan.total_time_s > 0
-
 
 
 # =============================================================================

@@ -1,157 +1,62 @@
 """
-Grade-based pacing heuristics for race planning.
+Pacing plan generators.
 
-This module provides a simple heuristic approach to pacing that adjusts
-target power based on terrain grade. It's the MVP approach per decision #530,
-prioritizing simplicity and predictability over optimal performance.
+This module owns the two plan-generator interfaces (ADR 0004):
+- generate_heuristic_pacing: discrete terrain multipliers, VI-corrected NP
+- generate_terrain_adapted_pacing: continuous grade-power formula, which
+  routes to the fine-grained (~25m) engine when an elevation profile exists
 
-Key insight: Variable pacing (harder uphill, easier downhill) beats constant
-power due to the v³ relationship between power and aerodynamic drag. On climbs,
-speed is low so aero losses are small - extra watts go to climbing. On descents,
-speed is high so extra watts are mostly lost to drag.
-
-The heuristic approach:
-- Base power = FTP × target_intensity
-- Scale power by terrain type using empirically-derived multipliers
-- Use physics model to calculate resulting speed and time
-
-This is intentionally simple. The scipy optimizer (#561) provides a more
-sophisticated approach that respects W'bal constraints.
+The power model itself (coefficients, grade-power formula, NP core,
+ride-type presets) lives in pacing_model.py — this module consumes it.
 """
 
 from dataclasses import dataclass
-from typing import Literal
 
 import numpy as np
 
 from trainingdash.domain.course_segmentation import CourseSegment, calculate_course_punchiness
 from trainingdash.domain.fine_grained_pacing import generate_fine_grained_plan
+from trainingdash.domain.pacing_model import (
+    DEFAULT_RIDER_CDA,
+    DEFAULT_RIDER_CRR,
+    DEFAULT_RIDER_MASS_KG,
+    MAX_POWER_MULTIPLIER,
+    MIN_POWER_MULTIPLIER,
+    RIDE_TYPE_PRESETS,
+    PacingCoefficients,
+    RideTypeParams,
+    RideTypePreset,
+    calculate_intensity_factor,
+    calculate_normalized_power,
+    estimate_tss,
+    get_grade_power_multiplier,
+    resolve_ride_type_params,
+)
 from trainingdash.domain.physics import (
     EnvironmentParams,
     RiderParams,
     speed_from_power,
 )
 
-
-# =============================================================================
-# Ride Type Configuration
-# =============================================================================
-
-RideTypePreset = Literal["race", "gran_fondo", "training", "touring", "custom"]
-
-
-@dataclass
-class RideTypeParams:
-    """Parameters controlling ride time estimation.
-    
-    These affect how predicted times account for:
-    1. Descent aggressiveness - how fast you take corners (affects curvature speed factor)
-    2. Stop percentage - expected time spent stopped (traffic, feeds, breaks)
-    
-    Attributes:
-        descent_aggressiveness: 0-100 scale. 0=very cautious (0.75x on hairpins),
-                               100=race pace (0.95x on hairpins). Affects descent speeds.
-        stop_pct: 0-50 range. Percentage of extra time for stops beyond physics prediction.
-                  6% means a 1-hour physics time becomes 1h04m total.
-    """
-    descent_aggressiveness: int  # 0-100
-    stop_pct: float  # 0-50
-    
-    def __post_init__(self):
-        if not 0 <= self.descent_aggressiveness <= 100:
-            raise ValueError(f"descent_aggressiveness must be 0-100, got {self.descent_aggressiveness}")
-        if not 0 <= self.stop_pct <= 50:
-            raise ValueError(f"stop_pct must be 0-50, got {self.stop_pct}")
-    
-    @property
-    def ride_type_for_curvature(self) -> str:
-        """Convert descent_aggressiveness to ride_type string for curvature factor."""
-        # >=80 is aggressive (race-like), <80 is cautious (training-like)
-        return "race" if self.descent_aggressiveness >= 80 else "training"
-    
-    @property
-    def stop_factor(self) -> float:
-        """Multiplier to apply to total time for stops.
-        
-        stop_pct=6 means 6% extra time, so factor = 1.06
-        """
-        return 1.0 + (self.stop_pct / 100.0)
+# Backward-compatible re-exports (moved to pacing_model.py; import sites unchanged)
+__all__ = [
+    "MAX_POWER_MULTIPLIER",
+    "MIN_POWER_MULTIPLIER",
+    "RIDE_TYPE_PRESETS",
+    "PacingCoefficients",
+    "RideTypeParams",
+    "RideTypePreset",
+    "calculate_intensity_factor",
+    "calculate_normalized_power",
+    "estimate_tss",
+    "get_grade_power_multiplier",
+    "resolve_ride_type_params",
+]
 
 
-# Preset configurations based on empirical data
-RIDE_TYPE_PRESETS: dict[str, RideTypeParams] = {
-    "race": RideTypeParams(
-        descent_aggressiveness=90,
-        stop_pct=0,
-    ),
-    "gran_fondo": RideTypeParams(
-        descent_aggressiveness=85,
-        stop_pct=3,
-    ),
-    "training": RideTypeParams(
-        descent_aggressiveness=70,
-        stop_pct=6,
-    ),
-    "touring": RideTypeParams(
-        descent_aggressiveness=60,
-        stop_pct=25,
-    ),
-}
-
-
-def resolve_ride_type_params(
-    ride_type: RideTypePreset,
-    custom_params: RideTypeParams | None = None,
-) -> RideTypeParams:
-    """Resolve ride type preset to actual parameters.
-    
-    Args:
-        ride_type: Preset name or "custom"
-        custom_params: Required if ride_type is "custom"
-        
-    Returns:
-        RideTypeParams with resolved values
-        
-    Raises:
-        ValueError: If ride_type is "custom" but no custom_params provided,
-                   or if ride_type is unknown
-    """
-    if ride_type == "custom":
-        if custom_params is None:
-            raise ValueError("custom_params required when ride_type is 'custom'")
-        return custom_params
-    
-    if ride_type not in RIDE_TYPE_PRESETS:
-        raise ValueError(f"Unknown ride_type: {ride_type}. Valid options: {list(RIDE_TYPE_PRESETS.keys()) + ['custom']}")
-    
-    return RIDE_TYPE_PRESETS[ride_type]
-
-
-@dataclass
-class PacingCoefficients:
-    """Personalized pacing model coefficients.
-
-    These parameters control how power targets are calculated based on terrain.
-    They can be learned from actual ride data via the calibration pipeline.
-    """
-
-    # Climb coefficients (grade-power relationship)
-    grade_power_intercept: float = 1.10  # Base multiplier at 0% grade
-    grade_power_slope: float = 0.035  # Additional multiplier per 1% grade
-
-    # Descent coefficients
-    max_descent_speed_mps: float = 18.0  # Absolute speed limit on descents
-    descent_power_multiplier: float = 0.50  # Power on descents (grade < -3%)
-    curvature_speed_coefficient: float = -68.0  # Speed reduction per unit curvature
-
-    @classmethod
-    def defaults(cls) -> "PacingCoefficients":
-        """Return global defaults."""
-        return cls()
-
-
-# Global defaults (backward compatibility)
-DEFAULT_COEFFICIENTS = PacingCoefficients.defaults()
+def _default_rider_params() -> RiderParams:
+    """Default rider params shared by all plan generators."""
+    return RiderParams(mass_kg=DEFAULT_RIDER_MASS_KG, cda=DEFAULT_RIDER_CDA, crr=DEFAULT_RIDER_CRR)
 
 
 @dataclass
@@ -181,74 +86,6 @@ class PacingPlan:
     intensity_factor: float  # NP / FTP
 
 
-# Terrain-based power multipliers (legacy - used by generate_heuristic_pacing)
-# These adjust power relative to base (FTP × target_intensity)
-# Values derived from pacing research and cycling coach recommendations
-TERRAIN_POWER_MULTIPLIERS = {
-    "steep_descent": 0.55,  # < -6%: mostly coasting, light pedaling
-    "descent": 0.70,  # -6% to -2%: soft pedaling, stay aero
-    "flat": 1.00,  # -2% to 2%: base power
-    "false_flat": 1.07,  # 2% to 4%: slight increase
-    "climb": 1.12,  # 4% to 8%: push harder
-    "steep_climb": 1.18,  # > 8%: near FTP but not over
-}
-
-
-# Calibrated continuous power multiplier formula (from real ride data analysis)
-# Based on regression against 30+ activities with power meters
-# Formula: power_mult = GRADE_POWER_INTERCEPT + GRADE_POWER_SLOPE * grade%
-#
-# Key findings from validation:
-# - Descents: Riders coast heavily, actual multiplier is 0.1-0.4, not formula-predicted
-# - Steep climbs (>10%): Power plateaus around 1.45× avg, doesn't continue increasing
-# - Optimal range (0-8%): Formula fits well with slope ~0.035
-GRADE_POWER_INTERCEPT = 1.10  # Base multiplier at 0% grade
-GRADE_POWER_SLOPE = 0.035  # Additional multiplier per 1% grade (calibrated from data)
-
-# Power multiplier bounds (prevent unrealistic values)
-# Adjusted based on actual ride data:
-# - Descents: Riders coast (actual ~0.1-0.3), but we set minimum 0.50 for modeling
-# - Steep climbs: Power caps around 1.50× avg in practice
-MIN_POWER_MULTIPLIER = 0.50  # Minimum for descents (coasting with some pedaling)
-MAX_POWER_MULTIPLIER = 1.50  # Maximum for very steep climbs (realistic ceiling)
-
-
-def get_grade_power_multiplier(
-    grade_pct: float,
-    coefficients: PacingCoefficients | None = None,
-) -> float:
-    """Calculate power multiplier based on grade using calibrated formula.
-
-    Uses continuous formula derived from regression against real ride data:
-        power_mult = intercept + slope × grade%
-
-    This captures the natural power distribution pattern where riders push
-    harder on climbs (where aero drag is low) and ease off on descents
-    (where extra power yields diminishing returns due to v³ drag).
-
-    Args:
-        grade_pct: Road gradient as percentage (e.g., 5.0 for 5% grade).
-        coefficients: Personalized coefficients. If None, uses global defaults.
-
-    Returns:
-        Power multiplier relative to base power (FTP × target_intensity).
-        Clamped to [MIN_POWER_MULTIPLIER, MAX_POWER_MULTIPLIER] range.
-
-    Examples:
-        >>> get_grade_power_multiplier(0)   # Flat
-        1.10
-        >>> get_grade_power_multiplier(10)  # 10% climb
-        1.45
-        >>> get_grade_power_multiplier(-8)  # 8% descent
-        0.50
-    """
-    if coefficients is None:
-        coefficients = DEFAULT_COEFFICIENTS
-
-    multiplier = coefficients.grade_power_intercept + coefficients.grade_power_slope * grade_pct
-    return max(MIN_POWER_MULTIPLIER, min(MAX_POWER_MULTIPLIER, multiplier))
-
-
 def get_terrain_multiplier(terrain_type: str) -> float:
     """Get power multiplier for terrain type.
 
@@ -258,6 +95,17 @@ def get_terrain_multiplier(terrain_type: str) -> float:
     Returns:
         Power multiplier (1.0 = base power)
     """
+    # Terrain-based power multipliers (used by generate_heuristic_pacing)
+    # These adjust power relative to base (FTP × target_intensity)
+    # Values derived from pacing research and cycling coach recommendations
+    TERRAIN_POWER_MULTIPLIERS = {
+        "steep_descent": 0.55,  # < -6%: mostly coasting, light pedaling
+        "descent": 0.70,  # -6% to -2%: soft pedaling, stay aero
+        "flat": 1.00,  # -2% to 2%: base power
+        "false_flat": 1.07,  # 2% to 4%: slight increase
+        "climb": 1.12,  # 4% to 8%: push harder
+        "steep_climb": 1.18,  # > 8%: near FTP but not over
+    }
     return TERRAIN_POWER_MULTIPLIERS.get(terrain_type, 1.0)
 
 
@@ -309,7 +157,7 @@ def generate_heuristic_pacing(
 
     # Default rider params if not provided
     if rider_params is None:
-        rider_params = RiderParams(mass_kg=83, cda=0.32, crr=0.004)
+        rider_params = _default_rider_params()
 
     if env_params is None:
         env_params = EnvironmentParams()
@@ -370,7 +218,7 @@ def generate_heuristic_pacing(
 
     # Calculate NP using VI correction for terrain variability
     np_power = calculate_normalized_power_from_segments(targets, expected_vi=punchiness.expected_vi)
-    intensity_factor = np_power / rider_ftp if rider_ftp > 0 else 0
+    intensity_factor = calculate_intensity_factor(np_power, rider_ftp)
 
     return PacingPlan(
         targets=targets,
@@ -380,46 +228,6 @@ def generate_heuristic_pacing(
         normalized_power_w=np_power,
         intensity_factor=intensity_factor,
     )
-
-
-def calculate_normalized_power(powers: np.ndarray, sample_rate_hz: float = 1.0) -> float:
-    """
-    Calculate Normalized Power using the standard algorithm.
-
-    NP = (mean(rolling_30s_power^4))^0.25
-
-    The 30-second rolling average smooths short spikes, then the 4th power
-    weighting emphasizes intensity. This makes NP reflect the physiological
-    cost better than simple average power.
-
-    Args:
-        powers: Array of power values in watts (one per sample).
-        sample_rate_hz: Sample frequency in Hz. Default 1.0 (1 sample/sec).
-
-    Returns:
-        Normalized Power in watts. Returns 0 if insufficient data.
-    """
-    powers = np.asarray(powers, dtype=np.float64)
-
-    if len(powers) < 30:
-        # Not enough data for 30s average - return regular average
-        return float(np.mean(powers)) if len(powers) > 0 else 0.0
-
-    # Window size for 30-second rolling average
-    window_size = int(30 * sample_rate_hz)
-    window_size = max(1, min(window_size, len(powers)))
-
-    # Calculate 30-second rolling average
-    cumsum = np.cumsum(np.insert(powers, 0, 0))
-    rolling_avg = (cumsum[window_size:] - cumsum[:-window_size]) / window_size
-
-    if len(rolling_avg) == 0:
-        return float(np.mean(powers))
-
-    # 4th power mean, then 4th root
-    np_power = (np.mean(rolling_avg**4)) ** 0.25
-
-    return float(np_power)
 
 
 def calculate_normalized_power_from_segments(
@@ -473,60 +281,6 @@ def calculate_normalized_power_from_segments(
     return weighted_4th_power**0.25
 
 
-def calculate_intensity_factor(np_watts: float, ftp: float) -> float:
-    """
-    Calculate Intensity Factor (IF).
-
-    IF = NP / FTP
-
-    IF provides a normalized measure of ride intensity:
-    - < 0.75: Recovery/Endurance
-    - 0.75-0.85: Tempo
-    - 0.85-0.95: Threshold
-    - 0.95-1.05: VO2max intervals
-    - > 1.05: Anaerobic
-
-    Args:
-        np_watts: Normalized Power in watts.
-        ftp: Functional Threshold Power in watts.
-
-    Returns:
-        Intensity Factor (dimensionless).
-    """
-    if ftp <= 0:
-        return 0.0
-    return np_watts / ftp
-
-
-def estimate_tss(np_watts: float, ftp: float, duration_s: float) -> float:
-    """
-    Estimate Training Stress Score (TSS) for a planned effort.
-
-    TSS = (duration_s × NP × IF) / (FTP × 3600) × 100
-
-    TSS quantifies training load:
-    - < 150: Low (easy recovery next day)
-    - 150-300: Medium (some residual fatigue)
-    - 300-450: High (2+ days recovery)
-    - > 450: Very high (extended recovery needed)
-
-    Args:
-        np_watts: Normalized Power in watts.
-        ftp: Functional Threshold Power in watts.
-        duration_s: Duration in seconds.
-
-    Returns:
-        Training Stress Score.
-    """
-    if ftp <= 0 or duration_s <= 0:
-        return 0.0
-
-    intensity_factor = np_watts / ftp
-    tss = (duration_s * np_watts * intensity_factor) / (ftp * 3600) * 100
-
-    return tss
-
-
 def generate_terrain_adapted_pacing(
     segments: list[CourseSegment],
     rider_ftp: float,
@@ -539,6 +293,9 @@ def generate_terrain_adapted_pacing(
     coefficients: PacingCoefficients | None = None,
     elevation_profile: list[dict] | None = None,
     ride_type: str = "training",
+    descent_aggressiveness: int = 70,
+    wind_speed_mps: float | None = None,
+    wind_direction_deg: float | None = None,
 ) -> PacingPlan:
     """
     Generate pacing plan using continuous grade-based power allocation.
@@ -575,8 +332,13 @@ def generate_terrain_adapted_pacing(
         elevation_profile: Course elevation profile from RaceCourse.elevation_profile.
             If provided, enables fine-grained (~25m) pacing for accurate speed
             predictions. If None, uses segment-based calculation.
-        ride_type: "training" or "race" - affects curvature speed factors on descents.
-            Training = more cautious descending, Race = more aggressive.
+        ride_type: "training" or "race" (interface compat; cornering is driven
+            by descent_aggressiveness).
+        descent_aggressiveness: 0-100; maps to lateral acceleration for the
+            cornering-speed limit on descents (B1). Default 70 = "training".
+        wind_speed_mps: Meteorological wind speed (m/s); decomposed per point
+            from GPS bearings in fine-grained mode. None/0 = no wind.
+        wind_direction_deg: Meteorological wind direction (FROM, degrees).
 
     Returns:
         PacingPlan with per-segment targets and overall metrics.
@@ -595,11 +357,11 @@ def generate_terrain_adapted_pacing(
 
     # Use default coefficients if not provided
     if coefficients is None:
-        coefficients = DEFAULT_COEFFICIENTS
+        coefficients = PacingCoefficients.defaults()
 
     # Default rider params if not provided
     if rider_params is None:
-        rider_params = RiderParams(mass_kg=83, cda=0.32, crr=0.004)
+        rider_params = _default_rider_params()
 
     if env_params is None:
         env_params = EnvironmentParams()
@@ -624,6 +386,9 @@ def generate_terrain_adapted_pacing(
             power_cap_ftp_pct=power_cap_ftp_pct,
             coefficients=coefficients,
             ride_type=ride_type,
+            descent_aggressiveness=descent_aggressiveness,
+            wind_speed_mps=wind_speed_mps,
+            wind_direction_deg=wind_direction_deg,
         )
 
     # =========================================================================
@@ -743,7 +508,6 @@ def calculate_normalized_power_from_variable_targets(
     return calculate_normalized_power(np.array(power_samples), sample_rate_hz=1.0)
 
 
-
 def _generate_fine_grained_adapted_pacing(
     segments: list[CourseSegment],
     elevation_profile: list[dict],
@@ -755,6 +519,9 @@ def _generate_fine_grained_adapted_pacing(
     power_cap_ftp_pct: float,
     coefficients: PacingCoefficients,
     ride_type: str = "training",
+    descent_aggressiveness: int = 70,
+    wind_speed_mps: float | None = None,
+    wind_direction_deg: float | None = None,
 ) -> PacingPlan:
     """
     Internal helper: Generate pacing plan using fine-grained elevation profile.
@@ -780,6 +547,10 @@ def _generate_fine_grained_adapted_pacing(
         power_cap_ftp_pct=power_cap_ftp_pct,
         target_spacing_m=25.0,
         ride_type=ride_type,
+        descent_aggressiveness=descent_aggressiveness,
+        wind_speed_mps=wind_speed_mps,
+        wind_direction_deg=wind_direction_deg,
+        coefficients=coefficients,
     )
 
     if not fine_plan.points:
@@ -843,8 +614,6 @@ def _generate_fine_grained_adapted_pacing(
             avg_power = min(base_power * multiplier, power_cap)
             avg_power = max(0, avg_power)
 
-            from trainingdash.domain.physics import speed_from_power
-
             avg_speed = speed_from_power(
                 avg_power,
                 segment.avg_grade_pct,
@@ -874,7 +643,7 @@ def _generate_fine_grained_adapted_pacing(
             fine_idx -= 1
 
     # Use aggregated metrics from fine-grained plan (more accurate)
-    intensity_factor = fine_plan.normalized_power_w / rider_ftp if rider_ftp > 0 else 0
+    intensity_factor = calculate_intensity_factor(fine_plan.normalized_power_w, rider_ftp)
 
     return PacingPlan(
         targets=targets,

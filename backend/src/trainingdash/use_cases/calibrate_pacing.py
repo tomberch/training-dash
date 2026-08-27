@@ -20,6 +20,7 @@ from trainingdash.domain.pacing_calibration import (
     extract_climb_samples,
     extract_descent_samples,
 )
+from trainingdash.domain.pacing_model import PacingCoefficients
 from trainingdash.repositories.postgres.models import Activity, Record
 from trainingdash.repositories.protocols import PacingCoefficientsRepo
 
@@ -121,16 +122,17 @@ class CalibratePacing:
 
         # Save to database
         await self._pacing_repo.upsert(
-            user_id=user_id,
-            bike_id=bike_id,
-            grade_power_intercept=result.grade_power_intercept,
-            grade_power_slope=result.grade_power_slope,
-            max_descent_speed_mps=result.max_descent_speed_mps,
-            descent_power_multiplier=result.descent_power_multiplier,
-            curvature_speed_coefficient=result.curvature_speed_coefficient,
-            climb_sample_count=result.climb_sample_count,
-            descent_sample_count=result.descent_sample_count,
-            activity_count=result.activity_count,
+            user_id,
+            PacingCoefficients(
+                grade_power_intercept=result.grade_power_intercept,
+                grade_power_slope=result.grade_power_slope,
+                max_descent_speed_mps=result.max_descent_speed_mps,
+                descent_power_multiplier=result.descent_power_multiplier,
+                curvature_speed_coefficient=result.curvature_speed_coefficient,
+                climb_sample_count=result.climb_sample_count,
+                descent_sample_count=result.descent_sample_count,
+                activity_count=result.activity_count,
+            ),
         )
 
         logger.info(

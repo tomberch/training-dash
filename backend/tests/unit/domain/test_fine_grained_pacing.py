@@ -5,14 +5,13 @@ import pytest
 
 from trainingdash.domain.fine_grained_pacing import (
     FineGrainedPoint,
-    aggregate_to_display_segments,
     calculate_np_from_fine_grained,
     calculate_power_targets,
     calculate_speeds_and_times,
     generate_fine_grained_plan,
     resample_elevation_profile,
 )
-from trainingdash.domain.physics import EnvironmentParams, RiderParams
+from trainingdash.domain.physics import RiderParams
 
 
 class TestResampleElevationProfile:
@@ -29,10 +28,7 @@ class TestResampleElevationProfile:
 
     def test_resamples_to_target_spacing(self):
         # 1000m course with 100m original spacing
-        profile = [
-            {"distance_m": i * 100, "elevation_m": 100 + i * 5, "grade_pct": 5.0}
-            for i in range(11)
-        ]
+        profile = [{"distance_m": i * 100, "elevation_m": 100 + i * 5, "grade_pct": 5.0} for i in range(11)]
 
         result = resample_elevation_profile(profile, target_spacing_m=25.0)
 
@@ -81,27 +77,21 @@ class TestCalculatePowerTargets:
 
     def test_flat_terrain_uses_base_multiplier(self):
         points = [FineGrainedPoint(0, 100, 0.0)]  # Flat
-        powers = calculate_power_targets(
-            points, base_power_w=200, grade_power_intercept=1.10, grade_power_slope=0.035
-        )
+        powers = calculate_power_targets(points, base_power_w=200, grade_power_intercept=1.10, grade_power_slope=0.035)
 
         # Flat: multiplier = 1.10, power = 200 * 1.10 = 220
         assert powers[0] == pytest.approx(220, rel=0.01)
 
     def test_climb_increases_power(self):
         points = [FineGrainedPoint(0, 100, 10.0)]  # 10% climb
-        powers = calculate_power_targets(
-            points, base_power_w=200, grade_power_intercept=1.10, grade_power_slope=0.035
-        )
+        powers = calculate_power_targets(points, base_power_w=200, grade_power_intercept=1.10, grade_power_slope=0.035)
 
         # 10% climb: multiplier = 1.10 + 0.035*10 = 1.45, power = 200 * 1.45 = 290
         assert powers[0] == pytest.approx(290, rel=0.01)
 
     def test_descent_reduces_power(self):
         points = [FineGrainedPoint(0, 100, -10.0)]  # 10% descent
-        powers = calculate_power_targets(
-            points, base_power_w=200, grade_power_intercept=1.10, grade_power_slope=0.035
-        )
+        powers = calculate_power_targets(points, base_power_w=200, grade_power_intercept=1.10, grade_power_slope=0.035)
 
         # -10% descent: multiplier = 1.10 + 0.035*(-10) = 0.75
         # But clamped to min 0.50, so power = 200 * 0.75 = 150
@@ -109,18 +99,14 @@ class TestCalculatePowerTargets:
 
     def test_steep_descent_clamps_to_minimum(self):
         points = [FineGrainedPoint(0, 100, -20.0)]  # 20% descent
-        powers = calculate_power_targets(
-            points, base_power_w=200, grade_power_intercept=1.10, grade_power_slope=0.035
-        )
+        powers = calculate_power_targets(points, base_power_w=200, grade_power_intercept=1.10, grade_power_slope=0.035)
 
         # -20%: multiplier = 1.10 - 0.7 = 0.40, clamped to 0.50
         assert powers[0] == pytest.approx(100, rel=0.01)  # 200 * 0.50
 
     def test_steep_climb_clamps_to_maximum(self):
         points = [FineGrainedPoint(0, 100, 20.0)]  # 20% climb
-        powers = calculate_power_targets(
-            points, base_power_w=200, grade_power_intercept=1.10, grade_power_slope=0.035
-        )
+        powers = calculate_power_targets(points, base_power_w=200, grade_power_intercept=1.10, grade_power_slope=0.035)
 
         # 20%: multiplier = 1.10 + 0.7 = 1.80, clamped to 1.50
         assert powers[0] == pytest.approx(300, rel=0.01)  # 200 * 1.50
@@ -128,7 +114,9 @@ class TestCalculatePowerTargets:
     def test_power_cap_applied(self):
         points = [FineGrainedPoint(0, 100, 10.0)]
         powers = calculate_power_targets(
-            points, base_power_w=200, power_cap_w=250  # Cap below natural target
+            points,
+            base_power_w=200,
+            power_cap_w=250,  # Cap below natural target
         )
 
         # Natural would be 290W, but capped to 250
@@ -186,9 +174,7 @@ class TestCalculateSpeedsAndTimes:
         ]
         powers = [150, 150]
 
-        speeds, _ = calculate_speeds_and_times(
-            points, powers, rider, max_descent_speed_mps=15.0
-        )
+        speeds, _ = calculate_speeds_and_times(points, powers, rider, max_descent_speed_mps=15.0)
 
         assert speeds[0] <= 15.0
 
@@ -315,68 +301,6 @@ class TestGenerateFineGrainedPlan:
         assert 200 < plan.normalized_power_w < 350
 
 
-class TestAggregateToDisplaySegments:
-    """Tests for aggregating fine points to display segments."""
-
-    @pytest.fixture
-    def sample_plan(self):
-        """Create a sample fine-grained plan for testing."""
-        from trainingdash.domain.fine_grained_pacing import FineGrainedPlan, FineGrainedTarget
-
-        points = [
-            FineGrainedTarget(i * 25, 0.0, 220, 9.0, 2.78)  # 25m at 9m/s = 2.78s
-            for i in range(40)  # 1000m total
-        ]
-
-        return FineGrainedPlan(
-            points=points,
-            total_time_s=sum(p.time_s for p in points),
-            total_distance_m=975,  # 39 segments * 25m
-            avg_power_w=220,
-            normalized_power_w=220,
-            power_samples=np.array([220] * 111),
-        )
-
-    def test_aggregates_to_target_count(self, sample_plan):
-        segments = aggregate_to_display_segments(sample_plan, target_segment_count=5)
-
-        # Should have ~5 segments (may be fewer if min length dominates)
-        assert 3 <= len(segments) <= 7
-
-    def test_segments_have_required_fields(self, sample_plan):
-        segments = aggregate_to_display_segments(sample_plan, target_segment_count=5)
-
-        for seg in segments:
-            assert "segment_idx" in seg
-            assert "start_distance_m" in seg
-            assert "end_distance_m" in seg
-            assert "distance_m" in seg
-            assert "avg_grade_pct" in seg
-            assert "avg_power_w" in seg
-            assert "avg_speed_mps" in seg
-            assert "time_s" in seg
-            assert "terrain_type" in seg
-
-    def test_segments_cover_full_distance(self, sample_plan):
-        segments = aggregate_to_display_segments(sample_plan, target_segment_count=5)
-
-        assert segments[0]["start_distance_m"] == 0
-        # Last segment should end at or near total distance
-        assert segments[-1]["end_distance_m"] >= sample_plan.total_distance_m * 0.9
-
-    def test_empty_plan_returns_empty(self):
-        from trainingdash.domain.fine_grained_pacing import FineGrainedPlan
-
-        empty_plan = FineGrainedPlan(
-            points=[], total_time_s=0, total_distance_m=0,
-            avg_power_w=0, normalized_power_w=0, power_samples=np.array([])
-        )
-
-        segments = aggregate_to_display_segments(empty_plan)
-        assert segments == []
-
-
-
 class TestCurvatureCalculation:
     """Tests for curvature calculation from GPS coordinates."""
 
@@ -394,8 +318,8 @@ class TestCurvatureCalculation:
 
         curvatures = calculate_curvature(points)
 
-        # All curvatures should be near zero
-        assert all(c < 2 for c in curvatures)
+        # All curvatures should be near zero (1/m scale)
+        assert all(c < 0.02 for c in curvatures)
 
     def test_90_degree_turn_high_curvature(self):
         """A 90 degree turn should have high curvature."""
@@ -411,11 +335,11 @@ class TestCurvatureCalculation:
 
         curvatures = calculate_curvature(points)
 
-        # Middle point should have high curvature (90 degree turn)
-        assert curvatures[1] > 30  # Should be significant turn
+        # Middle point: 90° turn over ~200m leg → tight corner (clamped max)
+        assert curvatures[1] > 0.005  # Radius under ~200m
 
-    def test_no_gps_returns_zeros(self):
-        """Points without GPS coordinates should return zero curvature."""
+    def test_no_gps_returns_none(self):
+        """Points without GPS coordinates cannot have curvature."""
         from trainingdash.domain.fine_grained_pacing import calculate_curvature
 
         points = [
@@ -426,57 +350,47 @@ class TestCurvatureCalculation:
 
         curvatures = calculate_curvature(points)
 
-        assert all(c == 0 for c in curvatures)
+        assert all(c is None for c in curvatures)
 
 
-class TestCurvatureSpeedFactor:
-    """Tests for curvature-based speed reduction."""
+class TestCorneringInSpeedLoop:
+    """The cornering-speed limit replaces the old threshold-table multiplier.
 
-    def test_straight_descent_no_reduction(self):
-        """Straight descents should have no speed reduction."""
-        from trainingdash.domain.fine_grained_pacing import get_curvature_speed_factor
+    Detailed cornering physics tests live in test_cornering.py; these pin
+    the integration points inside fine_grained_pacing.
+    """
 
-        factor = get_curvature_speed_factor(curvature_deg_per_100m=2.0, grade_pct=-5.0)
-        assert factor == 1.0
+    def test_speeds_respect_cornering_limit(self):
+        """Speeds never exceed sqrt(a_lat/kappa) on curved points."""
+        from trainingdash.domain.pacing_model import a_lat_from_aggressiveness, cornering_speed_limit
 
-    def test_curvy_descent_reduced_speed(self):
-        """Curvy descents should have reduced speed."""
-        from trainingdash.domain.fine_grained_pacing import get_curvature_speed_factor
+        points = [
+            FineGrainedPoint(distance_m=i * 25.0, elevation_m=0, grade_pct=-6.0, curvature_1_m=0.025) for i in range(10)
+        ]
+        powers = [200.0] * 10
+        speeds, _ = calculate_speeds_and_times(points, powers, RiderParams(mass_kg=83, cda=0.32, crr=0.004))
 
-        # Training mode
-        factor = get_curvature_speed_factor(
-            curvature_deg_per_100m=25.0, grade_pct=-5.0, ride_type="training"
-        )
-        assert factor == 0.90
+        limit = cornering_speed_limit(0.025, a_lat_from_aggressiveness(70))
+        assert all(s <= limit + 1e-9 for s in speeds)
 
-        # Hairpin
-        factor = get_curvature_speed_factor(
-            curvature_deg_per_100m=40.0, grade_pct=-5.0, ride_type="training"
-        )
-        assert factor == 0.80
+    def test_none_curvature_grade_only_physics(self):
+        """curvature_1_m=None (no GPS) → per-point density physics only."""
+        from trainingdash.domain.physics import EnvironmentParams, air_density_from_altitude, speed_from_power
 
-    def test_climb_no_reduction_even_if_curvy(self):
-        """Climbs should have no speed reduction regardless of curvature."""
-        from trainingdash.domain.fine_grained_pacing import get_curvature_speed_factor
+        points = [
+            FineGrainedPoint(distance_m=i * 25.0, elevation_m=900 - i * 1.5, grade_pct=-6.0, curvature_1_m=None)
+            for i in range(10)
+        ]
+        powers = [200.0] * 10
+        rider = RiderParams(mass_kg=83, cda=0.32, crr=0.004)
+        speeds, _ = calculate_speeds_and_times(points, powers, rider)
 
-        # Hairpin on a climb
-        factor = get_curvature_speed_factor(curvature_deg_per_100m=50.0, grade_pct=5.0)
-        assert factor == 1.0
-
-    def test_race_mode_less_aggressive_reduction(self):
-        """Race mode should have less aggressive speed reductions."""
-        from trainingdash.domain.fine_grained_pacing import get_curvature_speed_factor
-
-        # Same hairpin, different modes
-        training_factor = get_curvature_speed_factor(
-            curvature_deg_per_100m=40.0, grade_pct=-5.0, ride_type="training"
-        )
-        race_factor = get_curvature_speed_factor(
-            curvature_deg_per_100m=40.0, grade_pct=-5.0, ride_type="race"
-        )
-
-        # Race should be faster (higher factor)
-        assert race_factor > training_factor
+        rho_sea = air_density_from_altitude(0.0)
+        for i, s in enumerate(speeds):
+            expected_env = EnvironmentParams(
+                air_density=EnvironmentParams().air_density * air_density_from_altitude(points[i].elevation_m) / rho_sea
+            )
+            assert s == pytest.approx(speed_from_power(200.0, -6.0, rider, expected_env))
 
 
 class TestResampleWithGPS:
@@ -511,6 +425,6 @@ class TestResampleWithGPS:
 
         result = resample_elevation_profile(profile, target_spacing_m=25.0)
 
-        # Should have curvature values
-        has_curvature = any(p.curvature_deg_per_100m > 0 for p in result)
+        # Should have curvature values (Menger, 1/m)
+        has_curvature = any(p.curvature_1_m is not None and p.curvature_1_m > 0 for p in result)
         assert has_curvature or len(result) < 3  # Either has curvature or too few points

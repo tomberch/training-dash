@@ -381,23 +381,20 @@ class TestGenerateRacePlanPersonalizedCoefficients:
 
     @pytest.fixture
     def pacing_coefficients_repo(self):
-        from decimal import Decimal
-
         from tests.fakes.pacing_coefficients_repo import FakePacingCoefficientsRepo
-        from trainingdash.repositories.postgres.models import PacingCoefficients
+        from trainingdash.domain.pacing_model import PacingCoefficients
 
         repo = FakePacingCoefficientsRepo()
         # Add user default coefficients
         repo.add(
             PacingCoefficients(
-                id=1,
                 user_id=1,
                 bike_id=None,  # User default
-                grade_power_intercept=Decimal("1.15"),  # Higher than default 1.10
-                grade_power_slope=Decimal("0.045"),  # Higher than default 0.035
-                max_descent_speed_mps=Decimal("16.0"),  # Lower than default 18.0
-                descent_power_multiplier=Decimal("0.40"),
-                curvature_speed_coefficient=Decimal("-70.0"),
+                grade_power_intercept=1.15,  # Higher than default 1.10
+                grade_power_slope=0.045,  # Higher than default 0.035
+                max_descent_speed_mps=16.0,  # Lower than default 18.0
+                descent_power_multiplier=0.40,
+                curvature_speed_coefficient=-70.0,
                 climb_sample_count=5000,
                 descent_sample_count=3000,
                 activity_count=25,
@@ -406,14 +403,13 @@ class TestGenerateRacePlanPersonalizedCoefficients:
         # Add bike-specific coefficients for bike 1
         repo.add(
             PacingCoefficients(
-                id=2,
                 user_id=1,
                 bike_id=1,
-                grade_power_intercept=Decimal("1.08"),  # Different from user default
-                grade_power_slope=Decimal("0.030"),
-                max_descent_speed_mps=Decimal("20.0"),  # Faster descent
-                descent_power_multiplier=Decimal("0.55"),
-                curvature_speed_coefficient=Decimal("-60.0"),
+                grade_power_intercept=1.08,  # Different from user default
+                grade_power_slope=0.030,
+                max_descent_speed_mps=20.0,  # Faster descent
+                descent_power_multiplier=0.55,
+                curvature_speed_coefficient=-60.0,
                 climb_sample_count=2000,
                 descent_sample_count=1500,
                 activity_count=10,
@@ -484,3 +480,92 @@ class TestGenerateRacePlanPersonalizedCoefficients:
 
         assert result.plan is not None
         assert result.plan.total_time_s > 0
+
+
+class TestGenerateRacePlanWind:
+    """Wind-aware plan generation via overrides (no network)."""
+
+    @pytest.fixture
+    def course_with_bearings(self, course_repo):
+        """Course whose segments all carry bearings (headwind + tailwind)."""
+        course = course_repo._courses[(1, 1)]
+        course.segments = [
+            {
+                "start_m": 0,
+                "end_m": 5000,
+                "distance_m": 5000,
+                "avg_grade_pct": 0.0,
+                "elevation_gain_m": 0,
+                "elevation_loss_m": 0,
+                "terrain_type": "flat",
+                "bearing_deg": 0,  # north
+            },
+            {
+                "start_m": 5000,
+                "end_m": 10000,
+                "distance_m": 5000,
+                "avg_grade_pct": 0.0,
+                "elevation_gain_m": 0,
+                "elevation_loss_m": 0,
+                "terrain_type": "flat",
+                "bearing_deg": 180,  # south
+            },
+        ]
+        return course_repo
+
+    @pytest.mark.asyncio
+    async def test_wind_override_generates_plan_without_crashing(
+        self, course_with_bearings, bike_repo, user_repo, plan_repo
+    ):
+        """Wind > 0.1 m/s over bearing-bearing segments must not crash.
+
+        Regression: GenerateRacePlan built EnvironmentParams(headwind_mps=...)
+        but EnvironmentParams' field is wind_speed_mps — TypeError for any
+        windy plan over segments with bearings.
+        """
+        use_case = GenerateRacePlan(course_with_bearings, bike_repo, user_repo, plan_repo)
+        request = GeneratePlanRequest(
+            course_id=1,
+            bike_id=1,
+            ftp_watts=280,
+            target_intensity=0.85,
+            wind_override_speed_mps=5.0,
+            wind_override_direction_deg=0,  # from north
+        )
+
+        result = await use_case.execute(user_id=1, request=request)
+
+        assert result.plan is not None
+        assert result.plan.total_time_s > 0
+        assert any("wind override" in w.lower() for w in result.warnings)
+
+    @pytest.mark.asyncio
+    async def test_wind_changes_plan_times(self, course_with_bearings, bike_repo, user_repo, plan_repo):
+        """Headwind on leg 1 and tailwind on leg 2 must affect segment times.
+
+        With per-segment headwind applied, the northbound leg (full headwind)
+        takes longer and the southbound leg (full tailwind) is faster than
+        the calm-condition plan. A uniform-env plan gives identical times.
+        """
+        calm = GenerateRacePlan(course_with_bearings, bike_repo, user_repo, plan_repo)
+        calm_request = GeneratePlanRequest(course_id=1, bike_id=1, ftp_watts=280)
+        calm_result = await calm.execute(user_id=1, request=calm_request)
+
+        windy = GenerateRacePlan(course_with_bearings, bike_repo, user_repo, plan_repo)
+        windy_request = GeneratePlanRequest(
+            course_id=1,
+            bike_id=1,
+            ftp_watts=280,
+            wind_override_speed_mps=5.0,
+            wind_override_direction_deg=0,  # from north
+        )
+        windy_result = await windy.execute(user_id=1, request=windy_request)
+
+        calm_targets = calm_result.plan.segment_targets
+        windy_targets = windy_result.plan.segment_targets
+        assert len(windy_targets) == len(calm_targets) == 2
+
+        # Leg 1 (north, full headwind): slower than calm
+        assert windy_targets[0]["time_s"] > calm_targets[0]["time_s"]
+        # Leg 2 (south, full tailwind): faster than calm
+        assert windy_targets[1]["time_s"] < calm_targets[1]["time_s"]

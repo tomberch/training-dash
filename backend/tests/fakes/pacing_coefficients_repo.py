@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from trainingdash.repositories.postgres.models import PacingCoefficients
+from trainingdash.domain.pacing_model import PacingCoefficients
 
 
 class FakePacingCoefficientsRepo:
@@ -14,10 +14,9 @@ class FakePacingCoefficientsRepo:
         self._next_id = 1
 
     def add(self, coefficients: PacingCoefficients) -> None:
-        """Add coefficients directly (for test setup)."""
-        if coefficients.id is None:
-            coefficients.id = self._next_id
-            self._next_id += 1
+        """Add coefficients directly (for test setup). user_id must be set."""
+        if coefficients.user_id is None:
+            raise ValueError("user_id is required")
         key = (coefficients.user_id, coefficients.bike_id)
         self._coefficients[key] = coefficients
 
@@ -54,9 +53,9 @@ class FakePacingCoefficientsRepo:
 
     async def save(self, coefficients: PacingCoefficients) -> PacingCoefficients:
         """Save coefficients."""
-        if coefficients.id is None:
-            coefficients.id = self._next_id
-            self._next_id += 1
+        if coefficients.user_id is None:
+            raise ValueError("user_id is required to save coefficients")
+        coefficients.last_calibrated_at = coefficients.last_calibrated_at
         coefficients.updated_at = datetime.now(UTC).replace(tzinfo=None)
         key = (coefficients.user_id, coefficients.bike_id)
         self._coefficients[key] = coefficients
@@ -65,51 +64,40 @@ class FakePacingCoefficientsRepo:
     async def upsert(
         self,
         user_id: int,
-        bike_id: int | None,
-        grade_power_intercept: float,
-        grade_power_slope: float,
-        max_descent_speed_mps: float,
-        descent_power_multiplier: float,
-        curvature_speed_coefficient: float,
-        climb_sample_count: int,
-        descent_sample_count: int,
-        activity_count: int,
+        coefficients: PacingCoefficients,
     ) -> PacingCoefficients:
-        """Insert or update coefficients."""
+        """Insert or update coefficients (same rounding as the Postgres repo)."""
+        bike_id = coefficients.bike_id
         key = (user_id, bike_id)
         now = datetime.now(UTC).replace(tzinfo=None)
 
         if key in self._coefficients:
             coef = self._coefficients[key]
-            coef.grade_power_intercept = Decimal(str(round(grade_power_intercept, 3)))
-            coef.grade_power_slope = Decimal(str(round(grade_power_slope, 4)))
-            coef.max_descent_speed_mps = Decimal(str(round(max_descent_speed_mps, 1)))
-            coef.descent_power_multiplier = Decimal(str(round(descent_power_multiplier, 2)))
-            coef.curvature_speed_coefficient = Decimal(str(round(curvature_speed_coefficient, 1)))
-            coef.climb_sample_count = climb_sample_count
-            coef.descent_sample_count = descent_sample_count
-            coef.activity_count = activity_count
+            coef.grade_power_intercept = Decimal(str(round(coefficients.grade_power_intercept, 3)))
+            coef.grade_power_slope = Decimal(str(round(coefficients.grade_power_slope, 4)))
+            coef.max_descent_speed_mps = Decimal(str(round(coefficients.max_descent_speed_mps, 1)))
+            coef.descent_power_multiplier = Decimal(str(round(coefficients.descent_power_multiplier, 2)))
+            coef.curvature_speed_coefficient = Decimal(str(round(coefficients.curvature_speed_coefficient, 1)))
+            coef.climb_sample_count = coefficients.climb_sample_count
+            coef.descent_sample_count = coefficients.descent_sample_count
+            coef.activity_count = coefficients.activity_count
             coef.last_calibrated_at = now
             coef.updated_at = now
         else:
             coef = PacingCoefficients(
-                id=self._next_id,
-                user_id=user_id,
+                grade_power_intercept=Decimal(str(round(coefficients.grade_power_intercept, 3))),
+                grade_power_slope=Decimal(str(round(coefficients.grade_power_slope, 4))),
+                max_descent_speed_mps=Decimal(str(round(coefficients.max_descent_speed_mps, 1))),
+                descent_power_multiplier=Decimal(str(round(coefficients.descent_power_multiplier, 2))),
+                curvature_speed_coefficient=Decimal(str(round(coefficients.curvature_speed_coefficient, 1))),
+                climb_sample_count=coefficients.climb_sample_count,
+                descent_sample_count=coefficients.descent_sample_count,
+                activity_count=coefficients.activity_count,
                 bike_id=bike_id,
-                grade_power_intercept=Decimal(str(round(grade_power_intercept, 3))),
-                grade_power_slope=Decimal(str(round(grade_power_slope, 4))),
-                max_descent_speed_mps=Decimal(str(round(max_descent_speed_mps, 1))),
-                descent_power_multiplier=Decimal(str(round(descent_power_multiplier, 2))),
-                curvature_speed_coefficient=Decimal(str(round(curvature_speed_coefficient, 1))),
-                climb_sample_count=climb_sample_count,
-                descent_sample_count=descent_sample_count,
-                activity_count=activity_count,
-                last_calibrated_at=now,
-                created_at=now,
-                updated_at=now,
             )
-            self._next_id += 1
-            self._coefficients[key] = coef
+            coef.last_calibrated_at = now
+            coef.updated_at = now
+            self._coefficients[(user_id, bike_id)] = coef
 
         return coef
 

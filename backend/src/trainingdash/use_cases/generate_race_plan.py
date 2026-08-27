@@ -15,8 +15,8 @@ from trainingdash.domain.pacing import (
     PacingCoefficients,
     RideTypeParams,
     RideTypePreset,
-    resolve_ride_type_params,
     generate_terrain_adapted_pacing,
+    resolve_ride_type_params,
 )
 from trainingdash.domain.pacing_optimizer import optimize_pacing, optimize_pacing_for_time
 from trainingdash.domain.physics import EnvironmentParams, RiderParams, calculate_headwind
@@ -55,7 +55,7 @@ class GeneratePlanRequest:
     - If target_date is set and within 16 days, fetch forecast
     - If target_date is beyond 16 days or not set, use calm conditions
     - Wind overrides can be set for specific scenarios
-    
+
     Ride type:
     - Controls descent aggressiveness and expected stop time
     - Presets: race, gran_fondo (default), training, touring
@@ -298,7 +298,7 @@ class GenerateRacePlan:
                 segment_env_params.append(
                     EnvironmentParams(
                         air_density=forecast_conditions.air_density,
-                        headwind_mps=headwind,
+                        wind_speed_mps=headwind,
                     )
                 )
 
@@ -315,15 +315,7 @@ class GenerateRacePlan:
         # Load personalized pacing coefficients (if available)
         pacing_coefficients: PacingCoefficients | None = None
         if self._pacing_coefficients_repo is not None:
-            db_coefficients = await self._pacing_coefficients_repo.get_for_user_bike(user_id, bike_id=bike_id)
-            if db_coefficients is not None:
-                pacing_coefficients = PacingCoefficients(
-                    grade_power_intercept=float(db_coefficients.grade_power_intercept),
-                    grade_power_slope=float(db_coefficients.grade_power_slope),
-                    max_descent_speed_mps=float(db_coefficients.max_descent_speed_mps),
-                    descent_power_multiplier=float(db_coefficients.descent_power_multiplier),
-                    curvature_speed_coefficient=float(db_coefficients.curvature_speed_coefficient),
-                )
+            pacing_coefficients = await self._pacing_coefficients_repo.get_for_user_bike(user_id, bike_id=bike_id)
 
         # 6. Generate pacing plan
         # Three modes:
@@ -336,7 +328,7 @@ class GenerateRacePlan:
             # If stop_pct > 0, the target_time includes stops.
             # Physics calculation should target: net_riding_time = target_time / stop_factor
             net_target_time_s = request.target_time_s / ride_type_params.stop_factor
-            
+
             optimized = optimize_pacing_for_time(
                 segments=segments,
                 rider_ftp=ftp,
@@ -419,8 +411,11 @@ class GenerateRacePlan:
             optimization_method = "optimized"
 
             # Calculate comparison (times include stop factor)
-            heuristic_riding_time = riding_time_s / (1 - optimized.improvement_vs_heuristic_pct / 100) \
-                if optimized.improvement_vs_heuristic_pct < 100 else riding_time_s
+            heuristic_riding_time = (
+                riding_time_s / (1 - optimized.improvement_vs_heuristic_pct / 100)
+                if optimized.improvement_vs_heuristic_pct < 100
+                else riding_time_s
+            )
             comparison = {
                 "heuristic_time_s": heuristic_riding_time * ride_type_params.stop_factor,
                 "optimized_time_s": total_time_s,
@@ -433,7 +428,8 @@ class GenerateRacePlan:
             # Mode C: Terrain-adapted pacing with continuous grade-based power targets
             # Uses personalized coefficients if available, otherwise global defaults
             # When elevation_profile is available, uses fine-grained (~25m) pacing
-            # for accurate speed predictions
+            # for accurate speed predictions — with per-point wind decomposition
+            # and altitude-scaled air density (ADR 0004 Phase B)
             heuristic = generate_terrain_adapted_pacing(
                 segments=segments,
                 rider_ftp=ftp,
@@ -445,6 +441,9 @@ class GenerateRacePlan:
                 coefficients=pacing_coefficients,
                 elevation_profile=course.elevation_profile,
                 ride_type=ride_type_params.ride_type_for_curvature,
+                descent_aggressiveness=ride_type_params.descent_aggressiveness,
+                wind_speed_mps=forecast_conditions.wind_speed_mps,
+                wind_direction_deg=forecast_conditions.wind_direction_deg,
             )
 
             # Apply stop factor to get total time including stops

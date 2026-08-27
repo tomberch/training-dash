@@ -26,16 +26,33 @@ Architecture:
 
 import math
 from dataclasses import dataclass
-from typing import Sequence
 
 import numpy as np
 
+from trainingdash.domain.pacing_model import (
+    DEFAULT_RIDER_CDA,
+    DEFAULT_RIDER_CRR,
+    DEFAULT_RIDER_MASS_KG,
+    PacingCoefficients,
+    calculate_curvature_menger,
+    calculate_normalized_power,
+    cornering_speed_limit,
+    effective_a_lat,
+    get_grade_power_multiplier,
+)
 from trainingdash.domain.physics import (
     EnvironmentParams,
     RiderParams,
+    air_density_from_altitude,
+    calculate_bearing,
+    calculate_headwind,
     speed_from_power,
 )
 
+# Braking deceleration used by the look-ahead envelope (B2).
+# ~4 m/s² is a firm but realistic road-braking deceleration; riders brake
+# harder in emergencies but this models sustainable braking into corners.
+BRAKE_DECEL_MPS2 = 4.0
 
 # =============================================================================
 # Data Structures
@@ -51,7 +68,9 @@ class FineGrainedPoint:
     grade_pct: float
     lat: float | None = None
     lon: float | None = None
-    curvature_deg_per_100m: float = 0.0  # Turn angle per 100m (0 = straight)
+    # Menger curvature in 1/m (0 = straight, None = no GPS data).
+    # Same definition calibration fits — single definition per ADR 0004.
+    curvature_1_m: float | None = None
 
 
 @dataclass
@@ -79,143 +98,62 @@ class FineGrainedPlan:
 
 
 # =============================================================================
-# Curvature Calculation
+# Curvature Calculation (shared Menger definition from pacing_model)
 # =============================================================================
-
-
-def _bearing(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Calculate bearing between two points in radians."""
-    lat1, lon1, lat2, lon2 = map(math.radians, [lat1, lon1, lat2, lon2])
-    dlon = lon2 - lon1
-    x = math.sin(dlon) * math.cos(lat2)
-    y = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(dlon)
-    return math.atan2(x, y)
-
-
-def _angle_diff(a1: float, a2: float) -> float:
-    """Smallest angle difference in radians (unsigned)."""
-    diff = a2 - a1
-    while diff > math.pi:
-        diff -= 2 * math.pi
-    while diff < -math.pi:
-        diff += 2 * math.pi
-    return abs(diff)
 
 
 def calculate_curvature(
     points: list[FineGrainedPoint],
-) -> list[float]:
+) -> list[float | None]:
     """
-    Calculate curvature at each point from GPS coordinates.
-    
-    Curvature is measured as degrees of turn per 100m of distance.
-    Higher values indicate sharper turns (hairpins, switchbacks).
-    
+    Calculate Menger curvature (1/m) at each point from GPS coordinates.
+
+    Uses the shared definition in pacing_model.calculate_curvature_menger —
+    the same function calibration's descent extractor uses (ADR 0004).
+
     Args:
         points: Fine-grained points with lat/lon coordinates
-        
+
     Returns:
-        List of curvature values (degrees per 100m) for each point
+        List of curvature values (1/m) for each point; None where GPS is
+        missing (cornering limit then cannot apply — grade-only physics).
     """
     n = len(points)
-    curvatures = [0.0] * n
-    
+    curvatures: list[float | None] = [0.0] * n
+
     if n < 3:
         return curvatures
-    
+
     # Check if we have GPS data
     has_gps = all(p.lat is not None and p.lon is not None for p in points[:3])
     if not has_gps:
-        return curvatures
-    
+        return [None] * n
+
     for i in range(1, n - 1):
         prev_pt = points[i - 1]
         curr_pt = points[i]
         next_pt = points[i + 1]
-        
+
         # Skip if any point missing GPS
         if any(p.lat is None or p.lon is None for p in [prev_pt, curr_pt, next_pt]):
+            curvatures[i] = None
             continue
-        
-        # Calculate bearings
-        bearing_in = _bearing(prev_pt.lat, prev_pt.lon, curr_pt.lat, curr_pt.lon)
-        bearing_out = _bearing(curr_pt.lat, curr_pt.lon, next_pt.lat, next_pt.lon)
-        
-        # Calculate turn angle
-        turn_angle_rad = _angle_diff(bearing_in, bearing_out)
-        turn_angle_deg = math.degrees(turn_angle_rad)
-        
-        # Calculate distance for this segment
-        segment_dist = next_pt.distance_m - prev_pt.distance_m
-        
-        # Curvature = degrees per 100m
-        if segment_dist > 1:  # Avoid division by zero
-            curvature = turn_angle_deg * 100 / segment_dist
-        else:
-            curvature = 0.0
-        
-        curvatures[i] = curvature
-    
+
+        curvatures[i] = calculate_curvature_menger(
+            prev_pt.lat,
+            prev_pt.lon,
+            curr_pt.lat,
+            curr_pt.lon,
+            next_pt.lat,
+            next_pt.lon,
+        )
+
     # First and last points inherit from neighbors
     if n >= 2:
         curvatures[0] = curvatures[1]
         curvatures[-1] = curvatures[-2]
-    
+
     return curvatures
-
-
-def get_curvature_speed_factor(
-    curvature_deg_per_100m: float,
-    grade_pct: float,
-    ride_type: str = "training",
-) -> float:
-    """
-    Get speed reduction factor based on curvature.
-    
-    Only applies to descents (grade < 0) where braking for curves matters.
-    On climbs, curvature has negligible effect on speed.
-    
-    Based on empirical data:
-    - Straight (<5°/100m): 1.0 (no reduction)
-    - Gentle (5-15°/100m): 0.95
-    - Curvy (15-30°/100m): 0.90
-    - Hairpin (>30°/100m): 0.80
-    
-    For races, factors are less aggressive (assume faster descending).
-    
-    Args:
-        curvature_deg_per_100m: Turn angle in degrees per 100m
-        grade_pct: Gradient percentage (negative = descent)
-        ride_type: "training" or "race"
-        
-    Returns:
-        Speed multiplier (0.0 to 1.0)
-    """
-    # Curvature only affects descents
-    if grade_pct >= 0:
-        return 1.0
-    
-    # Curvature thresholds and factors
-    if ride_type == "race":
-        # More aggressive descending in races
-        if curvature_deg_per_100m < 5:
-            return 1.0
-        elif curvature_deg_per_100m < 15:
-            return 0.98
-        elif curvature_deg_per_100m < 30:
-            return 0.95
-        else:
-            return 0.90
-    else:
-        # Training ride - more cautious
-        if curvature_deg_per_100m < 5:
-            return 1.0
-        elif curvature_deg_per_100m < 15:
-            return 0.95
-        elif curvature_deg_per_100m < 30:
-            return 0.90
-        else:
-            return 0.80
 
 
 # =============================================================================
@@ -249,7 +187,7 @@ def resample_elevation_profile(
     # Extract arrays from profile
     distances = np.array([p["distance_m"] for p in elevation_profile])
     elevations = np.array([p["elevation_m"] for p in elevation_profile])
-    
+
     # Check for lat/lon data
     has_gps = "lat" in elevation_profile[0] and elevation_profile[0]["lat"] is not None
     if has_gps:
@@ -269,7 +207,7 @@ def resample_elevation_profile(
 
     # Interpolate elevations at new distances
     new_elevations = np.interp(new_distances, distances, elevations)
-    
+
     # Interpolate lat/lon if available
     if has_gps:
         new_lats = np.interp(new_distances, distances, lats)
@@ -314,7 +252,7 @@ def resample_elevation_profile(
     # Calculate curvature for each point
     curvatures = calculate_curvature(points)
     for i, curv in enumerate(curvatures):
-        points[i].curvature_deg_per_100m = curv
+        points[i].curvature_1_m = curv
 
     return points
 
@@ -330,13 +268,12 @@ def calculate_power_targets(
     grade_power_intercept: float = 1.10,
     grade_power_slope: float = 0.035,
     power_cap_w: float | None = None,
-    min_power_mult: float = 0.50,
-    max_power_mult: float = 1.50,
 ) -> list[float]:
     """
     Calculate terrain-adapted power targets at each point.
 
-    Uses the continuous grade-power formula:
+    Uses the continuous grade-power formula from pacing_model (single home
+    of the formula per ADR 0004):
         power_mult = intercept + slope × grade%
 
     This captures natural riding behavior where riders push harder
@@ -348,25 +285,24 @@ def calculate_power_targets(
         grade_power_intercept: Base multiplier at 0% grade (default 1.10)
         grade_power_slope: Additional multiplier per 1% grade (default 0.035)
         power_cap_w: Maximum power (e.g., FTP × 1.05). None = no cap.
-        min_power_mult: Minimum multiplier for descents (default 0.50)
-        max_power_mult: Maximum multiplier for steep climbs (default 1.50)
 
     Returns:
         List of power targets in watts, one per point
     """
+    # Shared coefficients object so the formula (including clamps) has one home
+    coefficients = PacingCoefficients(
+        grade_power_intercept=grade_power_intercept,
+        grade_power_slope=grade_power_slope,
+    )
+
     powers: list[float] = []
 
     for point in points:
-        # Calculate power multiplier based on grade
-        multiplier = grade_power_intercept + grade_power_slope * point.grade_pct
-
-        # Clamp to reasonable range
-        multiplier = max(min_power_mult, min(max_power_mult, multiplier))
-
-        # Calculate target power
-        power = base_power_w * multiplier
+        # Calculate power multiplier based on grade (shared formula)
+        multiplier = get_grade_power_multiplier(point.grade_pct, coefficients)
 
         # Apply power cap if specified
+        power = base_power_w * multiplier
         if power_cap_w is not None:
             power = min(power, power_cap_w)
 
@@ -380,6 +316,51 @@ def calculate_power_targets(
 # =============================================================================
 
 
+# =============================================================================
+# Per-point Environment (wind decomposition + altitude density)
+# =============================================================================
+
+
+def _point_bearings(points: list[FineGrainedPoint]) -> list[float | None]:
+    """Travel bearing (degrees) at each point, from GPS track.
+
+    Bearing at point i is the direction from point i-1 to point i (the
+    direction of travel arriving there). None where GPS is missing.
+    """
+    bearings: list[float | None] = [None] * len(points)
+    for i in range(1, len(points)):
+        prev_pt, curr_pt = points[i - 1], points[i]
+        if prev_pt.lat is None or prev_pt.lon is None or curr_pt.lat is None or curr_pt.lon is None:
+            continue
+        bearings[i] = calculate_bearing(prev_pt.lat, prev_pt.lon, curr_pt.lat, curr_pt.lon)
+    # First point inherits the second's bearing (same direction of travel)
+    if len(points) >= 2 and bearings[1] is not None:
+        bearings[0] = bearings[1]
+    return bearings
+
+
+def _point_env(
+    point: FineGrainedPoint,
+    base_env: EnvironmentParams,
+    wind_speed_mps: float | None,
+    wind_direction_deg: float | None,
+    rho_sea_level: float,
+    bearing_deg: float | None,
+) -> EnvironmentParams:
+    """Environment for one fine-grained point: altitude density + headwind."""
+    # Air density: scale the forecast/sea-level density by the ISA ratio at
+    # this point's elevation (only when the point knows its elevation).
+    air_density = base_env.air_density
+    air_density = base_env.air_density * (air_density_from_altitude(point.elevation_m) / rho_sea_level)
+
+    # Headwind: decompose meteorological wind onto the travel bearing
+    headwind = base_env.wind_speed_mps
+    if wind_speed_mps and bearing_deg is not None and wind_direction_deg is not None:
+        headwind = calculate_headwind(wind_speed_mps, wind_direction_deg, bearing_deg)
+
+    return EnvironmentParams(air_density=air_density, wind_speed_mps=headwind)
+
+
 def calculate_speeds_and_times(
     points: list[FineGrainedPoint],
     powers: list[float],
@@ -387,15 +368,26 @@ def calculate_speeds_and_times(
     env_params: EnvironmentParams | None = None,
     max_descent_speed_mps: float = 18.0,
     ride_type: str = "training",
+    descent_aggressiveness: int = 70,
+    wind_speed_mps: float | None = None,
+    wind_direction_deg: float | None = None,
+    coefficients: "PacingCoefficients | None" = None,
 ) -> tuple[list[float], list[float]]:
     """
     Calculate speed and segment time at each point using physics model.
 
     Runs the Newton-Raphson solver at each point to find the speed
     that corresponds to the given power output on the given grade.
-    
-    Applies curvature-based speed reduction on descents to account
-    for braking through corners.
+
+    Applies the cornering-speed limit v = sqrt(a_lat / kappa) on descents
+    (B1, ADR 0004): curvature is Menger 1/m, a_lat comes from
+    descent_aggressiveness (or calibration, once B3 fits it). Points
+    without curvature data (no GPS) get pure grade-based physics.
+
+    Per-point conditions (B-wind/B-density, ADR 0004): air density follows
+    the point's elevation (ISA ratio on the provided env density); wind
+    decomposes per point from GPS bearings. Points without GPS use the
+    uniform base env.
 
     Args:
         points: Fine-grained elevation points (with curvature)
@@ -403,7 +395,15 @@ def calculate_speeds_and_times(
         rider_params: Rider and bike physical parameters
         env_params: Environmental conditions (air density, wind)
         max_descent_speed_mps: Cap descent speeds to this value
-        ride_type: "training" or "race" - affects curvature speed factors
+        ride_type: "training" or "race" (accepted for interface compat; the
+            cornering limit is driven by descent_aggressiveness)
+        descent_aggressiveness: 0-100; fallback for a_lat when uncalibrated
+        wind_speed_mps: Meteorological wind speed (direction it comes FROM
+            decomposed per point). None/0 = no wind.
+        wind_direction_deg: Meteorological wind direction (FROM, degrees).
+        coefficients: Personalized coefficients; a fitted a_lat
+            (curvature_speed_coefficient with activity_count > 0) overrides
+            the descent_aggressiveness mapping (B3).
 
     Returns:
         Tuple of (speeds, times) where:
@@ -413,38 +413,64 @@ def calculate_speeds_and_times(
     if env_params is None:
         env_params = EnvironmentParams()
 
-    speeds: list[float] = []
-    times: list[float] = []
+    a_lat = effective_a_lat(coefficients, descent_aggressiveness)
 
+    # Per-point environment: air density scales with point elevation (ISA
+    # ratio against sea level); headwind decomposes from the point's travel
+    # bearing. Points without GPS use the uniform env as-is.
+    rho_sea_level = air_density_from_altitude(0.0)
+    bearings = _point_bearings(points)
+
+    # --- Forward pass: physics speed, capped by cornering limit (B1) --------
+    speeds: list[float] = []
     for i, (point, power) in enumerate(zip(points, powers)):
-        # Calculate speed from power using physics model
+        point_env = _point_env(
+            point,
+            base_env=env_params,
+            wind_speed_mps=wind_speed_mps,
+            wind_direction_deg=wind_direction_deg,
+            rho_sea_level=rho_sea_level,
+            bearing_deg=bearings[i],
+        )
+
         speed = speed_from_power(
             power_w=power,
             grade_pct=point.grade_pct,
             rider=rider_params,
-            env=env_params,
+            env=point_env,
             max_descent_speed_mps=max_descent_speed_mps,
         )
 
-        # Apply curvature-based speed reduction on descents
-        curvature_factor = get_curvature_speed_factor(
-            point.curvature_deg_per_100m,
-            point.grade_pct,
-            ride_type,
-        )
-        speed = speed * curvature_factor
+        # Cornering-speed limit on curved points (any grade: corners bind
+        # on flat approaches too, though they bind hardest on descents)
+        if point.curvature_1_m:
+            limit = cornering_speed_limit(point.curvature_1_m, a_lat)
+            speed = min(speed, limit)
 
-        # Ensure minimum speed (don't get stuck)
-        speed = max(0.5, speed)
-        speeds.append(speed)
+        speeds.append(max(0.5, speed))
 
-        # Calculate time to next point
+    # --- Backward pass: braking envelope (B2, ADR 0004) --------------------
+    # You cannot arrive at point i faster than the NEXT point's speed
+    # permits given one spacing of braking: v[i]² ≤ v[i+1]² + 2·a_brake·d.
+    # The loop is now stateful — speed depends on what lies ahead — so
+    # braking starts *before* corners instead of at them.
+    a_brake = BRAKE_DECEL_MPS2
+    for i in range(len(points) - 2, -1, -1):
+        spacing = points[i + 1].distance_m - points[i].distance_m
+        if spacing <= 0:
+            continue
+        v_allowed = math.sqrt(speeds[i + 1] ** 2 + 2 * a_brake * spacing)
+        if speeds[i] > v_allowed:
+            speeds[i] = v_allowed
+
+    # --- Times from final speeds -------------------------------------------
+    times: list[float] = []
+    for i in range(len(points)):
         if i < len(points) - 1:
-            segment_distance = points[i + 1].distance_m - point.distance_m
-            segment_time = segment_distance / speed if speed > 0 else 0
+            segment_distance = points[i + 1].distance_m - points[i].distance_m
+            segment_time = segment_distance / speeds[i] if speeds[i] > 0 else 0
         else:
             segment_time = 0.0
-
         times.append(segment_time)
 
     return speeds, times
@@ -495,13 +521,8 @@ def calculate_np_from_fine_grained(
 
     samples = np.array(power_samples)
 
-    # 30-second rolling average
-    window = 30
-    cumsum = np.cumsum(np.insert(samples, 0, 0))
-    rolling_avg = (cumsum[window:] - cumsum[:-window]) / window
-
-    # 4th power mean, then 4th root
-    np_power = float((np.mean(rolling_avg**4)) ** 0.25)
+    # NP via the shared core (30s rolling, 4th-power mean)
+    np_power = calculate_normalized_power(samples, sample_rate_hz=1.0)
 
     return np_power, samples
 
@@ -523,16 +544,20 @@ def generate_fine_grained_plan(
     power_cap_ftp_pct: float = 1.05,
     target_spacing_m: float = 25.0,
     ride_type: str = "training",
+    descent_aggressiveness: int = 70,
+    wind_speed_mps: float | None = None,
+    wind_direction_deg: float | None = None,
+    coefficients: "PacingCoefficients | None" = None,
 ) -> FineGrainedPlan:
     """
     Generate a fine-grained pacing plan with accurate speed predictions.
 
     This is the main entry point for fine-grained pacing. It:
     1. Resamples the elevation profile to consistent ~25m intervals
-    2. Calculates curvature at each point from GPS coordinates
+    2. Calculates Menger curvature (1/m) at each point from GPS coordinates
     3. Calculates terrain-adapted power targets at each point
     4. Runs the physics model to get speed at each point
-    5. Applies curvature-based speed reduction on descents
+    5. Applies the cornering-speed limit v = sqrt(a_lat / kappa) (B1)
     6. Calculates NP from the actual variable power profile
 
     Args:
@@ -547,16 +572,20 @@ def generate_fine_grained_plan(
         max_descent_speed_mps: Cap descent speeds
         power_cap_ftp_pct: Cap power at this fraction of FTP
         target_spacing_m: Spacing between fine-grained points
-        ride_type: "training" or "race" - affects curvature speed factors
-                   Training = more cautious descending (learned from your data)
-                   Race = more aggressive descending
+        ride_type: "training" or "race" (interface compat; cornering is driven
+                   by descent_aggressiveness)
+        descent_aggressiveness: 0-100; maps to lateral acceleration a_lat for
+                   the cornering limit (B1). Higher = faster through corners.
+        wind_speed_mps: Meteorological wind speed (m/s); decomposed per point
+                   from GPS bearings. None/0 = no wind.
+        wind_direction_deg: Meteorological wind direction (FROM, degrees).
 
     Returns:
         FineGrainedPlan with per-point targets and aggregated metrics
     """
     # Default parameters
     if rider_params is None:
-        rider_params = RiderParams(mass_kg=83, cda=0.32, crr=0.004)
+        rider_params = RiderParams(mass_kg=DEFAULT_RIDER_MASS_KG, cda=DEFAULT_RIDER_CDA, crr=DEFAULT_RIDER_CRR)
     if env_params is None:
         env_params = EnvironmentParams()
 
@@ -585,7 +614,7 @@ def generate_fine_grained_plan(
         power_cap_w=power_cap,
     )
 
-    # Step 3: Calculate speeds and times (with curvature factor)
+    # Step 3: Calculate speeds and times (with cornering-speed limit)
     speeds, times = calculate_speeds_and_times(
         points=points,
         powers=powers,
@@ -593,6 +622,9 @@ def generate_fine_grained_plan(
         env_params=env_params,
         max_descent_speed_mps=max_descent_speed_mps,
         ride_type=ride_type,
+        descent_aggressiveness=descent_aggressiveness,
+        wind_speed_mps=wind_speed_mps,
+        wind_direction_deg=wind_direction_deg,
     )
 
     # Step 4: Build fine-grained targets
@@ -627,117 +659,3 @@ def generate_fine_grained_plan(
         normalized_power_w=np_power,
         power_samples=power_samples,
     )
-
-
-# =============================================================================
-# Aggregation to Display Segments
-# =============================================================================
-
-
-def aggregate_to_display_segments(
-    fine_plan: FineGrainedPlan,
-    target_segment_count: int = 50,
-    min_segment_length_m: float = 200.0,
-) -> list[dict]:
-    """
-    Aggregate fine-grained points into display segments for UI.
-
-    The fine-grained plan may have 1000+ points, which is too many
-    for a race plan display. This function combines them into
-    ~50-100 display segments with weighted-average metrics.
-
-    Args:
-        fine_plan: The fine-grained pacing plan
-        target_segment_count: Target number of display segments
-        min_segment_length_m: Minimum segment length in meters
-
-    Returns:
-        List of display segment dicts with:
-        - start_distance_m, end_distance_m, distance_m
-        - avg_grade_pct, avg_power_w, avg_speed_mps
-        - time_s, terrain_type
-    """
-    if not fine_plan.points:
-        return []
-
-    total_distance = fine_plan.total_distance_m
-    target_length = max(min_segment_length_m, total_distance / target_segment_count)
-
-    segments: list[dict] = []
-    current_start_idx = 0
-    current_start_dist = 0.0
-
-    for i, point in enumerate(fine_plan.points):
-        segment_length = point.distance_m - current_start_dist
-
-        # Check if we should close this segment
-        is_last = i == len(fine_plan.points) - 1
-        should_close = segment_length >= target_length or is_last
-
-        if should_close and i > current_start_idx:
-            # Aggregate points in this segment
-            segment_points = fine_plan.points[current_start_idx : i + 1]
-
-            # Time-weighted averages
-            total_time = sum(p.time_s for p in segment_points)
-            if total_time > 0:
-                avg_power = sum(p.power_w * p.time_s for p in segment_points) / total_time
-                avg_speed = sum(p.speed_mps * p.time_s for p in segment_points) / total_time
-            else:
-                avg_power = sum(p.power_w for p in segment_points) / len(segment_points)
-                avg_speed = sum(p.speed_mps for p in segment_points) / len(segment_points)
-
-            # Distance-weighted grade
-            distances = [
-                segment_points[j + 1].distance_m - segment_points[j].distance_m
-                for j in range(len(segment_points) - 1)
-            ]
-            if distances:
-                total_dist = sum(distances)
-                avg_grade = (
-                    sum(segment_points[j].grade_pct * distances[j] for j in range(len(distances))) / total_dist
-                    if total_dist > 0
-                    else 0
-                )
-            else:
-                avg_grade = segment_points[0].grade_pct
-
-            # Classify terrain
-            terrain_type = _classify_terrain_from_grade(avg_grade)
-
-            segments.append(
-                {
-                    "segment_idx": len(segments),
-                    "start_distance_m": current_start_dist,
-                    "end_distance_m": point.distance_m,
-                    "distance_m": point.distance_m - current_start_dist,
-                    "avg_grade_pct": round(avg_grade, 2),
-                    "avg_power_w": round(avg_power, 0),
-                    "avg_speed_mps": round(avg_speed, 2),
-                    "avg_speed_kmh": round(avg_speed * 3.6, 1),
-                    "time_s": round(total_time, 1),
-                    "terrain_type": terrain_type,
-                }
-            )
-
-            # Start new segment
-            current_start_idx = i
-            current_start_dist = point.distance_m
-
-    return segments
-
-
-def _classify_terrain_from_grade(grade_pct: float) -> str:
-    """Classify terrain type based on average grade."""
-    if grade_pct < -6:
-        return "steep_descent"
-    elif grade_pct < -2:
-        return "descent"
-    elif grade_pct < 2:
-        return "flat"
-    elif grade_pct < 4:
-        return "false_flat"
-    elif grade_pct < 8:
-        return "climb"
-    else:
-        return "steep_climb"

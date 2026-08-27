@@ -79,6 +79,26 @@ Duplicate detection uses start/end point proximity (25m) + path overlap (95%) + 
 
 A single traversal of a Segment within an Activity. Stores elapsed time, power, HR, speed metrics, and a per-user PR flag. An activity can have multiple efforts if it crosses multiple segments, or crosses the same segment multiple times.
 
+## Pacing Plan
+
+A prediction of how a rider should distribute power across a Course to finish in a given time or intensity. Contains per-segment power targets, estimated speeds and times, total time, average and Normalized Power, and a W'bal prediction. Generated from the Course, the rider's thresholds and bike, weather at the target date, and Pacing Coefficients.
+
+## Pacing Coefficients
+
+The learned parameters of the pacing model, calibrated per user and bike from that rider's real activities. They control how power targets adapt to grade and how fast the rider is predicted to corner and descend. Coefficients are recalibrated automatically after activities are ingested.
+
+## Curvature
+
+How sharply the road bends at a point, measured as the reciprocal of the corner radius. Used to predict Cornering Speed; computed identically wherever it is used (runtime planning and calibration).
+
+## Cornering Speed
+
+The maximum speed a rider can hold through a corner of a given Curvature without exceeding their lateral acceleration comfort, which scales with descent aggressiveness. A plan never predicts speeds above this limit.
+
+## Braking Envelope
+
+The constraint that a plan's predicted speed must be reachable given the distance available to brake before a corner. Ensures predicted speeds drop *before* corners rather than at them.
+
 ## Segment Suggestion
 
 A pending proposal to create a segment, tied to a specific user. Created when the system detects a climb/sprint on a user's ride. Tracks repetition count and expires after 90 days of inactivity. Multiple users can have suggestions for the same underlying segment; first to approve owns it.

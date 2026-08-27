@@ -4,18 +4,34 @@ Pacing coefficient calibration from real ride data.
 Extracts grade-power relationships from activities to personalize pacing models.
 Uses weighted linear regression to fit climb coefficients and statistical analysis
 for descent parameters.
+
+The fitted coefficients flow into the shared PacingCoefficients
+(pacing_model.py) via the calibration use case; this module owns only
+the fitting math over primitive samples.
 """
 
 from dataclasses import dataclass
 
 import numpy as np
 
-# Global defaults (fallback when no personalized coefficients exist)
-DEFAULT_GRADE_POWER_INTERCEPT = 1.10
-DEFAULT_GRADE_POWER_SLOPE = 0.035
-DEFAULT_MAX_DESCENT_SPEED_MPS = 18.0
-DEFAULT_DESCENT_POWER_MULTIPLIER = 0.50
-DEFAULT_CURVATURE_SPEED_COEFFICIENT = -68.0
+from trainingdash.domain.pacing_model import (
+    GRADE_POWER_INTERCEPT as DEFAULT_GRADE_POWER_INTERCEPT,
+)
+from trainingdash.domain.pacing_model import (
+    GRADE_POWER_SLOPE as DEFAULT_GRADE_POWER_SLOPE,
+)
+from trainingdash.domain.pacing_model import (
+    PacingCoefficients as ModelCoefficients,
+)
+from trainingdash.domain.pacing_model import (
+    calculate_curvature_menger as _calculate_curvature,
+)
+
+# Fallback defaults for descent parameters (single source: pacing_model defaults)
+_DEFAULT_COEFFS = ModelCoefficients()
+DEFAULT_MAX_DESCENT_SPEED_MPS = _DEFAULT_COEFFS.max_descent_speed_mps
+DEFAULT_DESCENT_POWER_MULTIPLIER = _DEFAULT_COEFFS.descent_power_multiplier
+DEFAULT_CURVATURE_SPEED_COEFFICIENT = _DEFAULT_COEFFS.curvature_speed_coefficient
 
 # Minimum samples required for regression
 MIN_CLIMB_SAMPLES = 500  # ~8 minutes of climb data
@@ -64,52 +80,6 @@ class CalibrationResult:
     # Quality metrics
     climb_r_squared: float
     descent_confidence: float
-
-
-@dataclass
-class PacingCoefficients:
-    """Current pacing coefficients (from DB or defaults)."""
-
-    grade_power_intercept: float
-    grade_power_slope: float
-    max_descent_speed_mps: float
-    descent_power_multiplier: float
-    curvature_speed_coefficient: float
-    climb_sample_count: int
-    descent_sample_count: int
-    activity_count: int
-
-    @classmethod
-    def defaults(cls) -> "PacingCoefficients":
-        """Return global defaults."""
-        return cls(
-            grade_power_intercept=DEFAULT_GRADE_POWER_INTERCEPT,
-            grade_power_slope=DEFAULT_GRADE_POWER_SLOPE,
-            max_descent_speed_mps=DEFAULT_MAX_DESCENT_SPEED_MPS,
-            descent_power_multiplier=DEFAULT_DESCENT_POWER_MULTIPLIER,
-            curvature_speed_coefficient=DEFAULT_CURVATURE_SPEED_COEFFICIENT,
-            climb_sample_count=0,
-            descent_sample_count=0,
-            activity_count=0,
-        )
-
-    @classmethod
-    def from_db_model(cls, model: "DBPacingCoefficients") -> "PacingCoefficients":
-        """Convert from SQLAlchemy model."""
-        return cls(
-            grade_power_intercept=float(model.grade_power_intercept),
-            grade_power_slope=float(model.grade_power_slope),
-            max_descent_speed_mps=float(model.max_descent_speed_mps),
-            descent_power_multiplier=float(model.descent_power_multiplier),
-            curvature_speed_coefficient=float(model.curvature_speed_coefficient),
-            climb_sample_count=model.climb_sample_count,
-            descent_sample_count=model.descent_sample_count,
-            activity_count=model.activity_count,
-        )
-
-
-# Type alias for DB model (avoid circular import)
-DBPacingCoefficients = object
 
 
 def extract_climb_samples(
@@ -197,6 +167,12 @@ def extract_descent_samples(
     """
     Extract descent samples from activity records.
 
+    Curvature uses distance-anchored triples (~25m spacing, the same
+    baseline as the runtime resampler). Consecutive records (~5m apart)
+    are too close: ±3m GPS jitter turns straight roads into apparent
+    R<100m corners, saturating kappa and poisoning the a_lat fit
+    (discovered during B3 recalibration, ADR 0004).
+
     Args:
         records: Activity records with power, speed, altitude, position
         avg_power: Average power for the activity
@@ -226,12 +202,37 @@ def extract_descent_samples(
     # Sort by timestamp
     valid = sorted(valid, key=lambda r: r.timestamp)
 
-    for i in range(2, len(valid)):  # Need 3 points for curvature
-        prev2 = valid[i - 2]
-        prev = valid[i - 1]
+    # Distance-anchored curvature triple: keep TWO walking indices so the
+    # three curvature points are evenly spaced (~50m / ~25m / 0m behind the
+    # current record). Menger curvature divides by the shortest triangle
+    # side, so a degenerate triple (50m, 5m, 43m) lets GPS noise on the
+    # middle point saturate kappa; evenly spaced triples condition the
+    # noise floor to kappa ~0.003 at ±3m jitter while real corners
+    # (R <= 200m) read at kappa >= 0.005.
+    CURVATURE_ANCHOR_M = 50.0
+    anchor_a = 0  # ~50m behind
+    anchor_b = 0  # ~25m behind
+
+    for i in range(2, len(valid)):
         curr = valid[i]
 
-        # Distance and elevation deltas
+        # Advance curvature anchors (evenly spaced triples)
+        while anchor_a < i - 2 and curr.distance_m - valid[anchor_a].distance_m > 2 * CURVATURE_ANCHOR_M:
+            anchor_a += 1
+        while anchor_b < i - 2 and curr.distance_m - valid[anchor_b].distance_m > CURVATURE_ANCHOR_M:
+            anchor_b += 1
+        if anchor_b <= anchor_a:
+            anchor_b = min(anchor_a + 1, i - 1)
+
+        prev2 = valid[anchor_a]
+        prev = valid[i - 1]
+        curv_mid = valid[anchor_b]
+
+        # Skip samples whose curvature baseline is too short (start of ride)
+        if curr.distance_m - prev2.distance_m < CURVATURE_ANCHOR_M:
+            continue
+
+        # Distance and elevation deltas (record resolution for speed/grade)
         distance_delta = curr.distance_m - prev.distance_m
         if distance_delta < 1:
             continue
@@ -255,8 +256,8 @@ def extract_descent_samples(
         power = (prev.power_w + curr.power_w) / 2 if curr.power_w and prev.power_w else 0
         power_mult = power / avg_power if avg_power > 0 and power > 0 else 0.5
 
-        # Curvature (approximate from 3 points)
-        curvature = _calculate_curvature(prev2.lat, prev2.lon, prev.lat, prev.lon, curr.lat, curr.lon)
+        # Curvature from the evenly spaced triple
+        curvature = _calculate_curvature(prev2.lat, prev2.lon, curv_mid.lat, curv_mid.lon, curr.lat, curr.lon)
 
         samples.append(
             DescentSample(
@@ -269,48 +270,6 @@ def extract_descent_samples(
         )
 
     return samples
-
-
-def _calculate_curvature(
-    lat1: float,
-    lon1: float,
-    lat2: float,
-    lon2: float,
-    lat3: float,
-    lon3: float,
-) -> float:
-    """
-    Calculate curvature from three GPS points using Menger curvature.
-
-    Returns curvature in 1/meters (0 = straight line, higher = tighter curve).
-    """
-    import math
-
-    # Convert to approximate meters (rough for small areas)
-    # 1 degree lat ≈ 111km, 1 degree lon ≈ 111km * cos(lat)
-    lat_scale = 111000
-    lon_scale = 111000 * math.cos(math.radians(lat2))
-
-    x1, y1 = lon1 * lon_scale, lat1 * lat_scale
-    x2, y2 = lon2 * lon_scale, lat2 * lat_scale
-    x3, y3 = lon3 * lon_scale, lat3 * lat_scale
-
-    # Triangle area (2x) using cross product
-    area2 = abs((x2 - x1) * (y3 - y1) - (x3 - x1) * (y2 - y1))
-
-    # Side lengths
-    a = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
-    b = math.sqrt((x3 - x2) ** 2 + (y3 - y2) ** 2)
-    c = math.sqrt((x3 - x1) ** 2 + (y3 - y1) ** 2)
-
-    # Menger curvature = 4 * area / (a * b * c)
-    if a * b * c < 0.001:  # Avoid division by very small numbers
-        return 0
-
-    curvature = (4 * area2) / (a * b * c)
-
-    # Clamp to realistic values (0 to 0.01 = radius > 100m)
-    return min(0.01, curvature)
 
 
 def fit_climb_coefficients(
@@ -363,8 +322,13 @@ def fit_descent_coefficients(
     """
     Fit descent coefficients from samples.
 
+    The curvature coefficient is a_lat (m/s²): the lateral acceleration the
+    rider held through corners, computed per sample as v²·κ (the cornering
+    limit v = sqrt(a_lat/kappa) rearranged). The weighted mean across
+    corner samples estimates the rider's comfort limit (ADR 0004 Phase B3).
+
     Returns:
-        Tuple of (max_descent_speed, power_multiplier, curvature_coefficient, confidence)
+        Tuple of (max_descent_speed, power_multiplier, a_lat, confidence)
     """
     if len(samples) < MIN_DESCENT_SAMPLES:
         return (
@@ -386,21 +350,25 @@ def fit_descent_coefficients(
     # Average power multiplier on descents (weighted)
     power_mult = np.sum(power_mults * weights) / np.sum(weights)
 
-    # Curvature coefficient: how much speed decreases per unit curvature
-    # Linear regression: speed = a - b * curvature
-    # We're interested in the slope (b), which should be negative
-    if np.std(curvatures) > 0.0001:  # Only if there's curvature variance
-        W = np.sum(weights)
-        sum_wc = np.sum(weights * curvatures)
-        sum_ws = np.sum(weights * speeds)
-        sum_wcc = np.sum(weights * curvatures * curvatures)
-        sum_wcs = np.sum(weights * curvatures * speeds)
-
-        denom = W * sum_wcc - sum_wc * sum_wc
-        if abs(denom) > 1e-10:
-            curv_coef = (W * sum_wcs - sum_wc * sum_ws) / denom
-        else:
-            curv_coef = DEFAULT_CURVATURE_SPEED_COEFFICIENT
+    # a_lat: lateral acceleration the rider demonstrates holding through
+    # corners, v²·kappa per sample. Along a corner, v²·k varies (braking in,
+    # accelerating out), so the weighted MEAN measures average cornering
+    # intensity — which underestimates the limit the cornering model needs.
+    # The time-weighted p90 captures the demonstrated maximum while staying
+    # robust to noise (calibration found the mean sat at only the ~67th
+    # percentile, predicting 19 km/h hairpins for a rider who rides them at
+    # 30+). Only corner samples (curvature above the noise floor) inform it.
+    corner_mask = curvatures > 1e-4  # tighter than a 10km-radius "corner"
+    if np.any(corner_mask):
+        corner_speeds = speeds[corner_mask]
+        corner_kappas = curvatures[corner_mask]
+        corner_weights = weights[corner_mask]
+        a_lat_samples = corner_speeds**2 * corner_kappas
+        order = np.argsort(a_lat_samples)
+        cum_weights = np.cumsum(corner_weights[order]) / np.sum(corner_weights)
+        p90_idx = int(np.searchsorted(cum_weights, 0.90))
+        p90_idx = min(p90_idx, len(order) - 1)
+        curv_coef = float(a_lat_samples[order][p90_idx])
     else:
         curv_coef = DEFAULT_CURVATURE_SPEED_COEFFICIENT
 
@@ -410,7 +378,7 @@ def fit_descent_coefficients(
     # Clamp to reasonable bounds
     max_descent_speed = max(10.0, min(25.0, max_descent_speed))
     power_mult = max(0.2, min(0.8, power_mult))
-    curv_coef = max(-150.0, min(-20.0, curv_coef))
+    curv_coef = max(1.0, min(8.0, curv_coef))
 
     return max_descent_speed, power_mult, curv_coef, confidence
 
