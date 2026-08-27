@@ -47,6 +47,10 @@ from trainingdash.repositories.postgres.ride_event_repo import (
     PostgresRideEventRepo,
 )
 from trainingdash.repositories.postgres.saved_filter_repo import PostgresSavedFilterRepo
+from trainingdash.repositories.postgres.segment_repo import (
+    PostgresSegmentEffortRepo,
+    PostgresSegmentRepo,
+)
 from trainingdash.repositories.postgres.settings_repo import PostgresAppSettingsRepo
 from trainingdash.repositories.postgres.threshold_repo import PostgresThresholdRepo
 from trainingdash.repositories.postgres.user_repo import PostgresUserRepo
@@ -72,6 +76,8 @@ from trainingdash.repositories.protocols import (
     RideEventMediaRepo,
     RideEventRepo,
     SavedFilterRepo,
+    SegmentEffortRepo,
+    SegmentRepo,
     ThresholdRepo,
     UserRepo,
     XertCredentialsRepo,
@@ -158,6 +164,16 @@ async def get_saved_filter_repo(db: DbSession) -> SavedFilterRepo:
     return PostgresSavedFilterRepo(db)
 
 
+async def get_segment_repo(db: DbSession) -> SegmentRepo:
+    """Create a SegmentRepo bound to the current session."""
+    return PostgresSegmentRepo(db)
+
+
+async def get_segment_effort_repo(db: DbSession) -> SegmentEffortRepo:
+    """Create a SegmentEffortRepo bound to the current session."""
+    return PostgresSegmentEffortRepo(db)
+
+
 async def get_race_plan_repo(db: DbSession) -> RacePlanRepo:
     """Create a RacePlanRepo bound to the current session."""
     return PostgresRacePlanRepo(db)
@@ -238,6 +254,8 @@ RacePlanRepoD = Annotated[RacePlanRepo, Depends(get_race_plan_repo)]
 PacingCoefficientsRepoD = Annotated[PacingCoefficientsRepo, Depends(get_pacing_coefficients_repo)]
 ThresholdRepoD = Annotated[ThresholdRepo, Depends(get_threshold_repo)]
 SavedFilterRepoD = Annotated[SavedFilterRepo, Depends(get_saved_filter_repo)]
+SegmentRepoD = Annotated[SegmentRepo, Depends(get_segment_repo)]
+SegmentEffortRepoD = Annotated[SegmentEffortRepo, Depends(get_segment_effort_repo)]
 RecordRepoD = Annotated[RecordRepo, Depends(get_record_repo)]
 RideEventRepoD = Annotated[RideEventRepo, Depends(get_ride_event_repo)]
 JournalEntryRepoD = Annotated[JournalEntryRepo, Depends(get_journal_entry_repo)]

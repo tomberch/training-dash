@@ -350,6 +350,16 @@ class PostgresSegmentEffortRepo:
         )
         await self._session.commit()
 
+    async def count_for_segment(self, segment_id: UUID, user_id: int) -> int:
+        """Count a user's efforts on a segment."""
+        result = await self._session.execute(
+            select(func.count(SegmentEffort.id)).where(
+                SegmentEffort.segment_id == segment_id,
+                SegmentEffort.user_id == user_id,
+            )
+        )
+        return result.scalar_one()
+
 
 class PostgresSegmentSuggestionRepo:
     """

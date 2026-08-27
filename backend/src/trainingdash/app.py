@@ -35,6 +35,7 @@ from trainingdash.routers import (
     query,
     race_plans,
     saved_filters,
+    segments,
     tiles,
     user,
 )
@@ -108,6 +109,7 @@ def create_app() -> FastAPI:
     app.include_router(race_plans.router)
     app.include_router(pacing_coefficients.router)
     app.include_router(saved_filters.router)
+    app.include_router(segments.router)
     app.include_router(tiles.router)
 
     # Serve frontend static files if the dist directory exists

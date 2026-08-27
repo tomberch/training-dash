@@ -1233,7 +1233,7 @@ class PacingCoefficientsRepo(Protocol):
         self,
         user_id: int,
         bike_id: int | None = None,
-    ) -> "PacingCoefficients | None":
+    ) -> "DomainPacingCoefficients | None":
         """
         Get pacing coefficients with fallback chain.
 
@@ -1242,7 +1242,7 @@ class PacingCoefficientsRepo(Protocol):
         """
         ...
 
-    async def get_user_default(self, user_id: int) -> "PacingCoefficients | None":
+    async def get_user_default(self, user_id: int) -> "DomainPacingCoefficients | None":
         """
         Get user's default coefficients (bike_id=NULL).
 
@@ -1250,7 +1250,7 @@ class PacingCoefficientsRepo(Protocol):
         """
         ...
 
-    async def get_for_bike(self, user_id: int, bike_id: int) -> "PacingCoefficients | None":
+    async def get_for_bike(self, user_id: int, bike_id: int) -> "DomainPacingCoefficients | None":
         """
         Get bike-specific coefficients only (no fallback).
 
@@ -1258,7 +1258,7 @@ class PacingCoefficientsRepo(Protocol):
         """
         ...
 
-    async def list_for_user(self, user_id: int) -> list["PacingCoefficients"]:
+    async def list_for_user(self, user_id: int) -> list["DomainPacingCoefficients"]:
         """
         List all coefficients for a user (default + all bikes).
 
@@ -1266,7 +1266,7 @@ class PacingCoefficientsRepo(Protocol):
         """
         ...
 
-    async def save(self, coefficients: "PacingCoefficients") -> "PacingCoefficients":
+    async def save(self, coefficients: "DomainPacingCoefficients") -> "DomainPacingCoefficients":
         """
         Persist coefficients (insert or update).
 
@@ -1277,20 +1277,14 @@ class PacingCoefficientsRepo(Protocol):
     async def upsert(
         self,
         user_id: int,
-        bike_id: int | None,
-        grade_power_intercept: float,
-        grade_power_slope: float,
-        max_descent_speed_mps: float,
-        descent_power_multiplier: float,
-        curvature_speed_coefficient: float,
-        climb_sample_count: int,
-        descent_sample_count: int,
-        activity_count: int,
-    ) -> "PacingCoefficients":
+        coefficients: "DomainPacingCoefficients",
+    ) -> "DomainPacingCoefficients":
         """
-        Insert or update coefficients for a user/bike combination.
+        Insert or update coefficients from a domain PacingCoefficients instance.
 
-        Uses ON CONFLICT to atomically upsert.
+        user_id and bike_id come from the instance (user_id must be set;
+        bike_id None = user default). This is the preferred method for the
+        learning pipeline to avoid race conditions.
         """
         ...
 
@@ -1471,6 +1465,10 @@ class SegmentEffortRepo(Protocol):
         """
         ...
 
+    async def count_for_segment(self, segment_id: UUID, user_id: int) -> int:
+        """Count a user's efforts on a segment."""
+        ...
+
 
 class SegmentSuggestionRepo(Protocol):
     """
@@ -1549,6 +1547,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from geoalchemy2.elements import WKBElement
 
+    from trainingdash.domain.pacing_model import PacingCoefficients as DomainPacingCoefficients
     from trainingdash.domain.thresholds import ThresholdHistoryEntry, ThresholdValues
     from trainingdash.repositories.postgres.analytics_repo import RecordsView
     from trainingdash.repositories.postgres.models import (
@@ -1563,7 +1562,6 @@ if TYPE_CHECKING:
         JournalEntry,
         JournalEntryActivity,
         Notification,
-        PacingCoefficients,
         RaceCourse,
         RacePlan,
         RecalculationJob,

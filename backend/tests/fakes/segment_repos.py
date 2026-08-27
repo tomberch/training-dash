@@ -221,6 +221,15 @@ class FakeSegmentEffortRepo:
             ):
                 effort.is_pr = False
 
+    async def count_for_segment(self, segment_id: UUID, user_id: int) -> int:
+        return len(
+            [
+                e
+                for e in self._efforts.values()
+                if e.segment_id == segment_id and e.user_id == user_id
+            ]
+        )
+
     # --- Test helper methods ---
 
     def clear(self) -> None:
