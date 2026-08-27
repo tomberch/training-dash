@@ -20,6 +20,10 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from geoalchemy2 import WKTElement
+from geoalchemy2.functions import ST_MakeEnvelope
+from geoalchemy2.shape import to_shape
+
 from trainingdash.domain.climb_detection import DetectedClimb, detect_climbs
 from trainingdash.domain.polyline import encode_polyline
 from trainingdash.domain.segment_geometry import (
@@ -53,7 +57,6 @@ logger = logging.getLogger(__name__)
 
 # Constants
 SUGGESTION_EXPIRY_DAYS = 90
-MIN_REPETITIONS_FOR_SUGGESTION = 3
 SKIP_DETECTION_OVERLAP_PCT = 80
 
 
@@ -224,7 +227,7 @@ class ProcessActivitySegments:
 
         # Compute activity bounds and bearing
         coords = [(r["lat"], r["lon"]) for r in records]
-        bounds = compute_bounds(coords)
+        min_lat, min_lon, max_lat, max_lon = compute_bounds(coords)
         bearing = compute_bearing(
             records[0]["lat"], records[0]["lon"],
             records[-1]["lat"], records[-1]["lon"],
@@ -232,11 +235,9 @@ class ProcessActivitySegments:
 
         # Query candidates via repository
         # The repo handles PostGIS spatial query
-        from geoalchemy2.functions import ST_MakeEnvelope
-
         bounds_geom = ST_MakeEnvelope(
-            bounds.sw_lng, bounds.sw_lat,
-            bounds.ne_lng, bounds.ne_lat,
+            min_lon, min_lat,  # SW corner
+            max_lon, max_lat,  # NE corner
             4326,
         )
 
@@ -270,8 +271,6 @@ class ProcessActivitySegments:
 
     def _extract_point(self, point_geom: "WKBElement") -> tuple[float, float]:
         """Extract lat/lon from a PostGIS POINT geometry."""
-        from geoalchemy2.shape import to_shape
-
         shape = to_shape(point_geom)
         return (shape.y, shape.x)  # lat, lon
 
@@ -466,8 +465,6 @@ class ProcessActivitySegments:
         end_lon = records[climb.end_index]["lon"]
 
         # Create segment (status=suggested)
-        from geoalchemy2 import WKTElement
-
         start_wkt = WKTElement(f"POINT({start_lon} {start_lat})", srid=4326)
         end_wkt = WKTElement(f"POINT({end_lon} {end_lat})", srid=4326)
         
