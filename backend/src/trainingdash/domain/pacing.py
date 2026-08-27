@@ -20,6 +20,7 @@ sophisticated approach that respects W'bal constraints.
 """
 
 from dataclasses import dataclass
+from typing import Literal
 
 import numpy as np
 
@@ -30,6 +31,100 @@ from trainingdash.domain.physics import (
     RiderParams,
     speed_from_power,
 )
+
+
+# =============================================================================
+# Ride Type Configuration
+# =============================================================================
+
+RideTypePreset = Literal["race", "gran_fondo", "training", "touring", "custom"]
+
+
+@dataclass
+class RideTypeParams:
+    """Parameters controlling ride time estimation.
+    
+    These affect how predicted times account for:
+    1. Descent aggressiveness - how fast you take corners (affects curvature speed factor)
+    2. Stop percentage - expected time spent stopped (traffic, feeds, breaks)
+    
+    Attributes:
+        descent_aggressiveness: 0-100 scale. 0=very cautious (0.75x on hairpins),
+                               100=race pace (0.95x on hairpins). Affects descent speeds.
+        stop_pct: 0-50 range. Percentage of extra time for stops beyond physics prediction.
+                  6% means a 1-hour physics time becomes 1h04m total.
+    """
+    descent_aggressiveness: int  # 0-100
+    stop_pct: float  # 0-50
+    
+    def __post_init__(self):
+        if not 0 <= self.descent_aggressiveness <= 100:
+            raise ValueError(f"descent_aggressiveness must be 0-100, got {self.descent_aggressiveness}")
+        if not 0 <= self.stop_pct <= 50:
+            raise ValueError(f"stop_pct must be 0-50, got {self.stop_pct}")
+    
+    @property
+    def ride_type_for_curvature(self) -> str:
+        """Convert descent_aggressiveness to ride_type string for curvature factor."""
+        # >=80 is aggressive (race-like), <80 is cautious (training-like)
+        return "race" if self.descent_aggressiveness >= 80 else "training"
+    
+    @property
+    def stop_factor(self) -> float:
+        """Multiplier to apply to total time for stops.
+        
+        stop_pct=6 means 6% extra time, so factor = 1.06
+        """
+        return 1.0 + (self.stop_pct / 100.0)
+
+
+# Preset configurations based on empirical data
+RIDE_TYPE_PRESETS: dict[str, RideTypeParams] = {
+    "race": RideTypeParams(
+        descent_aggressiveness=90,
+        stop_pct=0,
+    ),
+    "gran_fondo": RideTypeParams(
+        descent_aggressiveness=85,
+        stop_pct=3,
+    ),
+    "training": RideTypeParams(
+        descent_aggressiveness=70,
+        stop_pct=6,
+    ),
+    "touring": RideTypeParams(
+        descent_aggressiveness=60,
+        stop_pct=25,
+    ),
+}
+
+
+def resolve_ride_type_params(
+    ride_type: RideTypePreset,
+    custom_params: RideTypeParams | None = None,
+) -> RideTypeParams:
+    """Resolve ride type preset to actual parameters.
+    
+    Args:
+        ride_type: Preset name or "custom"
+        custom_params: Required if ride_type is "custom"
+        
+    Returns:
+        RideTypeParams with resolved values
+        
+    Raises:
+        ValueError: If ride_type is "custom" but no custom_params provided,
+                   or if ride_type is unknown
+    """
+    if ride_type == "custom":
+        if custom_params is None:
+            raise ValueError("custom_params required when ride_type is 'custom'")
+        return custom_params
+    
+    if ride_type not in RIDE_TYPE_PRESETS:
+        raise ValueError(f"Unknown ride_type: {ride_type}. Valid options: {list(RIDE_TYPE_PRESETS.keys()) + ['custom']}")
+    
+    return RIDE_TYPE_PRESETS[ride_type]
 
 
 @dataclass
@@ -443,6 +538,7 @@ def generate_terrain_adapted_pacing(
     power_cap_ftp_pct: float = 1.05,
     coefficients: PacingCoefficients | None = None,
     elevation_profile: list[dict] | None = None,
+    ride_type: str = "training",
 ) -> PacingPlan:
     """
     Generate pacing plan using continuous grade-based power allocation.
@@ -479,6 +575,8 @@ def generate_terrain_adapted_pacing(
         elevation_profile: Course elevation profile from RaceCourse.elevation_profile.
             If provided, enables fine-grained (~25m) pacing for accurate speed
             predictions. If None, uses segment-based calculation.
+        ride_type: "training" or "race" - affects curvature speed factors on descents.
+            Training = more cautious descending, Race = more aggressive.
 
     Returns:
         PacingPlan with per-segment targets and overall metrics.
@@ -525,6 +623,7 @@ def generate_terrain_adapted_pacing(
             effective_max_descent_speed=effective_max_descent_speed,
             power_cap_ftp_pct=power_cap_ftp_pct,
             coefficients=coefficients,
+            ride_type=ride_type,
         )
 
     # =========================================================================
@@ -655,6 +754,7 @@ def _generate_fine_grained_adapted_pacing(
     effective_max_descent_speed: float,
     power_cap_ftp_pct: float,
     coefficients: PacingCoefficients,
+    ride_type: str = "training",
 ) -> PacingPlan:
     """
     Internal helper: Generate pacing plan using fine-grained elevation profile.
@@ -679,6 +779,7 @@ def _generate_fine_grained_adapted_pacing(
         max_descent_speed_mps=effective_max_descent_speed,
         power_cap_ftp_pct=power_cap_ftp_pct,
         target_spacing_m=25.0,
+        ride_type=ride_type,
     )
 
     if not fine_plan.points:

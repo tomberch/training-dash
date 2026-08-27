@@ -13,6 +13,9 @@ from trainingdash.domain.aero_selection import AeroSource, BikeAeroData, select_
 from trainingdash.domain.course_segmentation import CourseSegment
 from trainingdash.domain.pacing import (
     PacingCoefficients,
+    RideTypeParams,
+    RideTypePreset,
+    resolve_ride_type_params,
     generate_terrain_adapted_pacing,
 )
 from trainingdash.domain.pacing_optimizer import optimize_pacing, optimize_pacing_for_time
@@ -52,6 +55,11 @@ class GeneratePlanRequest:
     - If target_date is set and within 16 days, fetch forecast
     - If target_date is beyond 16 days or not set, use calm conditions
     - Wind overrides can be set for specific scenarios
+    
+    Ride type:
+    - Controls descent aggressiveness and expected stop time
+    - Presets: race, gran_fondo (default), training, touring
+    - Use "custom" with ride_type_params for full control
     """
 
     course_id: int
@@ -74,6 +82,9 @@ class GeneratePlanRequest:
     wind_override_speed_mps: float | None = None  # Manual wind speed override
     wind_override_direction_deg: float | None = None  # Manual wind direction override
     max_descent_speed_mps: float | None = None  # Cap descent speed (e.g., 18 m/s = 65 km/h)
+    # Ride type - controls descent aggressiveness and stop time estimation
+    ride_type: RideTypePreset = "gran_fondo"
+    ride_type_params: RideTypeParams | None = None  # Required if ride_type="custom"
 
 
 @dataclass
@@ -144,6 +155,12 @@ class GenerateRacePlan:
         segments = self._parse_segments(course.segments or [])
         if not segments:
             raise ValueError("Course has no segments")
+
+        # Resolve ride type parameters
+        ride_type_params = resolve_ride_type_params(
+            request.ride_type,
+            request.ride_type_params,
+        )
 
         # 2. Load bike and select CdA/Crr using smart selection
         bike_weight_kg: float | None = None
@@ -316,19 +333,25 @@ class GenerateRacePlan:
 
         if request.target_time_s is not None:
             # Mode A: Target time - find power to achieve specific finish time
+            # If stop_pct > 0, the target_time includes stops.
+            # Physics calculation should target: net_riding_time = target_time / stop_factor
+            net_target_time_s = request.target_time_s / ride_type_params.stop_factor
+            
             optimized = optimize_pacing_for_time(
                 segments=segments,
                 rider_ftp=ftp,
                 rider_cp=cp,
                 rider_w_prime=w_prime,
-                target_time_s=request.target_time_s,
+                target_time_s=net_target_time_s,
                 rider_params=rider_params,
                 env_params=env_params,
                 segment_env_params=segment_env_params,
                 max_descent_speed_mps=request.max_descent_speed_mps,
             )
 
-            total_time_s = optimized.total_time_s
+            # Apply stop factor to get total time including stops
+            riding_time_s = optimized.total_time_s
+            total_time_s = riding_time_s * ride_type_params.stop_factor
             total_distance_m = optimized.total_distance_m
             avg_power_w = optimized.avg_power_w
             normalized_power_w = optimized.normalized_power_w
@@ -348,7 +371,9 @@ class GenerateRacePlan:
             # Comparison: show energy savings vs constant power
             comparison = {
                 "target_time_s": request.target_time_s,
-                "achieved_time_s": optimized.total_time_s,
+                "achieved_time_s": total_time_s,
+                "riding_time_s": riding_time_s,
+                "stop_pct": ride_type_params.stop_pct,
                 "energy_saving_vs_constant_pct": optimized.improvement_vs_constant_pct,
             }
 
@@ -374,7 +399,9 @@ class GenerateRacePlan:
                 max_descent_speed_mps=request.max_descent_speed_mps,
             )
 
-            total_time_s = optimized.total_time_s
+            # Apply stop factor to get total time including stops
+            riding_time_s = optimized.total_time_s
+            total_time_s = riding_time_s * ride_type_params.stop_factor
             total_distance_m = optimized.total_distance_m
             avg_power_w = optimized.avg_power_w
             normalized_power_w = optimized.normalized_power_w
@@ -391,12 +418,14 @@ class GenerateRacePlan:
             wbal_min = optimized.wbal_min
             optimization_method = "optimized"
 
-            # Calculate comparison
+            # Calculate comparison (times include stop factor)
+            heuristic_riding_time = riding_time_s / (1 - optimized.improvement_vs_heuristic_pct / 100) \
+                if optimized.improvement_vs_heuristic_pct < 100 else riding_time_s
             comparison = {
-                "heuristic_time_s": optimized.total_time_s / (1 - optimized.improvement_vs_heuristic_pct / 100)
-                if optimized.improvement_vs_heuristic_pct < 100
-                else optimized.total_time_s,
-                "optimized_time_s": optimized.total_time_s,
+                "heuristic_time_s": heuristic_riding_time * ride_type_params.stop_factor,
+                "optimized_time_s": total_time_s,
+                "riding_time_s": riding_time_s,
+                "stop_pct": ride_type_params.stop_pct,
                 "improvement_vs_heuristic_pct": optimized.improvement_vs_heuristic_pct,
                 "improvement_vs_constant_pct": optimized.improvement_vs_constant_pct,
             }
@@ -415,9 +444,12 @@ class GenerateRacePlan:
                 max_descent_speed_mps=request.max_descent_speed_mps,
                 coefficients=pacing_coefficients,
                 elevation_profile=course.elevation_profile,
+                ride_type=ride_type_params.ride_type_for_curvature,
             )
 
-            total_time_s = heuristic.total_time_s
+            # Apply stop factor to get total time including stops
+            riding_time_s = heuristic.total_time_s
+            total_time_s = riding_time_s * ride_type_params.stop_factor
             total_distance_m = heuristic.total_distance_m
             avg_power_w = heuristic.avg_power_w
             normalized_power_w = heuristic.normalized_power_w
@@ -441,13 +473,14 @@ class GenerateRacePlan:
             wbal_prediction = predict_wbal_for_plan(powers, times, cp, w_prime)
             wbal_min = wbal_prediction.min_wbal
 
-            # Comparison: constant power baseline
+            # Comparison: constant power baseline (times include stop factor)
             constant_power = ftp * request.target_intensity
-            constant_time_s = sum(
+            constant_riding_time_s = sum(
                 seg.length_m
                 / max(0.1, self._speed_at_power(constant_power, seg.avg_grade_pct, rider_params, env_params))
                 for seg in segments
             )
+            constant_time_s = constant_riding_time_s * ride_type_params.stop_factor
             improvement_vs_constant = (
                 (constant_time_s - total_time_s) / constant_time_s * 100 if constant_time_s > 0 else 0
             )
@@ -455,6 +488,8 @@ class GenerateRacePlan:
             comparison = {
                 "constant_time_s": constant_time_s,
                 "heuristic_time_s": total_time_s,
+                "riding_time_s": riding_time_s,
+                "stop_pct": ride_type_params.stop_pct,
                 "improvement_vs_constant_pct": improvement_vs_constant,
             }
 
@@ -476,6 +511,12 @@ class GenerateRacePlan:
             crr=Decimal(str(crr)),
             target_intensity=Decimal(str(request.target_intensity)),
             optimization_method=optimization_method,
+            max_descent_speed_mps=request.max_descent_speed_mps,
+            # Ride type configuration
+            ride_type=request.ride_type,
+            descent_aggressiveness=ride_type_params.descent_aggressiveness,
+            stop_pct=ride_type_params.stop_pct,
+            # Results
             total_time_s=total_time_s,
             total_distance_m=total_distance_m,
             avg_power_w=avg_power_w,
@@ -490,7 +531,6 @@ class GenerateRacePlan:
             conditions_fetched_at=conditions_fetched_at,
             wind_override_speed_mps=request.wind_override_speed_mps,
             wind_override_direction_deg=request.wind_override_direction_deg,
-            max_descent_speed_mps=request.max_descent_speed_mps,
         )
 
         saved_plan = await self._plan_repo.save(plan)

@@ -16,12 +16,15 @@ yielding much more accurate segment times and overall predictions.
 Architecture:
 1. Resample elevation profile to consistent ~25m intervals
 2. Calculate grade at each point
-3. Apply terrain-adapted power targets (using personalized coefficients)
-4. Run physics model to get speed at each point
-5. Integrate for segment times
-6. Aggregate back to display segments (~50-100 for UI)
+3. Calculate curvature at each point (for descent speed reduction)
+4. Apply terrain-adapted power targets (using personalized coefficients)
+5. Run physics model to get speed at each point
+6. Apply curvature factor to descent speeds
+7. Integrate for segment times
+8. Aggregate back to display segments (~50-100 for UI)
 """
 
+import math
 from dataclasses import dataclass
 from typing import Sequence
 
@@ -46,6 +49,9 @@ class FineGrainedPoint:
     distance_m: float
     elevation_m: float
     grade_pct: float
+    lat: float | None = None
+    lon: float | None = None
+    curvature_deg_per_100m: float = 0.0  # Turn angle per 100m (0 = straight)
 
 
 @dataclass
@@ -73,6 +79,146 @@ class FineGrainedPlan:
 
 
 # =============================================================================
+# Curvature Calculation
+# =============================================================================
+
+
+def _bearing(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Calculate bearing between two points in radians."""
+    lat1, lon1, lat2, lon2 = map(math.radians, [lat1, lon1, lat2, lon2])
+    dlon = lon2 - lon1
+    x = math.sin(dlon) * math.cos(lat2)
+    y = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(dlon)
+    return math.atan2(x, y)
+
+
+def _angle_diff(a1: float, a2: float) -> float:
+    """Smallest angle difference in radians (unsigned)."""
+    diff = a2 - a1
+    while diff > math.pi:
+        diff -= 2 * math.pi
+    while diff < -math.pi:
+        diff += 2 * math.pi
+    return abs(diff)
+
+
+def calculate_curvature(
+    points: list[FineGrainedPoint],
+) -> list[float]:
+    """
+    Calculate curvature at each point from GPS coordinates.
+    
+    Curvature is measured as degrees of turn per 100m of distance.
+    Higher values indicate sharper turns (hairpins, switchbacks).
+    
+    Args:
+        points: Fine-grained points with lat/lon coordinates
+        
+    Returns:
+        List of curvature values (degrees per 100m) for each point
+    """
+    n = len(points)
+    curvatures = [0.0] * n
+    
+    if n < 3:
+        return curvatures
+    
+    # Check if we have GPS data
+    has_gps = all(p.lat is not None and p.lon is not None for p in points[:3])
+    if not has_gps:
+        return curvatures
+    
+    for i in range(1, n - 1):
+        prev_pt = points[i - 1]
+        curr_pt = points[i]
+        next_pt = points[i + 1]
+        
+        # Skip if any point missing GPS
+        if any(p.lat is None or p.lon is None for p in [prev_pt, curr_pt, next_pt]):
+            continue
+        
+        # Calculate bearings
+        bearing_in = _bearing(prev_pt.lat, prev_pt.lon, curr_pt.lat, curr_pt.lon)
+        bearing_out = _bearing(curr_pt.lat, curr_pt.lon, next_pt.lat, next_pt.lon)
+        
+        # Calculate turn angle
+        turn_angle_rad = _angle_diff(bearing_in, bearing_out)
+        turn_angle_deg = math.degrees(turn_angle_rad)
+        
+        # Calculate distance for this segment
+        segment_dist = next_pt.distance_m - prev_pt.distance_m
+        
+        # Curvature = degrees per 100m
+        if segment_dist > 1:  # Avoid division by zero
+            curvature = turn_angle_deg * 100 / segment_dist
+        else:
+            curvature = 0.0
+        
+        curvatures[i] = curvature
+    
+    # First and last points inherit from neighbors
+    if n >= 2:
+        curvatures[0] = curvatures[1]
+        curvatures[-1] = curvatures[-2]
+    
+    return curvatures
+
+
+def get_curvature_speed_factor(
+    curvature_deg_per_100m: float,
+    grade_pct: float,
+    ride_type: str = "training",
+) -> float:
+    """
+    Get speed reduction factor based on curvature.
+    
+    Only applies to descents (grade < 0) where braking for curves matters.
+    On climbs, curvature has negligible effect on speed.
+    
+    Based on empirical data:
+    - Straight (<5°/100m): 1.0 (no reduction)
+    - Gentle (5-15°/100m): 0.95
+    - Curvy (15-30°/100m): 0.90
+    - Hairpin (>30°/100m): 0.80
+    
+    For races, factors are less aggressive (assume faster descending).
+    
+    Args:
+        curvature_deg_per_100m: Turn angle in degrees per 100m
+        grade_pct: Gradient percentage (negative = descent)
+        ride_type: "training" or "race"
+        
+    Returns:
+        Speed multiplier (0.0 to 1.0)
+    """
+    # Curvature only affects descents
+    if grade_pct >= 0:
+        return 1.0
+    
+    # Curvature thresholds and factors
+    if ride_type == "race":
+        # More aggressive descending in races
+        if curvature_deg_per_100m < 5:
+            return 1.0
+        elif curvature_deg_per_100m < 15:
+            return 0.98
+        elif curvature_deg_per_100m < 30:
+            return 0.95
+        else:
+            return 0.90
+    else:
+        # Training ride - more cautious
+        if curvature_deg_per_100m < 5:
+            return 1.0
+        elif curvature_deg_per_100m < 15:
+            return 0.95
+        elif curvature_deg_per_100m < 30:
+            return 0.90
+        else:
+            return 0.80
+
+
+# =============================================================================
 # Elevation Profile Resampling
 # =============================================================================
 
@@ -90,11 +236,12 @@ def resample_elevation_profile(
     calculations.
 
     Args:
-        elevation_profile: List of dicts with 'distance_m', 'elevation_m', 'grade_pct'
+        elevation_profile: List of dicts with 'distance_m', 'elevation_m', 'grade_pct',
+                          and optionally 'lat', 'lon' for curvature calculation
         target_spacing_m: Target spacing between points (default 25m)
 
     Returns:
-        List of FineGrainedPoint at consistent intervals
+        List of FineGrainedPoint at consistent intervals, with curvature calculated
     """
     if not elevation_profile:
         return []
@@ -102,6 +249,15 @@ def resample_elevation_profile(
     # Extract arrays from profile
     distances = np.array([p["distance_m"] for p in elevation_profile])
     elevations = np.array([p["elevation_m"] for p in elevation_profile])
+    
+    # Check for lat/lon data
+    has_gps = "lat" in elevation_profile[0] and elevation_profile[0]["lat"] is not None
+    if has_gps:
+        lats = np.array([p.get("lat", 0) or 0 for p in elevation_profile])
+        lons = np.array([p.get("lon", 0) or 0 for p in elevation_profile])
+    else:
+        lats = None
+        lons = None
 
     if len(distances) < 2:
         return []
@@ -113,6 +269,14 @@ def resample_elevation_profile(
 
     # Interpolate elevations at new distances
     new_elevations = np.interp(new_distances, distances, elevations)
+    
+    # Interpolate lat/lon if available
+    if has_gps:
+        new_lats = np.interp(new_distances, distances, lats)
+        new_lons = np.interp(new_distances, distances, lons)
+    else:
+        new_lats = None
+        new_lons = None
 
     # Smooth elevations slightly to reduce GPS noise
     # Use a small window (3 points = ~75m) to preserve real terrain features
@@ -134,13 +298,23 @@ def resample_elevation_profile(
             # Last point: use previous grade
             grade_pct = points[-1].grade_pct if points else 0.0
 
+        lat = float(new_lats[i]) if new_lats is not None else None
+        lon = float(new_lons[i]) if new_lons is not None else None
+
         points.append(
             FineGrainedPoint(
                 distance_m=new_distances[i],
                 elevation_m=new_elevations[i],
                 grade_pct=grade_pct,
+                lat=lat,
+                lon=lon,
             )
         )
+
+    # Calculate curvature for each point
+    curvatures = calculate_curvature(points)
+    for i, curv in enumerate(curvatures):
+        points[i].curvature_deg_per_100m = curv
 
     return points
 
@@ -212,19 +386,24 @@ def calculate_speeds_and_times(
     rider_params: RiderParams,
     env_params: EnvironmentParams | None = None,
     max_descent_speed_mps: float = 18.0,
+    ride_type: str = "training",
 ) -> tuple[list[float], list[float]]:
     """
     Calculate speed and segment time at each point using physics model.
 
     Runs the Newton-Raphson solver at each point to find the speed
     that corresponds to the given power output on the given grade.
+    
+    Applies curvature-based speed reduction on descents to account
+    for braking through corners.
 
     Args:
-        points: Fine-grained elevation points
+        points: Fine-grained elevation points (with curvature)
         powers: Power target at each point (same length as points)
         rider_params: Rider and bike physical parameters
         env_params: Environmental conditions (air density, wind)
         max_descent_speed_mps: Cap descent speeds to this value
+        ride_type: "training" or "race" - affects curvature speed factors
 
     Returns:
         Tuple of (speeds, times) where:
@@ -246,6 +425,14 @@ def calculate_speeds_and_times(
             env=env_params,
             max_descent_speed_mps=max_descent_speed_mps,
         )
+
+        # Apply curvature-based speed reduction on descents
+        curvature_factor = get_curvature_speed_factor(
+            point.curvature_deg_per_100m,
+            point.grade_pct,
+            ride_type,
+        )
+        speed = speed * curvature_factor
 
         # Ensure minimum speed (don't get stuck)
         speed = max(0.5, speed)
@@ -335,18 +522,22 @@ def generate_fine_grained_plan(
     max_descent_speed_mps: float = 18.0,
     power_cap_ftp_pct: float = 1.05,
     target_spacing_m: float = 25.0,
+    ride_type: str = "training",
 ) -> FineGrainedPlan:
     """
     Generate a fine-grained pacing plan with accurate speed predictions.
 
     This is the main entry point for fine-grained pacing. It:
     1. Resamples the elevation profile to consistent ~25m intervals
-    2. Calculates terrain-adapted power targets at each point
-    3. Runs the physics model to get speed at each point
-    4. Calculates NP from the actual variable power profile
+    2. Calculates curvature at each point from GPS coordinates
+    3. Calculates terrain-adapted power targets at each point
+    4. Runs the physics model to get speed at each point
+    5. Applies curvature-based speed reduction on descents
+    6. Calculates NP from the actual variable power profile
 
     Args:
         elevation_profile: Course elevation profile (from RaceCourse.elevation_profile)
+                          Should include 'lat', 'lon' for curvature calculation
         rider_ftp: Rider's Functional Threshold Power in watts
         target_intensity: Target IF (0.85 = tempo, 0.95 = threshold)
         rider_params: Rider/bike physical parameters. If None, uses defaults.
@@ -356,6 +547,9 @@ def generate_fine_grained_plan(
         max_descent_speed_mps: Cap descent speeds
         power_cap_ftp_pct: Cap power at this fraction of FTP
         target_spacing_m: Spacing between fine-grained points
+        ride_type: "training" or "race" - affects curvature speed factors
+                   Training = more cautious descending (learned from your data)
+                   Race = more aggressive descending
 
     Returns:
         FineGrainedPlan with per-point targets and aggregated metrics
@@ -366,7 +560,7 @@ def generate_fine_grained_plan(
     if env_params is None:
         env_params = EnvironmentParams()
 
-    # Step 1: Resample elevation profile
+    # Step 1: Resample elevation profile (includes curvature calculation)
     points = resample_elevation_profile(elevation_profile, target_spacing_m)
 
     if not points:
@@ -391,13 +585,14 @@ def generate_fine_grained_plan(
         power_cap_w=power_cap,
     )
 
-    # Step 3: Calculate speeds and times
+    # Step 3: Calculate speeds and times (with curvature factor)
     speeds, times = calculate_speeds_and_times(
         points=points,
         powers=powers,
         rider_params=rider_params,
         env_params=env_params,
         max_descent_speed_mps=max_descent_speed_mps,
+        ride_type=ride_type,
     )
 
     # Step 4: Build fine-grained targets

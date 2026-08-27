@@ -1092,6 +1092,15 @@ wheels = [
 ]
 
 [[package]]
+name = "python-fitparse"
+version = "2.4.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/6f/34/0ee0ea8ca37207e3d17acea409744a7939ecae142875a50a46d244d6f651/python_fitparse-2.4.0.tar.gz", hash = "sha256:e1ddd44c4c0346fda46b14609961538cb57201daef47c962eddccc86db67f0c9", size = 98821, upload-time = "2026-08-12T02:21:01.327Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fd/1c/ca6bcae297223366ea5b37ed182fffdd188315ebb0f976939f1b27f7210b/python_fitparse-2.4.0-py3-none-any.whl", hash = "sha256:628fddcc68f548def1d251c131e330e038c4e5b8f34654ca377d7f3e10b7514b", size = 93724, upload-time = "2026-08-12T02:21:00.274Z" },
+]
+
+[[package]]
 name = "python-multipart"
 version = "0.0.32"
 source = { registry = "https://pypi.org/simple" }
@@ -1345,6 +1354,7 @@ dev = [
     { name = "pytest-json-report" },
     { name = "pytest-xdist" },
     { name = "python-dotenv" },
+    { name = "python-fitparse" },
     { name = "ruff" },
     { name = "testcontainers" },
 ]
@@ -1392,6 +1402,7 @@ dev = [
     { name = "pytest-json-report", specifier = ">=1.5.0" },
     { name = "pytest-xdist", specifier = ">=3.8.0" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
+    { name = "python-fitparse", specifier = ">=2.4.0" },
     { name = "ruff", specifier = ">=0.16.0" },
     { name = "testcontainers", specifier = ">=4.15.0" },
 ]

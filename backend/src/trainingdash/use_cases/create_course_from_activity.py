@@ -128,8 +128,8 @@ class CreateCourseFromActivity:
         max_elevation = float(np.max(smoothed_elevations)) if len(smoothed_elevations) > 0 else None
         total_distance = float(distances[-1]) if len(distances) > 0 else 0.0
 
-        # Step 7: Build elevation profile
-        elevation_profile = self._build_elevation_profile(distances, smoothed_elevations, grades)
+        # Step 7: Build elevation profile (with lat/lon for curvature)
+        elevation_profile = self._build_elevation_profile(distances, smoothed_elevations, grades, lats, lons)
 
         # Step 8: Build PostGIS geometry
         geometry = self._build_geometry(lats, lons, smoothed_elevations)
@@ -184,21 +184,28 @@ class CreateCourseFromActivity:
         distances: np.ndarray,
         elevations: np.ndarray,
         grades: np.ndarray,
+        lats: list[float],
+        lons: list[float],
     ) -> list[dict]:
-        """Build elevation profile for charting."""
+        """Build elevation profile for charting and pacing.
+        
+        Includes lat/lon for curvature-based speed calculations.
+        """
         # Downsample to ~500 points for reasonable chart size
         n_points = len(distances)
         if n_points <= 500:
-            indices = range(n_points)
+            indices = list(range(n_points))
         else:
             step = n_points // 500
-            indices = range(0, n_points, step)
+            indices = list(range(0, n_points, step))
 
         return [
             {
                 "distance_m": float(distances[i]),
                 "elevation_m": float(elevations[i]),
                 "grade_pct": float(grades[i]) if i < len(grades) else 0.0,
+                "lat": lats[i] if i < len(lats) else None,
+                "lon": lons[i] if i < len(lons) else None,
             }
             for i in indices
         ]

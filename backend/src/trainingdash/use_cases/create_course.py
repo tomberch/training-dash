@@ -152,8 +152,8 @@ class CreateCourse:
         min_elevation = float(np.min(smoothed_elevations)) if len(smoothed_elevations) > 0 else None
         max_elevation = float(np.max(smoothed_elevations)) if len(smoothed_elevations) > 0 else None
 
-        # Step 9: Build elevation profile (for charting)
-        elevation_profile = self._build_elevation_profile(distances, smoothed_elevations, grades)
+        # Step 9: Build elevation profile (for charting and pacing)
+        elevation_profile = self._build_elevation_profile(distances, smoothed_elevations, grades, parsed.points)
 
         # Step 10: Build PostGIS geometry
         geometry = self._build_geometry(parsed.points, smoothed_elevations)
@@ -270,8 +270,12 @@ class CreateCourse:
         distances: np.ndarray,
         elevations: np.ndarray,
         grades: np.ndarray,
+        points: list,
     ) -> list[dict]:
-        """Build elevation profile for charting."""
+        """Build elevation profile for charting and pacing.
+        
+        Includes lat/lon for curvature-based speed calculations.
+        """
         profile = []
 
         for i in range(len(distances)):
@@ -280,6 +284,8 @@ class CreateCourse:
                     "distance_m": float(distances[i]),
                     "elevation_m": float(elevations[i]),
                     "grade_pct": float(grades[i] * 100),
+                    "lat": points[i].latitude if i < len(points) else None,
+                    "lon": points[i].longitude if i < len(points) else None,
                 }
             )
 

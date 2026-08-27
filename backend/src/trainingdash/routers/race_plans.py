@@ -20,6 +20,7 @@ from trainingdash.integrations.weather import (
     fetch_race_day_forecast,
     get_calm_conditions,
 )
+from trainingdash.domain.pacing import RideTypeParams, RideTypePreset
 from trainingdash.use_cases.compare_execution import CompareExecution
 from trainingdash.use_cases.generate_race_plan import (
     GeneratePlanRequest,
@@ -33,6 +34,24 @@ router = APIRouter(prefix="/api/race-plans", tags=["race-plans"])
 # =============================================================================
 # Request/Response Models
 # =============================================================================
+
+
+class RideTypeParamsSchema(BaseModel):
+    """Custom ride type parameters for race plan generation.
+    
+    descent_aggressiveness: 0=very cautious, 100=race pace. Affects curvature-based speed reduction on descents.
+    stop_pct: Expected percentage of extra time for stops (traffic, feeds, breaks). 0-50%.
+    """
+    
+    descent_aggressiveness: int = Field(..., ge=0, le=100, description="0=cautious descents, 100=aggressive racing")
+    stop_pct: float = Field(..., ge=0, le=50, description="Expected stop time as % of riding time (0-50)")
+    
+    def to_domain(self) -> RideTypeParams:
+        """Convert to domain object."""
+        return RideTypeParams(
+            descent_aggressiveness=self.descent_aggressiveness,
+            stop_pct=self.stop_pct,
+        )
 
 
 class GeneratePlanRequestSchema(BaseModel):
@@ -79,6 +98,15 @@ class GeneratePlanRequestSchema(BaseModel):
     max_descent_speed_mps: float | None = Field(
         None, ge=5, le=30, description="Max descent speed cap (m/s). Default ~18 m/s = 65 km/h"
     )
+    # Ride type configuration
+    ride_type: RideTypePreset = Field(
+        "gran_fondo",
+        description="Ride type preset: race, gran_fondo, training, touring, custom. Controls descent aggressiveness and stop time.",
+    )
+    ride_type_params: "RideTypeParamsSchema | None" = Field(
+        None,
+        description="Custom ride type params (required when ride_type='custom'). descent_aggressiveness: 0-100, stop_pct: 0-50.",
+    )
 
     def to_domain(self) -> GeneratePlanRequest:
         """Convert to domain request object."""
@@ -101,6 +129,8 @@ class GeneratePlanRequestSchema(BaseModel):
             wind_override_speed_mps=self.wind_override_speed_mps,
             wind_override_direction_deg=self.wind_override_direction_deg,
             max_descent_speed_mps=self.max_descent_speed_mps,
+            ride_type=self.ride_type,
+            ride_type_params=self.ride_type_params.to_domain() if self.ride_type_params else None,
         )
 
 
@@ -181,6 +211,11 @@ class RacePlanResponse(BaseModel):
     avg_power_w: float
     normalized_power_w: float | None
     intensity_factor: float | None
+    # Ride type configuration
+    ride_type: str | None = None
+    descent_aggressiveness: int | None = None
+    stop_pct: float | None = None
+    # Comparison and metadata
     comparison: ComparisonSchema
     warnings: list[str]
     aero_selection: AeroSelectionSchema | None = None
@@ -230,6 +265,9 @@ class PlanUpdateSchema(BaseModel):
     bike_id: int | None = None
     rider_weight_kg: float | None = None
     name: str | None = Field(None, max_length=200)
+    # Ride type configuration
+    ride_type: RideTypePreset | None = Field(None, description="Ride type preset")
+    ride_type_params: RideTypeParamsSchema | None = Field(None, description="Custom ride type params")
 
 
 class CompareRequestSchema(BaseModel):
@@ -363,6 +401,9 @@ async def generate_plan(
         avg_power_w=plan.avg_power_w,
         normalized_power_w=plan.normalized_power_w,
         intensity_factor=float(plan.intensity_factor) if plan.intensity_factor else None,
+        ride_type=plan.ride_type,
+        descent_aggressiveness=plan.descent_aggressiveness,
+        stop_pct=plan.stop_pct,
         comparison=ComparisonSchema(**result.comparison),
         warnings=result.warnings,
         aero_selection=AeroSelectionSchema(**result.aero_selection) if result.aero_selection else None,
@@ -442,6 +483,9 @@ async def get_plan(
         avg_power_w=plan.avg_power_w,
         normalized_power_w=plan.normalized_power_w,
         intensity_factor=float(plan.intensity_factor) if plan.intensity_factor else None,
+        ride_type=plan.ride_type,
+        descent_aggressiveness=plan.descent_aggressiveness,
+        stop_pct=plan.stop_pct,
         comparison=ComparisonSchema(),  # Empty for detail view (comparison computed at generation time)
         warnings=[],  # No warnings stored
         segment_targets=segment_targets,
@@ -545,6 +589,9 @@ async def regenerate_plan(
         target_intensity=intensity,
         use_optimizer=use_opt,
         name=name,
+        # Preserve or update ride_type
+        ride_type=updates.ride_type if updates.ride_type is not None else (existing_plan.ride_type or "gran_fondo"),
+        ride_type_params=updates.ride_type_params.to_domain() if updates.ride_type_params else None,
     )
 
     # Generate new plan
@@ -568,6 +615,9 @@ async def regenerate_plan(
         avg_power_w=plan.avg_power_w,
         normalized_power_w=plan.normalized_power_w,
         intensity_factor=float(plan.intensity_factor) if plan.intensity_factor else None,
+        ride_type=plan.ride_type,
+        descent_aggressiveness=plan.descent_aggressiveness,
+        stop_pct=plan.stop_pct,
         comparison=ComparisonSchema(**result.comparison),
         warnings=result.warnings,
         aero_selection=AeroSelectionSchema(**result.aero_selection) if result.aero_selection else None,

@@ -374,3 +374,143 @@ class TestAggregateToDisplaySegments:
 
         segments = aggregate_to_display_segments(empty_plan)
         assert segments == []
+
+
+
+class TestCurvatureCalculation:
+    """Tests for curvature calculation from GPS coordinates."""
+
+    def test_straight_road_zero_curvature(self):
+        """A straight road should have zero curvature."""
+        from trainingdash.domain.fine_grained_pacing import calculate_curvature
+
+        # Straight line going north
+        points = [
+            FineGrainedPoint(distance_m=0, elevation_m=100, grade_pct=0, lat=47.0, lon=7.0),
+            FineGrainedPoint(distance_m=100, elevation_m=100, grade_pct=0, lat=47.001, lon=7.0),
+            FineGrainedPoint(distance_m=200, elevation_m=100, grade_pct=0, lat=47.002, lon=7.0),
+            FineGrainedPoint(distance_m=300, elevation_m=100, grade_pct=0, lat=47.003, lon=7.0),
+        ]
+
+        curvatures = calculate_curvature(points)
+
+        # All curvatures should be near zero
+        assert all(c < 2 for c in curvatures)
+
+    def test_90_degree_turn_high_curvature(self):
+        """A 90 degree turn should have high curvature."""
+        from trainingdash.domain.fine_grained_pacing import calculate_curvature
+
+        # L-shaped path: go east, then turn north
+        points = [
+            FineGrainedPoint(distance_m=0, elevation_m=100, grade_pct=0, lat=47.0, lon=7.0),
+            FineGrainedPoint(distance_m=100, elevation_m=100, grade_pct=0, lat=47.0, lon=7.001),  # east
+            FineGrainedPoint(distance_m=200, elevation_m=100, grade_pct=0, lat=47.001, lon=7.001),  # north
+            FineGrainedPoint(distance_m=300, elevation_m=100, grade_pct=0, lat=47.002, lon=7.001),  # north
+        ]
+
+        curvatures = calculate_curvature(points)
+
+        # Middle point should have high curvature (90 degree turn)
+        assert curvatures[1] > 30  # Should be significant turn
+
+    def test_no_gps_returns_zeros(self):
+        """Points without GPS coordinates should return zero curvature."""
+        from trainingdash.domain.fine_grained_pacing import calculate_curvature
+
+        points = [
+            FineGrainedPoint(distance_m=0, elevation_m=100, grade_pct=0, lat=None, lon=None),
+            FineGrainedPoint(distance_m=100, elevation_m=100, grade_pct=0, lat=None, lon=None),
+            FineGrainedPoint(distance_m=200, elevation_m=100, grade_pct=0, lat=None, lon=None),
+        ]
+
+        curvatures = calculate_curvature(points)
+
+        assert all(c == 0 for c in curvatures)
+
+
+class TestCurvatureSpeedFactor:
+    """Tests for curvature-based speed reduction."""
+
+    def test_straight_descent_no_reduction(self):
+        """Straight descents should have no speed reduction."""
+        from trainingdash.domain.fine_grained_pacing import get_curvature_speed_factor
+
+        factor = get_curvature_speed_factor(curvature_deg_per_100m=2.0, grade_pct=-5.0)
+        assert factor == 1.0
+
+    def test_curvy_descent_reduced_speed(self):
+        """Curvy descents should have reduced speed."""
+        from trainingdash.domain.fine_grained_pacing import get_curvature_speed_factor
+
+        # Training mode
+        factor = get_curvature_speed_factor(
+            curvature_deg_per_100m=25.0, grade_pct=-5.0, ride_type="training"
+        )
+        assert factor == 0.90
+
+        # Hairpin
+        factor = get_curvature_speed_factor(
+            curvature_deg_per_100m=40.0, grade_pct=-5.0, ride_type="training"
+        )
+        assert factor == 0.80
+
+    def test_climb_no_reduction_even_if_curvy(self):
+        """Climbs should have no speed reduction regardless of curvature."""
+        from trainingdash.domain.fine_grained_pacing import get_curvature_speed_factor
+
+        # Hairpin on a climb
+        factor = get_curvature_speed_factor(curvature_deg_per_100m=50.0, grade_pct=5.0)
+        assert factor == 1.0
+
+    def test_race_mode_less_aggressive_reduction(self):
+        """Race mode should have less aggressive speed reductions."""
+        from trainingdash.domain.fine_grained_pacing import get_curvature_speed_factor
+
+        # Same hairpin, different modes
+        training_factor = get_curvature_speed_factor(
+            curvature_deg_per_100m=40.0, grade_pct=-5.0, ride_type="training"
+        )
+        race_factor = get_curvature_speed_factor(
+            curvature_deg_per_100m=40.0, grade_pct=-5.0, ride_type="race"
+        )
+
+        # Race should be faster (higher factor)
+        assert race_factor > training_factor
+
+
+class TestResampleWithGPS:
+    """Tests for resampling with GPS coordinates."""
+
+    def test_resamples_with_lat_lon(self):
+        """Resampling should interpolate lat/lon when provided."""
+        profile = [
+            {"distance_m": 0, "elevation_m": 100, "grade_pct": 0, "lat": 47.0, "lon": 7.0},
+            {"distance_m": 100, "elevation_m": 105, "grade_pct": 5, "lat": 47.001, "lon": 7.0},
+            {"distance_m": 200, "elevation_m": 110, "grade_pct": 5, "lat": 47.002, "lon": 7.0},
+        ]
+
+        result = resample_elevation_profile(profile, target_spacing_m=50.0)
+
+        # Should have GPS coordinates
+        assert result[0].lat is not None
+        assert result[0].lon is not None
+
+        # First point should be near original
+        assert abs(result[0].lat - 47.0) < 0.0001
+
+    def test_calculates_curvature_during_resample(self):
+        """Resampling should calculate curvature from GPS."""
+        # Create a curvy path
+        profile = [
+            {"distance_m": 0, "elevation_m": 100, "grade_pct": -5, "lat": 47.0, "lon": 7.0},
+            {"distance_m": 50, "elevation_m": 97, "grade_pct": -5, "lat": 47.0, "lon": 7.0005},
+            {"distance_m": 100, "elevation_m": 95, "grade_pct": -5, "lat": 47.0005, "lon": 7.001},
+            {"distance_m": 150, "elevation_m": 92, "grade_pct": -5, "lat": 47.001, "lon": 7.001},
+        ]
+
+        result = resample_elevation_profile(profile, target_spacing_m=25.0)
+
+        # Should have curvature values
+        has_curvature = any(p.curvature_deg_per_100m > 0 for p in result)
+        assert has_curvature or len(result) < 3  # Either has curvature or too few points
