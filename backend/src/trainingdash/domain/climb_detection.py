@@ -244,7 +244,6 @@ def _merge_nearby_sections(
 
         # Calculate elevation drop in gap
         gap_start_alt = smoothed_altitudes[prev_end_idx]
-        gap_end_alt = smoothed_altitudes[curr_start_idx]
 
         # Find minimum altitude in gap
         min_alt_in_gap = gap_start_alt
@@ -310,7 +309,6 @@ def _compute_climb_stats(
                 if grade > max_grade:
                     max_grade = grade
 
-            seg_start_idx = i
             seg_start_dist = curr_dist
             seg_start_alt = curr_alt
 
