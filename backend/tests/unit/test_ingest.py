@@ -10,59 +10,116 @@ from trainingdash.ingest import _compute_extended_metrics, _compute_moving_time
 
 
 class TestComputeMovingTime:
-    """Tests for _compute_moving_time function."""
+    """Tests for _compute_moving_time function.
+
+    The function computes moving time from timestamp intervals between records,
+    not by counting records. This handles "smart recording" where intervals vary.
+    """
 
     def test_empty_records_returns_zero(self):
         """Empty records list returns 0."""
         assert _compute_moving_time([]) == 0
 
-    def test_all_moving_records(self):
-        """All records above speed threshold are counted."""
+    def test_single_moving_record_returns_one(self):
+        """Single moving record returns 1 (no interval to compute)."""
+        from datetime import datetime
+        records = [{"speed_mps": 5.0, "timestamp": datetime(2024, 1, 1, 10, 0, 0)}]
+        assert _compute_moving_time(records) == 1
+
+    def test_single_stopped_record_returns_zero(self):
+        """Single stopped record returns 0."""
+        from datetime import datetime
+        records = [{"speed_mps": 0.3, "timestamp": datetime(2024, 1, 1, 10, 0, 0)}]
+        assert _compute_moving_time(records) == 0
+
+    def test_one_second_intervals_moving(self):
+        """1-second intervals with all moving records sums correctly."""
+        from datetime import datetime
+        records = [
+            {"speed_mps": 5.0, "timestamp": datetime(2024, 1, 1, 10, 0, 0)},
+            {"speed_mps": 6.0, "timestamp": datetime(2024, 1, 1, 10, 0, 1)},
+            {"speed_mps": 7.0, "timestamp": datetime(2024, 1, 1, 10, 0, 2)},
+            {"speed_mps": 8.0, "timestamp": datetime(2024, 1, 1, 10, 0, 3)},
+        ]
+        # Intervals: 1s (moving) + 1s (moving) + 1s (moving) = 3s
+        assert _compute_moving_time(records) == 3
+
+    def test_variable_intervals_smart_recording(self):
+        """Variable intervals (smart recording) sums actual time deltas."""
+        from datetime import datetime
+        records = [
+            {"speed_mps": 5.0, "timestamp": datetime(2024, 1, 1, 10, 0, 0)},
+            {"speed_mps": 6.0, "timestamp": datetime(2024, 1, 1, 10, 0, 5)},   # 5s gap
+            {"speed_mps": 7.0, "timestamp": datetime(2024, 1, 1, 10, 0, 8)},   # 3s gap
+            {"speed_mps": 8.0, "timestamp": datetime(2024, 1, 1, 10, 0, 18)},  # 10s gap
+        ]
+        # All moving: 5 + 3 + 10 = 18s
+        assert _compute_moving_time(records) == 18
+
+    def test_all_stopped_records(self):
+        """All records below speed threshold return 0."""
+        from datetime import datetime
+        records = [
+            {"speed_mps": 0.0, "timestamp": datetime(2024, 1, 1, 10, 0, 0)},
+            {"speed_mps": 0.3, "timestamp": datetime(2024, 1, 1, 10, 0, 1)},
+            {"speed_mps": 0.5, "timestamp": datetime(2024, 1, 1, 10, 0, 2)},  # Exactly at threshold, not counted
+        ]
+        assert _compute_moving_time(records) == 0
+
+    def test_mixed_moving_and_stopped(self):
+        """Mix of moving and stopped records counts only moving intervals."""
+        from datetime import datetime
+        records = [
+            {"speed_mps": 0.0, "timestamp": datetime(2024, 1, 1, 10, 0, 0)},   # stopped
+            {"speed_mps": 5.0, "timestamp": datetime(2024, 1, 1, 10, 0, 5)},   # moving, 5s interval
+            {"speed_mps": 0.3, "timestamp": datetime(2024, 1, 1, 10, 0, 10)},  # stopped
+            {"speed_mps": 8.0, "timestamp": datetime(2024, 1, 1, 10, 0, 15)},  # moving, 5s interval
+            {"speed_mps": 0.0, "timestamp": datetime(2024, 1, 1, 10, 0, 20)},  # stopped
+            {"speed_mps": 6.0, "timestamp": datetime(2024, 1, 1, 10, 0, 25)},  # moving, 5s interval
+        ]
+        # Moving intervals: 5 + 5 + 5 = 15s
+        assert _compute_moving_time(records) == 15
+
+    def test_long_gap_capped_at_30_seconds(self):
+        """Long gaps (pauses) are capped at 30 seconds."""
+        from datetime import datetime
+        records = [
+            {"speed_mps": 5.0, "timestamp": datetime(2024, 1, 1, 10, 0, 0)},
+            {"speed_mps": 6.0, "timestamp": datetime(2024, 1, 1, 10, 2, 0)},  # 120s gap, capped to 30s
+        ]
+        assert _compute_moving_time(records) == 30
+
+    def test_none_speed_treated_as_stopped(self):
+        """Records with None speed are treated as stopped."""
+        from datetime import datetime
+        records = [
+            {"speed_mps": None, "timestamp": datetime(2024, 1, 1, 10, 0, 0)},
+            {"speed_mps": 5.0, "timestamp": datetime(2024, 1, 1, 10, 0, 5)},
+            {"speed_mps": None, "timestamp": datetime(2024, 1, 1, 10, 0, 10)},
+        ]
+        # Only the second record is moving: 5s interval
+        assert _compute_moving_time(records) == 5
+
+    def test_missing_speed_key_treated_as_stopped(self):
+        """Records missing speed_mps key are treated as stopped."""
+        from datetime import datetime
+        records = [
+            {"timestamp": datetime(2024, 1, 1, 10, 0, 0)},
+            {"speed_mps": 5.0, "timestamp": datetime(2024, 1, 1, 10, 0, 5)},
+            {"other_field": 10, "timestamp": datetime(2024, 1, 1, 10, 0, 10)},
+        ]
+        # Only the second record is moving: 5s interval
+        assert _compute_moving_time(records) == 5
+
+    def test_missing_timestamps_falls_back_to_one_second(self):
+        """Records without timestamps fall back to counting as 1 second each."""
         records = [
             {"speed_mps": 5.0},
             {"speed_mps": 6.0},
             {"speed_mps": 7.0},
         ]
-        assert _compute_moving_time(records) == 3
-
-    def test_all_stopped_records(self):
-        """All records below speed threshold return 0."""
-        records = [
-            {"speed_mps": 0.0},
-            {"speed_mps": 0.3},
-            {"speed_mps": 0.5},  # Exactly at threshold (0.5), not counted
-        ]
-        assert _compute_moving_time(records) == 0
-
-    def test_mixed_moving_and_stopped(self):
-        """Mix of moving and stopped records counts only moving."""
-        records = [
-            {"speed_mps": 0.0},  # stopped
-            {"speed_mps": 5.0},  # moving
-            {"speed_mps": 0.3},  # stopped
-            {"speed_mps": 8.0},  # moving
-            {"speed_mps": 0.0},  # stopped
-            {"speed_mps": 6.0},  # moving
-        ]
-        assert _compute_moving_time(records) == 3
-
-    def test_none_speed_treated_as_stopped(self):
-        """Records with None speed are treated as stopped."""
-        records = [
-            {"speed_mps": None},
-            {"speed_mps": 5.0},
-            {"speed_mps": None},
-        ]
-        assert _compute_moving_time(records) == 1
-
-    def test_missing_speed_key_treated_as_stopped(self):
-        """Records missing speed_mps key are treated as stopped."""
-        records = [
-            {},
-            {"speed_mps": 5.0},
-            {"other_field": 10},
-        ]
-        assert _compute_moving_time(records) == 1
+        # No timestamps, falls back to 1s per moving record: 2s (first record has no interval)
+        assert _compute_moving_time(records) == 2
 
 
 class TestComputeExtendedMetricsCadence:

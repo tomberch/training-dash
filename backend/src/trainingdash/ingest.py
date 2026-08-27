@@ -76,10 +76,48 @@ MOVING_SPEED_THRESHOLD = 0.5
 
 
 def _compute_moving_time(records: list[dict]) -> int:
-    """Compute moving time by counting seconds where speed exceeds threshold."""
-    if not records:
-        return 0
-    return sum(1 for r in records if (r.get("speed_mps") or 0) > MOVING_SPEED_THRESHOLD)
+    """
+    Compute moving time by summing time intervals where speed exceeds threshold.
+
+    Handles variable-interval "smart recording" by looking at the actual timestamp
+    gaps between records, rather than assuming 1 record = 1 second.
+
+    For each record where speed > threshold, we add the time delta from the previous
+    record (capped at 30 seconds to handle gaps from pauses/stops).
+    """
+    if len(records) < 2:
+        # 0 or 1 record: can't compute intervals
+        return len(records) if records and (records[0].get("speed_mps") or 0) > MOVING_SPEED_THRESHOLD else 0
+
+    moving_seconds = 0.0
+    max_interval = 30  # Cap intervals to avoid counting long pauses as moving time
+
+    for i in range(1, len(records)):
+        curr = records[i]
+        prev = records[i - 1]
+
+        # Skip if current record isn't moving
+        if (curr.get("speed_mps") or 0) <= MOVING_SPEED_THRESHOLD:
+            continue
+
+        # Compute time delta between this record and the previous one
+        curr_ts = curr.get("timestamp")
+        prev_ts = prev.get("timestamp")
+
+        if curr_ts is None or prev_ts is None:
+            # No timestamps available, fall back to counting as 1 second
+            moving_seconds += 1
+            continue
+
+        try:
+            delta = (curr_ts - prev_ts).total_seconds()
+            # Cap at max_interval to avoid counting pauses
+            moving_seconds += min(delta, max_interval)
+        except (TypeError, AttributeError):
+            # Timestamps not datetime objects, count as 1 second
+            moving_seconds += 1
+
+    return int(moving_seconds)
 
 
 def _compute_extended_metrics(
