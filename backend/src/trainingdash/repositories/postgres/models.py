@@ -769,6 +769,11 @@ class RacePlan(Base):
     target_intensity: Mapped[Decimal | None] = mapped_column(Numeric(3, 2), nullable=True)  # e.g., 0.85 for 85% IF
     optimization_method: Mapped[str | None] = mapped_column(String(20), nullable=True)  # heuristic, optimized
     max_descent_speed_mps: Mapped[float | None] = mapped_column(Float, nullable=True)  # Cap descent speed
+    
+    # Ride type configuration
+    ride_type: Mapped[str | None] = mapped_column(String(20), nullable=True)  # race, gran_fondo, training, touring, custom
+    descent_aggressiveness: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 0-100
+    stop_pct: Mapped[float | None] = mapped_column(Float, nullable=True)  # 0-50
 
     # Results
     total_time_s: Mapped[float] = mapped_column(Float, nullable=False)
@@ -955,3 +960,130 @@ class PacingCoefficients(Base):
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
     updated_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
+
+
+
+# =============================================================================
+# Segment System Models
+# =============================================================================
+
+
+class Segment(Base):
+    """Global segment definition (climb, sprint, or custom).
+
+    Segments are shared across all users. A segment can be:
+    - 'suggested': Auto-detected, awaiting user approval
+    - 'approved': Confirmed by a user, visible to all
+
+    Soft-deleted via deleted_at timestamp.
+    """
+
+    __tablename__ = "segments"
+    __table_args__ = (
+        sa.CheckConstraint("type IN ('climb', 'sprint', 'custom')", name="segments_valid_type"),
+        sa.CheckConstraint("status IN ('suggested', 'approved')", name="segments_valid_status"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True, default=uuid4)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    type: Mapped[str] = mapped_column(String(20), nullable=False)  # climb, sprint, custom
+    status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="suggested")
+    climb_category: Mapped[str | None] = mapped_column(String(10), nullable=True)  # hc, 1, 2, 3, 4, nc
+
+    # Geometry
+    polyline: Mapped[str] = mapped_column(Text, nullable=False)  # Encoded polyline
+    start_point: Mapped[object] = mapped_column(Geometry("POINT", srid=4326), nullable=False)
+    end_point: Mapped[object] = mapped_column(Geometry("POINT", srid=4326), nullable=False)
+    bounds: Mapped[object] = mapped_column(Geometry("POLYGON", srid=4326), nullable=False)
+    direction_bearing: Mapped[float | None] = mapped_column(Float, nullable=True)  # 0-360 degrees
+
+    # Metrics
+    distance_m: Mapped[float] = mapped_column(Float, nullable=False)
+    elevation_gain_m: Mapped[float] = mapped_column(Float, nullable=False)
+    avg_grade_pct: Mapped[float] = mapped_column(Float, nullable=False)
+    max_grade_pct: Mapped[float] = mapped_column(Float, nullable=False)
+    gradient_segments = mapped_column(JSONB, nullable=False)  # [{distance_m, grade_pct}, ...]
+
+    # Denormalized counts (updated by triggers or application code)
+    effort_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    athlete_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+
+    # Ownership & tracking
+    created_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    source_activity_id: Mapped[UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("activities.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
+    deleted_at: Mapped[datetime | None] = mapped_column(nullable=True)  # Soft delete
+    matching_job_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+
+class SegmentEffort(Base):
+    """A user's effort on a segment during an activity.
+
+    Tracks elapsed time, power, HR, and PR status.
+    start_index/end_index refer to the record indices in the activity.
+    """
+
+    __tablename__ = "segment_efforts"
+    __table_args__ = (
+        UniqueConstraint("segment_id", "activity_id", "start_index", name="uq_segment_effort_unique"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True, default=uuid4)
+    segment_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("segments.id", ondelete="CASCADE"), nullable=False
+    )
+    activity_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("activities.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+
+    started_at: Mapped[datetime] = mapped_column(nullable=False)
+    elapsed_time_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
+    moving_time_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    avg_power_watts: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    avg_hr_bpm: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    start_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    end_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    is_pr: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+
+    created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
+
+    # Relationships
+    segment: Mapped["Segment"] = relationship("Segment", lazy="joined")
+    activity: Mapped["Activity"] = relationship("Activity", lazy="select")
+
+
+class SegmentSuggestion(Base):
+    """Per-user segment suggestion with repetition tracking.
+
+    When a user rides a suggested segment multiple times, the repetition_count
+    increases and expires_at is extended (90 days from last ride).
+    Users can dismiss suggestions they don't want to see.
+    """
+
+    __tablename__ = "segment_suggestions"
+    __table_args__ = (
+        UniqueConstraint("segment_id", "user_id", name="uq_segment_suggestion_user"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True, default=uuid4)
+    segment_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("segments.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+
+    repetition_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
+    first_ridden_at: Mapped[datetime] = mapped_column(nullable=False)
+    last_ridden_at: Mapped[datetime] = mapped_column(nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(nullable=False)
+    dismissed_at: Mapped[datetime | None] = mapped_column(nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
+
+    # Relationships
+    segment: Mapped["Segment"] = relationship("Segment", lazy="joined")
