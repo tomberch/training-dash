@@ -25,7 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { fetchRacePlan, fetchCourse, deleteRacePlan, regenerateRacePlan } from "@/api/race-plans";
-import { ParameterSliders, type UpdatedParams } from "@/components/race-planner";
+import { ParameterSliders, RideTypeBadge, type UpdatedParams } from "@/components/race-planner";
 import type { PlanResult } from "@/lib/physics";
 import type {
   RacePlanDetail,
@@ -576,7 +576,7 @@ export function PlanDetail() {
 
       {/* Stats bar */}
       <div className="bg-card border border-border rounded-xl p-4 mb-8">
-        <div className="grid grid-cols-5 gap-4">
+        <div className="grid grid-cols-6 gap-4">
           <StatCard label="Total Time" value={plan.total_time_formatted} />
           <StatCard label="Distance" value={formatDistance(course.distance_m)} />
           <StatCard label="Avg Power" value={Math.round(plan.avg_power_w)} unit="W" />
@@ -589,6 +589,16 @@ export function PlanDetail() {
             label="IF"
             value={plan.intensity_factor ? plan.intensity_factor.toFixed(2) : "—"}
           />
+          <div className="text-center">
+            <div className="text-metric flex justify-center">
+              <RideTypeBadge
+                rideType={plan.ride_type}
+                descentAggressiveness={plan.descent_aggressiveness}
+                stopPct={plan.stop_pct}
+              />
+            </div>
+            <div className="text-metric-label">Ride Type</div>
+          </div>
         </div>
       </div>
 

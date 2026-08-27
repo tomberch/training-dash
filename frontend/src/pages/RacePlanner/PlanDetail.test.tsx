@@ -91,6 +91,9 @@ const mockPlan: RacePlanDetail = {
   avg_power_w: 220,
   normalized_power_w: 235,
   intensity_factor: 0.85,
+  ride_type: "race",
+  descent_aggressiveness: 90,
+  stop_pct: 2,
   comparison: {
     constant_time_s: 5600,
     heuristic_time_s: 5400,

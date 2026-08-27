@@ -348,6 +348,10 @@ export interface RacePlanDetail {
   avg_power_w: number;
   normalized_power_w: number | null;
   intensity_factor: number | null;
+  // Ride type configuration
+  ride_type: string | null;
+  descent_aggressiveness: number | null;
+  stop_pct: number | null;
   comparison: PlanComparison;
   warnings: string[];
   segment_targets: SegmentTarget[];
