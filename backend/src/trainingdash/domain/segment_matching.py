@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from trainingdash.domain.polyline import decode_polyline
-from trainingdash.domain.segment_geometry import haversine_distance
+from trainingdash.domain.segment_geometry import compute_bearing, haversine_distance
 
 __all__ = [
     "SegmentMatch",
@@ -211,9 +211,6 @@ def _compute_activity_bearing(records: list[dict], start_idx: int, end_idx: int)
     start_lon = records[start_idx].get("lon", 0)
     end_lat = records[end_idx].get("lat", 0)
     end_lon = records[end_idx].get("lon", 0)
-
-    # Use the bearing calculation from segment_geometry
-    from trainingdash.domain.segment_geometry import compute_bearing
 
     return compute_bearing(start_lat, start_lon, end_lat, end_lon)
 

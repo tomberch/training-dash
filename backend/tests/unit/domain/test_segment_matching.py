@@ -1,11 +1,11 @@
 """Unit tests for segment matching algorithm."""
 
-import math
 from uuid import uuid4
 
 import pytest
 
 from trainingdash.domain.polyline import encode_polyline
+from trainingdash.domain.segment_geometry import compute_bearing, haversine_distance
 from trainingdash.domain.segment_matching import (
     SegmentCandidate,
     SegmentMatch,
@@ -32,7 +32,6 @@ def make_records(coords: list[tuple[float, float]], start_distance: float = 0) -
     for i, (lat, lon) in enumerate(coords):
         if i > 0:
             prev_lat, prev_lon = coords[i - 1]
-            from trainingdash.domain.segment_geometry import haversine_distance
             cumulative_dist += haversine_distance(prev_lat, prev_lon, lat, lon)
         
         records.append({
@@ -50,8 +49,6 @@ def make_candidate(
     direction_bearing: float | None = None,
 ) -> SegmentCandidate:
     """Create a segment candidate from coordinates."""
-    from trainingdash.domain.segment_geometry import compute_bearing, haversine_distance
-    
     if segment_id is None:
         segment_id = uuid4()
     
