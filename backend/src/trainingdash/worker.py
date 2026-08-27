@@ -171,11 +171,17 @@ async def ingest_job(ctx: dict, *, user_id: int, fit_bytes_b64: str, source: str
 
 @tracked_job("match_route")
 async def match_route_job(ctx: dict, *, activity_id: str, user_id: int):
-    """Match an activity to a route cluster (thin dispatch to MatchRoute use case)."""
+    """Match an activity to a route cluster and chain to segment processing."""
+    from trainingdash.jobs import enqueue_segment_process_job
     from trainingdash.use_cases.match_route import MatchRoute
 
     async with worker_db_session(ctx) as db:
-        return await MatchRoute(db).execute(activity_id, user_id)
+        result = await MatchRoute(db).execute(activity_id, user_id)
+
+    # Chain to segment processing
+    await enqueue_segment_process_job(activity_id, user_id)
+
+    return result
 
 
 @tracked_job("recalculate_after_delete")
@@ -185,6 +191,83 @@ async def recalculate_after_delete_job(ctx: dict, *, user_id: int) -> dict:
 
     async with worker_db_session(ctx) as db:
         return await RecalcAfterDelete(db).execute(user_id)
+
+
+@tracked_job("segment_process")
+async def segment_process_job(ctx: dict, *, activity_id: str, user_id: int) -> dict:
+    """
+    Match activity against segments and detect climbs.
+
+    Called after match_route_job completes. This job:
+    - Loads activity with GPS records
+    - Finds candidate segments via spatial query
+    - Runs precise matching algorithm
+    - Creates SegmentEffort for each match with PR tracking
+    - Detects climbs and creates segment suggestions
+
+    Returns counts of matched efforts, detected climbs, and new PRs.
+    """
+    from uuid import UUID
+
+    from trainingdash.repositories.postgres.segment_repo import (
+        PostgresSegmentEffortRepo,
+        PostgresSegmentRepo,
+        PostgresSegmentSuggestionRepo,
+    )
+    from trainingdash.use_cases.process_activity_segments import ProcessActivitySegments
+
+    async with worker_db_session(ctx) as db:
+        segment_repo = PostgresSegmentRepo(db)
+        effort_repo = PostgresSegmentEffortRepo(db)
+        suggestion_repo = PostgresSegmentSuggestionRepo(db)
+
+        use_case = ProcessActivitySegments(db, segment_repo, effort_repo, suggestion_repo)
+        result = await use_case.execute(UUID(activity_id), user_id)
+
+        return {
+            "matched_efforts": result.matched_efforts,
+            "detected_climbs": result.detected_climbs,
+            "new_prs": result.new_prs,
+        }
+
+
+@tracked_job("retroactive_match")
+async def retroactive_match_job(ctx: dict, *, segment_id: str) -> dict:
+    """
+    Find historical activities that match a newly created segment.
+
+    Called when a segment is created or approved. This job:
+    - Loads the segment with bounding box
+    - Iterates through candidate activities in batches
+    - Runs precise matching for each
+    - Creates SegmentEffort for matches with PR tracking
+    - Updates denormalized counts on completion
+
+    Supports checkpoint/resume via segment.matching_job_id for reliability.
+
+    Returns success status, activities scanned, efforts created, and any error.
+    """
+    from uuid import UUID
+
+    from trainingdash.repositories.postgres.segment_repo import (
+        PostgresSegmentEffortRepo,
+        PostgresSegmentRepo,
+    )
+    from trainingdash.use_cases.retroactive_match import RetroactiveMatch
+
+    async with worker_db_session(ctx) as db:
+        segment_repo = PostgresSegmentRepo(db)
+        effort_repo = PostgresSegmentEffortRepo(db)
+
+        use_case = RetroactiveMatch(db, segment_repo, effort_repo)
+        result = await use_case.execute(UUID(segment_id))
+
+        return {
+            "success": result.success,
+            "activities_scanned": result.activities_scanned,
+            "efforts_created": result.efforts_created,
+            "error": result.error,
+        }
 
 
 @tracked_job("import_xert")
@@ -605,6 +688,8 @@ def settings():
             ingest_job,
             match_route_job,
             recalculate_after_delete_job,
+            segment_process_job,
+            retroactive_match_job,
             recalculate_metrics_job,
             fetch_weather_job,
             batch_weather_job,

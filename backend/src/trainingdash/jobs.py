@@ -131,6 +131,39 @@ async def enqueue_match_route_job(activity_id: str, user_id: int) -> str | None:
     return job.key if job else None
 
 
+async def enqueue_segment_process_job(activity_id: str, user_id: int) -> str | None:
+    """
+    Enqueue segment processing for an activity.
+
+    This job matches the activity against known segments and detects new climbs.
+    Called after route matching completes.
+
+    Returns job key or None if queue is not available.
+    """
+    if not queue_available():
+        return None
+    queue = await get_queue()
+    job = await queue.enqueue("segment_process_job", activity_id=activity_id, user_id=user_id)
+    return job.key if job else None
+
+
+async def enqueue_retroactive_match_job(segment_id: str) -> str | None:
+    """
+    Enqueue retroactive matching for a newly created segment.
+
+    This job scans historical activities to find those that match the segment.
+    Should be called when a segment is created or approved.
+
+    Returns job key or None if queue is not available.
+    """
+    if not queue_available():
+        return None
+    queue = await get_queue()
+    # Retroactive matching can process many activities; give it longer timeout
+    job = await queue.enqueue("retroactive_match_job", segment_id=segment_id, timeout=600)
+    return job.key if job else None
+
+
 async def enqueue_fetch_weather_job(user_id: int, activity_id: str | None = None) -> str | None:
     """
     Enqueue a weather fetch job for activities pending weather data.
