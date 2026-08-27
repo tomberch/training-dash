@@ -7,7 +7,7 @@ in batches with checkpoint/resume capability for reliability.
 
 Key features:
 1. Batched processing (100 activities per commit)
-2. Spatial filtering via ST_Intersects on activity direction bearings
+2. Direction bearing filter (±60°) for candidate filtering
 3. Checkpoint/resume via segment.matching_job_id
 4. PR tracking for each user
 5. Denormalized count updates at completion
@@ -20,10 +20,8 @@ from uuid import UUID, uuid4
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from geoalchemy2.functions import ST_Intersects, ST_MakeEnvelope
 from geoalchemy2.shape import to_shape
 
-from trainingdash.domain.segment_geometry import compute_bearing, compute_bounds
 from trainingdash.domain.segment_matching import (
     SegmentCandidate,
     match_activity_to_segments,
@@ -236,10 +234,10 @@ class RetroactiveMatch:
         limit: int,
     ) -> list[Activity]:
         """
-        Find activities whose bounds intersect segment + direction matches.
+        Find activities whose direction matches the segment bearing.
 
-        Uses spatial intersection with the segment's bounding box and
-        filters by direction bearing (±60°).
+        Filters by direction bearing (±60°) for candidate selection.
+        Activities are ordered by id for stable pagination.
 
         Args:
             segment: The segment to match against
@@ -249,20 +247,9 @@ class RetroactiveMatch:
         Returns:
             List of candidate Activity objects ordered by id for stable pagination
         """
-        # Build the spatial filter using ST_Intersects
-        # We need to create an envelope from the segment's bounds
-        segment_bounds = to_shape(segment.bounds).bounds  # (minx, miny, maxx, maxy)
-        min_lon, min_lat, max_lon, max_lat = segment_bounds
-
-        # Add 1km buffer (~0.009 degrees at equator)
-        buffer = 0.01
-        bounds_envelope = ST_MakeEnvelope(
-            min_lon - buffer,
-            min_lat - buffer,
-            max_lon + buffer,
-            max_lat + buffer,
-            4326,
-        )
+        # TODO: Add ST_Intersects spatial filter for performance optimization
+        # Currently relies on direction filter; spatial filter would reduce
+        # candidates further by checking activity bounds vs segment bounds
 
         # Build direction filter
         # Activities must have direction_bearing within ±60° of segment
@@ -297,9 +284,6 @@ class RetroactiveMatch:
                 | (Activity.direction_bearing <= high_bearing)
             )
 
-        # Execute query - spatial filter would require a PostGIS-enabled subquery
-        # For MVP, we rely on direction filter; spatial filter is a nice-to-have
-        # optimization that can be added later
         result = await self._db.execute(query)
         return list(result.scalars().all())
 
