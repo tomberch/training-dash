@@ -1303,11 +1303,252 @@ class PacingCoefficientsRepo(Protocol):
         ...
 
 
+class SegmentRepo(Protocol):
+    """
+    Repository protocol for Segment entities.
+
+    Segments are globally shared climb/sprint/custom sections of road.
+    They can be 'suggested' (auto-detected) or 'approved' (user-confirmed).
+    Soft-deleted via deleted_at timestamp.
+    """
+
+    async def get_by_id(self, segment_id: UUID) -> "Segment | None":
+        """Fetch a segment by ID. Returns None if not found or soft-deleted."""
+        ...
+
+    async def list_approved(
+        self,
+        type: str | None = None,
+        category: list[str] | None = None,
+        bounds: tuple[float, float, float, float] | None = None,
+        search: str | None = None,
+        sort: str = "popularity",
+        order: str = "desc",
+        limit: int = 20,
+        offset: int = 0,
+    ) -> list["Segment"]:
+        """
+        List approved segments with optional filters.
+
+        Args:
+            type: Filter by segment type ('climb', 'sprint', 'custom')
+            category: Filter by climb category (['hc', '1', '2', '3', '4', 'nc'])
+            bounds: Bounding box (sw_lat, sw_lng, ne_lat, ne_lng) for spatial filter
+            search: Text search on segment name (ILIKE)
+            sort: Sort field ('popularity', 'name', 'distance', 'elevation')
+            order: Sort order ('asc', 'desc')
+            limit: Maximum results
+            offset: Pagination offset
+
+        Returns:
+            List of approved Segment objects
+        """
+        ...
+
+    async def count_approved(
+        self,
+        type: str | None = None,
+        category: list[str] | None = None,
+        bounds: tuple[float, float, float, float] | None = None,
+        search: str | None = None,
+    ) -> int:
+        """Count approved segments matching the given filters."""
+        ...
+
+    async def save(self, segment: "Segment") -> "Segment":
+        """
+        Persist a segment (insert or update).
+
+        Returns the saved segment with any DB-generated fields populated.
+        """
+        ...
+
+    async def soft_delete(self, segment_id: UUID) -> bool:
+        """
+        Soft-delete a segment by setting deleted_at.
+
+        Returns True if deleted, False if not found.
+        """
+        ...
+
+    async def find_candidates_for_matching(
+        self,
+        bounds: "WKBElement",
+        direction_bearing: float,
+    ) -> list["Segment"]:
+        """
+        Find approved segments that might match an activity section.
+
+        Uses spatial intersection with bounds and direction within ±60°.
+
+        Args:
+            bounds: PostGIS polygon covering the activity section
+            direction_bearing: Travel direction in degrees (0-360)
+
+        Returns:
+            List of candidate Segment objects for detailed matching
+        """
+        ...
+
+    async def increment_counts(self, segment_id: UUID, new_athlete: bool) -> None:
+        """
+        Increment effort_count and optionally athlete_count.
+
+        Args:
+            segment_id: Segment to update
+            new_athlete: If True, also increment athlete_count
+        """
+        ...
+
+
+class SegmentEffortRepo(Protocol):
+    """
+    Repository protocol for SegmentEffort entities.
+
+    Efforts track a user's completion of a segment during an activity,
+    including elapsed time, power, HR, and PR status.
+    """
+
+    async def get_by_id(self, effort_id: UUID) -> "SegmentEffort | None":
+        """Fetch an effort by ID. Returns None if not found."""
+        ...
+
+    async def list_for_segment(
+        self,
+        segment_id: UUID,
+        user_id: int,
+        sort: str = "time",
+        order: str = "asc",
+        limit: int = 20,
+        offset: int = 0,
+    ) -> list["SegmentEffort"]:
+        """
+        List a user's efforts on a segment.
+
+        Args:
+            segment_id: Segment ID
+            user_id: User ID
+            sort: Sort field ('time', 'date', 'power')
+            order: Sort order ('asc', 'desc')
+            limit: Maximum results
+            offset: Pagination offset
+
+        Returns:
+            List of SegmentEffort objects
+        """
+        ...
+
+    async def list_for_activity(self, activity_id: UUID) -> list["SegmentEffort"]:
+        """
+        List all efforts from an activity, ordered by start_index.
+
+        Returns:
+            List of SegmentEffort objects in ride order
+        """
+        ...
+
+    async def save(self, effort: "SegmentEffort") -> "SegmentEffort":
+        """
+        Persist an effort (insert or update).
+
+        Returns the saved effort with any DB-generated fields populated.
+        """
+        ...
+
+    async def get_user_pr(self, segment_id: UUID, user_id: int) -> "SegmentEffort | None":
+        """
+        Get the user's PR effort on a segment.
+
+        Returns the effort with is_pr=True, or None if no efforts exist.
+        """
+        ...
+
+    async def clear_user_pr(self, segment_id: UUID, user_id: int) -> None:
+        """
+        Clear the is_pr flag on all of a user's efforts for a segment.
+
+        Called before setting a new PR.
+        """
+        ...
+
+
+class SegmentSuggestionRepo(Protocol):
+    """
+    Repository protocol for SegmentSuggestion entities.
+
+    Suggestions track auto-detected segments per user with repetition
+    counts and expiration. Users can dismiss suggestions they don't want.
+    """
+
+    async def get_by_id(self, suggestion_id: UUID) -> "SegmentSuggestion | None":
+        """Fetch a suggestion by ID. Returns None if not found."""
+        ...
+
+    async def list_for_user(
+        self,
+        user_id: int,
+        include_dismissed: bool = False,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> list["SegmentSuggestion"]:
+        """
+        List suggestions for a user.
+
+        Args:
+            user_id: User ID
+            include_dismissed: If True, include dismissed suggestions
+            limit: Maximum results
+            offset: Pagination offset
+
+        Returns:
+            List of SegmentSuggestion objects ordered by repetition_count desc
+        """
+        ...
+
+    async def count_for_user(self, user_id: int, include_dismissed: bool = False) -> int:
+        """Count suggestions for a user."""
+        ...
+
+    async def save(self, suggestion: "SegmentSuggestion") -> "SegmentSuggestion":
+        """
+        Persist a suggestion (insert or update).
+
+        Returns the saved suggestion with any DB-generated fields populated.
+        """
+        ...
+
+    async def dismiss(self, suggestion_id: UUID) -> bool:
+        """
+        Dismiss a suggestion by setting dismissed_at.
+
+        Returns True if dismissed, False if not found.
+        """
+        ...
+
+    async def dismiss_all(self, user_id: int) -> int:
+        """
+        Dismiss all suggestions for a user.
+
+        Returns the count of suggestions dismissed.
+        """
+        ...
+
+    async def get_for_user_segment(self, user_id: int, segment_id: UUID) -> "SegmentSuggestion | None":
+        """
+        Get the suggestion for a specific user/segment pair.
+
+        Returns None if no suggestion exists.
+        """
+        ...
+
+
 # Import types for type hints (avoid circular import at runtime)
 from datetime import date, datetime
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from geoalchemy2.elements import WKBElement
+
     from trainingdash.domain.thresholds import ThresholdHistoryEntry, ThresholdValues
     from trainingdash.repositories.postgres.analytics_repo import RecordsView
     from trainingdash.repositories.postgres.models import (
@@ -1332,6 +1573,9 @@ if TYPE_CHECKING:
         RideEventMedia,
         Route,
         SavedFilter,
+        Segment,
+        SegmentEffort,
+        SegmentSuggestion,
         User,
         UserOAuthLink,
         XertCredentials,
