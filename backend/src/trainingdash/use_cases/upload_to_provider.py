@@ -206,11 +206,12 @@ class UploadToProvider:
             filename = f"{activity.started_at.strftime('%Y-%m-%d')}_{activity.id}.fit"
             provider_activity_id = await client.upload_fit(fit_bytes, filename)
 
-            # Security: use %r (repr) to escape special characters and truncate to prevent log injection
+            # Security: provider_activity_id comes from external API, sanitize it
+            safe_id = provider_activity_id[:100] if provider_activity_id else None
             logger.info(
                 "Uploaded activity %s to Xert as %r for user %d",
                 activity.id,
-                provider_activity_id[:100] if provider_activity_id else None,
+                safe_id,
                 user_id,
             )
 
@@ -255,11 +256,12 @@ class UploadToProvider:
             client.login(creds.garmin_email, password)
             provider_activity_id = client.upload_fit(fit_bytes)
 
-            # Security: use %r (repr) to escape special characters and truncate to prevent log injection
+            # Security: provider_activity_id comes from external API, sanitize it
+            safe_id = provider_activity_id[:100] if provider_activity_id else None
             logger.info(
                 "Uploaded activity %s to Garmin as %r for user %d",
                 activity.id,
-                provider_activity_id[:100] if provider_activity_id else None,
+                safe_id,
                 user_id,
             )
 

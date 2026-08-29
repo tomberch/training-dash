@@ -153,12 +153,16 @@ class CalibratePacing:
                 ),
             )
 
+            # Security: bike_id is user input, use %r to escape special characters
             logger.info(
-                f"Calibrated pacing coefficients for user={user_id} bike={bike_id}: "
-                f"intercept={result.grade_power_intercept:.3f}, "
-                f"slope={result.grade_power_slope:.4f}, "
-                f"max_descent={result.max_descent_speed_mps:.1f}m/s, "
-                f"R²={result.climb_r_squared:.3f}"
+                "Calibrated pacing coefficients for user=%d bike=%r: "
+                "intercept=%.3f, slope=%.4f, max_descent=%.1fm/s, R²=%.3f",
+                user_id,
+                bike_id,
+                result.grade_power_intercept,
+                result.grade_power_slope,
+                result.max_descent_speed_mps,
+                result.climb_r_squared,
             )
 
             return CalibrationStats(

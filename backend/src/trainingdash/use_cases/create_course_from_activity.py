@@ -6,7 +6,6 @@ which is often more convenient than uploading a separate GPX/FIT file.
 """
 
 import logging
-import re
 from dataclasses import dataclass
 from uuid import UUID
 
@@ -156,11 +155,10 @@ class CreateCourseFromActivity:
 
         saved_course = await self._course_repo.save(course)
 
-        # Security: sanitize course name for logging
-        safe_name = re.sub(r"[\r\n\t\x00-\x1f\x7f-\x9f]", "", course_name)
+        # Security: use %r (repr) to escape special characters and truncate to prevent log injection
         logger.info(
-            "Created course '%s' from activity %s for user %d: %.1fkm, %.0fm gain",
-            safe_name,
+            "Created course %r from activity %s for user %d: %.1fkm, %.0fm gain",
+            course_name[:100],
             activity_id,
             user_id,
             total_distance / 1000,

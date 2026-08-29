@@ -139,10 +139,8 @@ class GarminClient:
                 prompt_mfa=self._mfa_callback,
             )
             self._client.login()
-            # Security: use %r (repr) to escape special characters and truncate to prevent log injection
-            # Email is masked to avoid PII exposure
-            masked = _mask_email(email)
-            logger.info("Garmin login successful for %r", masked[:50])
+            # Security: don't log email at all to avoid PII exposure
+            logger.info("Garmin login successful")
             return True
         except GarminMFARequired:
             # Re-raise our own exception
