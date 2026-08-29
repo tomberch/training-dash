@@ -11,13 +11,13 @@ from trainingdash.dependencies import (
     ActivityRepoD,
     BikeRepoD,
     CourseRepoD,
+    HistoricalNpRepoD,
     PacingCoefficientsRepoD,
     RacePlanRepoD,
     RecordRepoD,
     UserRepoD,
 )
 from trainingdash.domain.pacing import RideTypeParams, RideTypePreset
-from trainingdash.domain.historical_np import get_course_historical_np
 from trainingdash.integrations.weather import (
     fetch_race_day_forecast,
     get_calm_conditions,
@@ -184,7 +184,7 @@ class HistoricalNpStatsSchema(BaseModel):
     ride_count: int
     avg_np_w: float
     min_np_w: float
-    max_np_w: float
+    best_np_w: float
     avg_power_w: float
 
 
@@ -485,7 +485,7 @@ async def get_plan(
     plan_id: int,
     current_user: CurrentUser,
     plan_repo: RacePlanRepoD,
-    db: DbSession,
+    historical_np_repo: HistoricalNpRepoD,
 ):
     """Get full plan details including segment targets."""
     plan = await plan_repo.get_by_id(plan_id, current_user.id)
@@ -510,14 +510,14 @@ async def get_plan(
         forecast_stale = age.total_seconds() > 86400  # 24 hours
 
     # Fetch historical NP stats for this course (#643)
-    historical_stats = await get_course_historical_np(db, current_user.id, plan.course_id)
+    historical_stats = await historical_np_repo.get_for_course(current_user.id, plan.course_id)
     historical_np_stats = None
     if historical_stats:
         historical_np_stats = HistoricalNpStatsSchema(
             ride_count=historical_stats.ride_count,
             avg_np_w=historical_stats.avg_np_w,
             min_np_w=historical_stats.min_np_w,
-            max_np_w=historical_stats.max_np_w,
+            best_np_w=historical_stats.best_np_w,
             avg_power_w=historical_stats.avg_power_w,
         )
 

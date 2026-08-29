@@ -344,7 +344,7 @@ export interface HistoricalNpStats {
   ride_count: number;
   avg_np_w: number;
   min_np_w: number;
-  max_np_w: number;
+  best_np_w: number;
   avg_power_w: number;
 }
 

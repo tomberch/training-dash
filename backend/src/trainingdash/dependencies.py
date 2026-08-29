@@ -31,6 +31,7 @@ from trainingdash.repositories.postgres.credentials_repo import (
 )
 from trainingdash.repositories.postgres.event_repo import PostgresEventRepo
 from trainingdash.repositories.postgres.geocoding_cache_repo import PostgresGeocodingCacheRepo
+from trainingdash.repositories.postgres.historical_np_repo import PostgresHistoricalNpRepo
 from trainingdash.repositories.postgres.notification_repo import PostgresNotificationRepo
 from trainingdash.repositories.postgres.oauth_link_repo import PostgresOAuthLinkRepo
 from trainingdash.repositories.postgres.pacing_coefficients_repo import PostgresPacingCoefficientsRepo
@@ -65,6 +66,7 @@ from trainingdash.repositories.protocols import (
     CourseRepo,
     EventRepo,
     GarminCredentialsRepo,
+    HistoricalNpRepo,
     JournalEntryActivityRepo,
     JournalEntryRepo,
     NotificationRepo,
@@ -186,6 +188,11 @@ async def get_race_plan_repo(db: DbSession) -> RacePlanRepo:
     return PostgresRacePlanRepo(db)
 
 
+async def get_historical_np_repo(db: DbSession) -> HistoricalNpRepo:
+    """Create a HistoricalNpRepo bound to the current session."""
+    return PostgresHistoricalNpRepo(db)
+
+
 async def get_pacing_coefficients_repo(db: DbSession) -> PacingCoefficientsRepo:
     """Create a PacingCoefficientsRepo bound to the current session."""
     return PostgresPacingCoefficientsRepo(db)
@@ -258,6 +265,7 @@ EventRepoD = Annotated[EventRepo, Depends(get_event_repo)]
 RecalculationJobRepoD = Annotated[RecalculationJobRepo, Depends(get_recalculation_job_repo)]
 OAuthLinkRepoD = Annotated[OAuthLinkRepo, Depends(get_oauth_link_repo)]
 RacePlanRepoD = Annotated[RacePlanRepo, Depends(get_race_plan_repo)]
+HistoricalNpRepoD = Annotated[HistoricalNpRepo, Depends(get_historical_np_repo)]
 PacingCoefficientsRepoD = Annotated[PacingCoefficientsRepo, Depends(get_pacing_coefficients_repo)]
 ThresholdRepoD = Annotated[ThresholdRepo, Depends(get_threshold_repo)]
 SavedFilterRepoD = Annotated[SavedFilterRepo, Depends(get_saved_filter_repo)]

@@ -1540,6 +1540,73 @@ class SegmentSuggestionRepo(Protocol):
         ...
 
 
+class HistoricalNpRepo(Protocol):
+    """
+    Repository protocol for historical NP statistics.
+
+    Provides course-to-route matching via spatial queries and
+    aggregated NP statistics from activities on matched routes.
+    """
+
+    async def find_route_for_course(
+        self,
+        user_id: int,
+        course_id: int,
+        threshold_m: float = 100.0,
+    ) -> int | None:
+        """
+        Find the route that matches a course's geometry.
+
+        Uses Hausdorff distance to compare course geometry against
+        the user's routes.
+
+        Args:
+            user_id: User ID to scope routes.
+            course_id: Course ID to match.
+            threshold_m: Maximum Hausdorff distance in meters for a match.
+
+        Returns:
+            Route ID if a match is found within threshold, None otherwise.
+        """
+        ...
+
+    async def get_stats_for_route(
+        self,
+        user_id: int,
+        route_id: int,
+    ) -> "HistoricalNpStats | None":
+        """
+        Get NP statistics for activities on a route.
+
+        Args:
+            user_id: User ID to scope activities.
+            route_id: Route ID to query.
+
+        Returns:
+            HistoricalNpStats if activities with NP exist, None otherwise.
+        """
+        ...
+
+    async def get_for_course(
+        self,
+        user_id: int,
+        course_id: int,
+    ) -> "HistoricalNpStats | None":
+        """
+        Get historical NP stats for a course by matching to routes.
+
+        Convenience method that combines route matching and stats lookup.
+
+        Args:
+            user_id: User ID.
+            course_id: Course ID.
+
+        Returns:
+            HistoricalNpStats if a matching route with rides exists, None otherwise.
+        """
+        ...
+
+
 # Import types for type hints (avoid circular import at runtime)
 from datetime import date, datetime
 from typing import TYPE_CHECKING, Any
@@ -1547,6 +1614,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from geoalchemy2.elements import WKBElement
 
+    from trainingdash.domain.historical_np import HistoricalNpStats
     from trainingdash.domain.pacing_model import PacingCoefficients as DomainPacingCoefficients
     from trainingdash.domain.thresholds import ThresholdHistoryEntry, ThresholdValues
     from trainingdash.repositories.postgres.analytics_repo import RecordsView

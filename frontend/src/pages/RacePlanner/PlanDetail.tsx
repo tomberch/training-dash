@@ -623,7 +623,7 @@ export function PlanDetail() {
             )}
             {plan.historical_np_stats && (
               <div className="text-caption mt-1 text-muted-foreground">
-                Your rides: {Math.round(plan.historical_np_stats.avg_np_w)}W avg ({plan.historical_np_stats.ride_count} {plan.historical_np_stats.ride_count === 1 ? 'ride' : 'rides'})
+                Your rides here: NP {Math.round(plan.historical_np_stats.avg_np_w)}W avg ({plan.historical_np_stats.ride_count} {plan.historical_np_stats.ride_count === 1 ? 'ride' : 'rides'})
               </div>
             )}
           </div>

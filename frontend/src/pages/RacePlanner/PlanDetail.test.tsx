@@ -255,7 +255,7 @@ describe("PlanDetail", () => {
           ride_count: 5,
           avg_np_w: 239,
           min_np_w: 215,
-          max_np_w: 260,
+          best_np_w: 260,
           avg_power_w: 205,
         },
       };
@@ -264,7 +264,7 @@ describe("PlanDetail", () => {
       renderPlanDetail();
 
       await waitFor(() => {
-        expect(screen.getByText(/Your rides: 239W avg/)).toBeInTheDocument();
+        expect(screen.getByText(/Your rides here: NP 239W avg/)).toBeInTheDocument();
         expect(screen.getByText(/5 rides/)).toBeInTheDocument();
       });
     });
@@ -276,7 +276,7 @@ describe("PlanDetail", () => {
           ride_count: 1,
           avg_np_w: 230,
           min_np_w: 230,
-          max_np_w: 230,
+          best_np_w: 230,
           avg_power_w: 200,
         },
       };
@@ -285,7 +285,7 @@ describe("PlanDetail", () => {
       renderPlanDetail();
 
       await waitFor(() => {
-        expect(screen.getByText(/Your rides: 230W avg/)).toBeInTheDocument();
+        expect(screen.getByText(/Your rides here: NP 230W avg/)).toBeInTheDocument();
         expect(screen.getByText(/1 ride\)/)).toBeInTheDocument();
       });
     });
@@ -297,7 +297,7 @@ describe("PlanDetail", () => {
         expect(screen.getByText("Test Race Plan")).toBeInTheDocument();
       });
 
-      expect(screen.queryByText(/Your rides:/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Your rides here:/)).not.toBeInTheDocument();
     });
   });
 
