@@ -388,11 +388,20 @@ function QuickPreview({ result, onViewPlan, onGenerateAnother }: QuickPreviewPro
     ? `${result.comparison.improvement_vs_constant_pct.toFixed(1)}% faster than constant power`
     : null;
 
+  const isOptimized = result.optimization_method === "optimized";
+
   return (
     <div className="bg-success/10 border border-success/20 rounded-xl p-6">
       <div className="flex items-start justify-between mb-4">
         <div>
-          <h3 className="text-lg font-semibold text-success">Plan Generated!</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-lg font-semibold text-success">Plan Generated!</h3>
+            {isOptimized && (
+              <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-primary/20 text-primary">
+                Optimal Strategy
+              </span>
+            )}
+          </div>
           {improvementText && (
             <p className="text-sm text-success/80 mt-1">{improvementText}</p>
           )}
@@ -774,20 +783,28 @@ export function GeneratePlan(): JSX.Element {
             </div>
 
             {targetMode === "intensity" && (
-              <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
-                <div>
-                  <Label htmlFor="optimizer" className="text-sm font-medium">
-                    Use Optimizer
-                  </Label>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    More accurate, takes 10-30 seconds
-                  </p>
+              <div className="p-4 bg-muted/50 rounded-lg space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label htmlFor="optimizer" className="text-sm font-medium">
+                      Optimal Pacing (experimental)
+                    </Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Takes 10-30 seconds
+                    </p>
+                  </div>
+                  <Switch
+                    id="optimizer"
+                    checked={useOptimizer}
+                    onCheckedChange={setUseOptimizer}
+                  />
                 </div>
-                <Switch
-                  id="optimizer"
-                  checked={useOptimizer}
-                  onCheckedChange={setUseOptimizer}
-                />
+                {useOptimizer && (
+                  <p className="text-xs text-muted-foreground border-t border-border pt-3">
+                    Computes minimum-time pacing under a W′bal energy budget — a strategy view
+                    showing how fast you <em>could</em> go, not necessarily how you'd ride it.
+                  </p>
+                )}
               </div>
             )}
 
@@ -796,6 +813,9 @@ export function GeneratePlan(): JSX.Element {
                 <p className="text-sm text-primary">
                   Target time mode scales your riding profile to hit the finish time —
                   harder on climbs, coasting on descents, honest NP.
+                </p>
+                <p className="text-xs text-primary/70 mt-2">
+                  Note: The energy-budget optimizer is not used in time-target mode.
                 </p>
               </div>
             )}

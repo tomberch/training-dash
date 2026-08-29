@@ -387,6 +387,7 @@ export interface RacePlanResponse {
   intensity_factor: number | null;
   comparison: PlanComparison;
   warnings: string[];
+  optimization_method: string | null;
 }
 
 // Course types for race planner

@@ -106,6 +106,7 @@ const mockPlanResponse: RacePlanResponse = {
     improvement_vs_constant_pct: 3.5,
   },
   warnings: [],
+  optimization_method: "heuristic",
 };
 
 function renderGeneratePlan(initialRoute = "/race-planner/generate") {
@@ -277,12 +278,30 @@ describe("GeneratePlan", () => {
   });
 
   describe("Optimizer Toggle", () => {
-    it("shows optimizer toggle with explanation", async () => {
+    it("shows optimizer toggle with explicit opt-in labeling", async () => {
       renderGeneratePlan();
 
       await waitFor(() => {
-        expect(screen.getByText("Use Optimizer")).toBeInTheDocument();
-        expect(screen.getByText("More accurate, takes 10-30 seconds")).toBeInTheDocument();
+        expect(screen.getByText("Optimal Pacing (experimental)")).toBeInTheDocument();
+        expect(screen.getByText("Takes 10-30 seconds")).toBeInTheDocument();
+      });
+    });
+
+    it("shows explanatory copy when optimizer is enabled", async () => {
+      renderGeneratePlan();
+
+      await waitFor(() => {
+        expect(screen.getByDisplayValue("280")).toBeInTheDocument();
+      });
+
+      // Enable optimizer using Testing Library query
+      const optimizerSwitch = screen.getByRole("switch", { name: /Optimal Pacing/i });
+      await userEvent.click(optimizerSwitch);
+
+      // Should show explanatory copy about W'bal energy budget
+      await waitFor(() => {
+        expect(screen.getByText(/W′bal energy budget/)).toBeInTheDocument();
+        expect(screen.getByText(/strategy view/)).toBeInTheDocument();
       });
     });
   });
@@ -381,10 +400,9 @@ describe("GeneratePlan", () => {
       const courseSelect = getCourseSelect();
       await userEvent.selectOptions(courseSelect, "1");
 
-      // Enable optimizer - find by id to avoid matching other switches
-      const optimizerSwitch = document.getElementById("optimizer");
-      expect(optimizerSwitch).not.toBeNull();
-      await userEvent.click(optimizerSwitch!);
+      // Enable optimizer
+      const optimizerSwitch = screen.getByRole("switch", { name: /Optimal Pacing/i });
+      await userEvent.click(optimizerSwitch);
 
       await userEvent.click(screen.getByRole("button", { name: "Generate Plan" }));
 
@@ -525,6 +543,52 @@ describe("GeneratePlan", () => {
         expect(screen.queryByText("Plan Generated!")).not.toBeInTheDocument();
       });
     });
+
+    it("shows 'Optimal Strategy' badge for optimized plans", async () => {
+      const optimizedResponse = {
+        ...mockPlanResponse,
+        optimization_method: "optimized",
+      };
+      mockGenerateRacePlan.mockResolvedValue(optimizedResponse);
+      renderGeneratePlan();
+
+      await waitFor(() => {
+        expect(screen.getByDisplayValue("280")).toBeInTheDocument();
+      });
+
+      const courseSelect = getCourseSelect();
+      await userEvent.selectOptions(courseSelect, "1");
+
+      // Enable optimizer
+      const optimizerSwitch = screen.getByRole("switch", { name: /Optimal Pacing/i });
+      await userEvent.click(optimizerSwitch);
+
+      await userEvent.click(screen.getByRole("button", { name: "Generate Plan" }));
+
+      await waitFor(() => {
+        expect(screen.getByText("Plan Generated!")).toBeInTheDocument();
+        expect(screen.getByText("Optimal Strategy")).toBeInTheDocument();
+      });
+    });
+
+    it("does not show 'Optimal Strategy' badge for heuristic plans", async () => {
+      mockGenerateRacePlan.mockResolvedValue(mockPlanResponse); // has optimization_method: "heuristic"
+      renderGeneratePlan();
+
+      await waitFor(() => {
+        expect(screen.getByDisplayValue("280")).toBeInTheDocument();
+      });
+
+      const courseSelect = getCourseSelect();
+      await userEvent.selectOptions(courseSelect, "1");
+
+      await userEvent.click(screen.getByRole("button", { name: "Generate Plan" }));
+
+      await waitFor(() => {
+        expect(screen.getByText("Plan Generated!")).toBeInTheDocument();
+        expect(screen.queryByText("Optimal Strategy")).not.toBeInTheDocument();
+      });
+    });
   });
 
   describe("Target Time Mode", () => {
@@ -560,6 +624,20 @@ describe("GeneratePlan", () => {
 
       // Now check for the terrain-shaped info text
       expect(screen.getByText(/scales your riding profile/i)).toBeInTheDocument();
+    });
+
+    it("shows warning that optimizer is not used in time mode", async () => {
+      renderGeneratePlan();
+
+      await waitFor(() => {
+        expect(screen.getByDisplayValue("280")).toBeInTheDocument();
+      });
+
+      await userEvent.click(screen.getByRole("button", { name: "Target Time" }));
+
+      await waitFor(() => {
+        expect(screen.getByText(/energy-budget optimizer is not used/i)).toBeInTheDocument();
+      });
     });
 
     it("submits with target_time_s when in time mode", async () => {

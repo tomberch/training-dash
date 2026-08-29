@@ -558,7 +558,7 @@ export function PlanDetail() {
           </div>
         </div>
 
-        {/* Title and improvement badge */}
+        {/* Title and badges */}
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-page-title">{plan.name || course.name}</h1>
@@ -566,12 +566,27 @@ export function PlanDetail() {
               {course.name} · {formatDistance(course.distance_m)}
             </p>
           </div>
-          {improvementText && (
-            <span className="px-3 py-1.5 bg-success/20 text-success text-sm font-medium rounded-full">
-              {improvementText}
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {plan.optimization_method === "optimized" && (
+              <span className="px-3 py-1.5 bg-primary/20 text-primary text-sm font-medium rounded-full">
+                Optimal Strategy
+              </span>
+            )}
+            {improvementText && (
+              <span className="px-3 py-1.5 bg-success/20 text-success text-sm font-medium rounded-full">
+                {improvementText}
+              </span>
+            )}
+          </div>
         </div>
+
+        {/* Optimizer explanation for strategy plans */}
+        {plan.optimization_method === "optimized" && (
+          <p className="text-sm text-muted-foreground mt-3">
+            This plan uses the energy-budget optimizer — a strategy view showing minimum-time
+            pacing under a W′bal constraint, not necessarily how you'd ride it.
+          </p>
+        )}
       </div>
 
       {/* Stats bar */}
