@@ -336,6 +336,7 @@ export interface RacePlanListItem {
   total_time_formatted: string;
   avg_power_w: number;
   optimization_method: string | null;
+  sustainability: string | null;
   created_at: string;
 }
 
@@ -359,6 +360,7 @@ export interface RacePlanDetail {
   rider_params: RiderParams;
   bike_params: BikeParams;
   optimization_method: string | null;
+  sustainability: string | null;
   created_at: string;
 }
 
@@ -388,6 +390,7 @@ export interface RacePlanResponse {
   comparison: PlanComparison;
   warnings: string[];
   optimization_method: string | null;
+  sustainability: string | null;
 }
 
 // Course types for race planner

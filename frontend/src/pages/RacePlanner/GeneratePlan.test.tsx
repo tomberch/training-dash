@@ -107,6 +107,7 @@ const mockPlanResponse: RacePlanResponse = {
   },
   warnings: [],
   optimization_method: "heuristic",
+  sustainability: "green",
 };
 
 function renderGeneratePlan(initialRoute = "/race-planner/generate") {

@@ -34,6 +34,7 @@ const mockPlan: RacePlanDetail = {
   total_time_s: 7200,
   total_time_formatted: "2:00:00",
   optimization_method: "weighted_time_in_zones",
+  sustainability: "green",
   created_at: "2025-01-01T10:00:00Z",
   comparison: {
     heuristic_time_s: 7300,

@@ -123,6 +123,7 @@ const mockPlan: RacePlanDetail = {
     min_wbal_distance_m: 25000,
   },
   optimization_method: "heuristic",
+  sustainability: "green",
   created_at: "2024-01-15T10:00:00Z",
 };
 
@@ -232,6 +233,69 @@ describe("PlanDetail", () => {
       await waitFor(() => {
         expect(screen.getByText("0.85")).toBeInTheDocument();
         expect(screen.getByText("IF")).toBeInTheDocument();
+      });
+    });
+
+    it("displays variability index (VI) below NP", async () => {
+      renderPlanDetail();
+
+      await waitFor(() => {
+        // VI = NP / Avg = 235 / 220 = 1.07
+        expect(screen.getByText("VI 1.07")).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe("Sustainability Badge", () => {
+    it("displays green sustainability badge", async () => {
+      renderPlanDetail();
+
+      await waitFor(() => {
+        expect(screen.getByText("Sustainable")).toBeInTheDocument();
+      });
+    });
+
+    it("displays yellow sustainability badge for hard plans", async () => {
+      const hardPlan = { ...mockPlan, sustainability: "yellow" };
+      mockFetchRacePlan.mockResolvedValue(hardPlan);
+
+      renderPlanDetail();
+
+      await waitFor(() => {
+        expect(screen.getByText("Very Hard")).toBeInTheDocument();
+      });
+    });
+
+    it("displays red sustainability badge for beyond-limit plans", async () => {
+      const redPlan = { ...mockPlan, sustainability: "red" };
+      mockFetchRacePlan.mockResolvedValue(redPlan);
+
+      renderPlanDetail();
+
+      await waitFor(() => {
+        expect(screen.getByText("Beyond Limit")).toBeInTheDocument();
+      });
+    });
+
+    it("shows prominent warning banner for red plans", async () => {
+      const redPlan = { ...mockPlan, sustainability: "red" };
+      mockFetchRacePlan.mockResolvedValue(redPlan);
+
+      renderPlanDetail();
+
+      await waitFor(() => {
+        expect(screen.getByText(/exceeds your sustainable capability/)).toBeInTheDocument();
+      });
+    });
+
+    it("shows soft warning text for yellow plans", async () => {
+      const yellowPlan = { ...mockPlan, sustainability: "yellow" };
+      mockFetchRacePlan.mockResolvedValue(yellowPlan);
+
+      renderPlanDetail();
+
+      await waitFor(() => {
+        expect(screen.getByText(/Near your limit/)).toBeInTheDocument();
       });
     });
   });

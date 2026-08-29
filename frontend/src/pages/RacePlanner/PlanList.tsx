@@ -21,6 +21,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { SustainabilityBadge } from "@/components/race-planner";
 import { fetchRacePlans, deleteRacePlan } from "@/api/race-plans";
 import type { RacePlanListItem } from "@/api/types";
 import { formatDateFull } from "./utils";
@@ -212,12 +213,15 @@ export function PlanList() {
                     className="border-b border-border/50 hover:bg-muted/20 transition-colors"
                   >
                     <td className="py-3 px-4">
-                      <Link
-                        to={`/race-planner/plans/${plan.id}`}
-                        className="font-medium hover:text-primary hover:underline"
-                      >
-                        {plan.name || "Untitled Plan"}
-                      </Link>
+                      <div className="flex items-center gap-2">
+                        <Link
+                          to={`/race-planner/plans/${plan.id}`}
+                          className="font-medium hover:text-primary hover:underline"
+                        >
+                          {plan.name || "Untitled Plan"}
+                        </Link>
+                        <SustainabilityBadge sustainability={plan.sustainability} compact />
+                      </div>
                     </td>
                     <td className="py-3 px-4 text-right tabular-nums">
                       {plan.total_time_formatted}

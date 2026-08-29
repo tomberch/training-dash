@@ -25,7 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { fetchRacePlan, fetchCourse, deleteRacePlan, regenerateRacePlan } from "@/api/race-plans";
-import { ParameterSliders, RideTypeBadge, type UpdatedParams } from "@/components/race-planner";
+import { ParameterSliders, RideTypeBadge, SustainabilityBadge, type UpdatedParams } from "@/components/race-planner";
 import type { PlanResult } from "@/lib/physics";
 import type {
   RacePlanDetail,
@@ -567,6 +567,7 @@ export function PlanDetail() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <SustainabilityBadge sustainability={plan.sustainability} />
             {plan.optimization_method === "optimized" && (
               <span className="px-3 py-1.5 bg-primary/20 text-primary text-sm font-medium rounded-full">
                 Optimal Strategy
@@ -587,6 +588,20 @@ export function PlanDetail() {
             pacing under a W′bal constraint, not necessarily how you'd ride it.
           </p>
         )}
+
+        {/* Sustainability warning for red/yellow plans */}
+        {plan.sustainability === "red" && (
+          <div className="mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+            <p className="text-sm text-destructive font-medium">
+              This plan exceeds your sustainable capability — use as a strategy reference, not a ride plan.
+            </p>
+          </div>
+        )}
+        {plan.sustainability === "yellow" && (
+          <p className="text-sm text-warning mt-3">
+            Near your limit — achievable but demanding. Pacing errors will hurt.
+          </p>
+        )}
       </div>
 
       {/* Stats bar */}
@@ -595,11 +610,18 @@ export function PlanDetail() {
           <StatCard label="Total Time" value={plan.total_time_formatted} />
           <StatCard label="Distance" value={formatDistance(course.distance_m)} />
           <StatCard label="Avg Power" value={Math.round(plan.avg_power_w)} unit="W" />
-          <StatCard
-            label="Normalized Power"
-            value={plan.normalized_power_w ? Math.round(plan.normalized_power_w) : "—"}
-            unit={plan.normalized_power_w ? "W" : undefined}
-          />
+          <div className="text-center">
+            <div className="text-metric">
+              {plan.normalized_power_w ? Math.round(plan.normalized_power_w) : "—"}
+              {plan.normalized_power_w && <span className="text-lg ml-0.5">W</span>}
+            </div>
+            <div className="text-metric-label">Normalized Power</div>
+            {plan.normalized_power_w && plan.avg_power_w > 0 && (
+              <div className="text-caption mt-1">
+                VI {(plan.normalized_power_w / plan.avg_power_w).toFixed(2)}
+              </div>
+            )}
+          </div>
           <StatCard
             label="IF"
             value={plan.intensity_factor ? plan.intensity_factor.toFixed(2) : "—"}
