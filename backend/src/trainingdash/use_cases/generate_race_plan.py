@@ -18,6 +18,7 @@ from trainingdash.domain.pacing import (
     generate_terrain_adapted_pacing,
     resolve_ride_type_params,
 )
+from trainingdash.domain.pacing_model import effective_descent_power_multiplier, modulate_descent_power_multiplier
 from trainingdash.domain.pacing_optimizer import optimize_pacing, optimize_pacing_for_time
 from trainingdash.domain.physics import EnvironmentParams, RiderParams, calculate_headwind
 from trainingdash.domain.wbal import predict_wbal_for_plan
@@ -442,6 +443,7 @@ class GenerateRacePlan:
                 elevation_profile=course.elevation_profile,
                 ride_type=ride_type_params.ride_type_for_curvature,
                 descent_aggressiveness=ride_type_params.descent_aggressiveness,
+                ride_type_params=ride_type_params,
                 wind_speed_mps=forecast_conditions.wind_speed_mps,
                 wind_direction_deg=forecast_conditions.wind_direction_deg,
             )
@@ -490,6 +492,13 @@ class GenerateRacePlan:
                 "riding_time_s": riding_time_s,
                 "stop_pct": ride_type_params.stop_pct,
                 "improvement_vs_constant_pct": improvement_vs_constant,
+                # Plan-Type modulation transparency (#636): the values the
+                # engine actually used, so the UI can show "race mode:
+                # coasting tightened" instead of diverging silently.
+                "learned_descent_power_multiplier": effective_descent_power_multiplier(pacing_coefficients),
+                "modulated_descent_power_multiplier": modulate_descent_power_multiplier(
+                    effective_descent_power_multiplier(pacing_coefficients), ride_type_params
+                ),
             }
 
         # Find distance at min W'bal

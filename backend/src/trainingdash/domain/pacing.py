@@ -32,6 +32,7 @@ from trainingdash.domain.pacing_model import (
     effective_descent_power_multiplier,
     estimate_tss,
     get_grade_power_multiplier,
+    modulate_descent_power_multiplier,
     resolve_ride_type_params,
 )
 from trainingdash.domain.physics import (
@@ -296,6 +297,7 @@ def generate_terrain_adapted_pacing(
     elevation_profile: list[dict] | None = None,
     ride_type: str = "training",
     descent_aggressiveness: int = 70,
+    ride_type_params: "RideTypeParams | None" = None,
     wind_speed_mps: float | None = None,
     wind_direction_deg: float | None = None,
 ) -> PacingPlan:
@@ -389,6 +391,7 @@ def generate_terrain_adapted_pacing(
             coefficients=coefficients,
             ride_type=ride_type,
             descent_aggressiveness=descent_aggressiveness,
+            ride_type_params=ride_type_params,
             wind_speed_mps=wind_speed_mps,
             wind_direction_deg=wind_direction_deg,
         )
@@ -400,11 +403,17 @@ def generate_terrain_adapted_pacing(
     power_cap = rider_ftp * power_cap_ftp_pct
     targets: list[PacingTarget] = []
 
+    # Plan-Type modulation resolves ONCE per plan (#636): training/None =
+    # identity; race/gran_fondo/touring reshape the learned descent behavior.
+    modulated_descent_multiplier = modulate_descent_power_multiplier(
+        effective_descent_power_multiplier(coefficients), ride_type_params
+    )
+
     for idx, segment in enumerate(segments):
         # Descent Multiplier on descents, shared grade-power formula elsewhere
         # (ADR 0005 #634 — the fine-grained path applies it per point)
         if segment.avg_grade_pct < DESCENT_GRADE_PCT:
-            multiplier = effective_descent_power_multiplier(coefficients)
+            multiplier = modulated_descent_multiplier
         else:
             multiplier = get_grade_power_multiplier(segment.avg_grade_pct, coefficients)
 
@@ -526,6 +535,7 @@ def _generate_fine_grained_adapted_pacing(
     coefficients: PacingCoefficients,
     ride_type: str = "training",
     descent_aggressiveness: int = 70,
+    ride_type_params: "RideTypeParams | None" = None,
     wind_speed_mps: float | None = None,
     wind_direction_deg: float | None = None,
 ) -> PacingPlan:
@@ -552,7 +562,9 @@ def _generate_fine_grained_adapted_pacing(
         max_descent_speed_mps=effective_max_descent_speed,
         power_cap_ftp_pct=power_cap_ftp_pct,
         target_spacing_m=25.0,
-        descent_power_multiplier=effective_descent_power_multiplier(coefficients),
+        descent_power_multiplier=modulate_descent_power_multiplier(
+            effective_descent_power_multiplier(coefficients), ride_type_params
+        ),
         ride_type=ride_type,
         descent_aggressiveness=descent_aggressiveness,
         wind_speed_mps=wind_speed_mps,

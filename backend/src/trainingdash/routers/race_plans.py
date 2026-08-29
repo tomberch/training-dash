@@ -41,16 +41,26 @@ class RideTypeParamsSchema(BaseModel):
 
     descent_aggressiveness: 0=very cautious, 100=race pace. Affects curvature-based speed reduction on descents.
     stop_pct: Expected percentage of extra time for stops (traffic, feeds, breaks). 0-50%.
+    coast_modulation: multiplier on the learned descent power multiplier
+        (ADR 0005 #636). 1.0 = raw baseline; >1 pedals descents more
+        (race-like); <1 coasts more (touring-like).
     """
 
     descent_aggressiveness: int = Field(..., ge=0, le=100, description="0=cautious descents, 100=aggressive racing")
     stop_pct: float = Field(..., ge=0, le=50, description="Expected stop time as % of riding time (0-50)")
+    coast_modulation: float = Field(
+        1.0,
+        gt=0,
+        le=3,
+        description="Multiplier on learned descent power: 1.0 = baseline, >1 pedals descents, <1 coasts more",
+    )
 
     def to_domain(self) -> RideTypeParams:
         """Convert to domain object."""
         return RideTypeParams(
             descent_aggressiveness=self.descent_aggressiveness,
             stop_pct=self.stop_pct,
+            coast_modulation=self.coast_modulation,
         )
 
 
@@ -175,6 +185,10 @@ class ComparisonSchema(BaseModel):
     optimized_time_s: float | None = None
     improvement_vs_constant_pct: float | None = None
     improvement_vs_heuristic_pct: float | None = None
+    # Plan-Type modulation transparency (#636): learned baseline and the
+    # value actually used after ride-type modulation
+    learned_descent_power_multiplier: float | None = None
+    modulated_descent_power_multiplier: float | None = None
 
 
 class AeroSelectionSchema(BaseModel):

@@ -38,16 +38,24 @@ class RideTypeParams:
                                100=race pace (0.95x on hairpins). Affects descent speeds.
         stop_pct: 0-50 range. Percentage of extra time for stops beyond physics prediction.
                   6% means a 1-hour physics time becomes 1h04m total.
+        coast_modulation: multiplier on the learned descent power multiplier
+                  (ADR 0005 #636). 1.0 = identity (training rides use the
+                  raw baseline); <1.0 tightens coasting (races pedal descents
+                  more); >1.0 loosens it (touring). Clamped to keep the
+                  modulated value in the physical band.
     """
 
     descent_aggressiveness: int  # 0-100
     stop_pct: float  # 0-50
+    coast_modulation: float = 1.0  # > 0, <= 3
 
     def __post_init__(self):
         if not 0 <= self.descent_aggressiveness <= 100:
             raise ValueError(f"descent_aggressiveness must be 0-100, got {self.descent_aggressiveness}")
         if not 0 <= self.stop_pct <= 50:
             raise ValueError(f"stop_pct must be 0-50, got {self.stop_pct}")
+        if not 0 < self.coast_modulation <= 3:
+            raise ValueError(f"coast_modulation must be > 0 and <= 3, got {self.coast_modulation}")
 
     @property
     def ride_type_for_curvature(self) -> str:
@@ -65,22 +73,30 @@ class RideTypeParams:
 
 
 # Preset configurations based on empirical data
+# coast_modulation (ADR 0005 #636): how Plan Type reshapes the learned
+# descent behavior. training = 1.0 (identity — the baseline IS what the
+# rider does); race/gran_fondo push coasting down (races pedal descents);
+# touring pushes it up (more coasting than the baseline).
 RIDE_TYPE_PRESETS: dict[str, RideTypeParams] = {
     "race": RideTypeParams(
         descent_aggressiveness=90,
         stop_pct=0,
+        coast_modulation=3.0,  # 0.12 x 3.0 -> 0.36: race pedals descents
     ),
     "gran_fondo": RideTypeParams(
         descent_aggressiveness=85,
         stop_pct=3,
+        coast_modulation=2.0,  # 0.12 x 2.0 -> 0.24
     ),
     "training": RideTypeParams(
         descent_aggressiveness=70,
         stop_pct=6,
+        coast_modulation=1.0,  # identity: the learned baseline as-is
     ),
     "touring": RideTypeParams(
         descent_aggressiveness=60,
         stop_pct=25,
+        coast_modulation=0.5,  # 0.12 x 0.5 -> 0.06: tour more, coast more
     ),
 }
 
@@ -296,6 +312,24 @@ def effective_descent_power_multiplier(coefficients: "PacingCoefficients | None"
     if coefficients is not None and coefficients.activity_count > 0:
         return coefficients.descent_power_multiplier
     return DEFAULT_COEFFICIENTS.descent_power_multiplier
+
+
+def modulate_descent_power_multiplier(
+    base_multiplier: float,
+    ride_type_params: "RideTypeParams | None",
+) -> float:
+    """Apply Plan-Type modulation to the resolved descent multiplier (#636).
+
+    training/None = identity: the learned baseline passes through
+    untouched. Race/gran_fondo tighten coasting (races pedal descents);
+    touring loosens it. The result stays in the physical band [0.0, 1.0]
+    of base power — modulation never invents negative or >100% descent
+    power.
+    """
+    if ride_type_params is None:
+        return base_multiplier
+    modulated = base_multiplier * ride_type_params.coast_modulation
+    return max(0.0, min(1.0, modulated))
 
 
 def calculate_curvature_menger(

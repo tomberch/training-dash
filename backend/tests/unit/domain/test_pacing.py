@@ -1223,3 +1223,191 @@ class TestGenerateTerrainAdaptedPacingWithRideType:
         # but the parameter should be accepted
         assert plan_race.total_time_s > 0
         assert plan_training.total_time_s > 0
+
+
+class TestPlanTypeModulation:
+    """#636: Plan Type modulates the learned Riding Behavior.
+
+    training = identity (raw baseline exactly); race/gran_fondo tighten
+    coasting; touring loosens it. Same course, two ride types →
+    different descent power, different stop time, both traceable to the
+    same learned baseline.
+    """
+
+    def test_presets_carry_coast_modulation(self):
+        """Preset table gains coast modulation factors with the right order.
+        Race pushes coasting DOWN (pedals descents more: higher power
+        factor); touring pushes coasting UP (lower power factor).
+        training = 1.0 identity."""
+        from trainingdash.domain.pacing_model import RIDE_TYPE_PRESETS
+
+        assert RIDE_TYPE_PRESETS["training"].coast_modulation == pytest.approx(1.0)
+        assert (
+            RIDE_TYPE_PRESETS["race"].coast_modulation
+            >= RIDE_TYPE_PRESETS["gran_fondo"].coast_modulation
+            > RIDE_TYPE_PRESETS["training"].coast_modulation
+            > RIDE_TYPE_PRESETS["touring"].coast_modulation
+        )
+
+    def test_coast_modulation_validation(self):
+        """coast_modulation must be > 0 (and sane: <= 2)."""
+        from trainingdash.domain.pacing_model import RideTypeParams
+
+        with pytest.raises(ValueError, match="coast_modulation"):
+            RideTypeParams(descent_aggressiveness=70, stop_pct=6, coast_modulation=0.0)
+        with pytest.raises(ValueError, match="coast_modulation"):
+            RideTypeParams(descent_aggressiveness=70, stop_pct=6, coast_modulation=3.5)
+
+    def test_modulate_descent_power_multiplier_identity_for_training(self):
+        """Training reproduces the raw learned baseline exactly."""
+        from trainingdash.domain.pacing_model import RIDE_TYPE_PRESETS, modulate_descent_power_multiplier
+
+        assert modulate_descent_power_multiplier(0.12, RIDE_TYPE_PRESETS["training"]) == pytest.approx(0.12)
+
+    def test_modulate_descent_power_multiplier_race_tightens_touring_loosens(self):
+        """Race pedals descents more (higher power), touring coasts more
+        (lower power); result clamped to the physical band [0.0, 1.0]."""
+        from trainingdash.domain.pacing_model import RIDE_TYPE_PRESETS, modulate_descent_power_multiplier
+
+        race = modulate_descent_power_multiplier(0.12, RIDE_TYPE_PRESETS["race"])
+        touring = modulate_descent_power_multiplier(0.12, RIDE_TYPE_PRESETS["touring"])
+        assert touring < 0.12 < race
+
+        # Clamped at the ceiling: modulating a pedaler stays physical
+        assert modulate_descent_power_multiplier(0.9, RIDE_TYPE_PRESETS["race"]) <= 1.0
+
+    def test_terrain_adapted_pacing_applies_modulation(self):
+        from statistics import mean
+
+        """The engine: same course, two ride types → different descent power.
+        Race plans pedaled descents harder than touring plans coast them."""
+        from trainingdash.domain.course_segmentation import CourseSegment
+        from trainingdash.domain.pacing import generate_terrain_adapted_pacing
+        from trainingdash.domain.pacing_model import RIDE_TYPE_PRESETS, PacingCoefficients
+        from trainingdash.domain.physics import EnvironmentParams, RiderParams
+
+        # Simple hilly course: 2km descent at -5%
+        segs = [
+            CourseSegment(
+                start_distance_m=0,
+                end_distance_m=1000,
+                length_m=1000,
+                avg_grade_pct=0.0,
+                elevation_gain_m=0,
+                elevation_loss_m=0,
+                terrain_type="flat",
+            ),
+            CourseSegment(
+                start_distance_m=1000,
+                end_distance_m=2000,
+                length_m=1000,
+                avg_grade_pct=-5.0,
+                elevation_gain_m=0,
+                elevation_loss_m=50,
+                terrain_type="descent",
+            ),
+        ]
+        profile = []
+        for i in range(0, 41):
+            d = i * 50.0
+            profile.append(
+                {
+                    "distance_m": d,
+                    "elevation_m": 100.0 - max(0.0, d - 1000.0) * 0.05,
+                    "grade_pct": -5.0 if d > 1000 else 0.0,
+                    "lat": 47.0,
+                    "lon": 8.0,
+                }
+            )
+        coeffs = PacingCoefficients(
+            grade_power_intercept=1.10,
+            grade_power_slope=0.035,
+            descent_power_multiplier=0.12,  # learned near-coaster
+            activity_count=10,  # calibrated
+        )
+        rider = RiderParams(mass_kg=80, cda=0.32, crr=0.004)
+        env = EnvironmentParams(air_density=1.15)
+
+        race_plan = generate_terrain_adapted_pacing(
+            segments=segs,
+            rider_ftp=280.0,
+            target_intensity=0.85,
+            rider_params=rider,
+            env_params=env,
+            coefficients=coeffs,
+            elevation_profile=profile,
+            ride_type_params=RIDE_TYPE_PRESETS["race"],
+        )
+        touring_plan = generate_terrain_adapted_pacing(
+            segments=segs,
+            rider_ftp=280.0,
+            target_intensity=0.85,
+            rider_params=rider,
+            env_params=env,
+            coefficients=coeffs,
+            elevation_profile=profile,
+            ride_type_params=RIDE_TYPE_PRESETS["touring"],
+        )
+
+        race_descents = [t.target_power_w for t in race_plan.targets if t.terrain_type == "descent"]
+        touring_descents = [t.target_power_w for t in touring_plan.targets if t.terrain_type == "descent"]
+        assert race_descents and touring_descents
+        assert mean(race_descents) > mean(touring_descents), "race must pedal descents harder than touring"
+        # And touring still coasts (near-0 power vs race's higher)
+        assert mean(touring_descents) < mean(race_descents)
+
+    def test_terrain_adapted_pacing_training_is_identity(self):
+        """Passing no ride_type_params (or training) reproduces the unmodulated
+        plan exactly — the raw learned behavior."""
+        from trainingdash.domain.course_segmentation import CourseSegment
+        from trainingdash.domain.pacing import generate_terrain_adapted_pacing
+        from trainingdash.domain.pacing_model import RIDE_TYPE_PRESETS, PacingCoefficients
+        from trainingdash.domain.physics import EnvironmentParams, RiderParams
+
+        segs = [
+            CourseSegment(
+                start_distance_m=0,
+                end_distance_m=1000,
+                length_m=1000,
+                avg_grade_pct=0.0,
+                elevation_gain_m=0,
+                elevation_loss_m=0,
+                terrain_type="flat",
+            ),
+            CourseSegment(
+                start_distance_m=1000,
+                end_distance_m=2000,
+                length_m=1000,
+                avg_grade_pct=-5.0,
+                elevation_gain_m=0,
+                elevation_loss_m=50,
+                terrain_type="descent",
+            ),
+        ]
+        profile = [
+            {
+                "distance_m": i * 50.0,
+                "elevation_m": 100.0 - max(0.0, i * 50.0 - 1000.0) * 0.05,
+                "grade_pct": -5.0 if i * 50.0 > 1000 else 0.0,
+                "lat": 47.0,
+                "lon": 8.0,
+            }
+            for i in range(41)
+        ]
+        coeffs = PacingCoefficients(descent_power_multiplier=0.12, activity_count=10)
+        rider = RiderParams(mass_kg=80, cda=0.32, crr=0.004)
+        env = EnvironmentParams(air_density=1.15)
+        kw = {
+            "segments": segs,
+            "rider_ftp": 280.0,
+            "target_intensity": 0.85,
+            "rider_params": rider,
+            "env_params": env,
+            "coefficients": coeffs,
+            "elevation_profile": profile,
+        }
+
+        plain = generate_terrain_adapted_pacing(**kw)
+        training = generate_terrain_adapted_pacing(**kw, ride_type_params=RIDE_TYPE_PRESETS["training"])
+        assert plain.total_time_s == pytest.approx(training.total_time_s)
+        assert [t.target_power_w for t in plain.targets] == pytest.approx([t.target_power_w for t in training.targets])

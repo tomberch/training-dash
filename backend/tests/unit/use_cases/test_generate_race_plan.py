@@ -569,3 +569,124 @@ class TestGenerateRacePlanWind:
         assert windy_targets[0]["time_s"] > calm_targets[0]["time_s"]
         # Leg 2 (south, full tailwind): faster than calm
         assert windy_targets[1]["time_s"] < calm_targets[1]["time_s"]
+
+
+class TestPlanTypeModulation:
+    """#636: same course, two ride types → different plans, direction pinned."""
+
+    @pytest.fixture
+    def hilly_course_repo(self):
+        """Course with a real descent (< -3%) so the Descent Multiplier applies."""
+        repo = FakeCourseRepo()
+        profile = []
+        # 1km flat, 2km climb at 5%, 2km descent at -5%
+        for i in range(101):
+            d = i * 50.0
+            elev = 100.0 + max(0.0, min(d, 3000.0) - 1000.0) * 0.05 - max(0.0, d - 3000.0) * 0.05
+            profile.append({"distance_m": d, "elevation_m": elev, "grade_pct": 0.0, "lat": 47.0, "lon": 8.0})
+        course = RaceCourse(
+            id=1,
+            user_id=1,
+            name="Hilly",
+            source_type="gpx",
+            distance_m=5000.0,
+            elevation_gain_m=100.0,
+            elevation_loss_m=100.0,
+            geometry="SRID=4326;LINESTRINGZ(0 0 100, 1 1 200)",
+            segments=[
+                {
+                    "start_m": 0,
+                    "end_m": 1000,
+                    "distance_m": 1000,
+                    "avg_grade_pct": 0.0,
+                    "elevation_gain_m": 0,
+                    "elevation_loss_m": 0,
+                    "terrain_type": "flat",
+                },
+                {
+                    "start_m": 1000,
+                    "end_m": 3000,
+                    "distance_m": 2000,
+                    "avg_grade_pct": 5.0,
+                    "elevation_gain_m": 100,
+                    "elevation_loss_m": 0,
+                    "terrain_type": "climb",
+                },
+                {
+                    "start_m": 3000,
+                    "end_m": 5000,
+                    "distance_m": 2000,
+                    "avg_grade_pct": -5.0,
+                    "elevation_gain_m": 0,
+                    "elevation_loss_m": 100,
+                    "terrain_type": "descent",
+                },
+            ],
+            elevation_profile=profile,
+        )
+        repo.add(course)
+        return repo
+
+    @pytest.fixture
+    def calibrated_pacing_repo(self):
+        from tests.fakes.pacing_coefficients_repo import FakePacingCoefficientsRepo
+        from trainingdash.domain.pacing_model import PacingCoefficients
+
+        repo = FakePacingCoefficientsRepo()
+        repo.add(
+            PacingCoefficients(
+                user_id=1,
+                bike_id=None,
+                descent_power_multiplier=0.12,  # learned near-coaster
+                activity_count=10,
+            )
+        )
+        return repo
+
+    def _use_case(self, course_repo, pacing_repo, bike_repo, user_repo, plan_repo):
+        return GenerateRacePlan(course_repo, bike_repo, user_repo, plan_repo, pacing_repo)
+
+    @pytest.mark.asyncio
+    async def test_race_vs_touring_descends_differently(
+        self, hilly_course_repo, calibrated_pacing_repo, bike_repo, user_repo, plan_repo
+    ):
+        """Race pedals descents harder than touring; stop time differs;
+        both traceable to the same learned baseline via the comparison dict."""
+        uc = self._use_case(hilly_course_repo, calibrated_pacing_repo, bike_repo, user_repo, plan_repo)
+
+        race = await uc.execute(
+            user_id=1,
+            request=GeneratePlanRequest(course_id=1, ftp_watts=250, ride_type="race", name="race-plan"),
+        )
+        touring = await uc.execute(
+            user_id=1,
+            request=GeneratePlanRequest(course_id=1, ftp_watts=250, ride_type="touring", name="touring-plan"),
+        )
+
+        # Same learned baseline for both
+        assert race.comparison["learned_descent_power_multiplier"] == pytest.approx(0.12)
+        assert touring.comparison["learned_descent_power_multiplier"] == pytest.approx(0.12)
+        # Different modulated values, direction pinned
+        race_mod = race.comparison["modulated_descent_power_multiplier"]
+        touring_mod = touring.comparison["modulated_descent_power_multiplier"]
+        assert touring_mod < race_mod
+        # Stop time: race < touring
+        assert race.plan.total_time_s < touring.plan.total_time_s
+        # Descent segment targets: race pedals harder
+        race_descent = [t for t in race.plan.segment_targets if t["segment_idx"] == 2]
+        touring_descent = [t for t in touring.plan.segment_targets if t["segment_idx"] == 2]
+        assert race_descent[0]["power_w"] > touring_descent[0]["power_w"]
+
+    @pytest.mark.asyncio
+    async def test_training_ride_type_is_identity(
+        self, hilly_course_repo, calibrated_pacing_repo, bike_repo, user_repo, plan_repo
+    ):
+        """Training plan's modulated value = learned baseline exactly."""
+        uc = self._use_case(hilly_course_repo, calibrated_pacing_repo, bike_repo, user_repo, plan_repo)
+
+        training = await uc.execute(
+            user_id=1,
+            request=GeneratePlanRequest(course_id=1, ftp_watts=250, ride_type="training"),
+        )
+
+        assert training.comparison["modulated_descent_power_multiplier"] == pytest.approx(0.12)

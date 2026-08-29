@@ -97,7 +97,7 @@ The fraction of target power a rider actually holds while descending. Learned fr
 
 ## Plan Type
 
-The character of ride a plan is for: race, gran fondo, training, or touring. Plan Type does not change the rider's learned Behavior — it modulates it (coasting, stops) and sets cornering aggressiveness and expected stop time for the plan.
+The character of ride a plan is for: race, gran fondo, training, or touring. Plan Type does not change the rider's learned Behavior — it modulates it and sets cornering aggressiveness and expected stop time for the plan. Concretely (ADR 0005 #636): each preset carries a coast modulation factor applied to the learned Descent Multiplier — training is the identity (the baseline exactly as learned), race and gran fondo pedal descents more (races strongest), touring coasts more. The plan response exposes both the learned and the modulated values so the UI can show what changed.
 
 ## Pacing Coefficients
 
