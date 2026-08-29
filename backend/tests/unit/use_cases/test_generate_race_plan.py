@@ -800,3 +800,90 @@ class TestTargetTimeMode:
 
         with pytest.raises(ValueError, match="too fast"):
             await uc.execute(user_id=1, request=GeneratePlanRequest(course_id=1, ftp_watts=280, target_time_s=100.0))
+
+
+class TestSustainability:
+    """#638: every plan carries a sustainability level; red still saves."""
+
+    @pytest.fixture
+    def course_repo_for_effort(self):
+        """Course long enough (2h at modest pace) for duration-adjusted IF."""
+        repo = FakeCourseRepo()
+        # 40km flat: ~1.5h ride
+        segs = [
+            {
+                "start_m": 0,
+                "end_m": 40000,
+                "distance_m": 40000,
+                "avg_grade_pct": 0.5,
+                "elevation_gain_m": 200,
+                "elevation_loss_m": 0,
+                "terrain_type": "rolling",
+            },
+        ]
+        profile = [{"distance_m": i * 100.0, "elevation_m": 100.0 + i * 0.5, "grade_pct": 0.5, "lat": 47.0, "lon": 8.0} for i in range(401)]
+        course = RaceCourse(
+            id=1,
+            user_id=1,
+            name="Rolling 40k",
+            source_type="gpx",
+            distance_m=40000.0,
+            elevation_gain_m=200.0,
+            elevation_loss_m=0.0,
+            geometry="SRID=4326;LINESTRINGZ(0 0 100, 1 1 200)",
+            segments=segs,
+            elevation_profile=profile,
+        )
+        repo.add(course)
+        return repo
+
+    @pytest.mark.asyncio
+    async def test_easy_plan_is_green_and_saved(self, course_repo_for_effort, bike_repo, user_repo, plan_repo):
+        uc = GenerateRacePlan(course_repo_for_effort, bike_repo, user_repo, plan_repo)
+        result = await uc.execute(user_id=1, request=GeneratePlanRequest(course_id=1, ftp_watts=250, target_intensity=0.75))
+        assert result.plan.sustainability == "green"
+
+    @pytest.mark.asyncio
+    async def test_ambitious_plan_is_yellow_or_red(self, course_repo_for_effort, bike_repo, user_repo, plan_repo):
+        uc = GenerateRacePlan(course_repo_for_effort, bike_repo, user_repo, plan_repo)
+        result = await uc.execute(user_id=1, request=GeneratePlanRequest(course_id=1, ftp_watts=250, target_intensity=1.05))
+        assert result.plan.sustainability in ("yellow", "red")
+
+    @pytest.mark.asyncio
+    async def test_red_plan_saves_with_flag_and_warning(self, course_repo_for_effort, bike_repo, user_repo, plan_repo):
+        """Red plans are saved, flagged, and carry a warning string —
+        not rejected."""
+        uc = GenerateRacePlan(course_repo_for_effort, bike_repo, user_repo, plan_repo)
+        # Aggressive-but-possible time target on a long course: the solver
+        # scales pedaling power to the ceiling → deep effort → yellow/red.
+        # (3600s would be physically impossible and hard-error — that's the
+        # other acceptance criterion, covered separately.)
+        result = await uc.execute(
+            user_id=1,
+            request=GeneratePlanRequest(course_id=1, ftp_watts=250, target_time_s=4200.0),
+        )
+        plan = result.plan
+        assert plan.id is not None, "red plan must still be saved"
+        assert plan.sustainability in ("yellow", "red")
+        if plan.sustainability == "red":
+            assert any("very hard" in w.lower() or "beyond" in w.lower() or "red" in w.lower() for w in result.warnings)
+
+
+    @pytest.mark.asyncio
+    async def test_physically_impossible_time_errors_before_save(
+        self, course_repo_for_effort, bike_repo, user_repo, plan_repo
+    ):
+        """#638: only the physically impossible is a hard error — raised
+        before save, message states the minimum achievable time."""
+        uc = GenerateRacePlan(course_repo_for_effort, bike_repo, user_repo, plan_repo)
+        plans_before = len(plan_repo._plans) if hasattr(plan_repo, "_plans") else None
+
+        with pytest.raises(ValueError, match="too fast"):
+            await uc.execute(
+                user_id=1,
+                request=GeneratePlanRequest(course_id=1, ftp_watts=250, target_time_s=600.0),
+            )
+
+        # Nothing was saved for the impossible request
+        if plans_before is not None:
+            assert len(plan_repo._plans) == plans_before

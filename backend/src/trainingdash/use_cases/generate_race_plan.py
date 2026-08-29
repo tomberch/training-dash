@@ -22,6 +22,7 @@ from trainingdash.domain.pacing import (
 )
 from trainingdash.domain.pacing_model import effective_descent_power_multiplier, modulate_descent_power_multiplier
 from trainingdash.domain.pacing_optimizer import optimize_pacing
+from trainingdash.domain.sustainability import assess_sustainability
 from trainingdash.domain.pacing_scale import solve_target_time
 from trainingdash.domain.physics import EnvironmentParams, RiderParams, calculate_headwind
 from trainingdash.domain.wbal import predict_wbal_for_plan
@@ -518,6 +519,21 @@ class GenerateRacePlan:
         # Find distance at min W'bal
         wbal_min_distance_m = self._find_wbal_min_distance(segment_targets, segments) if wbal_min is not None else None
 
+        # Sustainability traffic light (ADR 0005 #638): red plans are still
+        # generated and saved — flagged, not rejected. Only physically
+        # impossible requests error (the scale-to-time solver's job).
+        riding_for_sustainability = riding_time_s if riding_time_s and riding_time_s > 0 else total_time_s
+        sustainability = assess_sustainability(
+            intensity_factor=intensity_factor if intensity_factor else 0.0,
+            wbal_min_j=wbal_min if wbal_min is not None else float(w_prime),
+            w_prime_j=float(w_prime),
+            ride_duration_s=riding_for_sustainability,
+        )
+        if sustainability.level == "yellow":
+            warnings.append(f"Sustainability YELLOW: {sustainability.message}")
+        elif sustainability.level == "red":
+            warnings.append(f"Sustainability RED: {sustainability.message}")
+
         # 7. Save plan
         plan = RacePlan(
             user_id=user_id,
@@ -547,6 +563,7 @@ class GenerateRacePlan:
             segment_targets=segment_targets,
             wbal_min=wbal_min,
             wbal_min_distance_m=wbal_min_distance_m,
+            sustainability=sustainability.level,
             # Weather/conditions
             target_date=request.target_date,
             target_conditions=weather_conditions_dict,

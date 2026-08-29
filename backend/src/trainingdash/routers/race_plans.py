@@ -235,6 +235,10 @@ class RacePlanResponse(BaseModel):
     aero_selection: AeroSelectionSchema | None = None
     weather_conditions: WeatherConditionsSchema | None = None
     forecast_stale: bool = False  # True if calm conditions used (no real forecast)
+    # Sustainability (ADR 0005 #638): green/yellow/red effort flag
+    sustainability: str | None = Field(
+        None, description="green = sustainable, yellow = very hard near-limit, red = beyond capability (still saved, flagged)"
+    )
 
 
 class RacePlanListItem(BaseModel):
@@ -247,6 +251,7 @@ class RacePlanListItem(BaseModel):
     total_time_formatted: str
     avg_power_w: float
     optimization_method: str | None
+    sustainability: str | None = None
     created_at: datetime
 
 
@@ -423,6 +428,7 @@ async def generate_plan(
         aero_selection=AeroSelectionSchema(**result.aero_selection) if result.aero_selection else None,
         weather_conditions=WeatherConditionsSchema(**result.weather_conditions) if result.weather_conditions else None,
         forecast_stale=result.forecast_stale,
+        sustainability=plan.sustainability,
     )
 
 
@@ -454,6 +460,7 @@ async def list_plans(
             total_time_formatted=format_time(p.total_time_s),
             avg_power_w=p.avg_power_w,
             optimization_method=p.optimization_method,
+            sustainability=p.sustainability,
             created_at=p.created_at,
         )
         for p in plans
@@ -637,6 +644,7 @@ async def regenerate_plan(
         aero_selection=AeroSelectionSchema(**result.aero_selection) if result.aero_selection else None,
         weather_conditions=WeatherConditionsSchema(**result.weather_conditions) if result.weather_conditions else None,
         forecast_stale=result.forecast_stale,
+        sustainability=plan.sustainability,
     )
 
 

@@ -741,6 +741,10 @@ class RacePlan(Base):
             "optimization_method IN ('heuristic', 'optimized', 'time_scaled', 'time_scaled_legacy') OR optimization_method IS NULL",
             name="valid_optimization_method",
         ),
+        sa.CheckConstraint(
+            "sustainability IN ('green', 'yellow', 'red') OR sustainability IS NULL",
+            name="valid_sustainability",
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
@@ -791,6 +795,10 @@ class RacePlan(Base):
     # W'bal prediction
     wbal_min: Mapped[float | None] = mapped_column(Float, nullable=True)
     wbal_min_distance_m: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Sustainability (ADR 0005 #638): green = sustainable, yellow = very
+    # hard near-limit, red = beyond capability (still saved, flagged)
+    sustainability: Mapped[str | None] = mapped_column(String(10), nullable=True)
 
     # Weather/conditions for race day
     target_date: Mapped[date | None] = mapped_column(Date, nullable=True)  # Event date
