@@ -1,43 +1,43 @@
-"""Climb detection algorithm for GPS activity records.
+"""Climb detection algorithm for identifying climbs from GPS records.
 
-This module detects climbs from GPS records using gradient analysis:
-1. Smooth elevation data to reduce GPS noise
-2. Compute gradient at fixed intervals
-3. Find sections meeting minimum grade threshold
-4. Merge nearby climb sections (gaps with minimal descent)
-5. Filter by minimum length
-6. Categorize using standard cycling climb categories
+This module provides automatic detection of climbs from activity GPS data,
+including categorization using the standard length × grade formula used in
+professional cycling.
 
-The algorithm is designed to match how cyclists perceive climbs — short flat
-sections or minor dips within a climb are merged, but significant descents
-split the climb into separate segments.
+The algorithm:
+1. Smooths elevation data to remove GPS noise
+2. Computes gradient at fixed intervals (default 50m)
+3. Identifies sections with grade >= 3%
+4. Merges nearby climbs if gap is small and elevation drop is minimal
+5. Filters by minimum length
+6. Categorizes using the standard climb scoring formula
 """
 
 from dataclasses import dataclass
 
-from trainingdash.domain.segment_geometry import GradientSegment
+import numpy as np
 
-__all__ = [
-    "DetectedClimb",
-    "categorize_climb",
-    "detect_climbs",
-    "smooth_elevation",
-]
+from trainingdash.domain.elevation import smooth_elevation as savgol_smooth
+
+
+@dataclass
+class GradientSegment:
+    """A segment of road with a specific gradient.
+
+    Used to represent the gradient profile of a climb, typically
+    at 50m intervals for display and analysis.
+    """
+
+    distance_m: float
+    grade_pct: float
 
 
 @dataclass
 class DetectedClimb:
-    """A detected climb section within an activity.
+    """A detected climb with its characteristics.
 
-    Attributes:
-        start_index: Index of first record in the climb
-        end_index: Index of last record in the climb (inclusive)
-        distance_m: Total distance of the climb in meters
-        elevation_gain_m: Total elevation gained in meters
-        avg_grade_pct: Average gradient as percentage
-        max_grade_pct: Maximum gradient as percentage
-        category: Climb category ('hc', '1', '2', '3', '4', 'nc')
-        gradient_segments: List of fixed-distance gradient segments
+    Contains all the information needed to create a Segment entity
+    from automatically detected climb data.
     """
 
     start_index: int
@@ -46,71 +46,30 @@ class DetectedClimb:
     elevation_gain_m: float
     avg_grade_pct: float
     max_grade_pct: float
-    category: str
+    category: str  # 'hc', '1', '2', '3', '4', 'nc'
     gradient_segments: list[GradientSegment]
 
 
-def smooth_elevation(altitudes: list[float], window: int = 5) -> list[float]:
-    """
-    Apply moving average smoothing to elevation data.
-
-    Uses a centered window where possible, falling back to available
-    points at the edges.
-
-    Args:
-        altitudes: List of altitude values in meters
-        window: Window size for moving average (default 5)
-
-    Returns:
-        Smoothed altitude values (same length as input)
-    """
-    if len(altitudes) <= 1:
-        return list(altitudes)
-
-    smoothed = []
-    half_window = window // 2
-
-    for i in range(len(altitudes)):
-        # Determine window bounds
-        start = max(0, i - half_window)
-        end = min(len(altitudes), i + half_window + 1)
-
-        # Compute average
-        window_values = altitudes[start:end]
-        smoothed.append(sum(window_values) / len(window_values))
-
-    return smoothed
-
-
 def categorize_climb(distance_m: float, avg_grade_pct: float) -> str:
-    """
-    Categorize a climb using the distance × grade formula.
+    """Categorize a climb using the length × grade formula.
 
-    This follows standard cycling climb categorization where longer
-    and steeper climbs receive higher categories.
+    This is the standard formula used in professional cycling to
+    categorize climbs. The score is calculated as distance (m) × grade (%).
 
-    Thresholds (distance_m × avg_grade_pct):
-    - HC (Hors Catégorie): >= 80,000
-    - Category 1: >= 64,000
-    - Category 2: >= 32,000
-    - Category 3: >= 16,000
-    - Category 4: >= 8,000
-    - NC (Not Categorized): < 8,000
+    Thresholds (based on Tour de France categorization):
+    - HC (Hors Catégorie): >= 80,000 (e.g., 10km at 8%)
+    - Cat 1: >= 64,000 (e.g., 8km at 8%)
+    - Cat 2: >= 32,000 (e.g., 4km at 8%)
+    - Cat 3: >= 16,000 (e.g., 2km at 8%)
+    - Cat 4: >= 8,000 (e.g., 1km at 8%)
+    - NC (uncategorized): < 8,000
 
     Args:
-        distance_m: Climb distance in meters
-        avg_grade_pct: Average gradient as percentage
+        distance_m: Climb length in meters.
+        avg_grade_pct: Average gradient as percentage (5.0 = 5%).
 
     Returns:
-        Category string: 'hc', '1', '2', '3', '4', or 'nc'
-
-    Examples:
-        >>> categorize_climb(10000, 8.0)  # 80,000 = HC
-        'hc'
-        >>> categorize_climb(2000, 5.0)   # 10,000 = Cat 4
-        '4'
-        >>> categorize_climb(500, 6.0)    # 3,000 = NC
-        'nc'
+        Category string: 'hc', '1', '2', '3', '4', or 'nc'.
     """
     score = distance_m * avg_grade_pct
 
@@ -127,99 +86,164 @@ def categorize_climb(distance_m: float, avg_grade_pct: float) -> str:
     return "nc"
 
 
-def _compute_grades_at_intervals(
-    records: list[dict],
-    smoothed_altitudes: list[float],
-    segment_length_m: float,
-) -> list[tuple[int, int, float, float]]:
-    """
-    Compute grades at fixed distance intervals.
+def smooth_elevation_simple(altitudes: list[float], window: int = 5) -> list[float]:
+    """Apply simple moving average smoothing to elevation data.
 
-    Returns list of (start_idx, end_idx, distance_m, grade_pct) tuples.
+    This is a lightweight alternative to Savitzky-Golay filtering,
+    useful when scipy is not available or for quick processing.
+
+    Args:
+        altitudes: Raw elevation values in meters.
+        window: Window size for moving average (should be odd).
+
+    Returns:
+        Smoothed elevation values.
+    """
+    if len(altitudes) < window:
+        return altitudes.copy() if isinstance(altitudes, list) else list(altitudes)
+
+    result = []
+    half = window // 2
+
+    for i in range(len(altitudes)):
+        start = max(0, i - half)
+        end = min(len(altitudes), i + half + 1)
+        result.append(sum(altitudes[start:end]) / (end - start))
+
+    return result
+
+
+def compute_gradient_segments(
+    records: list[dict],
+    segment_length_m: float = 50.0,
+) -> list[GradientSegment]:
+    """Compute gradient at fixed distance intervals.
+
+    Divides the route into fixed-length segments and calculates
+    the average gradient for each segment. This provides a consistent
+    representation of the gradient profile regardless of GPS point density.
+
+    Args:
+        records: List of dicts with 'distance_m' and 'altitude_m' keys.
+        segment_length_m: Length of each segment in meters.
+
+    Returns:
+        List of GradientSegment objects representing the gradient profile.
     """
     if len(records) < 2:
         return []
 
+    # Extract arrays
+    distances = np.array([r["distance_m"] for r in records], dtype=np.float64)
+    altitudes = np.array([r["altitude_m"] for r in records], dtype=np.float64)
+
+    # Smooth elevations using Savitzky-Golay filter
+    smoothed = savgol_smooth(altitudes)
+
+    total_distance = distances[-1] - distances[0]
+    if total_distance < segment_length_m:
+        # Single segment for very short distances
+        elev_gain = smoothed[-1] - smoothed[0]
+        grade_pct = (elev_gain / total_distance) * 100 if total_distance > 0 else 0.0
+        return [GradientSegment(distance_m=total_distance, grade_pct=grade_pct)]
+
     segments = []
-    start_idx = 0
-    start_distance = records[0].get("distance_m", 0.0)
-    start_altitude = smoothed_altitudes[0]
+    start_dist = distances[0]
 
-    for i in range(1, len(records)):
-        current_distance = records[i].get("distance_m", 0.0)
-        segment_dist = current_distance - start_distance
+    while start_dist < distances[-1]:
+        end_dist = min(start_dist + segment_length_m, distances[-1])
 
-        if segment_dist >= segment_length_m:
-            current_altitude = smoothed_altitudes[i]
-            delta_alt = current_altitude - start_altitude
+        # Find indices for start and end of this segment
+        start_idx = np.searchsorted(distances, start_dist)
+        end_idx = np.searchsorted(distances, end_dist)
 
-            if segment_dist > 0:
-                grade = (delta_alt / segment_dist) * 100
+        # Ensure we have valid indices
+        start_idx = min(start_idx, len(distances) - 1)
+        end_idx = min(end_idx, len(distances) - 1)
+
+        # Interpolate elevations at exact segment boundaries
+        if start_idx > 0 and distances[start_idx] != start_dist:
+            # Linear interpolation for start elevation
+            idx = start_idx - 1
+            frac = (start_dist - distances[idx]) / (distances[start_idx] - distances[idx])
+            start_elev = smoothed[idx] + frac * (smoothed[start_idx] - smoothed[idx])
+        else:
+            start_elev = smoothed[start_idx]
+
+        if end_idx > 0 and distances[end_idx] != end_dist:
+            idx = end_idx - 1
+            if distances[end_idx] != distances[idx]:
+                frac = (end_dist - distances[idx]) / (distances[end_idx] - distances[idx])
+                end_elev = smoothed[idx] + frac * (smoothed[end_idx] - smoothed[idx])
             else:
-                grade = 0.0
+                end_elev = smoothed[end_idx]
+        else:
+            end_elev = smoothed[end_idx]
 
-            segments.append((start_idx, i, segment_dist, grade))
+        segment_dist = end_dist - start_dist
+        elev_change = end_elev - start_elev
+        grade_pct = (elev_change / segment_dist) * 100 if segment_dist > 0 else 0.0
 
-            start_idx = i
-            start_distance = current_distance
-            start_altitude = current_altitude
+        segments.append(GradientSegment(distance_m=segment_dist, grade_pct=grade_pct))
 
-    # Handle remaining distance
-    if start_idx < len(records) - 1:
-        final_distance = records[-1].get("distance_m", 0.0)
-        remaining_dist = final_distance - start_distance
-
-        if remaining_dist > 0:
-            delta_alt = smoothed_altitudes[-1] - start_altitude
-            grade = (delta_alt / remaining_dist) * 100
-            segments.append((start_idx, len(records) - 1, remaining_dist, grade))
+        start_dist = end_dist
 
     return segments
 
 
 def _find_climbing_sections(
-    grade_segments: list[tuple[int, int, float, float]],
+    distances: np.ndarray,
+    smoothed: np.ndarray,
     min_grade_pct: float,
 ) -> list[tuple[int, int]]:
-    """
-    Find contiguous sections where grade >= min_grade_pct.
+    """Find sections where grade exceeds minimum threshold.
 
-    Returns list of (start_segment_idx, end_segment_idx) tuples.
+    Returns list of (start_idx, end_idx) tuples for climbing sections.
     """
+    n = len(distances)
+    if n < 2:
+        return []
+
+    # Calculate point-to-point grades
+    grades = np.zeros(n)
+    for i in range(1, n):
+        d_dist = distances[i] - distances[i - 1]
+        if d_dist > 0:
+            grades[i] = ((smoothed[i] - smoothed[i - 1]) / d_dist) * 100
+
+    # Find sections above threshold
+    climbing = grades >= min_grade_pct
     sections = []
-    in_climb = False
-    climb_start = 0
+    in_section = False
+    start_idx = 0
 
-    for i, (_, _, _, grade) in enumerate(grade_segments):
-        if grade >= min_grade_pct:
-            if not in_climb:
-                in_climb = True
-                climb_start = i
-        else:
-            if in_climb:
-                sections.append((climb_start, i - 1))
-                in_climb = False
+    for i in range(n):
+        if climbing[i] and not in_section:
+            start_idx = i
+            in_section = True
+        elif not climbing[i] and in_section:
+            if i > start_idx:
+                sections.append((start_idx, i - 1))
+            in_section = False
 
-    # Close final section if still climbing
-    if in_climb:
-        sections.append((climb_start, len(grade_segments) - 1))
+    # Handle section that extends to end
+    if in_section:
+        sections.append((start_idx, n - 1))
 
     return sections
 
 
-def _merge_nearby_sections(
+def _merge_sections(
     sections: list[tuple[int, int]],
-    grade_segments: list[tuple[int, int, float, float]],
-    records: list[dict],
-    smoothed_altitudes: list[float],
+    distances: np.ndarray,
+    smoothed: np.ndarray,
     merge_gap_m: float,
     merge_max_drop_m: float,
 ) -> list[tuple[int, int]]:
-    """
-    Merge climb sections that are close together with minimal descent.
+    """Merge climbing sections if gaps are small enough.
 
     Two sections are merged if:
-    1. The gap between them is <= merge_gap_m
+    1. The gap distance is <= merge_gap_m
     2. The elevation drop in the gap is <= merge_max_drop_m
     """
     if len(sections) <= 1:
@@ -228,191 +252,197 @@ def _merge_nearby_sections(
     merged = [sections[0]]
 
     for current in sections[1:]:
-        prev = merged[-1]
+        prev_end = merged[-1][1]
+        curr_start = current[0]
 
-        # Get record indices for gap analysis
-        prev_end_segment = grade_segments[prev[1]]
-        curr_start_segment = grade_segments[current[0]]
+        gap_distance = distances[curr_start] - distances[prev_end]
+        elev_drop = smoothed[prev_end] - smoothed[curr_start]
 
-        prev_end_idx = prev_end_segment[1]  # End record index of previous section
-        curr_start_idx = curr_start_segment[0]  # Start record index of current section
-
-        # Calculate gap distance
-        gap_start_dist = records[prev_end_idx].get("distance_m", 0.0)
-        gap_end_dist = records[curr_start_idx].get("distance_m", 0.0)
-        gap_distance = gap_end_dist - gap_start_dist
-
-        # Calculate elevation drop in gap
-        gap_start_alt = smoothed_altitudes[prev_end_idx]
-
-        # Find minimum altitude in gap
-        min_alt_in_gap = gap_start_alt
-        for j in range(prev_end_idx, curr_start_idx + 1):
-            if smoothed_altitudes[j] < min_alt_in_gap:
-                min_alt_in_gap = smoothed_altitudes[j]
-
-        elevation_drop = gap_start_alt - min_alt_in_gap
-
-        # Merge if gap is small and drop is minimal
-        if gap_distance <= merge_gap_m and elevation_drop <= merge_max_drop_m:
+        # Merge if gap is small and elevation drop is minimal
+        if gap_distance <= merge_gap_m and elev_drop <= merge_max_drop_m:
             # Extend previous section to include current
-            merged[-1] = (prev[0], current[1])
+            merged[-1] = (merged[-1][0], current[1])
         else:
             merged.append(current)
 
     return merged
 
 
-def _compute_climb_stats(
-    records: list[dict],
-    smoothed_altitudes: list[float],
+def _calculate_climb_metrics(
     start_idx: int,
     end_idx: int,
+    distances: np.ndarray,
+    smoothed: np.ndarray,
     segment_length_m: float,
-) -> tuple[float, float, float, float, list[GradientSegment]]:
-    """
-    Compute statistics for a climb section.
+) -> DetectedClimb:
+    """Calculate all metrics for a detected climb section."""
+    # Total distance
+    distance_m = distances[end_idx] - distances[start_idx]
 
-    Returns (distance_m, elevation_gain_m, avg_grade_pct, max_grade_pct, gradient_segments)
-    """
-    # Distance
-    start_dist = records[start_idx].get("distance_m", 0.0)
-    end_dist = records[end_idx].get("distance_m", 0.0)
-    distance_m = end_dist - start_dist
-
-    # Elevation gain (only positive changes)
-    elevation_gain = 0.0
-    max_grade = 0.0
-
-    gradient_segments = []
-    seg_start_idx = start_idx
-    seg_start_dist = start_dist
-    seg_start_alt = smoothed_altitudes[start_idx]
+    # Elevation gain (net gain, handling any small dips)
+    total_gain = 0.0
+    max_grade_pct = 0.0
 
     for i in range(start_idx + 1, end_idx + 1):
-        curr_dist = records[i].get("distance_m", 0.0)
-        curr_alt = smoothed_altitudes[i]
+        d_dist = distances[i] - distances[i - 1]
+        d_elev = smoothed[i] - smoothed[i - 1]
 
-        # Track elevation gain
-        delta_alt = curr_alt - smoothed_altitudes[i - 1]
-        if delta_alt > 0:
-            elevation_gain += delta_alt
+        if d_elev > 0:
+            total_gain += d_elev
 
-        # Check if we've reached segment length
-        seg_dist = curr_dist - seg_start_dist
-        if seg_dist >= segment_length_m or i == end_idx:
-            if seg_dist > 0:
-                seg_delta_alt = curr_alt - seg_start_alt
-                grade = (seg_delta_alt / seg_dist) * 100
-                gradient_segments.append(GradientSegment(distance_m=round(seg_dist, 1), grade_pct=round(grade, 1)))
-
-                if grade > max_grade:
-                    max_grade = grade
-
-            seg_start_dist = curr_dist
-            seg_start_alt = curr_alt
+        if d_dist > 0:
+            grade = (d_elev / d_dist) * 100
+            max_grade_pct = max(max_grade_pct, grade)
 
     # Average grade
-    total_elevation = smoothed_altitudes[end_idx] - smoothed_altitudes[start_idx]
-    if distance_m > 0:
-        avg_grade = (total_elevation / distance_m) * 100
-    else:
-        avg_grade = 0.0
+    net_elevation = smoothed[end_idx] - smoothed[start_idx]
+    avg_grade_pct = (net_elevation / distance_m) * 100 if distance_m > 0 else 0.0
 
-    return (distance_m, elevation_gain, avg_grade, max_grade, gradient_segments)
+    # Generate gradient segments for this climb
+    gradient_segments = []
+    seg_start_dist = distances[start_idx]
+    seg_end_dist = distances[end_idx]
+
+    current_dist = seg_start_dist
+    while current_dist < seg_end_dist:
+        next_dist = min(current_dist + segment_length_m, seg_end_dist)
+
+        # Find elevation at current and next distance
+        curr_idx = np.searchsorted(distances, current_dist)
+        next_idx = np.searchsorted(distances, next_dist)
+
+        curr_idx = min(curr_idx, len(distances) - 1)
+        next_idx = min(next_idx, len(distances) - 1)
+
+        # Interpolate elevations
+        if curr_idx > 0 and distances[curr_idx] != current_dist:
+            idx = curr_idx - 1
+            if distances[curr_idx] != distances[idx]:
+                frac = (current_dist - distances[idx]) / (distances[curr_idx] - distances[idx])
+                curr_elev = smoothed[idx] + frac * (smoothed[curr_idx] - smoothed[idx])
+            else:
+                curr_elev = smoothed[curr_idx]
+        else:
+            curr_elev = smoothed[curr_idx]
+
+        if next_idx > 0 and distances[next_idx] != next_dist:
+            idx = next_idx - 1
+            if distances[next_idx] != distances[idx]:
+                frac = (next_dist - distances[idx]) / (distances[next_idx] - distances[idx])
+                next_elev = smoothed[idx] + frac * (smoothed[next_idx] - smoothed[idx])
+            else:
+                next_elev = smoothed[next_idx]
+        else:
+            next_elev = smoothed[next_idx]
+
+        seg_dist = next_dist - current_dist
+        seg_elev = next_elev - curr_elev
+        seg_grade = (seg_elev / seg_dist) * 100 if seg_dist > 0 else 0.0
+
+        gradient_segments.append(GradientSegment(distance_m=seg_dist, grade_pct=seg_grade))
+        current_dist = next_dist
+
+    # Categorize the climb
+    category = categorize_climb(distance_m, avg_grade_pct)
+
+    return DetectedClimb(
+        start_index=start_idx,
+        end_index=end_idx,
+        distance_m=distance_m,
+        elevation_gain_m=total_gain,
+        avg_grade_pct=avg_grade_pct,
+        max_grade_pct=max_grade_pct,
+        category=category,
+        gradient_segments=gradient_segments,
+    )
 
 
 def detect_climbs(
     records: list[dict],
     min_grade_pct: float = 3.0,
-    min_length_m: float = 300,
-    merge_gap_m: float = 500,
-    merge_max_drop_m: float = 20,
-    segment_length_m: float = 50,
+    min_length_m: float = 300.0,
+    merge_gap_m: float = 500.0,
+    merge_max_drop_m: float = 20.0,
+    segment_length_m: float = 50.0,
 ) -> list[DetectedClimb]:
-    """
-    Detect climbs from GPS activity records.
+    """Detect climbs from GPS records.
 
     Algorithm:
-    1. Smooth elevation data with 5-point moving average
-    2. Compute gradient at fixed intervals (segment_length_m)
-    3. Find sections where gradient >= min_grade_pct
-    4. Merge nearby sections if gap <= merge_gap_m and drop <= merge_max_drop_m
-    5. Filter by minimum length (min_length_m)
-    6. Categorize each climb by distance × grade formula
+    1. Smooth elevation data using Savitzky-Golay filter
+    2. Identify sections where grade >= min_grade_pct
+    3. Merge nearby sections if gap <= merge_gap_m and elevation drop <= merge_max_drop_m
+    4. Filter by minimum length (>= min_length_m)
+    5. Calculate metrics and categorize each climb
 
     Args:
-        records: List of record dicts with keys:
-            - altitude_m: Altitude in meters
-            - distance_m: Cumulative distance in meters
-        min_grade_pct: Minimum gradient to consider as climbing (default 3%)
-        min_length_m: Minimum climb length in meters (default 300m)
-        merge_gap_m: Maximum gap to merge between climb sections (default 500m)
-        merge_max_drop_m: Maximum elevation drop in gap to allow merge (default 20m)
-        segment_length_m: Length for gradient calculation segments (default 50m)
+        records: List of dicts with keys:
+            - 'lat': Latitude (optional, not used for detection)
+            - 'lon': Longitude (optional, not used for detection)
+            - 'altitude_m': Elevation in meters
+            - 'distance_m': Cumulative distance in meters
+        min_grade_pct: Minimum grade percentage to consider as climbing.
+            Default 3.0% is standard for cycling climbs.
+        min_length_m: Minimum climb length in meters.
+            Default 300m filters out very short steep sections.
+        merge_gap_m: Maximum gap distance to merge adjacent climbs.
+            Default 500m handles brief flat/descent sections mid-climb.
+        merge_max_drop_m: Maximum elevation drop in gap to allow merging.
+            Default 20m prevents merging climbs separated by real descent.
+        segment_length_m: Length of gradient segments for profile.
+            Default 50m provides good detail without being too granular.
 
     Returns:
-        List of DetectedClimb objects, ordered by start position
+        List of DetectedClimb objects, ordered by start distance.
+        Empty list if no climbs found or insufficient data.
+
+    Example:
+        >>> records = [
+        ...     {'distance_m': 0, 'altitude_m': 100},
+        ...     {'distance_m': 500, 'altitude_m': 125},
+        ...     {'distance_m': 1000, 'altitude_m': 150},
+        ... ]
+        >>> climbs = detect_climbs(records, min_grade_pct=3.0)
+        >>> len(climbs)
+        1
+        >>> climbs[0].avg_grade_pct
+        5.0
     """
     if len(records) < 2:
         return []
 
-    # Extract and smooth altitudes
-    altitudes = [r.get("altitude_m", 0.0) for r in records]
-    smoothed = smooth_elevation(altitudes)
+    # Extract arrays
+    distances = np.array([r["distance_m"] for r in records], dtype=np.float64)
+    altitudes = np.array([r["altitude_m"] for r in records], dtype=np.float64)
 
-    # Compute grades at intervals
-    grade_segments = _compute_grades_at_intervals(records, smoothed, segment_length_m)
+    # Check for valid data
+    if np.isnan(distances).any() or np.isnan(altitudes).any():
+        # Filter out NaN values
+        valid = ~(np.isnan(distances) | np.isnan(altitudes))
+        if valid.sum() < 2:
+            return []
+        distances = distances[valid]
+        altitudes = altitudes[valid]
 
-    if not grade_segments:
+    # Smooth elevations
+    smoothed = savgol_smooth(altitudes)
+
+    # Step 1: Find sections where grade >= min_grade_pct
+    sections = _find_climbing_sections(distances, smoothed, min_grade_pct)
+
+    if not sections:
         return []
 
-    # Find climbing sections
-    climbing_sections = _find_climbing_sections(grade_segments, min_grade_pct)
+    # Step 2: Merge nearby sections
+    sections = _merge_sections(sections, distances, smoothed, merge_gap_m, merge_max_drop_m)
 
-    if not climbing_sections:
-        return []
-
-    # Merge nearby sections
-    merged_sections = _merge_nearby_sections(
-        climbing_sections,
-        grade_segments,
-        records,
-        smoothed,
-        merge_gap_m,
-        merge_max_drop_m,
-    )
-
-    # Build climb objects
+    # Step 3: Filter by minimum length and calculate metrics
     climbs = []
-    for seg_start, seg_end in merged_sections:
-        # Convert segment indices to record indices
-        start_idx = grade_segments[seg_start][0]
-        end_idx = grade_segments[seg_end][1]
-
-        # Compute stats
-        distance_m, elevation_gain, avg_grade, max_grade, gradient_segs = _compute_climb_stats(
-            records, smoothed, start_idx, end_idx, segment_length_m
-        )
-
-        # Filter by minimum length
-        if distance_m < min_length_m:
-            continue
-
-        # Categorize
-        category = categorize_climb(distance_m, avg_grade)
-
-        climbs.append(
-            DetectedClimb(
-                start_index=start_idx,
-                end_index=end_idx,
-                distance_m=round(distance_m, 1),
-                elevation_gain_m=round(elevation_gain, 1),
-                avg_grade_pct=round(avg_grade, 2),
-                max_grade_pct=round(max_grade, 2),
-                category=category,
-                gradient_segments=gradient_segs,
+    for start_idx, end_idx in sections:
+        length = distances[end_idx] - distances[start_idx]
+        if length >= min_length_m:
+            climb = _calculate_climb_metrics(
+                start_idx, end_idx, distances, smoothed, segment_length_m
             )
-        )
+            climbs.append(climb)
 
     return climbs
