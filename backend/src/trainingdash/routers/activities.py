@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 
 from trainingdash.auth import CurrentUser, DbSession
-from trainingdash.dependencies import ActivityRepoD, BikeRepoD, DeleteActivityD, PacingCoefficientsRepoD, ThresholdRepoD
+from trainingdash.dependencies import ActivityRepoD, BikeRepoD, DeleteActivityD, PacingCoefficientsRepoD, SegmentEffortRepoD, ThresholdRepoD
 from trainingdash.domain.activity_type import validate_activity_type
 from trainingdash.domain.fit_modifier import FitModifications
 from trainingdash.repositories.postgres.models import Activity, ActivityPeakPower, Record
@@ -718,3 +718,73 @@ async def list_fit_devices(user: CurrentUser):
 
     devices = get_device_list()
     return {"devices": devices, "total": len(devices)}
+
+
+
+# --- Segment Efforts ---
+
+
+async def _compute_pr_delta(
+    effort_repo: SegmentEffortRepoD,
+    effort,
+) -> int | None:
+    """
+    Compute delta to user's PR in seconds.
+
+    Returns:
+        0 if this effort is the PR
+        Positive integer if slower than PR
+        None if no PR exists (shouldn't happen normally)
+    """
+    if effort.is_pr:
+        return 0
+
+    pr = await effort_repo.get_user_pr(effort.segment_id, effort.user_id)
+    if pr:
+        return effort.elapsed_time_seconds - pr.elapsed_time_seconds
+    return None
+
+
+@router.get("/activities/{activity_id}/segments")
+async def get_activity_segments(
+    repo: ActivityRepoD,
+    effort_repo: SegmentEffortRepoD,
+    user: CurrentUser,
+    activity_id: UUID,
+):
+    """
+    Get all segment efforts for an activity.
+
+    Returns efforts in chronological order (by start_index).
+    Includes segment name, type, category, and PR delta.
+    """
+    # Verify activity ownership
+    activity = await _get_owned_activity(repo, user, activity_id)
+
+    # Get efforts with segment data joined (repo returns them ordered by start_index)
+    efforts = await effort_repo.list_for_activity(activity_id)
+
+    # Build response with PR deltas
+    effort_items = []
+    for e in efforts:
+        delta = await _compute_pr_delta(effort_repo, e)
+        effort_items.append(
+            {
+                "id": str(e.id),
+                "segment_id": str(e.segment_id),
+                "segment_name": e.segment.name,
+                "segment_type": e.segment.type,
+                "climb_category": e.segment.climb_category,
+                "distance_m": e.segment.distance_m,
+                "elapsed_time_seconds": e.elapsed_time_seconds,
+                "moving_time_seconds": e.moving_time_seconds,
+                "avg_power_watts": e.avg_power_watts,
+                "avg_hr_bpm": e.avg_hr_bpm,
+                "is_pr": e.is_pr,
+                "delta_to_pr_seconds": delta,
+                "start_index": e.start_index,
+                "end_index": e.end_index,
+            }
+        )
+
+    return {"efforts": effort_items}
