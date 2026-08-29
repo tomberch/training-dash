@@ -30,6 +30,7 @@ def _to_model(coef: PacingCoefficients) -> PacingCoefficientsModel:
         descent_sample_count=coef.descent_sample_count,
         activity_count=coef.activity_count,
         last_calibrated_at=coef.last_calibrated_at,
+        terrain_behavior=coef.terrain_behavior,
     )
 
 
@@ -46,6 +47,7 @@ def _from_model(model: PacingCoefficientsModel) -> PacingCoefficients:
         descent_sample_count=model.descent_sample_count,
         activity_count=model.activity_count,
         last_calibrated_at=model.last_calibrated_at,
+        terrain_behavior=model.terrain_behavior,
     )
 
 
@@ -168,6 +170,7 @@ class PostgresPacingCoefficientsRepo:
             "climb_sample_count": coefficients.climb_sample_count,
             "descent_sample_count": coefficients.descent_sample_count,
             "activity_count": coefficients.activity_count,
+            "terrain_behavior": coefficients.terrain_behavior,
             "last_calibrated_at": now,
             "updated_at": now,
         }
@@ -183,6 +186,7 @@ class PostgresPacingCoefficientsRepo:
             climb_sample_count=coefficients.climb_sample_count,
             descent_sample_count=coefficients.descent_sample_count,
             activity_count=coefficients.activity_count,
+            terrain_behavior=coefficients.terrain_behavior,
             last_calibrated_at=now,
             created_at=now,
             updated_at=now,

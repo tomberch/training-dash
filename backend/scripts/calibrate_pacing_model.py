@@ -661,6 +661,7 @@ async def run_calibration(
     logger.info(f"Found {len(activities)} activities with power data")
 
     results: list[ActivityResult] = []
+    behavior_samples: list = []
 
     for i, activity in enumerate(activities):
         logger.info(f"Processing {i + 1}/{len(activities)}: {activity.title or activity.id}")
@@ -679,6 +680,22 @@ async def run_calibration(
             if not segments:
                 results.append(ActivityResult.skipped(activity, pedaling_metrics, notes))
                 continue
+
+            # Stop/coast behavior sample for the learned baseline (#635)
+            try:
+                from trainingdash.domain.grade import calculate_grade
+                from trainingdash.domain.rider_behavior import extract_ride_behavior
+
+                valid_pts = [r for r in records if r.lat is not None and r.altitude_m is not None]
+                if len(valid_pts) >= 2:
+                    dists = np.array([r.distance_m for r in valid_pts])
+                    elevs = np.array([r.altitude_m for r in valid_pts])
+                    point_grades = calculate_grade(dists, elevs)
+                    sample = extract_ride_behavior(valid_pts, list(point_grades))
+                    if sample is not None:
+                        behavior_samples.append(sample)
+            except Exception as exc:  # reporting must never kill the run
+                logger.debug(f"behavior extraction failed for {activity.id}: {exc}")
 
             # Get rider and bike parameters
             rider_weight = await get_user_weight(activity.user_id)
@@ -716,7 +733,7 @@ async def run_calibration(
     write_csv(results, output_path)
 
     # Print summary
-    print_summary(results)
+    print_summary(results, behavior_baseline=aggregate_behavior_or_none(behavior_samples))
 
     return results
 
@@ -811,7 +828,19 @@ def write_csv(results: list[ActivityResult], output_path: str) -> None:
     logger.info(f"Results written to {output_path}")
 
 
-def print_summary(results: list[ActivityResult]) -> None:
+def aggregate_behavior_or_none(samples: list):
+    """Aggregate behavior samples into the learned baseline (or None)."""
+    if not samples:
+        return None
+    try:
+        from trainingdash.domain.rider_behavior import aggregate_behavior_baseline
+
+        return aggregate_behavior_baseline(samples)
+    except ImportError:
+        return None
+
+
+def print_summary(results: list[ActivityResult], behavior_baseline=None) -> None:
     """Print summary statistics."""
     successful = [r for r in results if r.status == "success"]
     skipped = [r for r in results if r.status == "skipped"]
@@ -956,6 +985,18 @@ def print_summary(results: list[ActivityResult]) -> None:
         if ct_pedaling_speed_errors:
             print(f"    Speed Error (pedaling): mean={mean(ct_pedaling_speed_errors):.1f}%")
             print(f"    Avg pedaling %: {mean(ct_pedaling_pcts):.1f}%")
+        # Measured vs learned stop/coast baseline cross-check (#635):
+        # measured = 100 - avg pedaling % from records in this terrain;
+        # learned = rider_behavior baseline for the matching bucket.
+        measured_non_pedaling = 100.0 - mean(ct_pedaling_pcts) if ct_pedaling_pcts else None
+        learned = (behavior_baseline or {}).get(_harness_to_behavior_terrain(ct))
+        if measured_non_pedaling is not None:
+            line = f"    Non-pedaling (measured): {measured_non_pedaling:.1f}%"
+            if learned is not None:
+                line += f"  |  learned baseline: {learned['non_pedaling_pct']:.1f}% ({learned['activity_count']} rides)"
+            else:
+                line += "  |  learned baseline: unset (quality gate)"
+            print(line)
 
         # Speed bias for this terrain
         ct_speed_bias = mean([r.pred_avg_speed_kmh - r.actual_avg_speed_kmh for r in ct_results])
@@ -1060,3 +1101,13 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+def _harness_to_behavior_terrain(course_type: str) -> str:
+    """Map the harness's course_type to the rider_behavior terrain buckets."""
+    return {
+        "flat": "flat",
+        "rolling": "rolling",
+        "hilly": "hilly",
+        "mountainous": "mountain",
+    }.get(course_type, course_type)

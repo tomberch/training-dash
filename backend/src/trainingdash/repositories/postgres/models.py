@@ -958,6 +958,15 @@ class PacingCoefficients(Base):
         nullable=True,
         comment="When coefficients were last updated",
     )
+    terrain_behavior: Mapped[dict | None] = mapped_column(
+        JSONB,
+        nullable=True,
+        comment=(
+            "Learned stop/coast baseline per terrain type (ADR 0005 #635). "
+            "Shape: {terrain: {non_pedaling_pct, coasting_pct, stopped_pct, "
+            "activity_count}}. NULL = not learned / thinned by the quality gate."
+        ),
+    )
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))

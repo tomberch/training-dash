@@ -153,6 +153,12 @@ class PacingCoefficients:
     activity_count: int = 0
     last_calibrated_at: "datetime | None" = None
 
+    # Learned stop/coast baseline per terrain type (ADR 0005 #635).
+    # Shape: {terrain: {non_pedaling_pct, coasting_pct, stopped_pct,
+    # activity_count}}. None = not learned (quality gate kept it unset);
+    # missing terrain keys = too few rides in that bucket.
+    terrain_behavior: "dict | None" = None
+
     @classmethod
     def defaults(cls) -> "PacingCoefficients":
         """Return global defaults."""

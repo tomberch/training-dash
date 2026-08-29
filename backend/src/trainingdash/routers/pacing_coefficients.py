@@ -55,6 +55,16 @@ class CoefficientsResponse(BaseModel):
     confidence_level: str = Field(description="Confidence: 'high', 'medium', 'low', or 'default'")
     confidence_note: str = Field(description="Explanation of confidence level")
 
+    # Learned stop/coast baseline per terrain (ADR 0005 #635)
+    terrain_behavior: dict | None = Field(
+        default=None,
+        description=(
+            "Learned non-pedaling time per terrain type: "
+            "{terrain: {non_pedaling_pct, coasting_pct, stopped_pct, activity_count}}. "
+            "Null = not learned yet (quality gate keeps thin buckets unset)."
+        ),
+    )
+
 
 class AllCoefficientsResponse(BaseModel):
     """All coefficients for a user (default + per-bike)."""
@@ -271,6 +281,7 @@ def _build_coefficients_response(coef, bike_names: dict[int, str]) -> Coefficien
         last_calibrated_at=coef.last_calibrated_at,
         confidence_level=confidence_level,
         confidence_note=confidence_note,
+        terrain_behavior=coef.terrain_behavior,
     )
 
 

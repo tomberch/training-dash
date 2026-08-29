@@ -7,6 +7,7 @@ pacing model parameters from accumulated ride data.
 
 import logging
 from dataclasses import dataclass
+from itertools import pairwise
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,6 +27,11 @@ from trainingdash.domain.pacing_calibration import (
     pedaling_average_power,
 )
 from trainingdash.domain.pacing_model import PacingCoefficients
+from trainingdash.domain.rider_behavior import (
+    RideBehaviorSample,
+    aggregate_behavior_baseline,
+    extract_ride_behavior,
+)
 from trainingdash.repositories.postgres.models import Activity, Record
 from trainingdash.repositories.protocols import PacingCoefficientsRepo
 
@@ -42,6 +48,7 @@ class CalibrationStats:
     coefficients_updated: bool
     result: CalibrationResult | None
     message: str | None = None  # e.g. quality-gate rejection reason
+    terrain_behavior: dict | None = None  # learned stop/coast baseline (#635)
 
 
 class CalibratePacing:
@@ -92,6 +99,7 @@ class CalibratePacing:
         # Accumulate samples from all activities
         all_climb_samples: list[GradePowerSample] = []
         all_descent_samples: list[DescentSample] = []
+        behavior_samples: list[RideBehaviorSample] = []
 
         for activity in activities:
             records = await self._get_records(str(activity.id))
@@ -110,6 +118,15 @@ class CalibratePacing:
 
             all_climb_samples.extend(climb_samples)
             all_descent_samples.extend(descent_samples)
+
+            # Stop/coast baseline (ADR 0005 #635): per-ride behavior
+            # sample, classified by the ride's point grades.
+            behavior = extract_ride_behavior(records, _point_grades(records))
+            if behavior is not None:
+                behavior_samples.append(behavior)
+
+        # Aggregate the stop/coast baseline per terrain (quality-gated)
+        behavior_baseline = aggregate_behavior_baseline(behavior_samples)
 
         # Calibrate
         result = calibrate_coefficients(
@@ -132,6 +149,7 @@ class CalibratePacing:
                     descent_sample_count=result.descent_sample_count,
                     activity_count=result.activity_count,
                     bike_id=bike_id,
+                    terrain_behavior=_baseline_to_json(behavior_baseline),
                 ),
             )
 
@@ -171,6 +189,7 @@ class CalibratePacing:
                     descent_sample_count=len(all_descent_samples),
                     activity_count=len(activities),
                     bike_id=bike_id,
+                    terrain_behavior=_baseline_to_json(behavior_baseline),
                 ),
             )
             message = (
@@ -284,3 +303,40 @@ class CalibratePacing:
             )
         )
         return [row[0] for row in result.fetchall() if row[0] is not None]
+
+
+def _point_grades(records: list) -> list[float]:
+    """Per-record point grades (%) for terrain classification (#635).
+
+    Uses the same elevation-delta definition as the calibration extractors;
+    records without elevation carry grade 0.
+    """
+    grades: list[float] = []
+    for prev, curr in pairwise(records):
+        if (
+            prev.altitude_m is None
+            or curr.altitude_m is None
+            or prev.distance_m is None
+            or curr.distance_m is None
+            or curr.distance_m - prev.distance_m < 1
+        ):
+            grades.append(0.0)
+            continue
+        grades.append((curr.altitude_m - prev.altitude_m) / (curr.distance_m - prev.distance_m) * 100)
+    grades.append(grades[-1] if grades else 0.0)
+    return grades
+
+
+def _baseline_to_json(baseline: dict | None) -> dict | None:
+    """Serialize a TerrainBehaviorBaseline dict for JSONB storage."""
+    if baseline is None:
+        return None
+    return {
+        terrain: {
+            "non_pedaling_pct": round(b.non_pedaling_pct, 1),
+            "coasting_pct": round(b.coasting_pct, 1),
+            "stopped_pct": round(b.stopped_pct, 1),
+            "activity_count": b.activity_count,
+        }
+        for terrain, b in baseline.items()
+    }

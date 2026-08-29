@@ -81,6 +81,7 @@ class FakePacingCoefficientsRepo:
             coef.climb_sample_count = coefficients.climb_sample_count
             coef.descent_sample_count = coefficients.descent_sample_count
             coef.activity_count = coefficients.activity_count
+            coef.terrain_behavior = coefficients.terrain_behavior
             coef.last_calibrated_at = now
             coef.updated_at = now
         else:
@@ -93,6 +94,7 @@ class FakePacingCoefficientsRepo:
                 climb_sample_count=coefficients.climb_sample_count,
                 descent_sample_count=coefficients.descent_sample_count,
                 activity_count=coefficients.activity_count,
+                terrain_behavior=coefficients.terrain_behavior,
                 bike_id=bike_id,
             )
             coef.last_calibrated_at = now
