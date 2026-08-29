@@ -406,5 +406,3 @@ class TestIngestActivityCalibration:
         # Ingestion should still succeed
         assert result is not None
         assert result.id == activity_with_power.id
-
-
