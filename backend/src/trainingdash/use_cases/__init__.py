@@ -22,6 +22,7 @@ Example:
 """
 
 from trainingdash.use_cases.breakthrough_evaluator import BreakthroughEvaluator
+from trainingdash.use_cases.create_segment import CreateSegment, CreateSegmentResult
 from trainingdash.use_cases.calibrate_bike import (
     BikeNotEligibleError,
     BikeNotFoundError,
@@ -67,6 +68,8 @@ __all__ = [
     "CalibrationError",
     "CalibrationResult",
     "CreateBackup",
+    "CreateSegment",
+    "CreateSegmentResult",
     "DeleteActivity",
     "EnsureDefaultThresholds",
     "FitnessModelUpdater",
