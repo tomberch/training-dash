@@ -50,6 +50,7 @@ from trainingdash.repositories.postgres.saved_filter_repo import PostgresSavedFi
 from trainingdash.repositories.postgres.segment_repo import (
     PostgresSegmentEffortRepo,
     PostgresSegmentRepo,
+    PostgresSegmentSuggestionRepo,
 )
 from trainingdash.repositories.postgres.settings_repo import PostgresAppSettingsRepo
 from trainingdash.repositories.postgres.threshold_repo import PostgresThresholdRepo
@@ -78,6 +79,7 @@ from trainingdash.repositories.protocols import (
     SavedFilterRepo,
     SegmentEffortRepo,
     SegmentRepo,
+    SegmentSuggestionRepo,
     ThresholdRepo,
     UserRepo,
     XertCredentialsRepo,
@@ -174,6 +176,11 @@ async def get_segment_effort_repo(db: DbSession) -> SegmentEffortRepo:
     return PostgresSegmentEffortRepo(db)
 
 
+async def get_segment_suggestion_repo(db: DbSession) -> SegmentSuggestionRepo:
+    """Create a SegmentSuggestionRepo bound to the current session."""
+    return PostgresSegmentSuggestionRepo(db)
+
+
 async def get_race_plan_repo(db: DbSession) -> RacePlanRepo:
     """Create a RacePlanRepo bound to the current session."""
     return PostgresRacePlanRepo(db)
@@ -256,6 +263,7 @@ ThresholdRepoD = Annotated[ThresholdRepo, Depends(get_threshold_repo)]
 SavedFilterRepoD = Annotated[SavedFilterRepo, Depends(get_saved_filter_repo)]
 SegmentRepoD = Annotated[SegmentRepo, Depends(get_segment_repo)]
 SegmentEffortRepoD = Annotated[SegmentEffortRepo, Depends(get_segment_effort_repo)]
+SegmentSuggestionRepoD = Annotated[SegmentSuggestionRepo, Depends(get_segment_suggestion_repo)]
 RecordRepoD = Annotated[RecordRepo, Depends(get_record_repo)]
 RideEventRepoD = Annotated[RideEventRepo, Depends(get_ride_event_repo)]
 JournalEntryRepoD = Annotated[JournalEntryRepo, Depends(get_journal_entry_repo)]
@@ -320,3 +328,17 @@ DeleteActivityD = Annotated[DeleteActivity, Depends(get_delete_activity_use_case
 EnsureDefaultThresholdsD = Annotated[EnsureDefaultThresholds, Depends(get_ensure_default_thresholds_use_case)]
 BatchLinkActivitiesD = Annotated[BatchLinkActivities, Depends(get_batch_link_activities_use_case)]
 CalibratePacingD = Annotated[CalibratePacing, Depends(get_calibrate_pacing_use_case)]
+
+
+from trainingdash.use_cases.approve_suggestion import ApproveSuggestion
+
+
+async def get_approve_suggestion_use_case(
+    segment_repo: SegmentRepoD,
+    suggestion_repo: SegmentSuggestionRepoD,
+) -> ApproveSuggestion:
+    """Create an ApproveSuggestion use case with its dependencies."""
+    return ApproveSuggestion(segment_repo, suggestion_repo)
+
+
+ApproveSuggestionD = Annotated[ApproveSuggestion, Depends(get_approve_suggestion_use_case)]
