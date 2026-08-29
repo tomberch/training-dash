@@ -273,7 +273,7 @@ class CreateCourse:
         points: list,
     ) -> list[dict]:
         """Build elevation profile for charting and pacing.
-        
+
         Includes lat/lon for curvature-based speed calculations.
         """
         profile = []

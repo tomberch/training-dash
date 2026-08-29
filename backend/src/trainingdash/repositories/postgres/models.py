@@ -769,9 +769,11 @@ class RacePlan(Base):
     target_intensity: Mapped[Decimal | None] = mapped_column(Numeric(3, 2), nullable=True)  # e.g., 0.85 for 85% IF
     optimization_method: Mapped[str | None] = mapped_column(String(20), nullable=True)  # heuristic, optimized
     max_descent_speed_mps: Mapped[float | None] = mapped_column(Float, nullable=True)  # Cap descent speed
-    
+
     # Ride type configuration
-    ride_type: Mapped[str | None] = mapped_column(String(20), nullable=True)  # race, gran_fondo, training, touring, custom
+    ride_type: Mapped[str | None] = mapped_column(
+        String(20), nullable=True
+    )  # race, gran_fondo, training, touring, custom
     descent_aggressiveness: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 0-100
     stop_pct: Mapped[float | None] = mapped_column(Float, nullable=True)  # 0-50
 
@@ -962,7 +964,6 @@ class PacingCoefficients(Base):
     updated_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("now()"))
 
 
-
 # =============================================================================
 # Segment System Models
 # =============================================================================
@@ -1009,9 +1010,7 @@ class Segment(Base):
     athlete_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
 
     # Ownership & tracking
-    created_by: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
-    )
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     source_activity_id: Mapped[UUID | None] = mapped_column(
         PgUUID(as_uuid=True), ForeignKey("activities.id", ondelete="SET NULL"), nullable=True
     )
@@ -1028,9 +1027,7 @@ class SegmentEffort(Base):
     """
 
     __tablename__ = "segment_efforts"
-    __table_args__ = (
-        UniqueConstraint("segment_id", "activity_id", "start_index", name="uq_segment_effort_unique"),
-    )
+    __table_args__ = (UniqueConstraint("segment_id", "activity_id", "start_index", name="uq_segment_effort_unique"),)
 
     id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True, default=uuid4)
     segment_id: Mapped[UUID] = mapped_column(
@@ -1067,9 +1064,7 @@ class SegmentSuggestion(Base):
     """
 
     __tablename__ = "segment_suggestions"
-    __table_args__ = (
-        UniqueConstraint("segment_id", "user_id", name="uq_segment_suggestion_user"),
-    )
+    __table_args__ = (UniqueConstraint("segment_id", "user_id", name="uq_segment_suggestion_user"),)
 
     id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True, default=uuid4)
     segment_id: Mapped[UUID] = mapped_column(

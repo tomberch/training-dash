@@ -1,6 +1,6 @@
 """Tests for segments API router endpoints."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -155,7 +155,7 @@ class TestEffortSummary:
         effort.id = uuid4()
         effort.segment_id = uuid4()
         effort.activity_id = uuid4()
-        effort.started_at = datetime(2024, 6, 15, 10, 30, 0, tzinfo=timezone.utc)
+        effort.started_at = datetime(2024, 6, 15, 10, 30, 0, tzinfo=UTC)
         effort.elapsed_time_seconds = 1800
         effort.moving_time_seconds = 1750
         effort.avg_power_watts = 280
@@ -181,7 +181,7 @@ class TestEffortSummary:
         effort.id = uuid4()
         effort.segment_id = uuid4()
         effort.activity_id = uuid4()
-        effort.started_at = datetime(2024, 6, 15, 10, 30, 0, tzinfo=timezone.utc)
+        effort.started_at = datetime(2024, 6, 15, 10, 30, 0, tzinfo=UTC)
         effort.elapsed_time_seconds = 300
         effort.moving_time_seconds = None
         effort.avg_power_watts = None

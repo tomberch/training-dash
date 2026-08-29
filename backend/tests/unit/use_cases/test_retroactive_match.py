@@ -6,10 +6,10 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from tests.fakes.segment_repos import FakeSegmentEffortRepo, FakeSegmentRepo
 from trainingdash.domain.segment_matching import SegmentMatch
 from trainingdash.repositories.postgres.models import (
     Activity,
-    Record,
     Segment,
     SegmentEffort,
 )
@@ -18,8 +18,6 @@ from trainingdash.use_cases.retroactive_match import (
     RetroactiveMatch,
     RetroactiveMatchResult,
 )
-from tests.fakes.segment_repos import FakeSegmentEffortRepo, FakeSegmentRepo
-
 
 # =============================================================================
 # Test Fixtures
@@ -95,15 +93,17 @@ def make_records_for_activity(
 
     records = []
     for i in range(count):
-        records.append({
-            "lat": 47.0 + (i * 0.005),
-            "lon": 8.0,
-            "altitude_m": 100.0 + (i * 10),
-            "distance_m": i * 500.0,
-            "timestamp": base_time + timedelta(seconds=i * 60),
-            "power_w": 200 + (i * 25),
-            "hr_bpm": 140 + (i * 5),
-        })
+        records.append(
+            {
+                "lat": 47.0 + (i * 0.005),
+                "lon": 8.0,
+                "altitude_m": 100.0 + (i * 10),
+                "distance_m": i * 500.0,
+                "timestamp": base_time + timedelta(seconds=i * 60),
+                "power_w": 200 + (i * 25),
+                "hr_bpm": 140 + (i * 5),
+            }
+        )
     return records
 
 
@@ -179,9 +179,7 @@ class TestRetroactiveMatch:
         assert result.efforts_created == 0
 
     @pytest.mark.asyncio
-    async def test_no_candidate_activities(
-        self, use_case, mock_db, segment_repo, effort_repo
-    ):
+    async def test_no_candidate_activities(self, use_case, mock_db, segment_repo, effort_repo):
         """Returns success with zero counts when no activities match."""
         segment = make_segment()
         segment_repo.add(segment)
@@ -196,9 +194,7 @@ class TestRetroactiveMatch:
         assert result.efforts_created == 0
 
     @pytest.mark.asyncio
-    async def test_single_activity_matches(
-        self, use_case, mock_db, segment_repo, effort_repo
-    ):
+    async def test_single_activity_matches(self, use_case, mock_db, segment_repo, effort_repo):
         """Single activity matching creates one effort."""
         segment = make_segment()
         segment_repo.add(segment)
@@ -236,9 +232,7 @@ class TestRetroactiveMatch:
         assert efforts[0].is_pr is True
 
     @pytest.mark.asyncio
-    async def test_batch_processing(
-        self, use_case, mock_db, segment_repo, effort_repo
-    ):
+    async def test_batch_processing(self, use_case, mock_db, segment_repo, effort_repo):
         """Activities are processed in batches."""
         segment = make_segment()
         segment_repo.add(segment)
@@ -278,9 +272,7 @@ class TestRetroactiveMatch:
         assert result.efforts_created == 5
 
     @pytest.mark.asyncio
-    async def test_no_duplicate_efforts(
-        self, use_case, mock_db, segment_repo, effort_repo
-    ):
+    async def test_no_duplicate_efforts(self, use_case, mock_db, segment_repo, effort_repo):
         """Skips creating effort when one already exists."""
         segment = make_segment()
         segment_repo.add(segment)
@@ -329,9 +321,7 @@ class TestRetroactiveMatch:
         assert len(effort_repo.all()) == 1
 
     @pytest.mark.asyncio
-    async def test_pr_flags_updated_correctly(
-        self, use_case, mock_db, segment_repo, effort_repo
-    ):
+    async def test_pr_flags_updated_correctly(self, use_case, mock_db, segment_repo, effort_repo):
         """PR flags are updated when faster time is found."""
         segment = make_segment()
         segment_repo.add(segment)
@@ -345,8 +335,24 @@ class TestRetroactiveMatch:
         # Activity 2: faster (60 seconds)
         base_time2 = datetime(2024, 1, 2, 10, 0)
         records2 = [
-            {"lat": 47.0, "lon": 8.0, "altitude_m": 100, "distance_m": 0, "timestamp": base_time2, "power_w": 200, "hr_bpm": 140},
-            {"lat": 47.01, "lon": 8.0, "altitude_m": 110, "distance_m": 1000, "timestamp": base_time2 + timedelta(seconds=60), "power_w": 250, "hr_bpm": 150},
+            {
+                "lat": 47.0,
+                "lon": 8.0,
+                "altitude_m": 100,
+                "distance_m": 0,
+                "timestamp": base_time2,
+                "power_w": 200,
+                "hr_bpm": 140,
+            },
+            {
+                "lat": 47.01,
+                "lon": 8.0,
+                "altitude_m": 110,
+                "distance_m": 1000,
+                "timestamp": base_time2 + timedelta(seconds=60),
+                "power_w": 250,
+                "hr_bpm": 150,
+            },
         ]
 
         match = SegmentMatch(
@@ -384,9 +390,7 @@ class TestRetroactiveMatch:
         assert pr_efforts[0].elapsed_time_seconds == 60
 
     @pytest.mark.asyncio
-    async def test_resume_from_checkpoint(
-        self, use_case, mock_db, segment_repo, effort_repo
-    ):
+    async def test_resume_from_checkpoint(self, use_case, mock_db, segment_repo, effort_repo):
         """Resuming from checkpoint skips already-processed activities."""
         # Segment with checkpoint set
         checkpoint_activity_id = uuid4()
@@ -407,6 +411,7 @@ class TestRetroactiveMatch:
         )
 
         call_count = [0]
+
         # Should start after the checkpoint
         def side_effect_candidates(*args, **kwargs):
             call_count[0] += 1
@@ -432,16 +437,24 @@ class TestRetroactiveMatch:
         assert result.efforts_created == 1
 
     @pytest.mark.asyncio
-    async def test_skip_activity_with_insufficient_records(
-        self, use_case, mock_db, segment_repo, effort_repo
-    ):
+    async def test_skip_activity_with_insufficient_records(self, use_case, mock_db, segment_repo, effort_repo):
         """Skips activities with fewer than 2 records."""
         segment = make_segment()
         segment_repo.add(segment)
 
         activity = make_activity()
         # Only 1 record - insufficient
-        single_record = [{"lat": 47.0, "lon": 8.0, "altitude_m": 100, "distance_m": 0, "timestamp": datetime.now(), "power_w": None, "hr_bpm": None}]
+        single_record = [
+            {
+                "lat": 47.0,
+                "lon": 8.0,
+                "altitude_m": 100,
+                "distance_m": 0,
+                "timestamp": datetime.now(),
+                "power_w": None,
+                "hr_bpm": None,
+            }
+        ]
 
         with patch.object(use_case, "_find_candidate_activities", side_effect=[[activity], []]):
             with patch.object(use_case, "_load_activity_records", return_value=single_record):
@@ -455,9 +468,7 @@ class TestRetroactiveMatch:
         assert result.efforts_created == 0  # No effort created
 
     @pytest.mark.asyncio
-    async def test_multiple_users_pr_tracking(
-        self, use_case, mock_db, segment_repo, effort_repo
-    ):
+    async def test_multiple_users_pr_tracking(self, use_case, mock_db, segment_repo, effort_repo):
         """PR flags are tracked per-user correctly."""
         segment = make_segment()
         segment_repo.add(segment)
@@ -494,9 +505,7 @@ class TestRetroactiveMatch:
         assert all(e.is_pr for e in efforts)
 
     @pytest.mark.asyncio
-    async def test_updates_denormalized_counts(
-        self, use_case, mock_db, segment_repo, effort_repo
-    ):
+    async def test_updates_denormalized_counts(self, use_case, mock_db, segment_repo, effort_repo):
         """Segment counts are updated after completion."""
         segment = make_segment()
         segment_repo.add(segment)
@@ -510,9 +519,7 @@ class TestRetroactiveMatch:
         mock_update.assert_called_once_with(segment.id)
 
     @pytest.mark.asyncio
-    async def test_clears_matching_job_id_on_completion(
-        self, use_case, mock_db, segment_repo, effort_repo
-    ):
+    async def test_clears_matching_job_id_on_completion(self, use_case, mock_db, segment_repo, effort_repo):
         """matching_job_id is cleared after successful completion."""
         segment = make_segment()
         segment_repo.add(segment)

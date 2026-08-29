@@ -225,9 +225,7 @@ class PostgresSegmentRepo:
         if new_athlete:
             values["athlete_count"] = Segment.athlete_count + 1
 
-        await self._session.execute(
-            update(Segment).where(Segment.id == segment_id).values(**values)
-        )
+        await self._session.execute(update(Segment).where(Segment.id == segment_id).values(**values))
         await self._session.commit()
 
 
@@ -243,9 +241,7 @@ class PostgresSegmentEffortRepo:
 
     async def get_by_id(self, effort_id: UUID) -> SegmentEffort | None:
         """Fetch an effort by ID. Returns None if not found."""
-        result = await self._session.execute(
-            select(SegmentEffort).where(SegmentEffort.id == effort_id)
-        )
+        result = await self._session.execute(select(SegmentEffort).where(SegmentEffort.id == effort_id))
         return result.scalar_one_or_none()
 
     async def list_for_segment(
@@ -373,9 +369,7 @@ class PostgresSegmentSuggestionRepo:
 
     async def get_by_id(self, suggestion_id: UUID) -> SegmentSuggestion | None:
         """Fetch a suggestion by ID. Returns None if not found."""
-        result = await self._session.execute(
-            select(SegmentSuggestion).where(SegmentSuggestion.id == suggestion_id)
-        )
+        result = await self._session.execute(select(SegmentSuggestion).where(SegmentSuggestion.id == suggestion_id))
         return result.scalar_one_or_none()
 
     async def list_for_user(
@@ -402,20 +396,14 @@ class PostgresSegmentSuggestionRepo:
         if not include_dismissed:
             query = query.where(SegmentSuggestion.dismissed_at.is_(None))
 
-        query = (
-            query.order_by(SegmentSuggestion.repetition_count.desc())
-            .limit(limit)
-            .offset(offset)
-        )
+        query = query.order_by(SegmentSuggestion.repetition_count.desc()).limit(limit).offset(offset)
 
         result = await self._session.execute(query)
         return list(result.scalars().all())
 
     async def count_for_user(self, user_id: int, include_dismissed: bool = False) -> int:
         """Count suggestions for a user."""
-        query = select(func.count(SegmentSuggestion.id)).where(
-            SegmentSuggestion.user_id == user_id
-        )
+        query = select(func.count(SegmentSuggestion.id)).where(SegmentSuggestion.user_id == user_id)
 
         if not include_dismissed:
             query = query.where(SegmentSuggestion.dismissed_at.is_(None))
@@ -468,9 +456,7 @@ class PostgresSegmentSuggestionRepo:
         await self._session.commit()
         return result.rowcount
 
-    async def get_for_user_segment(
-        self, user_id: int, segment_id: UUID
-    ) -> SegmentSuggestion | None:
+    async def get_for_user_segment(self, user_id: int, segment_id: UUID) -> SegmentSuggestion | None:
         """
         Get the suggestion for a specific user/segment pair.
 

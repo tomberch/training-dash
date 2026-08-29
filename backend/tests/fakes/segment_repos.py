@@ -40,11 +40,7 @@ class FakeSegmentRepo:
         limit: int = 20,
         offset: int = 0,
     ) -> list[Segment]:
-        segments = [
-            s
-            for s in self._segments.values()
-            if s.status == "approved" and s.deleted_at is None
-        ]
+        segments = [s for s in self._segments.values() if s.status == "approved" and s.deleted_at is None]
 
         # Apply filters
         if type:
@@ -81,11 +77,7 @@ class FakeSegmentRepo:
         bounds: tuple[float, float, float, float] | None = None,
         search: str | None = None,
     ) -> int:
-        segments = [
-            s
-            for s in self._segments.values()
-            if s.status == "approved" and s.deleted_at is None
-        ]
+        segments = [s for s in self._segments.values() if s.status == "approved" and s.deleted_at is None]
 
         if type:
             segments = [s for s in segments if s.type == type]
@@ -118,11 +110,7 @@ class FakeSegmentRepo:
         direction_bearing: float,
     ) -> list[Segment]:
         # Simplified: return all approved segments (real impl uses PostGIS)
-        return [
-            s
-            for s in self._segments.values()
-            if s.status == "approved" and s.deleted_at is None
-        ]
+        return [s for s in self._segments.values() if s.status == "approved" and s.deleted_at is None]
 
     async def increment_counts(self, segment_id: UUID, new_athlete: bool) -> None:
         segment = self._segments.get(segment_id)
@@ -173,11 +161,7 @@ class FakeSegmentEffortRepo:
         limit: int = 20,
         offset: int = 0,
     ) -> list[SegmentEffort]:
-        efforts = [
-            e
-            for e in self._efforts.values()
-            if e.segment_id == segment_id and e.user_id == user_id
-        ]
+        efforts = [e for e in self._efforts.values() if e.segment_id == segment_id and e.user_id == user_id]
 
         # Apply sorting
         sort_key = {
@@ -204,31 +188,17 @@ class FakeSegmentEffortRepo:
 
     async def get_user_pr(self, segment_id: UUID, user_id: int) -> SegmentEffort | None:
         for effort in self._efforts.values():
-            if (
-                effort.segment_id == segment_id
-                and effort.user_id == user_id
-                and effort.is_pr
-            ):
+            if effort.segment_id == segment_id and effort.user_id == user_id and effort.is_pr:
                 return effort
         return None
 
     async def clear_user_pr(self, segment_id: UUID, user_id: int) -> None:
         for effort in self._efforts.values():
-            if (
-                effort.segment_id == segment_id
-                and effort.user_id == user_id
-                and effort.is_pr
-            ):
+            if effort.segment_id == segment_id and effort.user_id == user_id and effort.is_pr:
                 effort.is_pr = False
 
     async def count_for_segment(self, segment_id: UUID, user_id: int) -> int:
-        return len(
-            [
-                e
-                for e in self._efforts.values()
-                if e.segment_id == segment_id and e.user_id == user_id
-            ]
-        )
+        return len([e for e in self._efforts.values() if e.segment_id == segment_id and e.user_id == user_id])
 
     # --- Test helper methods ---
 
@@ -309,9 +279,7 @@ class FakeSegmentSuggestionRepo:
                 count += 1
         return count
 
-    async def get_for_user_segment(
-        self, user_id: int, segment_id: UUID
-    ) -> SegmentSuggestion | None:
+    async def get_for_user_segment(self, user_id: int, segment_id: UUID) -> SegmentSuggestion | None:
         for suggestion in self._suggestions.values():
             if suggestion.user_id == user_id and suggestion.segment_id == segment_id:
                 return suggestion

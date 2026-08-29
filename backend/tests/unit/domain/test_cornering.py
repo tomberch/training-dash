@@ -7,6 +7,7 @@ the same definition calibration fits.
 
 import itertools
 import math
+import random
 
 import pytest
 
@@ -575,8 +576,8 @@ class TestDescentSampleCurvatureNoise:
         """Straight -5% descent (or R=radius arc) with GPS jitter."""
         import math
         import random
-        from types import SimpleNamespace
         from datetime import datetime, timedelta
+        from types import SimpleNamespace
 
         rng = random.Random(seed)
         recs = []
@@ -629,3 +630,149 @@ class TestDescentSampleCurvatureNoise:
 
         med_kappa = median(s.curvature for s in samples if s.curvature > 0)
         assert med_kappa > 0.005, f"R=100m arc should give kappa ~0.01, got {med_kappa:.4f}"
+
+
+class TestPedalingNormalization:
+    """#633: grade-power samples normalize by pedaling-time average.
+
+    Normalizing by whole-ride average (which includes 0W coasting) inflates
+    the intercept and flattens the slope: a rider pushing 280W on climbs of
+    an 82%-pedaling ride showed power_mult = 275/184 = 1.49. Normalizing by
+    pedaling-time average (the power they hold while pedaling) fixes it.
+    """
+
+    @staticmethod
+    def _ride_records(hilly=True, seed=5):
+        """Synthetic ride: 80% of time pedaling at terrain-appropriate power,
+        20% coasting (0W) on descents. Returns (records, pedaling_avg, whole_avg)."""
+        import math
+        from datetime import datetime, timedelta
+        from types import SimpleNamespace
+
+        recs = []
+        t0 = datetime(2026, 1, 1)
+        # 10 blocks of 100s: 5 blocks climbing at +6% @ 260W, 3 flat @ 200W,
+        # 2 descending at -5%: one coasting (0W), one soft-pedaling (80W)
+        plan = [("climb", 6.0, 260.0, 5), ("flat", 0.0, 200.0, 4), ("descent", -5.0, 0.0, 2)]
+        speed_mps = 6.0  # ~21.6 km/h
+        dt = 5.0
+        d = 0.0
+        elev = 100.0
+        t = t0
+        for kind, grade, power, n_blocks in plan:
+            for _ in range(n_blocks):
+                for _s in range(int(100 / dt)):
+                    d += 0.0  # computed below
+                    dt_dist = 6.0 * dt * math.cos(math.atan(grade / 100.0))
+                    d += dt_dist
+                    elev_delta = dt_dist * grade / 100.0
+                    elev += elev_delta
+                    recs.append(
+                        SimpleNamespace(
+                            power_w=power,
+                            altitude_m=elev,
+                            distance_m=d,
+                            timestamp=t,
+                        )
+                    )
+                    t += timedelta(seconds=dt)
+        powers = [r.power_w for r in recs]
+        pedaling = [p for p in powers if p > 0]
+        pedaling_avg = sum(pedaling) / len(pedaling)
+        whole_avg = sum(powers) / len(powers)
+        return recs, pedaling_avg, whole_avg
+
+    def test_samples_normalized_by_pedaling_average(self):
+        """Climb samples divide by pedaling-time average, not whole-ride avg."""
+        from trainingdash.domain.pacing_calibration import extract_climb_samples
+
+        recs, pedaling_avg, whole_avg = self._ride_records()
+        assert pedaling_avg > whole_avg * 1.1  # sanity: coasting dilutes whole avg
+
+        samples = extract_climb_samples(recs, avg_power=pedaling_avg)
+        assert len(samples) > 0
+        # 6% climb at 260W against pedaling avg ~240 → mult ≈ 1.08, sensible
+        for s in samples:
+            assert s.power_mult < 1.4  # old code: 260/~196 whole avg ≈ 1.33
+
+    def test_clipped_coasting_records_accepted(self):
+        """Only pedaling samples feed the fit; coasting never creates samples."""
+        from trainingdash.domain.pacing_calibration import extract_climb_samples
+
+        recs, pedaling_avg, _ = self._ride_records()
+        samples = extract_climb_samples(recs, avg_power=pedaling_avg)
+        # All samples come from the climbing blocks (~260W); none from coasting
+        assert all(s.power_mult > 0.5 for s in samples)
+
+
+class TestFitQualityGate:
+    """#633: a poisoned fit (low R²) must not be stored."""
+
+    def test_low_r_squared_fit_rejected(self):
+        """R² near zero (garbage fit) → calibrate_coefficients returns None."""
+        from trainingdash.domain.pacing_calibration import (
+            MIN_CLIMB_SAMPLES,
+            DescentSample,
+            GradePowerSample,
+            calibrate_coefficients,
+        )
+
+        # Many samples, butpower random vs grade → R² ~ 0
+        rng = random.Random(3)
+        climb = [
+            GradePowerSample(grade_pct=rng.uniform(1, 15), power_mult=rng.uniform(0.5, 2.5), time_weight=5.0)
+            for _ in range(MIN_CLIMB_SAMPLES + 50)
+        ]
+        descent = [
+            DescentSample(grade_pct=-5.0, speed_mps=12.0, power_mult=0.4, curvature=0.008, time_weight=5.0)
+            for _ in range(400)
+        ]
+        result = calibrate_coefficients(climb, descent, activity_count=5)
+        assert result is None, "garbage fit (R²≈0) must not be stored"
+
+
+class TestPedalingAverageExtraction:
+    """#633: pedaling-time average power from records.
+
+    Whole-ride average includes 0W coasting, diluting the normalizer.
+    Pedaling-average = mean power over samples where the rider pedals.
+    """
+
+    @staticmethod
+    def _mixed_records():
+        """Climb at 260W, coast at 0W — pedaling avg ≈ 260, whole avg ≈ 173."""
+        from datetime import datetime, timedelta
+        from types import SimpleNamespace
+
+        recs = []
+        t0 = datetime(2026, 1, 1)
+        d, elev = 0.0, 100.0
+        for i in range(100):  # climbing 500s
+            d += 30.0
+            elev += 1.8  # +6%
+            recs.append(
+                SimpleNamespace(power_w=260, altitude_m=elev, distance_m=d, timestamp=t0 + timedelta(seconds=i * 5))
+            )
+        for i in range(100):  # coasting 500s at 0W
+            d += 40.0
+            elev -= 2.0
+            recs.append(
+                SimpleNamespace(power_w=0, altitude_m=elev, distance_m=d, timestamp=t0 + timedelta(seconds=500 + i * 5))
+            )
+        return recs
+
+    def test_pedaling_average_excludes_coasting(self):
+        from trainingdash.domain.pacing_calibration import pedaling_average_power
+
+        recs = self._mixed_records()
+        p_avg = pedaling_average_power(recs)
+        assert p_avg == pytest.approx(260.0, rel=0.05)
+
+    def test_extract_uses_pedaling_average(self):
+        """Climb samples against pedaling-avg land near 1.0, not 1.5."""
+        from trainingdash.domain.pacing_calibration import extract_climb_samples, pedaling_average_power
+
+        recs = self._mixed_records()
+        samples = extract_climb_samples(recs, avg_power=pedaling_average_power(recs))
+        assert samples, "climb samples should exist"
+        assert all(s.power_mult == pytest.approx(1.0, rel=0.1) for s in samples)

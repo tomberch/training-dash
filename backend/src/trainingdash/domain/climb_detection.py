@@ -19,8 +19,8 @@ from trainingdash.domain.segment_geometry import GradientSegment
 
 __all__ = [
     "DetectedClimb",
-    "detect_climbs",
     "categorize_climb",
+    "detect_climbs",
     "smooth_elevation",
 ]
 

@@ -16,11 +16,11 @@ from trainingdash.dependencies import (
     RecordRepoD,
     UserRepoD,
 )
+from trainingdash.domain.pacing import RideTypeParams, RideTypePreset
 from trainingdash.integrations.weather import (
     fetch_race_day_forecast,
     get_calm_conditions,
 )
-from trainingdash.domain.pacing import RideTypeParams, RideTypePreset
 from trainingdash.use_cases.compare_execution import CompareExecution
 from trainingdash.use_cases.generate_race_plan import (
     GeneratePlanRequest,
@@ -38,14 +38,14 @@ router = APIRouter(prefix="/api/race-plans", tags=["race-plans"])
 
 class RideTypeParamsSchema(BaseModel):
     """Custom ride type parameters for race plan generation.
-    
+
     descent_aggressiveness: 0=very cautious, 100=race pace. Affects curvature-based speed reduction on descents.
     stop_pct: Expected percentage of extra time for stops (traffic, feeds, breaks). 0-50%.
     """
-    
+
     descent_aggressiveness: int = Field(..., ge=0, le=100, description="0=cautious descents, 100=aggressive racing")
     stop_pct: float = Field(..., ge=0, le=50, description="Expected stop time as % of riding time (0-50)")
-    
+
     def to_domain(self) -> RideTypeParams:
         """Convert to domain object."""
         return RideTypeParams(

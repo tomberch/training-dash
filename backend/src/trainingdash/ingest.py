@@ -781,8 +781,7 @@ async def finalize_batch_import(
         updated_count = sum(1 for stats in results.values() if stats.coefficients_updated)
         if updated_count > 0:
             logger.info(
-                f"Calibrated pacing coefficients for user={user_id}: "
-                f"{updated_count} bike(s) updated after batch import"
+                f"Calibrated pacing coefficients for user={user_id}: {updated_count} bike(s) updated after batch import"
             )
     except Exception as e:
         # Log but don't fail the batch import if calibration fails

@@ -188,7 +188,7 @@ class CreateCourseFromActivity:
         lons: list[float],
     ) -> list[dict]:
         """Build elevation profile for charting and pacing.
-        
+
         Includes lat/lon for curvature-based speed calculations.
         """
         # Downsample to ~500 points for reasonable chart size

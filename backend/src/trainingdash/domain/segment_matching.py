@@ -18,11 +18,11 @@ from trainingdash.domain.polyline import decode_polyline
 from trainingdash.domain.segment_geometry import compute_bearing, haversine_distance
 
 __all__ = [
-    "SegmentMatch",
     "SegmentCandidate",
-    "match_activity_to_segments",
-    "compute_path_overlap",
+    "SegmentMatch",
     "bearings_match",
+    "compute_path_overlap",
+    "match_activity_to_segments",
     "point_to_segment_distance",
 ]
 
@@ -324,17 +324,13 @@ def match_activity_to_segments(
 
     for candidate in candidates:
         # Find all activity points near segment start
-        start_points = _find_points_near_location(
-            records, candidate.start_lat, candidate.start_lon, start_tolerance_m
-        )
+        start_points = _find_points_near_location(records, candidate.start_lat, candidate.start_lon, start_tolerance_m)
 
         if not start_points:
             continue
 
         # Find all activity points near segment end
-        end_points = _find_points_near_location(
-            records, candidate.end_lat, candidate.end_lon, end_tolerance_m
-        )
+        end_points = _find_points_near_location(records, candidate.end_lat, candidate.end_lon, end_tolerance_m)
 
         if not end_points:
             continue
@@ -361,9 +357,7 @@ def match_activity_to_segments(
                     continue
 
                 # Compute path overlap
-                overlap = compute_path_overlap(
-                    records, start_idx, end_idx, candidate.polyline, buffer_m
-                )
+                overlap = compute_path_overlap(records, start_idx, end_idx, candidate.polyline, buffer_m)
 
                 if overlap >= min_overlap_pct:
                     matches.append(

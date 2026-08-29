@@ -38,6 +38,11 @@ MIN_CLIMB_SAMPLES = 500  # ~8 minutes of climb data
 MIN_DESCENT_SAMPLES = 300  # ~5 minutes of descent data
 MIN_ACTIVITIES = 3  # Minimum activities to calibrate
 
+# Fit quality gate (ADR 0005): a grade-power regression this weak describes
+# noise, not riding behavior. Storing it poisons every subsequent plan
+# (the reference data produced R²=0.009 → "pedal hard downhill" plans).
+MIN_CLIMB_R_SQUARED = 0.25
+
 
 @dataclass
 class GradePowerSample:
@@ -46,6 +51,24 @@ class GradePowerSample:
     grade_pct: float
     power_mult: float
     time_weight: float  # Seconds at this grade
+
+
+def pedaling_average_power(records: list) -> float | None:
+    """Average power over samples where the rider is pedaling (power > 0).
+
+    The whole-ride average includes 0W coasting time, which dilutes the
+    normalizer and poisons the grade-power fit (ADR 0005): a rider pushing
+    260W on climbs of an 82%-pedaling ride would show power_mult 1.4+ when
+    normalized by the whole-ride average. Normalizing by pedaling-time
+    average lets the coefficients describe *pedaling shape*; coasting is
+    the descent multiplier's business.
+
+    Returns None when the rider never pedals (no usable normalizer).
+    """
+    pedaling = [r.power_w for r in records if r.power_w is not None and r.power_w > 0]
+    if not pedaling:
+        return None
+    return sum(pedaling) / len(pedaling)
 
 
 @dataclass
@@ -402,6 +425,11 @@ def calibrate_coefficients(
 
     # Fit climb coefficients
     intercept, slope, r_squared = fit_climb_coefficients(climb_samples)
+
+    # Quality gate (ADR 0005): a weak grade-power fit describes noise.
+    # Keep the previously stored coefficients rather than poisoning plans.
+    if r_squared < MIN_CLIMB_R_SQUARED:
+        return None
 
     # Fit descent coefficients
     max_speed, power_mult, curv_coef, descent_conf = fit_descent_coefficients(descent_samples)

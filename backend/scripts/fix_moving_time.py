@@ -78,11 +78,7 @@ async def fix_activity_from_fit(db: AsyncSession, activity: Activity, dry_run: b
 
 async def fix_activity_from_records(db: AsyncSession, activity: Activity, dry_run: bool) -> bool:
     """Fix moving time by loading records from the database."""
-    result = await db.execute(
-        select(Record)
-        .where(Record.activity_id == activity.id)
-        .order_by(Record.timestamp)
-    )
+    result = await db.execute(select(Record).where(Record.activity_id == activity.id).order_by(Record.timestamp))
     records = result.scalars().all()
 
     if not records:
@@ -90,10 +86,7 @@ async def fix_activity_from_records(db: AsyncSession, activity: Activity, dry_ru
         return False
 
     # Convert ORM records to dicts for _compute_moving_time
-    record_dicts = [
-        {"timestamp": r.timestamp, "speed_mps": r.speed_mps}
-        for r in records
-    ]
+    record_dicts = [{"timestamp": r.timestamp, "speed_mps": r.speed_mps} for r in records]
 
     new_moving_time = _compute_moving_time(record_dicts)
 

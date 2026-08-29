@@ -37,7 +37,10 @@ class TestSegmentProcessJob:
 
             # Patch at the actual import location inside the function
             with patch.dict("sys.modules", {"trainingdash.repositories.postgres.segment_repo": MagicMock()}):
-                with patch("trainingdash.use_cases.process_activity_segments.ProcessActivitySegments", return_value=mock_use_case):
+                with patch(
+                    "trainingdash.use_cases.process_activity_segments.ProcessActivitySegments",
+                    return_value=mock_use_case,
+                ):
                     result = await segment_process_job(ctx={}, activity_id=activity_id, user_id=user_id)
 
         assert result == {
@@ -70,7 +73,10 @@ class TestSegmentProcessJob:
             mock_session.return_value.__aexit__ = AsyncMock()
 
             with patch.dict("sys.modules", {"trainingdash.repositories.postgres.segment_repo": MagicMock()}):
-                with patch("trainingdash.use_cases.process_activity_segments.ProcessActivitySegments", return_value=mock_use_case):
+                with patch(
+                    "trainingdash.use_cases.process_activity_segments.ProcessActivitySegments",
+                    return_value=mock_use_case,
+                ):
                     result = await segment_process_job(ctx={}, activity_id=activity_id, user_id=user_id)
 
         # Verify all expected keys are present
@@ -192,7 +198,7 @@ class TestJobsRegistration:
 
     def test_segment_jobs_are_defined(self):
         """Segment jobs are defined and callable."""
-        from trainingdash.worker import segment_process_job, retroactive_match_job
+        from trainingdash.worker import retroactive_match_job, segment_process_job
 
         # Verify jobs are callable
         assert callable(segment_process_job)

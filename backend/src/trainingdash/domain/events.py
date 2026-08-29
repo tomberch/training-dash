@@ -123,6 +123,7 @@ EVENT_VALID_OUTCOMES: dict[EventType, set[EventOutcome]] = {
     EventType.ADMIN_NUKE_ACTIVITIES: {EventOutcome.INFO},
     EventType.ADMIN_NUKE_INTEGRATIONS: {EventOutcome.INFO},
     EventType.ADMIN_NUKE_ACCOUNT: {EventOutcome.INFO},
+    EventType.ADMIN_WEATHER_BACKFILL: {EventOutcome.INFO, EventOutcome.SUCCESS, EventOutcome.FAILURE},
     # Scheduler
     EventType.SCHEDULER_TRIGGERED: {EventOutcome.INFO},
     # Cache

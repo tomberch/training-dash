@@ -2,19 +2,15 @@
 
 from uuid import uuid4
 
-import pytest
-
 from trainingdash.domain.polyline import encode_polyline
 from trainingdash.domain.segment_geometry import compute_bearing, haversine_distance
 from trainingdash.domain.segment_matching import (
     SegmentCandidate,
-    SegmentMatch,
     bearings_match,
     compute_path_overlap,
     match_activity_to_segments,
     point_to_segment_distance,
 )
-
 
 # =============================================================================
 # Test Helpers
@@ -23,23 +19,25 @@ from trainingdash.domain.segment_matching import (
 
 def make_records(coords: list[tuple[float, float]], start_distance: float = 0) -> list[dict]:
     """Create activity records from lat/lon coordinates.
-    
+
     Automatically computes cumulative distance_m.
     """
     records = []
     cumulative_dist = start_distance
-    
+
     for i, (lat, lon) in enumerate(coords):
         if i > 0:
             prev_lat, prev_lon = coords[i - 1]
             cumulative_dist += haversine_distance(prev_lat, prev_lon, lat, lon)
-        
-        records.append({
-            "lat": lat,
-            "lon": lon,
-            "distance_m": cumulative_dist,
-        })
-    
+
+        records.append(
+            {
+                "lat": lat,
+                "lon": lon,
+                "distance_m": cumulative_dist,
+            }
+        )
+
     return records
 
 
@@ -51,22 +49,19 @@ def make_candidate(
     """Create a segment candidate from coordinates."""
     if segment_id is None:
         segment_id = uuid4()
-    
+
     polyline = encode_polyline(coords)
     start_lat, start_lon = coords[0]
     end_lat, end_lon = coords[-1]
-    
+
     # Compute total distance
     total_dist = 0.0
     for i in range(1, len(coords)):
-        total_dist += haversine_distance(
-            coords[i-1][0], coords[i-1][1],
-            coords[i][0], coords[i][1]
-        )
-    
+        total_dist += haversine_distance(coords[i - 1][0], coords[i - 1][1], coords[i][0], coords[i][1])
+
     if direction_bearing is None:
         direction_bearing = compute_bearing(start_lat, start_lon, end_lat, end_lon)
-    
+
     return SegmentCandidate(
         id=segment_id,
         polyline=polyline,
@@ -79,7 +74,9 @@ def make_candidate(
     )
 
 
-def offset_coords(coords: list[tuple[float, float]], lat_offset: float = 0, lon_offset: float = 0) -> list[tuple[float, float]]:
+def offset_coords(
+    coords: list[tuple[float, float]], lat_offset: float = 0, lon_offset: float = 0
+) -> list[tuple[float, float]]:
     """Offset coordinates by given amounts (in degrees)."""
     return [(lat + lat_offset, lon + lon_offset) for lat, lon in coords]
 
@@ -146,18 +143,24 @@ class TestPointToSegmentDistance:
     def test_point_at_segment_start(self):
         """Point at segment start has zero distance."""
         dist = point_to_segment_distance(
-            47.0, 8.0,  # point
-            47.0, 8.0,  # segment start
-            47.001, 8.001,  # segment end
+            47.0,
+            8.0,  # point
+            47.0,
+            8.0,  # segment start
+            47.001,
+            8.001,  # segment end
         )
         assert dist < 1  # Within 1 meter
 
     def test_point_at_segment_end(self):
         """Point at segment end has zero distance."""
         dist = point_to_segment_distance(
-            47.001, 8.001,  # point
-            47.0, 8.0,  # segment start
-            47.001, 8.001,  # segment end
+            47.001,
+            8.001,  # point
+            47.0,
+            8.0,  # segment start
+            47.001,
+            8.001,  # segment end
         )
         assert dist < 1
 
@@ -166,9 +169,12 @@ class TestPointToSegmentDistance:
         # Horizontal segment at lat 47.0 from lon 8.0 to 8.001
         # Point directly north of segment center
         dist = point_to_segment_distance(
-            47.0001, 8.0005,  # point north of center
-            47.0, 8.0,
-            47.0, 8.001,
+            47.0001,
+            8.0005,  # point north of center
+            47.0,
+            8.0,
+            47.0,
+            8.001,
         )
         # 0.0001 degrees latitude ≈ 11 meters
         assert 10 < dist < 15
@@ -177,33 +183,45 @@ class TestPointToSegmentDistance:
         """Point beyond segment start projects to start."""
         # Horizontal segment
         dist = point_to_segment_distance(
-            47.0, 7.999,  # point west of segment start
-            47.0, 8.0,
-            47.0, 8.001,
+            47.0,
+            7.999,  # point west of segment start
+            47.0,
+            8.0,
+            47.0,
+            8.001,
         )
         # Should be distance to start point
         from trainingdash.domain.segment_geometry import haversine_distance
+
         expected = haversine_distance(47.0, 7.999, 47.0, 8.0)
         assert abs(dist - expected) < 5  # Within 5 meters
 
     def test_point_beyond_segment_end(self):
         """Point beyond segment end projects to end."""
         dist = point_to_segment_distance(
-            47.0, 8.002,  # point east of segment end
-            47.0, 8.0,
-            47.0, 8.001,
+            47.0,
+            8.002,  # point east of segment end
+            47.0,
+            8.0,
+            47.0,
+            8.001,
         )
         from trainingdash.domain.segment_geometry import haversine_distance
+
         expected = haversine_distance(47.0, 8.002, 47.0, 8.001)
         assert abs(dist - expected) < 5
 
     def test_zero_length_segment(self):
         """Zero-length segment returns distance to that point."""
         from trainingdash.domain.segment_geometry import haversine_distance
+
         dist = point_to_segment_distance(
-            47.001, 8.001,
-            47.0, 8.0,
-            47.0, 8.0,  # same as start
+            47.001,
+            8.001,
+            47.0,
+            8.0,
+            47.0,
+            8.0,  # same as start
         )
         expected = haversine_distance(47.001, 8.001, 47.0, 8.0)
         assert abs(dist - expected) < 1
@@ -213,9 +231,12 @@ class TestPointToSegmentDistance:
         # Diagonal segment from (47.0, 8.0) to (47.001, 8.001)
         # Point slightly off the line
         dist = point_to_segment_distance(
-            47.0005, 8.0006,  # slightly east of center
-            47.0, 8.0,
-            47.001, 8.001,
+            47.0005,
+            8.0006,  # slightly east of center
+            47.0,
+            8.0,
+            47.001,
+            8.001,
         )
         # Should be small but nonzero
         assert 0 < dist < 20
@@ -238,7 +259,7 @@ class TestComputePathOverlap:
         ]
         records = make_records(segment_coords)
         polyline = encode_polyline(segment_coords)
-        
+
         overlap = compute_path_overlap(records, 0, 2, polyline, buffer_m=35)
         assert overlap == 100.0
 
@@ -251,13 +272,13 @@ class TestComputePathOverlap:
         ]
         # Activity wobbles slightly but stays within 35m
         activity_coords = [
-            (47.0, 8.00001),      # ~1m east
-            (47.001, 7.99998),   # ~2m west
-            (47.002, 8.00002),   # ~2m east
+            (47.0, 8.00001),  # ~1m east
+            (47.001, 7.99998),  # ~2m west
+            (47.002, 8.00002),  # ~2m east
         ]
         records = make_records(activity_coords)
         polyline = encode_polyline(segment_coords)
-        
+
         overlap = compute_path_overlap(records, 0, 2, polyline, buffer_m=35)
         assert overlap >= 90.0
 
@@ -272,7 +293,7 @@ class TestComputePathOverlap:
         activity_coords = offset_coords(segment_coords, lon_offset=0.0006)
         records = make_records(activity_coords)
         polyline = encode_polyline(segment_coords)
-        
+
         overlap = compute_path_overlap(records, 0, 2, polyline, buffer_m=35)
         assert overlap < 90.0
 
@@ -291,7 +312,7 @@ class TestComputePathOverlap:
         ]
         records = make_records(activity_coords)
         polyline = encode_polyline(segment_coords)
-        
+
         overlap = compute_path_overlap(records, 0, 1, polyline, buffer_m=35)
         # Should be around 50% (2 of 4 points covered)
         assert 40 < overlap < 60
@@ -328,9 +349,9 @@ class TestMatchActivityToSegments:
         ]
         records = make_records(segment_coords)
         candidate = make_candidate(segment_coords)
-        
+
         matches = match_activity_to_segments(records, [candidate])
-        
+
         assert len(matches) == 1
         assert matches[0].segment_id == candidate.id
         assert matches[0].start_index == 0
@@ -354,9 +375,9 @@ class TestMatchActivityToSegments:
         ]
         records = make_records(activity_coords)
         candidate = make_candidate(segment_coords)
-        
+
         matches = match_activity_to_segments(records, [candidate])
-        
+
         assert len(matches) == 1
         assert matches[0].overlap_pct >= 90
 
@@ -372,9 +393,9 @@ class TestMatchActivityToSegments:
         activity_coords = offset_coords(segment_coords, lon_offset=0.0008)
         records = make_records(activity_coords)
         candidate = make_candidate(segment_coords)
-        
+
         matches = match_activity_to_segments(records, [candidate])
-        
+
         assert len(matches) == 0
 
     def test_no_match_opposite_direction(self):
@@ -389,9 +410,9 @@ class TestMatchActivityToSegments:
         activity_coords = list(reversed(segment_coords))
         records = make_records(activity_coords)
         candidate = make_candidate(segment_coords)
-        
+
         matches = match_activity_to_segments(records, [candidate])
-        
+
         assert len(matches) == 0
 
     def test_multiple_crossings_loop_ride(self):
@@ -419,9 +440,9 @@ class TestMatchActivityToSegments:
         ]
         records = make_records(activity_coords)
         candidate = make_candidate(segment_coords)
-        
+
         matches = match_activity_to_segments(records, [candidate])
-        
+
         # Should find at least two matches (may find more depending on overlap)
         assert len(matches) >= 2
         assert all(m.segment_id == candidate.id for m in matches)
@@ -445,11 +466,9 @@ class TestMatchActivityToSegments:
         ]
         records = make_records(activity_coords)
         candidate = make_candidate(segment_coords)
-        
-        matches = match_activity_to_segments(
-            records, [candidate], min_overlap_pct=90
-        )
-        
+
+        matches = match_activity_to_segments(records, [candidate], min_overlap_pct=90)
+
         assert len(matches) == 0
 
     def test_segment_at_activity_start(self):
@@ -467,9 +486,9 @@ class TestMatchActivityToSegments:
         ]
         records = make_records(activity_coords)
         candidate = make_candidate(segment_coords)
-        
+
         matches = match_activity_to_segments(records, [candidate])
-        
+
         assert len(matches) == 1
         assert matches[0].start_index == 0
         assert matches[0].end_index == 1
@@ -488,9 +507,9 @@ class TestMatchActivityToSegments:
         ]
         records = make_records(activity_coords)
         candidate = make_candidate(segment_coords)
-        
+
         matches = match_activity_to_segments(records, [candidate])
-        
+
         assert len(matches) == 1
         assert matches[0].start_index == 2
         assert matches[0].end_index == 3
@@ -510,9 +529,9 @@ class TestMatchActivityToSegments:
         ]
         records = make_records(activity_coords)
         candidate = make_candidate(segment_coords)
-        
+
         matches = match_activity_to_segments(records, [candidate])
-        
+
         assert len(matches) == 1
 
     def test_no_candidates(self):
@@ -542,9 +561,9 @@ class TestMatchActivityToSegments:
             {"lat": 47.002, "lon": 8.0, "distance_m": 222},
         ]
         candidate = make_candidate(segment_coords)
-        
+
         matches = match_activity_to_segments(records, [candidate])
-        
+
         # Should still match despite bad record
         assert len(matches) == 1
 
@@ -561,7 +580,7 @@ class TestMatchActivityToSegments:
             (47.003, 8.0),
             (47.004, 8.0),
         ]
-        
+
         # Activity covers both
         activity_coords = [
             (47.0, 8.0),
@@ -573,9 +592,9 @@ class TestMatchActivityToSegments:
         records = make_records(activity_coords)
         candidate1 = make_candidate(segment1_coords)
         candidate2 = make_candidate(segment2_coords)
-        
+
         matches = match_activity_to_segments(records, [candidate1, candidate2])
-        
+
         assert len(matches) == 2
         segment_ids = {m.segment_id for m in matches}
         assert candidate1.id in segment_ids
@@ -596,15 +615,13 @@ class TestMatchActivityToSegments:
         ]
         records = make_records(activity_coords)
         candidate = make_candidate(segment_coords)
-        
+
         # With default 25m tolerance, shouldn't match
         matches_default = match_activity_to_segments(records, [candidate])
         assert len(matches_default) == 0
-        
+
         # With 35m tolerance, should match
-        matches_custom = match_activity_to_segments(
-            records, [candidate], start_tolerance_m=35
-        )
+        matches_custom = match_activity_to_segments(records, [candidate], start_tolerance_m=35)
         assert len(matches_custom) == 1
 
     def test_direction_tolerance(self):
@@ -618,27 +635,23 @@ class TestMatchActivityToSegments:
         # Activity also going north (same path) - will definitely match
         activity_coords = segment_coords.copy()
         records = make_records(activity_coords)
-        
+
         # Create candidate with explicit bearing = 0 (north)
         candidate_north = make_candidate(segment_coords, direction_bearing=0)
-        
+
         # With default 30° tolerance, north activity vs north segment matches
         matches_default = match_activity_to_segments(records, [candidate_north])
         assert len(matches_default) == 1
-        
+
         # Now create same segment but with NE bearing (45°)
         candidate_ne = make_candidate(segment_coords, direction_bearing=45)
-        
+
         # North activity (0°) vs NE segment (45°) with 30° tolerance should not match
-        matches_ne_30 = match_activity_to_segments(
-            records, [candidate_ne], direction_tolerance_deg=30
-        )
+        matches_ne_30 = match_activity_to_segments(records, [candidate_ne], direction_tolerance_deg=30)
         assert len(matches_ne_30) == 0  # 45° diff > 30°
-        
+
         # North activity vs NE segment with 50° tolerance should match
-        matches_ne_50 = match_activity_to_segments(
-            records, [candidate_ne], direction_tolerance_deg=50
-        )
+        matches_ne_50 = match_activity_to_segments(records, [candidate_ne], direction_tolerance_deg=50)
         assert len(matches_ne_50) == 1  # 45° diff < 50°
 
     def test_matches_sorted_by_start_index(self):
@@ -653,14 +666,14 @@ class TestMatchActivityToSegments:
             (47.005, 8.0),
         ]
         records = make_records(activity_coords)
-        
+
         # Create segments in reverse order
         seg1 = make_candidate([(47.004, 8.0), (47.005, 8.0)])  # last
-        seg2 = make_candidate([(47.0, 8.0), (47.001, 8.0)])    # first
+        seg2 = make_candidate([(47.0, 8.0), (47.001, 8.0)])  # first
         seg3 = make_candidate([(47.002, 8.0), (47.003, 8.0)])  # middle
-        
+
         matches = match_activity_to_segments(records, [seg1, seg2, seg3])
-        
+
         # Should be sorted by start_index
         assert len(matches) == 3
         for i in range(len(matches) - 1):

@@ -3,11 +3,10 @@
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
-from pydantic import BaseModel, Field
-from sqlalchemy import select
-
 from geoalchemy2 import WKTElement
 from geoalchemy2.shape import to_shape
+from pydantic import BaseModel, Field
+from sqlalchemy import select
 
 from trainingdash.auth import CurrentUser, DbSession
 from trainingdash.dependencies import (
@@ -230,9 +229,7 @@ async def create_segment(
 
     # Fetch records for the activity
     result = await db.execute(
-        select(Record)
-        .where(Record.activity_id == request.activity_id)
-        .order_by(Record.timestamp.asc())
+        select(Record).where(Record.activity_id == request.activity_id).order_by(Record.timestamp.asc())
     )
     records = list(result.scalars().all())
 

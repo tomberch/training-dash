@@ -365,11 +365,6 @@ class TestDetectClimbs:
     def test_max_grade_tracked(self):
         """Max grade should reflect steepest section."""
         # Variable grade climb: starts easy, gets steep
-        altitudes = (
-            [500 + i * 2 for i in range(11)]  # 4% for 500m
-            + [altitudes[-1] if "altitudes" in dir() else 520 + i * 6 for i in range(11)]  # 12% for 500m
-        )
-        # Fix: manually construct
         altitudes = []
         alt = 500
         for i in range(11):

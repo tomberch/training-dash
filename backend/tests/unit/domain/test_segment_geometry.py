@@ -1,7 +1,5 @@
 """Tests for segment geometry utilities."""
 
-import math
-
 import pytest
 
 from trainingdash.domain.segment_geometry import (
@@ -16,7 +14,6 @@ from trainingdash.domain.segment_geometry import (
     encode_polyline,
     haversine_distance,
 )
-
 
 # =============================================================================
 # Haversine Distance Tests
@@ -379,9 +376,7 @@ class TestComputeSegmentGeometry:
 
     def test_gradient_segments_generated(self, sample_records):
         """Test gradient segments are generated."""
-        geom = compute_segment_geometry(
-            sample_records, start_index=0, end_index=5, gradient_segment_length_m=150
-        )
+        geom = compute_segment_geometry(sample_records, start_index=0, end_index=5, gradient_segment_length_m=150)
 
         # 750m / 150m = 5 segments expected
         assert len(geom.gradient_segments) == 5

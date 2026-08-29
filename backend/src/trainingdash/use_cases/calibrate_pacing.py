@@ -13,12 +13,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from trainingdash.domain.pacing_calibration import (
     MIN_ACTIVITIES,
+    MIN_CLIMB_R_SQUARED,
+    MIN_CLIMB_SAMPLES,
+    MIN_DESCENT_SAMPLES,
     CalibrationResult,
     DescentSample,
     GradePowerSample,
     calibrate_coefficients,
     extract_climb_samples,
     extract_descent_samples,
+    pedaling_average_power,
 )
 from trainingdash.domain.pacing_model import PacingCoefficients
 from trainingdash.repositories.postgres.models import Activity, Record
@@ -36,6 +40,7 @@ class CalibrationStats:
     descent_samples: int
     coefficients_updated: bool
     result: CalibrationResult | None
+    message: str | None = None  # e.g. quality-gate rejection reason
 
 
 class CalibratePacing:
@@ -92,10 +97,15 @@ class CalibratePacing:
             if not records or activity.avg_power_w is None:
                 continue
 
-            avg_power = float(activity.avg_power_w)
+            # Normalize by pedaling-time average power (ADR 0005): the
+            # whole-ride average includes 0W coasting, which inflates the
+            # intercept and flattens the slope of the grade-power fit.
+            pedaling_avg = pedaling_average_power(records)
+            if pedaling_avg is None:
+                continue
 
-            climb_samples = extract_climb_samples(records, avg_power)
-            descent_samples = extract_descent_samples(records, avg_power)
+            climb_samples = extract_climb_samples(records, pedaling_avg)
+            descent_samples = extract_descent_samples(records, pedaling_avg)
 
             all_climb_samples.extend(climb_samples)
             all_descent_samples.extend(descent_samples)
@@ -108,9 +118,20 @@ class CalibratePacing:
         )
 
         if result is None:
+            # Distinguish gate rejection from insufficient data (ADR 0005)
+            if (len(all_climb_samples) >= MIN_CLIMB_SAMPLES or len(all_descent_samples) >= MIN_DESCENT_SAMPLES) and len(
+                activities
+            ) >= MIN_ACTIVITIES:
+                message = (
+                    f"Fit quality below gate (R² < {MIN_CLIMB_R_SQUARED:.2f}): "
+                    "grade-power relationship too noisy to trust. Keeping previously "
+                    "stored coefficients. More/better ride data may help."
+                )
+            else:
+                message = None  # plain insufficient-data case
             logger.info(
-                f"Insufficient samples for calibration: "
-                f"climb={len(all_climb_samples)}, descent={len(all_descent_samples)}"
+                f"Calibration not stored: climb={len(all_climb_samples)}, "
+                f"descent={len(all_descent_samples)}: {message or 'insufficient data'}"
             )
             return CalibrationStats(
                 activities_processed=len(activities),
@@ -118,6 +139,7 @@ class CalibratePacing:
                 descent_samples=len(all_descent_samples),
                 coefficients_updated=False,
                 result=None,
+                message=message,
             )
 
         # Save to database

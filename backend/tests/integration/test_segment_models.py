@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta
 
 import pytest
-from geoalchemy2.functions import ST_MakePoint, ST_MakePolygon, ST_MakeLine, ST_SetSRID
+from geoalchemy2.functions import ST_MakeLine, ST_MakePoint, ST_MakePolygon, ST_SetSRID
 from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 
@@ -33,8 +33,10 @@ class TestSegmentModel:
             bounds=ST_SetSRID(
                 ST_MakePolygon(
                     ST_MakeLine(
-                        text("ARRAY[ST_MakePoint(7.4, 46.9), ST_MakePoint(7.5, 46.9), "
-                             "ST_MakePoint(7.5, 47.0), ST_MakePoint(7.4, 47.0), ST_MakePoint(7.4, 46.9)]")
+                        text(
+                            "ARRAY[ST_MakePoint(7.4, 46.9), ST_MakePoint(7.5, 46.9), "
+                            "ST_MakePoint(7.5, 47.0), ST_MakePoint(7.4, 47.0), ST_MakePoint(7.4, 46.9)]"
+                        )
                     )
                 ),
                 4326,
@@ -73,8 +75,10 @@ class TestSegmentModel:
             bounds=ST_SetSRID(
                 ST_MakePolygon(
                     ST_MakeLine(
-                        text("ARRAY[ST_MakePoint(7.4, 46.9), ST_MakePoint(7.5, 46.9), "
-                             "ST_MakePoint(7.5, 47.0), ST_MakePoint(7.4, 47.0), ST_MakePoint(7.4, 46.9)]")
+                        text(
+                            "ARRAY[ST_MakePoint(7.4, 46.9), ST_MakePoint(7.5, 46.9), "
+                            "ST_MakePoint(7.5, 47.0), ST_MakePoint(7.4, 47.0), ST_MakePoint(7.4, 46.9)]"
+                        )
                     )
                 ),
                 4326,
@@ -108,8 +112,10 @@ class TestSegmentModel:
             bounds=ST_SetSRID(
                 ST_MakePolygon(
                     ST_MakeLine(
-                        text("ARRAY[ST_MakePoint(7.4, 46.9), ST_MakePoint(7.5, 46.9), "
-                             "ST_MakePoint(7.5, 47.0), ST_MakePoint(7.4, 47.0), ST_MakePoint(7.4, 46.9)]")
+                        text(
+                            "ARRAY[ST_MakePoint(7.4, 46.9), ST_MakePoint(7.5, 46.9), "
+                            "ST_MakePoint(7.5, 47.0), ST_MakePoint(7.4, 47.0), ST_MakePoint(7.4, 46.9)]"
+                        )
                     )
                 ),
                 4326,
@@ -138,8 +144,10 @@ class TestSegmentModel:
             bounds=ST_SetSRID(
                 ST_MakePolygon(
                     ST_MakeLine(
-                        text("ARRAY[ST_MakePoint(7.4, 46.9), ST_MakePoint(7.5, 46.9), "
-                             "ST_MakePoint(7.5, 47.0), ST_MakePoint(7.4, 47.0), ST_MakePoint(7.4, 46.9)]")
+                        text(
+                            "ARRAY[ST_MakePoint(7.4, 46.9), ST_MakePoint(7.5, 46.9), "
+                            "ST_MakePoint(7.5, 47.0), ST_MakePoint(7.4, 47.0), ST_MakePoint(7.4, 46.9)]"
+                        )
                     )
                 ),
                 4326,
@@ -167,8 +175,10 @@ class TestSegmentModel:
             bounds=ST_SetSRID(
                 ST_MakePolygon(
                     ST_MakeLine(
-                        text("ARRAY[ST_MakePoint(7.4, 46.9), ST_MakePoint(7.5, 46.9), "
-                             "ST_MakePoint(7.5, 47.0), ST_MakePoint(7.4, 47.0), ST_MakePoint(7.4, 46.9)]")
+                        text(
+                            "ARRAY[ST_MakePoint(7.4, 46.9), ST_MakePoint(7.5, 46.9), "
+                            "ST_MakePoint(7.5, 47.0), ST_MakePoint(7.4, 47.0), ST_MakePoint(7.4, 46.9)]"
+                        )
                     )
                 ),
                 4326,
@@ -208,8 +218,10 @@ class TestSegmentModel:
             bounds=ST_SetSRID(
                 ST_MakePolygon(
                     ST_MakeLine(
-                        text("ARRAY[ST_MakePoint(7.4, 46.9), ST_MakePoint(7.5, 46.9), "
-                             "ST_MakePoint(7.5, 47.0), ST_MakePoint(7.4, 47.0), ST_MakePoint(7.4, 46.9)]")
+                        text(
+                            "ARRAY[ST_MakePoint(7.4, 46.9), ST_MakePoint(7.5, 46.9), "
+                            "ST_MakePoint(7.5, 47.0), ST_MakePoint(7.4, 47.0), ST_MakePoint(7.4, 46.9)]"
+                        )
                     )
                 ),
                 4326,
@@ -251,8 +263,10 @@ class TestSegmentEffortModel:
             bounds=ST_SetSRID(
                 ST_MakePolygon(
                     ST_MakeLine(
-                        text("ARRAY[ST_MakePoint(7.4, 46.9), ST_MakePoint(7.5, 46.9), "
-                             "ST_MakePoint(7.5, 47.0), ST_MakePoint(7.4, 47.0), ST_MakePoint(7.4, 46.9)]")
+                        text(
+                            "ARRAY[ST_MakePoint(7.4, 46.9), ST_MakePoint(7.5, 46.9), "
+                            "ST_MakePoint(7.5, 47.0), ST_MakePoint(7.4, 47.0), ST_MakePoint(7.4, 46.9)]"
+                        )
                     )
                 ),
                 4326,
@@ -348,8 +362,10 @@ class TestSegmentEffortModel:
             bounds=ST_SetSRID(
                 ST_MakePolygon(
                     ST_MakeLine(
-                        text("ARRAY[ST_MakePoint(7.4, 46.9), ST_MakePoint(7.5, 46.9), "
-                             "ST_MakePoint(7.5, 47.0), ST_MakePoint(7.4, 47.0), ST_MakePoint(7.4, 46.9)]")
+                        text(
+                            "ARRAY[ST_MakePoint(7.4, 46.9), ST_MakePoint(7.5, 46.9), "
+                            "ST_MakePoint(7.5, 47.0), ST_MakePoint(7.4, 47.0), ST_MakePoint(7.4, 46.9)]"
+                        )
                     )
                 ),
                 4326,
@@ -420,8 +436,10 @@ class TestSegmentSuggestionModel:
             bounds=ST_SetSRID(
                 ST_MakePolygon(
                     ST_MakeLine(
-                        text("ARRAY[ST_MakePoint(7.4, 46.9), ST_MakePoint(7.5, 46.9), "
-                             "ST_MakePoint(7.5, 47.0), ST_MakePoint(7.4, 47.0), ST_MakePoint(7.4, 46.9)]")
+                        text(
+                            "ARRAY[ST_MakePoint(7.4, 46.9), ST_MakePoint(7.5, 46.9), "
+                            "ST_MakePoint(7.5, 47.0), ST_MakePoint(7.4, 47.0), ST_MakePoint(7.4, 46.9)]"
+                        )
                     )
                 ),
                 4326,
@@ -521,8 +539,10 @@ class TestSegmentSuggestionModel:
             bounds=ST_SetSRID(
                 ST_MakePolygon(
                     ST_MakeLine(
-                        text("ARRAY[ST_MakePoint(7.4, 46.9), ST_MakePoint(7.5, 46.9), "
-                             "ST_MakePoint(7.5, 47.0), ST_MakePoint(7.4, 47.0), ST_MakePoint(7.4, 46.9)]")
+                        text(
+                            "ARRAY[ST_MakePoint(7.4, 46.9), ST_MakePoint(7.5, 46.9), "
+                            "ST_MakePoint(7.5, 47.0), ST_MakePoint(7.4, 47.0), ST_MakePoint(7.4, 46.9)]"
+                        )
                     )
                 ),
                 4326,
@@ -593,8 +613,10 @@ class TestSpatialQueries:
             bounds=ST_SetSRID(
                 ST_MakePolygon(
                     ST_MakeLine(
-                        text("ARRAY[ST_MakePoint(7.44, 46.94), ST_MakePoint(7.47, 46.94), "
-                             "ST_MakePoint(7.47, 46.97), ST_MakePoint(7.44, 46.97), ST_MakePoint(7.44, 46.94)]")
+                        text(
+                            "ARRAY[ST_MakePoint(7.44, 46.94), ST_MakePoint(7.47, 46.94), "
+                            "ST_MakePoint(7.47, 46.97), ST_MakePoint(7.44, 46.97), ST_MakePoint(7.44, 46.94)]"
+                        )
                     )
                 ),
                 4326,
@@ -613,9 +635,7 @@ class TestSpatialQueries:
         from geoalchemy2.functions import ST_Intersects
 
         result = await db_session.execute(
-            select(Segment).where(
-                ST_Intersects(Segment.bounds, ST_SetSRID(ST_MakePoint(7.455, 46.955), 4326))
-            )
+            select(Segment).where(ST_Intersects(Segment.bounds, ST_SetSRID(ST_MakePoint(7.455, 46.955), 4326)))
         )
         found = result.scalars().all()
 

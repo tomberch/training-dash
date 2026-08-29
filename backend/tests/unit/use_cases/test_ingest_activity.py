@@ -6,9 +6,9 @@ from uuid import uuid4
 
 import pytest
 
+from tests.fakes.pacing_coefficients_repo import FakePacingCoefficientsRepo
 from trainingdash.repositories.postgres.models import Activity
 from trainingdash.use_cases import IngestActivity
-from tests.fakes.pacing_coefficients_repo import FakePacingCoefficientsRepo
 
 
 class MockAsyncSession:
@@ -163,7 +163,6 @@ class TestIngestActivityUseCase:
         assert call_kwargs["batch_mode"] is True
 
 
-
 class TestIngestActivityCalibration:
     """Tests for automatic pacing calibration after ingestion."""
 
@@ -247,13 +246,9 @@ class TestIngestActivityCalibration:
                     mock_pipeline = mock.AsyncMock()
                     MockPipeline.return_value = mock_pipeline
 
-                    with mock.patch(
-                        "trainingdash.use_cases.calibrate_pacing.CalibratePacing"
-                    ) as MockCalibrate:
+                    with mock.patch("trainingdash.use_cases.calibrate_pacing.CalibratePacing") as MockCalibrate:
                         mock_calibrate = mock.AsyncMock()
-                        mock_calibrate.execute = mock.AsyncMock(
-                            return_value=mock.MagicMock(coefficients_updated=True)
-                        )
+                        mock_calibrate.execute = mock.AsyncMock(return_value=mock.MagicMock(coefficients_updated=True))
                         MockCalibrate.return_value = mock_calibrate
 
                         result = await use_case_with_pacing.execute(
@@ -281,9 +276,7 @@ class TestIngestActivityCalibration:
                     mock_pipeline = mock.AsyncMock()
                     MockPipeline.return_value = mock_pipeline
 
-                    with mock.patch(
-                        "trainingdash.use_cases.calibrate_pacing.CalibratePacing"
-                    ) as MockCalibrate:
+                    with mock.patch("trainingdash.use_cases.calibrate_pacing.CalibratePacing") as MockCalibrate:
                         mock_calibrate = mock.AsyncMock()
                         MockCalibrate.return_value = mock_calibrate
 
@@ -300,9 +293,7 @@ class TestIngestActivityCalibration:
         MockCalibrate.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_calibration_skipped_when_no_pacing_repo(
-        self, use_case, sample_parsed_fit, activity_with_power
-    ):
+    async def test_calibration_skipped_when_no_pacing_repo(self, use_case, sample_parsed_fit, activity_with_power):
         """Calibration is skipped when pacing_repo is None."""
         with mock.patch("trainingdash.ingest.parse_records", return_value=sample_parsed_fit):
             with mock.patch("trainingdash.ingest._store_parsed_fit", return_value=activity_with_power):
@@ -310,9 +301,7 @@ class TestIngestActivityCalibration:
                     mock_pipeline = mock.AsyncMock()
                     MockPipeline.return_value = mock_pipeline
 
-                    with mock.patch(
-                        "trainingdash.use_cases.calibrate_pacing.CalibratePacing"
-                    ) as MockCalibrate:
+                    with mock.patch("trainingdash.use_cases.calibrate_pacing.CalibratePacing") as MockCalibrate:
                         result = await use_case.execute(
                             user_id=1,
                             fit_data=b"fake fit data",
@@ -335,9 +324,7 @@ class TestIngestActivityCalibration:
                     mock_pipeline = mock.AsyncMock()
                     MockPipeline.return_value = mock_pipeline
 
-                    with mock.patch(
-                        "trainingdash.use_cases.calibrate_pacing.CalibratePacing"
-                    ) as MockCalibrate:
+                    with mock.patch("trainingdash.use_cases.calibrate_pacing.CalibratePacing") as MockCalibrate:
                         result = await use_case_with_pacing.execute(
                             user_id=1,
                             fit_data=b"fake fit data",
@@ -359,9 +346,7 @@ class TestIngestActivityCalibration:
                     mock_pipeline = mock.AsyncMock()
                     MockPipeline.return_value = mock_pipeline
 
-                    with mock.patch(
-                        "trainingdash.use_cases.calibrate_pacing.CalibratePacing"
-                    ) as MockCalibrate:
+                    with mock.patch("trainingdash.use_cases.calibrate_pacing.CalibratePacing") as MockCalibrate:
                         result = await use_case_with_pacing.execute(
                             user_id=1,
                             fit_data=b"fake fit data",
@@ -383,9 +368,7 @@ class TestIngestActivityCalibration:
                     mock_pipeline = mock.AsyncMock()
                     MockPipeline.return_value = mock_pipeline
 
-                    with mock.patch(
-                        "trainingdash.use_cases.calibrate_pacing.CalibratePacing"
-                    ) as MockCalibrate:
+                    with mock.patch("trainingdash.use_cases.calibrate_pacing.CalibratePacing") as MockCalibrate:
                         result = await use_case_with_pacing.execute(
                             user_id=1,
                             fit_data=b"fake fit data",
@@ -407,13 +390,9 @@ class TestIngestActivityCalibration:
                     mock_pipeline = mock.AsyncMock()
                     MockPipeline.return_value = mock_pipeline
 
-                    with mock.patch(
-                        "trainingdash.use_cases.calibrate_pacing.CalibratePacing"
-                    ) as MockCalibrate:
+                    with mock.patch("trainingdash.use_cases.calibrate_pacing.CalibratePacing") as MockCalibrate:
                         mock_calibrate = mock.AsyncMock()
-                        mock_calibrate.execute = mock.AsyncMock(
-                            side_effect=Exception("Calibration database error")
-                        )
+                        mock_calibrate.execute = mock.AsyncMock(side_effect=Exception("Calibration database error"))
                         MockCalibrate.return_value = mock_calibrate
 
                         # Should not raise, even though calibration fails
@@ -427,3 +406,5 @@ class TestIngestActivityCalibration:
         # Ingestion should still succeed
         assert result is not None
         assert result.id == activity_with_power.id
+
+

@@ -17,10 +17,9 @@ import logging
 from dataclasses import dataclass
 from uuid import UUID, uuid4
 
+from geoalchemy2.shape import to_shape
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from geoalchemy2.shape import to_shape
 
 from trainingdash.domain.segment_matching import (
     SegmentCandidate,
@@ -95,9 +94,7 @@ class RetroactiveMatch:
         self._segment_repo = segment_repo
         self._effort_repo = effort_repo
 
-    async def execute(
-        self, segment_id: UUID, batch_size: int = DEFAULT_BATCH_SIZE
-    ) -> RetroactiveMatchResult:
+    async def execute(self, segment_id: UUID, batch_size: int = DEFAULT_BATCH_SIZE) -> RetroactiveMatchResult:
         """
         Find all historical activities that match a segment.
 
@@ -133,10 +130,7 @@ class RetroactiveMatch:
         job_id = str(uuid4())
         checkpoint_activity_id = await self._get_checkpoint(segment)
         if checkpoint_activity_id:
-            logger.info(
-                f"Resuming retroactive match for segment {segment_id} "
-                f"from activity {checkpoint_activity_id}"
-            )
+            logger.info(f"Resuming retroactive match for segment {segment_id} from activity {checkpoint_activity_id}")
         else:
             await self._set_matching_job_id(segment_id, job_id)
 
@@ -177,9 +171,7 @@ class RetroactiveMatch:
 
                     for match in matches:
                         # Check if we already have an effort for this activity/segment
-                        existing = await self._check_existing_effort(
-                            segment_id, activity.id, match.start_index
-                        )
+                        existing = await self._check_existing_effort(segment_id, activity.id, match.start_index)
                         if existing:
                             continue  # Don't create duplicates
 
@@ -199,10 +191,7 @@ class RetroactiveMatch:
                 # Commit batch and update checkpoint
                 await self._db.commit()
                 await self._set_checkpoint(segment_id, after_id)
-                logger.debug(
-                    f"Processed batch: {len(activities)} activities, "
-                    f"{batch_efforts} efforts created"
-                )
+                logger.debug(f"Processed batch: {len(activities)} activities, {batch_efforts} efforts created")
 
             # Step 4: Update denormalized counts
             await self._update_segment_counts(segment_id)
@@ -280,8 +269,7 @@ class RetroactiveMatch:
         else:
             # Wraparound case: bearing > low OR bearing < high
             query = query.where(
-                (Activity.direction_bearing >= low_bearing)
-                | (Activity.direction_bearing <= high_bearing)
+                (Activity.direction_bearing >= low_bearing) | (Activity.direction_bearing <= high_bearing)
             )
 
         result = await self._db.execute(query)
@@ -290,22 +278,22 @@ class RetroactiveMatch:
     async def _load_activity_records(self, activity_id: UUID) -> list[dict]:
         """Load and prepare activity records for matching."""
         result = await self._db.execute(
-            select(Record)
-            .where(Record.activity_id == activity_id)
-            .order_by(Record.timestamp)
+            select(Record).where(Record.activity_id == activity_id).order_by(Record.timestamp)
         )
         records = []
         for r in result.scalars().all():
             if r.lat is not None and r.lon is not None:
-                records.append({
-                    "lat": r.lat,
-                    "lon": r.lon,
-                    "altitude_m": r.altitude_m,
-                    "distance_m": r.distance_m or 0.0,
-                    "timestamp": r.timestamp,
-                    "power_w": r.power_w,
-                    "hr_bpm": r.hr_bpm,
-                })
+                records.append(
+                    {
+                        "lat": r.lat,
+                        "lon": r.lon,
+                        "altitude_m": r.altitude_m,
+                        "distance_m": r.distance_m or 0.0,
+                        "timestamp": r.timestamp,
+                        "power_w": r.power_w,
+                        "hr_bpm": r.hr_bpm,
+                    }
+                )
         return records
 
     def _build_segment_candidate(self, segment: Segment) -> SegmentCandidate:
@@ -324,9 +312,7 @@ class RetroactiveMatch:
             distance_m=segment.distance_m,
         )
 
-    async def _check_existing_effort(
-        self, segment_id: UUID, activity_id: UUID, start_index: int
-    ) -> bool:
+    async def _check_existing_effort(self, segment_id: UUID, activity_id: UUID, start_index: int) -> bool:
         """Check if an effort already exists for this segment/activity/start_index."""
         result = await self._db.execute(
             select(SegmentEffort.id)
@@ -366,9 +352,7 @@ class RetroactiveMatch:
         end_record = records[end_index]
 
         started_at = start_record["timestamp"]
-        elapsed_time = int(
-            (end_record["timestamp"] - start_record["timestamp"]).total_seconds()
-        )
+        elapsed_time = int((end_record["timestamp"] - start_record["timestamp"]).total_seconds())
 
         if elapsed_time <= 0:
             return None
@@ -430,20 +414,12 @@ class RetroactiveMatch:
 
     async def _set_matching_job_id(self, segment_id: UUID, job_id: str) -> None:
         """Set the matching_job_id on the segment."""
-        await self._db.execute(
-            update(Segment)
-            .where(Segment.id == segment_id)
-            .values(matching_job_id=job_id)
-        )
+        await self._db.execute(update(Segment).where(Segment.id == segment_id).values(matching_job_id=job_id))
         await self._db.commit()
 
     async def _clear_matching_job_id(self, segment_id: UUID) -> None:
         """Clear the matching_job_id on the segment."""
-        await self._db.execute(
-            update(Segment)
-            .where(Segment.id == segment_id)
-            .values(matching_job_id=None)
-        )
+        await self._db.execute(update(Segment).where(Segment.id == segment_id).values(matching_job_id=None))
 
     async def _get_checkpoint(self, segment: Segment) -> UUID | None:
         """
@@ -469,9 +445,7 @@ class RetroactiveMatch:
         Encodes as 'job_id:activity_id' in matching_job_id.
         """
         # Get current job_id
-        result = await self._db.execute(
-            select(Segment.matching_job_id).where(Segment.id == segment_id)
-        )
+        result = await self._db.execute(select(Segment.matching_job_id).where(Segment.id == segment_id))
         current = result.scalar_one_or_none()
         if not current:
             return
@@ -481,18 +455,14 @@ class RetroactiveMatch:
 
         # Update with checkpoint
         await self._db.execute(
-            update(Segment)
-            .where(Segment.id == segment_id)
-            .values(matching_job_id=f"{base_job_id}:{activity_id}")
+            update(Segment).where(Segment.id == segment_id).values(matching_job_id=f"{base_job_id}:{activity_id}")
         )
 
     async def _update_segment_counts(self, segment_id: UUID) -> None:
         """Update denormalized effort_count and athlete_count on segment."""
         # Count total efforts
         effort_count_result = await self._db.execute(
-            select(func.count())
-            .select_from(SegmentEffort)
-            .where(SegmentEffort.segment_id == segment_id)
+            select(func.count()).select_from(SegmentEffort).where(SegmentEffort.segment_id == segment_id)
         )
         effort_count = effort_count_result.scalar() or 0
 

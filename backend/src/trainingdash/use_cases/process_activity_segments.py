@@ -17,12 +17,11 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from geoalchemy2 import WKTElement
 from geoalchemy2.functions import ST_MakeEnvelope
 from geoalchemy2.shape import to_shape
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from trainingdash.domain.climb_detection import DetectedClimb, detect_climbs
 from trainingdash.domain.polyline import encode_polyline
@@ -186,19 +185,14 @@ class ProcessActivitySegments:
     ) -> tuple[Activity | None, list[Record]]:
         """Load activity and its GPS records."""
         # Load activity
-        result = await self._db.execute(
-            select(Activity)
-            .where(Activity.id == activity_id, Activity.user_id == user_id)
-        )
+        result = await self._db.execute(select(Activity).where(Activity.id == activity_id, Activity.user_id == user_id))
         activity = result.scalar_one_or_none()
         if activity is None:
             return None, []
 
         # Load records
         records_result = await self._db.execute(
-            select(Record)
-            .where(Record.activity_id == activity_id)
-            .order_by(Record.timestamp)
+            select(Record).where(Record.activity_id == activity_id).order_by(Record.timestamp)
         )
         records = list(records_result.scalars().all())
 
@@ -209,15 +203,17 @@ class ProcessActivitySegments:
         records = []
         for r in activity_records:  # Already sorted by timestamp from query
             if r.lat is not None and r.lon is not None:
-                records.append({
-                    "lat": r.lat,
-                    "lon": r.lon,
-                    "altitude_m": r.altitude_m,
-                    "distance_m": r.distance_m or 0.0,
-                    "timestamp": r.timestamp,
-                    "power_w": r.power_w,
-                    "hr_bpm": r.hr_bpm,
-                })
+                records.append(
+                    {
+                        "lat": r.lat,
+                        "lon": r.lon,
+                        "altitude_m": r.altitude_m,
+                        "distance_m": r.distance_m or 0.0,
+                        "timestamp": r.timestamp,
+                        "power_w": r.power_w,
+                        "hr_bpm": r.hr_bpm,
+                    }
+                )
         return records
 
     async def _find_candidates(self, records: list[dict]) -> list[SegmentCandidate]:
@@ -229,15 +225,19 @@ class ProcessActivitySegments:
         coords = [(r["lat"], r["lon"]) for r in records]
         min_lat, min_lon, max_lat, max_lon = compute_bounds(coords)
         bearing = compute_bearing(
-            records[0]["lat"], records[0]["lon"],
-            records[-1]["lat"], records[-1]["lon"],
+            records[0]["lat"],
+            records[0]["lon"],
+            records[-1]["lat"],
+            records[-1]["lon"],
         )
 
         # Query candidates via repository
         # The repo handles PostGIS spatial query
         bounds_geom = ST_MakeEnvelope(
-            min_lon, min_lat,  # SW corner
-            max_lon, max_lat,  # NE corner
+            min_lon,
+            min_lat,  # SW corner
+            max_lon,
+            max_lat,  # NE corner
             4326,
         )
 
@@ -332,9 +332,7 @@ class ProcessActivitySegments:
 
         # Update segment counts
         # Check if this is user's first effort on this segment
-        existing_efforts = await self._effort_repo.list_for_segment(
-            match.segment_id, user_id, limit=2
-        )
+        existing_efforts = await self._effort_repo.list_for_segment(match.segment_id, user_id, limit=2)
         new_athlete = len(existing_efforts) <= 1  # Only the one we just created
 
         await self._segment_repo.increment_counts(match.segment_id, new_athlete)
@@ -386,10 +384,7 @@ class ProcessActivitySegments:
         for climb in detected:
             # Check if any matched segment overlaps with this climb
             if self._climb_overlaps_matched_segment(climb, matches, records):
-                logger.debug(
-                    f"Skipping climb detection at index {climb.start_index}: "
-                    "overlaps existing segment match"
-                )
+                logger.debug(f"Skipping climb detection at index {climb.start_index}: overlaps existing segment match")
                 continue
 
             # Process this climb
@@ -418,10 +413,7 @@ class ProcessActivitySegments:
             return False
 
         # Get climb coordinates
-        climb_coords = [
-            (records[i]["lat"], records[i]["lon"])
-            for i in range(climb.start_index, climb.end_index + 1)
-        ]
+        climb_coords = [(records[i]["lat"], records[i]["lon"]) for i in range(climb.start_index, climb.end_index + 1)]
         climb_polyline = encode_polyline(climb_coords)
 
         for match in matches:
@@ -467,15 +459,11 @@ class ProcessActivitySegments:
         # Create segment (status=suggested)
         start_wkt = WKTElement(f"POINT({start_lon} {start_lat})", srid=4326)
         end_wkt = WKTElement(f"POINT({end_lon} {end_lat})", srid=4326)
-        
+
         # bounds is (min_lat, min_lon, max_lat, max_lon) = (sw_lat, sw_lng, ne_lat, ne_lng)
         sw_lat, sw_lng, ne_lat, ne_lng = geometry.bounds
         bounds_wkt = WKTElement(
-            f"POLYGON(({sw_lng} {sw_lat}, "
-            f"{ne_lng} {sw_lat}, "
-            f"{ne_lng} {ne_lat}, "
-            f"{sw_lng} {ne_lat}, "
-            f"{sw_lng} {sw_lat}))",
+            f"POLYGON(({sw_lng} {sw_lat}, {ne_lng} {sw_lat}, {ne_lng} {ne_lat}, {sw_lng} {ne_lat}, {sw_lng} {sw_lat}))",
             srid=4326,
         )
 
@@ -494,10 +482,7 @@ class ProcessActivitySegments:
             elevation_gain_m=climb.elevation_gain_m,
             avg_grade_pct=climb.avg_grade_pct,
             max_grade_pct=climb.max_grade_pct,
-            gradient_segments=[
-                {"distance_m": g.distance_m, "grade_pct": g.grade_pct}
-                for g in climb.gradient_segments
-            ],
+            gradient_segments=[{"distance_m": g.distance_m, "grade_pct": g.grade_pct} for g in climb.gradient_segments],
             created_by=user_id,
             source_activity_id=activity.id,
         )
@@ -508,9 +493,7 @@ class ProcessActivitySegments:
         now = datetime.now()
         expires_at = now + timedelta(days=SUGGESTION_EXPIRY_DAYS)
 
-        existing_suggestion = await self._suggestion_repo.get_for_user_segment(
-            user_id, saved_segment.id
-        )
+        existing_suggestion = await self._suggestion_repo.get_for_user_segment(user_id, saved_segment.id)
 
         if existing_suggestion:
             # Increment repetition count

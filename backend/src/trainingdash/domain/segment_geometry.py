@@ -17,16 +17,16 @@ from trainingdash.domain.polyline import decode_polyline, encode_polyline
 
 # Re-export for convenience
 __all__ = [
-    "SegmentGeometry",
     "GradientSegment",
-    "compute_segment_geometry",
+    "SegmentGeometry",
     "compute_bearing",
     "compute_bounds",
     "compute_elevation_stats",
     "compute_gradient_segments",
-    "haversine_distance",
-    "encode_polyline",
+    "compute_segment_geometry",
     "decode_polyline",
+    "encode_polyline",
+    "haversine_distance",
 ]
 
 

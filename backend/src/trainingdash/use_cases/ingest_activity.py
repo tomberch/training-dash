@@ -204,8 +204,7 @@ class IngestActivity:
             stats = await calibrate.execute(activity.user_id, bike_id=None)
             if stats.coefficients_updated:
                 logger.info(
-                    f"Updated user default pacing coefficients for user={activity.user_id} "
-                    f"after activity {activity.id}"
+                    f"Updated user default pacing coefficients for user={activity.user_id} after activity {activity.id}"
                 )
 
         except Exception as e:
