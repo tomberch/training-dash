@@ -70,6 +70,33 @@ class CoefficientsSource(StrEnum):
     GLOBAL_DEFAULTS = "global_defaults"
 
 
+class BarStatus(StrEnum):
+    """Tri-state status for numeric bar criteria."""
+
+    PASS = "pass"
+    FAIL = "fail"
+    SKIP = "skip"  # No data available
+
+
+@dataclass
+class BarResult:
+    """Result of a single numeric bar criterion check."""
+
+    name: str
+    actual: float | None
+    threshold: float | None
+    status: BarStatus
+
+    def print_line(self) -> str:
+        """Format as a single output line."""
+        if self.status == BarStatus.SKIP:
+            return f"  [ SKIP ] {self.name}: no data"
+        elif self.status == BarStatus.PASS:
+            return f"  [ PASS ] {self.name}: {self.actual:.1f}% (threshold: {self.threshold:.0f}%)"
+        else:
+            return f"  [ FAIL ] {self.name}: {self.actual:.1f}% (threshold: {self.threshold:.0f}%)"
+
+
 @dataclass
 class ResolvedPacingCoefficients:
     """Pacing coefficients resolved for a specific user/bike.
@@ -868,57 +895,63 @@ def print_summary(results: list[ActivityResult], behavior_baseline=None) -> None
     print("NUMERIC BAR (ADR 0004 + ADR 0005)")
     print("=" * 70)
 
-    bar_passed = True
-    bar_results = []
+    def check_bar(
+        name: str, values: list[float], threshold: float, comparator: str = "le"
+    ) -> BarResult:
+        """Check a single bar criterion against a threshold.
+
+        Args:
+            name: Criterion name for display.
+            values: List of values to check (computes mean).
+            threshold: Pass/fail threshold.
+            comparator: 'le' for <=, 'lt' for <.
+
+        Returns:
+            BarResult with appropriate status.
+        """
+        if not values:
+            return BarResult(name, None, None, BarStatus.SKIP)
+        actual = mean(values)
+        passed = actual <= threshold if comparator == "le" else actual < threshold
+        status = BarStatus.PASS if passed else BarStatus.FAIL
+        return BarResult(name, actual, threshold, status)
+
+    bar_results: list[BarResult] = []
 
     # ADR 0004 bar: pedaling-speed on mountain courses
     mountain_results = [r for r in successful if r.course_type == "mountainous" and r.pedaling_pct > 0]
+    mountain_speed_errors = [r.pedaling_speed_error_pct for r in mountain_results]
+
+    bar_results.append(check_bar(
+        "ADR 0004: Mountain pedaling-speed mean < 10%",
+        mountain_speed_errors, 10.0, "lt"
+    ))
     if mountain_results:
-        mountain_speed_errors = [r.pedaling_speed_error_pct for r in mountain_results]
-        mountain_mean_error = mean(mountain_speed_errors)
-        mountain_max_error = max(mountain_speed_errors)
-
-        speed_mean_pass = mountain_mean_error < 10.0
-        speed_max_pass = mountain_max_error < 25.0
-
-        bar_results.append(("ADR 0004: Mountain pedaling-speed mean < 10%", mountain_mean_error, 10.0, speed_mean_pass))
-        bar_results.append(("ADR 0004: Mountain pedaling-speed max < 25%", mountain_max_error, 25.0, speed_max_pass))
-
-        if not speed_mean_pass or not speed_max_pass:
-            bar_passed = False
-    else:
-        bar_results.append(("ADR 0004: Mountain pedaling-speed", None, None, None))
+        max_error = max(mountain_speed_errors)
+        max_status = BarStatus.PASS if max_error < 25.0 else BarStatus.FAIL
+        bar_results.append(BarResult(
+            "ADR 0004: Mountain pedaling-speed max < 25%",
+            max_error, 25.0, max_status
+        ))
 
     # ADR 0005 bar: NP/VI on hilly/mountain courses (where VI > 1.1 matters)
     varied_terrain = [r for r in successful if r.course_type in ("hilly", "mountainous")]
-    if varied_terrain:
-        np_errors = [r.np_error_pct for r in varied_terrain]
-        vi_errors = [r.vi_error_pct for r in varied_terrain]
+    np_errors = [r.np_error_pct for r in varied_terrain]
+    vi_errors = [r.vi_error_pct for r in varied_terrain]
 
-        np_mean_error = mean(np_errors)
-        vi_mean_error = mean(vi_errors)
-
-        # NP error ≤ 15% mean on varied terrain (where VI prediction matters)
-        np_pass = np_mean_error <= 15.0
-        # VI error ≤ 15% mean (the core of ADR 0005: predicted VI ≈ actual VI)
-        vi_pass = vi_mean_error <= 15.0
-
-        bar_results.append(("ADR 0005: Hilly/mountain NP error mean ≤ 15%", np_mean_error, 15.0, np_pass))
-        bar_results.append(("ADR 0005: Hilly/mountain VI error mean ≤ 15%", vi_mean_error, 15.0, vi_pass))
-
-        if not np_pass or not vi_pass:
-            bar_passed = False
-    else:
-        bar_results.append(("ADR 0005: Hilly/mountain NP/VI", None, None, None))
+    bar_results.append(check_bar(
+        "ADR 0005: Hilly/mountain NP error mean ≤ 15%",
+        np_errors, 15.0, "le"
+    ))
+    bar_results.append(check_bar(
+        "ADR 0005: Hilly/mountain VI error mean ≤ 15%",
+        vi_errors, 15.0, "le"
+    ))
 
     # Print bar results
-    for name, actual, threshold, passed in bar_results:
-        if passed is None:
-            print(f"  [ SKIP ] {name}: no data")
-        elif passed:
-            print(f"  [ PASS ] {name}: {actual:.1f}% (threshold: {threshold:.0f}%)")
-        else:
-            print(f"  [ FAIL ] {name}: {actual:.1f}% (threshold: {threshold:.0f}%)")
+    bar_passed = all(r.status != BarStatus.FAIL for r in bar_results)
+    for result in bar_results:
+        print(result.print_line())
 
     print("\n" + "-" * 70)
     if bar_passed:
