@@ -303,7 +303,7 @@ function TargetTimeInput({ value, onChange, ftp, courseDistanceM }: TargetTimeIn
       </p>
       {!value && (
         <p className="text-caption text-muted-foreground">
-          The optimizer will calculate the power needed for each segment to hit your target time.
+          Your riding profile will be scaled to hit the target time — terrain-shaped power on climbs, coasting on descents.
         </p>
       )}
       {value && !isValid && (
@@ -559,7 +559,7 @@ export function GeneratePlan(): JSX.Element {
       use_optimizer: useOptimizer,
     };
 
-    // If targeting time, add target_time_s and force optimizer on
+    // If targeting time, add target_time_s (terrain-shaped solver scales riding profile)
     if (targetMode === "time" && targetTimeSeconds) {
       request.target_time_s = targetTimeSeconds;
       // Note: target_time_s takes precedence on the backend
@@ -794,8 +794,8 @@ export function GeneratePlan(): JSX.Element {
             {targetMode === "time" && (
               <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg">
                 <p className="text-sm text-primary">
-                  Target time mode automatically uses the optimizer to calculate
-                  the power needed for each segment.
+                  Target time mode scales your riding profile to hit the finish time —
+                  harder on climbs, coasting on descents, honest NP.
                 </p>
               </div>
             )}
@@ -860,10 +860,10 @@ export function GeneratePlan(): JSX.Element {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
-              {targetMode === "time" ? "Calculating watts for target..." : useOptimizer ? "Optimizing..." : "Generating..."}
+              {targetMode === "time" ? "Scaling to target time..." : useOptimizer ? "Optimizing..." : "Generating..."}
             </span>
           ) : (
-            targetMode === "time" ? "Calculate Power for Target Time" : "Generate Plan"
+            targetMode === "time" ? "Scale to Target Time" : "Generate Plan"
           )}
         </Button>
       </div>

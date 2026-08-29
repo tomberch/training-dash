@@ -526,4 +526,116 @@ describe("GeneratePlan", () => {
       });
     });
   });
+
+  describe("Target Time Mode", () => {
+    it("switches to time mode when toggle clicked", async () => {
+      renderGeneratePlan();
+
+      await waitFor(() => {
+        expect(screen.getByDisplayValue("280")).toBeInTheDocument();
+      });
+
+      // Click on "Target Time" toggle
+      await userEvent.click(screen.getByRole("button", { name: "Target Time" }));
+
+      // Should show time input
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Target Finish Time/)).toBeInTheDocument();
+      });
+    });
+
+    it("shows terrain-shaped copy in time mode", async () => {
+      renderGeneratePlan();
+
+      await waitFor(() => {
+        expect(screen.getByDisplayValue("280")).toBeInTheDocument();
+      });
+
+      await userEvent.click(screen.getByRole("button", { name: "Target Time" }));
+
+      // Wait for time input to appear first (confirms mode switch)
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Target Finish Time/)).toBeInTheDocument();
+      });
+
+      // Now check for the terrain-shaped info text
+      expect(screen.getByText(/scales your riding profile/i)).toBeInTheDocument();
+    });
+
+    it("submits with target_time_s when in time mode", async () => {
+      mockGenerateRacePlan.mockResolvedValue(mockPlanResponse);
+      renderGeneratePlan();
+
+      await waitFor(() => {
+        expect(screen.getByDisplayValue("280")).toBeInTheDocument();
+      });
+
+      // Select course
+      const courseSelect = getCourseSelect();
+      await userEvent.selectOptions(courseSelect, "1");
+
+      // Switch to time mode
+      await userEvent.click(screen.getByRole("button", { name: "Target Time" }));
+
+      // Enter target time (1:30:00 = 5400 seconds)
+      const timeInput = screen.getByLabelText(/Target Finish Time/);
+      await userEvent.type(timeInput, "1:30:00");
+
+      // Click generate (button text changes in time mode)
+      await userEvent.click(screen.getByRole("button", { name: "Scale to Target Time" }));
+
+      await waitFor(() => {
+        expect(mockGenerateRacePlan).toHaveBeenCalledWith(
+          expect.objectContaining({
+            course_id: 1,
+            ftp_watts: 280,
+            target_time_s: 5400,
+          })
+        );
+      });
+    });
+
+    it("shows 'Scaling to target time...' during generation", async () => {
+      mockGenerateRacePlan.mockImplementation(() => new Promise(() => {}));
+      renderGeneratePlan();
+
+      await waitFor(() => {
+        expect(screen.getByDisplayValue("280")).toBeInTheDocument();
+      });
+
+      const courseSelect = getCourseSelect();
+      await userEvent.selectOptions(courseSelect, "1");
+
+      await userEvent.click(screen.getByRole("button", { name: "Target Time" }));
+
+      const timeInput = screen.getByLabelText(/Target Finish Time/);
+      await userEvent.type(timeInput, "1:30:00");
+
+      await userEvent.click(screen.getByRole("button", { name: "Scale to Target Time" }));
+
+      await waitFor(() => {
+        expect(screen.getByText("Scaling to target time...")).toBeInTheDocument();
+      });
+    });
+
+    it("disables submit button when time is invalid", async () => {
+      renderGeneratePlan();
+
+      await waitFor(() => {
+        expect(screen.getByDisplayValue("280")).toBeInTheDocument();
+      });
+
+      const courseSelect = getCourseSelect();
+      await userEvent.selectOptions(courseSelect, "1");
+
+      await userEvent.click(screen.getByRole("button", { name: "Target Time" }));
+
+      // Enter invalid time
+      const timeInput = screen.getByLabelText(/Target Finish Time/);
+      await userEvent.type(timeInput, "invalid");
+
+      // Button should be disabled
+      expect(screen.getByRole("button", { name: "Scale to Target Time" })).toBeDisabled();
+    });
+  });
 });
