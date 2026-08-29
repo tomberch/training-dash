@@ -81,7 +81,23 @@ A single traversal of a Segment within an Activity. Stores elapsed time, power, 
 
 ## Pacing Plan
 
-A prediction of how a rider should distribute power across a Course to finish in a given time or intensity. Contains per-segment power targets, estimated speeds and times, total time, average and Normalized Power, and a W'bal prediction. Generated from the Course, the rider's thresholds and bike, weather at the target date, and Pacing Coefficients.
+A prediction of how a rider should distribute power across a Course to finish in a given time or intensity. A plan is always shaped by the rider's own riding behavior (coasting on descents, stops, cornering) applied to the course's terrain; the rider supplies either a target intensity (time is computed) or a target time (the profile is scaled until it hits). Carries a Sustainability level. Contains per-segment power targets, estimated speeds and times, total time, average and Normalized Power, and a W'bal prediction.
+
+## Sustainability
+
+A plan's traffic-light level: green (sustainable), yellow (very hard, near the rider's limit), or red (beyond the rider's capability). Red plans are still generated and shown, flagged. Only a physically impossible request is rejected outright.
+
+## Riding Behavior
+
+The rider's learned baseline of how they actually ride, distinct from their physiology: how much power they hold on descents (Descent Multiplier), how much ride time they spend coasting or stopped, per terrain type. Learned from ingested activities and modulated by Plan Type — a race tightens coasting and stops, a tour loosens them.
+
+## Descent Multiplier
+
+The fraction of target power a rider actually holds while descending. Learned from the rider's activities; near zero = full coasting, near one = pedaling descents. Applied by the pacing model on descents instead of the grade-power formula.
+
+## Plan Type
+
+The character of ride a plan is for: race, gran fondo, training, or touring. Plan Type does not change the rider's learned Behavior — it modulates it (coasting, stops) and sets cornering aggressiveness and expected stop time for the plan.
 
 ## Pacing Coefficients
 
