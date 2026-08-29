@@ -841,7 +841,7 @@ def aggregate_behavior_or_none(samples: list):
 
 
 def print_summary(results: list[ActivityResult], behavior_baseline=None) -> None:
-    """Print summary statistics."""
+    """Print summary statistics and check numeric bar."""
     successful = [r for r in results if r.status == "success"]
     skipped = [r for r in results if r.status == "skipped"]
     errors = [r for r in results if r.status == "error"]
@@ -857,6 +857,76 @@ def print_summary(results: list[ActivityResult], behavior_baseline=None) -> None
     if not successful:
         print("\nNo successful validations to analyze.")
         return
+
+    # =========================================================================
+    # NUMERIC BAR (ADR 0004 + ADR 0005)
+    # =========================================================================
+    # ADR 0004: Mountain-course mean pedaling-speed error < 10%, no single > 25%
+    # ADR 0005: NP/VI error mean ≤ 15% on hilly/mountain (where VI matters)
+    # =========================================================================
+    print("\n" + "=" * 70)
+    print("NUMERIC BAR (ADR 0004 + ADR 0005)")
+    print("=" * 70)
+
+    bar_passed = True
+    bar_results = []
+
+    # ADR 0004 bar: pedaling-speed on mountain courses
+    mountain_results = [r for r in successful if r.course_type == "mountainous" and r.pedaling_pct > 0]
+    if mountain_results:
+        mountain_speed_errors = [r.pedaling_speed_error_pct for r in mountain_results]
+        mountain_mean_error = mean(mountain_speed_errors)
+        mountain_max_error = max(mountain_speed_errors)
+
+        speed_mean_pass = mountain_mean_error < 10.0
+        speed_max_pass = mountain_max_error < 25.0
+
+        bar_results.append(("ADR 0004: Mountain pedaling-speed mean < 10%", mountain_mean_error, 10.0, speed_mean_pass))
+        bar_results.append(("ADR 0004: Mountain pedaling-speed max < 25%", mountain_max_error, 25.0, speed_max_pass))
+
+        if not speed_mean_pass or not speed_max_pass:
+            bar_passed = False
+    else:
+        bar_results.append(("ADR 0004: Mountain pedaling-speed", None, None, None))
+
+    # ADR 0005 bar: NP/VI on hilly/mountain courses (where VI > 1.1 matters)
+    varied_terrain = [r for r in successful if r.course_type in ("hilly", "mountainous")]
+    if varied_terrain:
+        np_errors = [r.np_error_pct for r in varied_terrain]
+        vi_errors = [r.vi_error_pct for r in varied_terrain]
+
+        np_mean_error = mean(np_errors)
+        vi_mean_error = mean(vi_errors)
+
+        # NP error ≤ 15% mean on varied terrain (where VI prediction matters)
+        np_pass = np_mean_error <= 15.0
+        # VI error ≤ 15% mean (the core of ADR 0005: predicted VI ≈ actual VI)
+        vi_pass = vi_mean_error <= 15.0
+
+        bar_results.append(("ADR 0005: Hilly/mountain NP error mean ≤ 15%", np_mean_error, 15.0, np_pass))
+        bar_results.append(("ADR 0005: Hilly/mountain VI error mean ≤ 15%", vi_mean_error, 15.0, vi_pass))
+
+        if not np_pass or not vi_pass:
+            bar_passed = False
+    else:
+        bar_results.append(("ADR 0005: Hilly/mountain NP/VI", None, None, None))
+
+    # Print bar results
+    for name, actual, threshold, passed in bar_results:
+        if passed is None:
+            print(f"  [ SKIP ] {name}: no data")
+        elif passed:
+            print(f"  [ PASS ] {name}: {actual:.1f}% (threshold: {threshold:.0f}%)")
+        else:
+            print(f"  [ FAIL ] {name}: {actual:.1f}% (threshold: {threshold:.0f}%)")
+
+    print("\n" + "-" * 70)
+    if bar_passed:
+        print("NUMERIC BAR: PASSED")
+    else:
+        print("NUMERIC BAR: FAILED")
+        print("  Stop and investigate before proceeding with deployment.")
+    print("-" * 70)
 
     # Pedaling metrics overview
     pedaling_pcts = [r.pedaling_pct for r in successful if r.pedaling_pct > 0]
@@ -1090,6 +1160,16 @@ def print_summary(results: list[ActivityResult], behavior_baseline=None) -> None
             print(f"\nSpeed prediction bias is within acceptable range ({speed_bias:+.1f} km/h).")
 
 
+def _harness_to_behavior_terrain(course_type: str) -> str:
+    """Map the harness's course_type to the rider_behavior terrain buckets."""
+    return {
+        "flat": "flat",
+        "rolling": "rolling",
+        "hilly": "hilly",
+        "mountainous": "mountain",
+    }.get(course_type, course_type)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Calibrate pacing model against real ride data")
     parser.add_argument("--output", "-o", default="calibration_results.csv", help="Output CSV path")
@@ -1101,13 +1181,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-def _harness_to_behavior_terrain(course_type: str) -> str:
-    """Map the harness's course_type to the rider_behavior terrain buckets."""
-    return {
-        "flat": "flat",
-        "rolling": "rolling",
-        "hilly": "hilly",
-        "mountainous": "mountain",
-    }.get(course_type, course_type)
