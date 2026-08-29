@@ -878,7 +878,7 @@ class TestSustainability:
         uc = GenerateRacePlan(course_repo_for_effort, bike_repo, user_repo, plan_repo)
         plans_before = len(plan_repo._plans) if hasattr(plan_repo, "_plans") else None
 
-        with pytest.raises(ValueError, match="too fast"):
+        with pytest.raises(ValueError, match=r"too fast.*[Mm]inimum achievable"):
             await uc.execute(
                 user_id=1,
                 request=GeneratePlanRequest(course_id=1, ftp_watts=250, target_time_s=600.0),

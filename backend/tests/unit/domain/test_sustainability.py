@@ -79,3 +79,83 @@ class TestSustainabilityBoundaries:
         s = assess_sustainability(intensity_factor=1.05, wbal_min_j=500.0, w_prime_j=20000.0, ride_duration_s=7200.0)
         assert s.level == "red"
         assert "IF" in s.message or "W'" in s.message or "intensity" in s.message.lower()
+
+
+class TestYellowBoundariesPinned:
+    """Exact yellow threshold tests to pin the documented boundaries."""
+
+    # IF thresholds at anchor durations (from sustainability.py docstring):
+    # - 2.5h: yellow at IF 0.92, red at IF 1.05
+    # - 5h: yellow at IF 0.80, red at IF 0.90
+
+    def test_short_ride_yellow_boundary_if_092(self):
+        """At 2.5h, IF 0.91 is green, IF 0.92 is yellow."""
+        duration_2_5h = 2.5 * 3600
+        green = assess_sustainability(intensity_factor=0.91, wbal_min_j=15000.0, w_prime_j=20000.0, ride_duration_s=duration_2_5h)
+        yellow = assess_sustainability(intensity_factor=0.92, wbal_min_j=15000.0, w_prime_j=20000.0, ride_duration_s=duration_2_5h)
+        assert green.level == "green"
+        assert yellow.level == "yellow"
+
+    def test_short_ride_red_boundary_if_105(self):
+        """At 2.5h, IF 1.04 is yellow, IF 1.05 is red."""
+        duration_2_5h = 2.5 * 3600
+        yellow = assess_sustainability(intensity_factor=1.04, wbal_min_j=15000.0, w_prime_j=20000.0, ride_duration_s=duration_2_5h)
+        red = assess_sustainability(intensity_factor=1.05, wbal_min_j=15000.0, w_prime_j=20000.0, ride_duration_s=duration_2_5h)
+        assert yellow.level == "yellow"
+        assert red.level == "red"
+
+    def test_long_ride_yellow_boundary_if_080(self):
+        """At 5h, IF 0.79 is green, IF 0.80 is yellow."""
+        duration_5h = 5.0 * 3600
+        green = assess_sustainability(intensity_factor=0.79, wbal_min_j=15000.0, w_prime_j=20000.0, ride_duration_s=duration_5h)
+        yellow = assess_sustainability(intensity_factor=0.80, wbal_min_j=15000.0, w_prime_j=20000.0, ride_duration_s=duration_5h)
+        assert green.level == "green"
+        assert yellow.level == "yellow"
+
+    def test_long_ride_red_boundary_if_090(self):
+        """At 5h, IF 0.89 is yellow, IF 0.90 is red."""
+        duration_5h = 5.0 * 3600
+        yellow = assess_sustainability(intensity_factor=0.89, wbal_min_j=15000.0, w_prime_j=20000.0, ride_duration_s=duration_5h)
+        red = assess_sustainability(intensity_factor=0.90, wbal_min_j=15000.0, w_prime_j=20000.0, ride_duration_s=duration_5h)
+        assert yellow.level == "yellow"
+        assert red.level == "red"
+
+    # W'bal thresholds (from sustainability.py):
+    # - red at <= 10% of W' remaining
+    # - yellow at <= 30% of W' remaining
+
+    def test_wbal_yellow_boundary_30_percent(self):
+        """W'bal at 31% is green (IF-wise), at 30% is yellow."""
+        # 31% of 20000 = 6200, 30% = 6000
+        green = assess_sustainability(intensity_factor=0.75, wbal_min_j=6200.0, w_prime_j=20000.0, ride_duration_s=3600.0)
+        yellow = assess_sustainability(intensity_factor=0.75, wbal_min_j=6000.0, w_prime_j=20000.0, ride_duration_s=3600.0)
+        assert green.level == "green"
+        assert yellow.level == "yellow"
+
+    def test_wbal_red_boundary_10_percent(self):
+        """W'bal at 11% is yellow, at 10% is red."""
+        # 11% of 20000 = 2200, 10% = 2000
+        yellow = assess_sustainability(intensity_factor=0.75, wbal_min_j=2200.0, w_prime_j=20000.0, ride_duration_s=3600.0)
+        red = assess_sustainability(intensity_factor=0.75, wbal_min_j=2000.0, w_prime_j=20000.0, ride_duration_s=3600.0)
+        assert yellow.level == "yellow"
+        assert red.level == "red"
+
+
+class TestWbalNoneHandling:
+    """When wbal_min_j is None, the W'bal axis is skipped."""
+
+    def test_none_wbal_skips_wbal_axis(self):
+        """With wbal_min_j=None, only IF axis determines the level."""
+        # IF 0.75 is green regardless of W'bal
+        s = assess_sustainability(intensity_factor=0.75, wbal_min_j=None, w_prime_j=20000.0, ride_duration_s=3600.0)
+        assert s.level == "green"
+
+    def test_none_wbal_with_high_if_is_yellow(self):
+        """With wbal_min_j=None, high IF still triggers yellow."""
+        s = assess_sustainability(intensity_factor=0.95, wbal_min_j=None, w_prime_j=20000.0, ride_duration_s=3600.0)
+        assert s.level == "yellow"
+
+    def test_none_wbal_does_not_mask_red_if(self):
+        """With wbal_min_j=None, red IF still triggers red."""
+        s = assess_sustainability(intensity_factor=1.10, wbal_min_j=None, w_prime_j=20000.0, ride_duration_s=3600.0)
+        assert s.level == "red"

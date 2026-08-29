@@ -525,7 +525,7 @@ class GenerateRacePlan:
         riding_for_sustainability = riding_time_s if riding_time_s and riding_time_s > 0 else total_time_s
         sustainability = assess_sustainability(
             intensity_factor=intensity_factor if intensity_factor else 0.0,
-            wbal_min_j=wbal_min if wbal_min is not None else float(w_prime),
+            wbal_min_j=wbal_min,  # None skips W'bal axis in assessment
             w_prime_j=float(w_prime),
             ride_duration_s=riding_for_sustainability,
         )

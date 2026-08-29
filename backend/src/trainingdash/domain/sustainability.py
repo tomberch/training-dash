@@ -22,6 +22,7 @@ Assessment axes (both must be green for green; the worst wins):
      - yellow at <= 30% of W' remaining (near-limit)
 """
 
+import math
 from dataclasses import dataclass
 
 # W'bal depth thresholds (fraction of W' remaining at the plan's minimum)
@@ -54,7 +55,6 @@ def _if_thresholds(ride_duration_s: float) -> tuple[float, float]:
     first anchor, longer than 5h the second.
     """
     hours = max(ride_duration_s, 1.0) / 3600.0
-    import math
 
     if hours <= _IF_ANCHORS[0][0]:
         return _IF_ANCHORS[0][1], _IF_ANCHORS[0][2]
@@ -71,7 +71,7 @@ def _if_thresholds(ride_duration_s: float) -> tuple[float, float]:
 
 def assess_sustainability(
     intensity_factor: float,
-    wbal_min_j: float,
+    wbal_min_j: float | None,
     w_prime_j: float,
     ride_duration_s: float,
 ) -> SustainabilityAssessment:
@@ -80,7 +80,7 @@ def assess_sustainability(
 
     Args:
         intensity_factor: The plan's IF (NP / FTP).
-        wbal_min_j: The plan's minimum predicted W'bal (joules).
+        wbal_min_j: The plan's minimum predicted W'bal (joules), or None to skip W'bal axis.
         w_prime_j: The rider's W' (joules).
         ride_duration_s: The plan's riding time (seconds).
 
