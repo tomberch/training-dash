@@ -21,6 +21,9 @@ from trainingdash.domain.pacing_model import (
     GRADE_POWER_SLOPE as DEFAULT_GRADE_POWER_SLOPE,
 )
 from trainingdash.domain.pacing_model import (
+    MAX_DESCENT_POWER_MULT,
+)
+from trainingdash.domain.pacing_model import (
     PacingCoefficients as ModelCoefficients,
 )
 from trainingdash.domain.pacing_model import (
@@ -42,10 +45,6 @@ MIN_ACTIVITIES = 3  # Minimum activities to calibrate
 # noise, not riding behavior. Storing it poisons every subsequent plan
 # (the reference data produced R²=0.009 → "pedal hard downhill" plans).
 MIN_CLIMB_R_SQUARED = 0.25
-
-# Descent multiplier bounds (ADR 0005 #634): riders coast descents (~0.0-0.3)
-# or pedal them (~0.5-0.8); a fitted value outside this band means bad data.
-MAX_DESCENT_POWER_MULT = 0.8
 
 
 @dataclass

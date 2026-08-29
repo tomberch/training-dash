@@ -1273,8 +1273,11 @@ class TestPlanTypeModulation:
         touring = modulate_descent_power_multiplier(0.12, RIDE_TYPE_PRESETS["touring"])
         assert touring < 0.12 < race
 
-        # Clamped at the ceiling: modulating a pedaler stays physical
-        assert modulate_descent_power_multiplier(0.9, RIDE_TYPE_PRESETS["race"]) <= 1.0
+        # Clamped at the ceiling (the calibration band, not 1.0):
+        # modulated values never exceed what real riders do
+        assert modulate_descent_power_multiplier(0.9, RIDE_TYPE_PRESETS["race"]) <= 0.8
+        # Default (uncalibrated 0.50) x gran_fondo 2.0 clamps at 0.8, not 1.0
+        assert modulate_descent_power_multiplier(0.50, RIDE_TYPE_PRESETS["gran_fondo"]) == pytest.approx(0.8)
 
     def test_terrain_adapted_pacing_applies_modulation(self):
         from statistics import mean

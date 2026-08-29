@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal
 
+import numpy as np
+
 from trainingdash.domain.aero_selection import AeroSource, BikeAeroData, select_aero_params
 from trainingdash.domain.course_segmentation import CourseSegment
 from trainingdash.domain.pacing import (
@@ -19,7 +21,8 @@ from trainingdash.domain.pacing import (
     resolve_ride_type_params,
 )
 from trainingdash.domain.pacing_model import effective_descent_power_multiplier, modulate_descent_power_multiplier
-from trainingdash.domain.pacing_optimizer import optimize_pacing, optimize_pacing_for_time
+from trainingdash.domain.pacing_optimizer import optimize_pacing
+from trainingdash.domain.pacing_scale import solve_target_time
 from trainingdash.domain.physics import EnvironmentParams, RiderParams, calculate_headwind
 from trainingdash.domain.wbal import predict_wbal_for_plan
 from trainingdash.integrations.weather import (
@@ -325,30 +328,37 @@ class GenerateRacePlan:
         # C) Heuristic mode: grade-based power targets
 
         if request.target_time_s is not None:
-            # Mode A: Target time - find power to achieve specific finish time
-            # If stop_pct > 0, the target_time includes stops.
-            # Physics calculation should target: net_riding_time = target_time / stop_factor
+            # Mode A (replaced, ADR 0005 #637): target time via the scaled
+            # terrain-shaped engine. The rider's shaped profile is scaled on
+            # pedaling segments until riding time hits the target; descents
+            # stay at coast level. NP/avg are honest outputs of the shape.
+            # If stop_pct > 0, the target_time includes stops:
+            # net_riding_time = target_time / stop_factor.
             net_target_time_s = request.target_time_s / ride_type_params.stop_factor
 
-            optimized = optimize_pacing_for_time(
+            solved = solve_target_time(
                 segments=segments,
                 rider_ftp=ftp,
-                rider_cp=cp,
-                rider_w_prime=w_prime,
                 target_time_s=net_target_time_s,
                 rider_params=rider_params,
                 env_params=env_params,
-                segment_env_params=segment_env_params,
+                coefficients=pacing_coefficients,
+                elevation_profile=course.elevation_profile,
                 max_descent_speed_mps=request.max_descent_speed_mps,
+                ride_type_params=ride_type_params,
+                wind_speed_mps=forecast_conditions.wind_speed_mps,
+                wind_direction_deg=forecast_conditions.wind_direction_deg,
             )
 
-            # Apply stop factor to get total time including stops
-            riding_time_s = optimized.total_time_s
+            if not solved.converged:
+                warnings.append("Time solver did not fully converge - results may be approximate")
+
+            riding_time_s = solved.plan.total_time_s
             total_time_s = riding_time_s * ride_type_params.stop_factor
-            total_distance_m = optimized.total_distance_m
-            avg_power_w = optimized.avg_power_w
-            normalized_power_w = optimized.normalized_power_w
-            intensity_factor = optimized.intensity_factor
+            total_distance_m = solved.plan.total_distance_m
+            avg_power_w = solved.plan.avg_power_w
+            normalized_power_w = solved.plan.normalized_power_w
+            intensity_factor = solved.plan.intensity_factor
             segment_targets = [
                 {
                     "segment_idx": t.segment_idx,
@@ -356,22 +366,28 @@ class GenerateRacePlan:
                     "time_s": t.estimated_time_s,
                     "speed_mps": t.estimated_speed_mps,
                 }
-                for t in optimized.targets
+                for t in solved.plan.targets
             ]
-            wbal_min = optimized.wbal_min
-            optimization_method = "time_targeted"
+            optimization_method = "time_scaled"
 
-            # Comparison: show energy savings vs constant power
+            # W'bal prediction for the scaled shape (same treatment as Mode C)
+            powers = np.array([t.target_power_w for t in solved.plan.targets])
+            times = np.array([t.estimated_time_s for t in solved.plan.targets])
+            wbal_prediction = predict_wbal_for_plan(powers, times, cp, w_prime)
+            wbal_min = wbal_prediction.min_wbal
+
+            # Comparison: target vs achieved + the solved shape
             comparison = {
                 "target_time_s": request.target_time_s,
                 "achieved_time_s": total_time_s,
                 "riding_time_s": riding_time_s,
                 "stop_pct": ride_type_params.stop_pct,
-                "energy_saving_vs_constant_pct": optimized.improvement_vs_constant_pct,
+                "solved_intensity": solved.solved_intensity,
+                "learned_descent_power_multiplier": effective_descent_power_multiplier(pacing_coefficients),
+                "modulated_descent_power_multiplier": modulate_descent_power_multiplier(
+                    effective_descent_power_multiplier(pacing_coefficients), ride_type_params
+                ),
             }
-
-            if not optimized.converged:
-                warnings.append("Optimizer did not fully converge - results may be approximate")
 
         elif request.use_optimizer:
             # Mode B: Energy budget optimization
@@ -467,8 +483,6 @@ class GenerateRacePlan:
             optimization_method = "heuristic"
 
             # Calculate W'bal prediction
-            import numpy as np
-
             powers = np.array([t.target_power_w for t in heuristic.targets])
             times = np.array([t.estimated_time_s for t in heuristic.targets])
             wbal_prediction = predict_wbal_for_plan(powers, times, cp, w_prime)

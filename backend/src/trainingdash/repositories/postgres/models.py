@@ -738,7 +738,7 @@ class RacePlan(Base):
     __tablename__ = "race_plans"
     __table_args__ = (
         sa.CheckConstraint(
-            "optimization_method IN ('heuristic', 'optimized', 'time_targeted') OR optimization_method IS NULL",
+            "optimization_method IN ('heuristic', 'optimized', 'time_scaled', 'time_scaled_legacy') OR optimization_method IS NULL",
             name="valid_optimization_method",
         ),
     )

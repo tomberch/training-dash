@@ -690,3 +690,113 @@ class TestPlanTypeModulation:
         )
 
         assert training.comparison["modulated_descent_power_multiplier"] == pytest.approx(0.12)
+
+
+class TestTargetTimeMode:
+    """#637: target-time requests hit the scaled terrain-shaped engine."""
+
+    @pytest.fixture
+    def hilly_course_repo(self):
+        repo = FakeCourseRepo()
+        profile = []
+        for i in range(121):
+            d = i * 50.0
+            if d <= 2000:
+                grade, elev = 0.0, 100.0
+            elif d <= 4000:
+                grade, elev = 5.0, 100.0 + (d - 2000) * 0.05
+            else:
+                grade, elev = -5.0, 200.0 - (d - 4000) * 0.05
+            profile.append({"distance_m": d, "elevation_m": elev, "grade_pct": grade, "lat": 47.0, "lon": 8.0})
+        course = RaceCourse(
+            id=1,
+            user_id=1,
+            name="Hilly",
+            source_type="gpx",
+            distance_m=6000.0,
+            elevation_gain_m=100.0,
+            elevation_loss_m=100.0,
+            geometry="SRID=4326;LINESTRINGZ(0 0 100, 1 1 200)",
+            segments=[
+                {
+                    "start_m": 0,
+                    "end_m": 2000,
+                    "distance_m": 2000,
+                    "avg_grade_pct": 0.0,
+                    "elevation_gain_m": 0,
+                    "elevation_loss_m": 0,
+                    "terrain_type": "flat",
+                },
+                {
+                    "start_m": 2000,
+                    "end_m": 4000,
+                    "distance_m": 2000,
+                    "avg_grade_pct": 5.0,
+                    "elevation_gain_m": 100,
+                    "elevation_loss_m": 0,
+                    "terrain_type": "climb",
+                },
+                {
+                    "start_m": 4000,
+                    "end_m": 6000,
+                    "distance_m": 2000,
+                    "avg_grade_pct": -5.0,
+                    "elevation_gain_m": 0,
+                    "elevation_loss_m": 100,
+                    "terrain_type": "descent",
+                },
+            ],
+            elevation_profile=profile,
+        )
+        repo.add(course)
+        return repo
+
+    @pytest.fixture
+    def calibrated_pacing_repo(self):
+        from tests.fakes.pacing_coefficients_repo import FakePacingCoefficientsRepo
+        from trainingdash.domain.pacing_model import PacingCoefficients
+
+        repo = FakePacingCoefficientsRepo()
+        repo.add(
+            PacingCoefficients(
+                user_id=1,
+                bike_id=None,
+                descent_power_multiplier=0.12,  # learned near-coaster
+                activity_count=10,
+            )
+        )
+        return repo
+
+    @pytest.mark.asyncio
+    async def test_target_time_hits_solver_and_is_terrain_shaped(
+        self, hilly_course_repo, calibrated_pacing_repo, bike_repo, user_repo, plan_repo
+    ):
+        """target_time_s produces a terrain-shaped scaled plan: descents at
+        coast level, VI > 1.0, method = 'time_scaled'."""
+        uc = GenerateRacePlan(hilly_course_repo, bike_repo, user_repo, plan_repo, calibrated_pacing_repo)
+
+        request = GeneratePlanRequest(course_id=1, ftp_watts=280, target_time_s=700.0, ride_type="training")
+
+        result = await uc.execute(user_id=1, request=request)
+
+        assert result.plan.optimization_method == "time_scaled"
+        # Terrain-shaped: descents coasted (near-zero), not 200W+
+        descent = [t for t in result.plan.segment_targets if t["segment_idx"] == 2][0]
+        assert descent["power_w"] < 100
+        # VI reflects variability, not the constant-power fantasy
+        vi = result.plan.normalized_power_w / result.plan.avg_power_w
+        assert vi > 1.02
+        # Riding time honors the net target (total minus training's 6% stops)
+        riding = result.comparison["riding_time_s"]
+        assert riding == pytest.approx(700.0 / 1.06, rel=0.02)
+        # And the achieved TOTAL time honors the request target
+        assert result.plan.total_time_s == pytest.approx(700.0, rel=0.03)
+
+    @pytest.mark.asyncio
+    async def test_impossible_target_time_hard_error(self, hilly_course_repo, bike_repo, user_repo, plan_repo):
+        """Faster than physically possible → ValueError with the minimum
+        achievable time."""
+        uc = GenerateRacePlan(hilly_course_repo, bike_repo, user_repo, plan_repo)
+
+        with pytest.raises(ValueError, match="too fast"):
+            await uc.execute(user_id=1, request=GeneratePlanRequest(course_id=1, ftp_watts=280, target_time_s=100.0))

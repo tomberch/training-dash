@@ -198,6 +198,12 @@ MIN_POWER_MULTIPLIER = 0.50  # Minimum for descents (coasting with some pedaling
 # the Descent Multiplier — same threshold as the calibration extractor's
 # descent sampling (pacing_calibration.extract_descent_samples).
 DESCENT_GRADE_PCT = -3.0
+
+# Physical band for descent power multipliers (fitted or modulated):
+# riders coast descents (~0.0-0.3) or pedal them (~0.5-0.8). Values above
+# 0.8 mean pedaling descents harder than any real rider does — including
+# modulated defaults (0.50 x race 3.0 clamps here, not at 1.0).
+MAX_DESCENT_POWER_MULT = 0.8
 MAX_POWER_MULTIPLIER = 1.50  # Maximum for very steep climbs (realistic ceiling)
 
 # Default rider parameters used when none are provided
@@ -329,7 +335,7 @@ def modulate_descent_power_multiplier(
     if ride_type_params is None:
         return base_multiplier
     modulated = base_multiplier * ride_type_params.coast_modulation
-    return max(0.0, min(1.0, modulated))
+    return max(0.0, min(MAX_DESCENT_POWER_MULT, modulated))
 
 
 def calculate_curvature_menger(
