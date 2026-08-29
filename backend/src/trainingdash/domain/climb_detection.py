@@ -18,18 +18,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from trainingdash.domain.elevation import smooth_elevation as savgol_smooth
-
-
-@dataclass
-class GradientSegment:
-    """A segment of road with a specific gradient.
-
-    Used to represent the gradient profile of a climb, typically
-    at 50m intervals for display and analysis.
-    """
-
-    distance_m: float
-    grade_pct: float
+from trainingdash.domain.segment_geometry import GradientSegment
 
 
 @dataclass
@@ -84,33 +73,6 @@ def categorize_climb(distance_m: float, avg_grade_pct: float) -> str:
     if score >= 8000:
         return "4"
     return "nc"
-
-
-def smooth_elevation_simple(altitudes: list[float], window: int = 5) -> list[float]:
-    """Apply simple moving average smoothing to elevation data.
-
-    This is a lightweight alternative to Savitzky-Golay filtering,
-    useful when scipy is not available or for quick processing.
-
-    Args:
-        altitudes: Raw elevation values in meters.
-        window: Window size for moving average (should be odd).
-
-    Returns:
-        Smoothed elevation values.
-    """
-    if len(altitudes) < window:
-        return altitudes.copy() if isinstance(altitudes, list) else list(altitudes)
-
-    result = []
-    half = window // 2
-
-    for i in range(len(altitudes)):
-        start = max(0, i - half)
-        end = min(len(altitudes), i + half + 1)
-        result.append(sum(altitudes[start:end]) / (end - start))
-
-    return result
 
 
 def compute_gradient_segments(

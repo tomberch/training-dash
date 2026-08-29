@@ -331,6 +331,7 @@ CalibratePacingD = Annotated[CalibratePacing, Depends(get_calibrate_pacing_use_c
 
 
 from trainingdash.use_cases.approve_suggestion import ApproveSuggestion
+from trainingdash.use_cases.create_segment import CreateSegment
 
 
 async def get_approve_suggestion_use_case(
@@ -341,4 +342,14 @@ async def get_approve_suggestion_use_case(
     return ApproveSuggestion(segment_repo, suggestion_repo)
 
 
+async def get_create_segment_use_case(
+    activity_repo: ActivityRepoD,
+    record_repo: RecordRepoD,
+    segment_repo: SegmentRepoD,
+) -> CreateSegment:
+    """Create a CreateSegment use case with its dependencies."""
+    return CreateSegment(activity_repo, record_repo, segment_repo)
+
+
 ApproveSuggestionD = Annotated[ApproveSuggestion, Depends(get_approve_suggestion_use_case)]
+CreateSegmentD = Annotated[CreateSegment, Depends(get_create_segment_use_case)]

@@ -3,19 +3,16 @@
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
-from geoalchemy2 import WKTElement
 from geoalchemy2.shape import to_shape
 from pydantic import BaseModel, Field
-from sqlalchemy import select
 
-from trainingdash.auth import CurrentUser, DbSession
+from trainingdash.auth import CurrentUser
 from trainingdash.dependencies import (
-    ActivityRepoD,
+    CreateSegmentD,
     SegmentEffortRepoD,
     SegmentRepoD,
 )
-from trainingdash.domain.segment_geometry import compute_segment_geometry
-from trainingdash.repositories.postgres.models import Record, Segment, SegmentEffort
+from trainingdash.repositories.postgres.models import Segment, SegmentEffort
 from trainingdash.routers.datetime_utils import utc_str
 
 router = APIRouter(prefix="/api/segments", tags=["segments"])
@@ -213,117 +210,33 @@ async def get_segment(
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_segment(
     user: CurrentUser,
-    db: DbSession,
-    segment_repo: SegmentRepoD,
-    activity_repo: ActivityRepoD,
+    create_use_case: CreateSegmentD,
     request: CreateSegmentRequest,
 ):
     """Create a segment from an activity's GPS data."""
-    # Fetch the activity
-    activity = await activity_repo.get_by_id(request.activity_id, user.id)
-    if activity is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Activity not found",
-        )
-
-    # Fetch records for the activity
-    result = await db.execute(
-        select(Record).where(Record.activity_id == request.activity_id).order_by(Record.timestamp.asc())
-    )
-    records = list(result.scalars().all())
-
-    # Validate indices
-    if request.start_index >= request.end_index:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="start_index must be less than end_index",
-        )
-    if request.end_index >= len(records):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"end_index {request.end_index} exceeds record count {len(records)}",
-        )
-
-    # Extract GPS points for the segment
-    segment_records = records[request.start_index : request.end_index + 1]
-    if len(segment_records) < 2:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Segment must have at least 2 points",
-        )
-
-    # Build points list
-    points = [
-        (r.position_lat, r.position_long, r.altitude)
-        for r in segment_records
-        if r.position_lat is not None and r.position_long is not None
-    ]
-
-    if len(points) < 2:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Segment must have at least 2 valid GPS points",
-        )
-
-    # Compute geometry
-    geometry = compute_segment_geometry(points)
-
-    # Determine type based on metrics
-    segment_type = "custom"
-    climb_category = None
-    if geometry.elevation_gain_m >= 50 and geometry.avg_grade_pct >= 3:
-        segment_type = "climb"
-        # Calculate climb category based on difficulty score
-        # Score = elevation_gain * (avg_grade / 100)
-        score = geometry.elevation_gain_m * (geometry.avg_grade_pct / 100)
-        if score >= 80:
-            climb_category = "hc"
-        elif score >= 64:
-            climb_category = "1"
-        elif score >= 32:
-            climb_category = "2"
-        elif score >= 16:
-            climb_category = "3"
-        elif score >= 8:
-            climb_category = "4"
-        else:
-            climb_category = "nc"  # non-categorized
-    elif geometry.distance_m <= 500 and geometry.distance_m >= 100:
-        segment_type = "sprint"
-
-    # Create segment model
-    start_lat, start_lng = points[0][0], points[0][1]
-    end_lat, end_lng = points[-1][0], points[-1][1]
-
-    segment = Segment(
+    result = await create_use_case.execute(
+        user_id=user.id,
+        activity_id=request.activity_id,
+        start_index=request.start_index,
+        end_index=request.end_index,
         name=request.name,
-        type=segment_type,
-        status="approved",  # User-created segments are auto-approved
-        climb_category=climb_category,
-        polyline=geometry.polyline,
-        start_point=WKTElement(f"POINT({start_lng} {start_lat})", srid=4326),
-        end_point=WKTElement(f"POINT({end_lng} {end_lat})", srid=4326),
-        bounds=WKTElement(
-            f"POLYGON(({geometry.bounds[1]} {geometry.bounds[0]}, "
-            f"{geometry.bounds[3]} {geometry.bounds[0]}, "
-            f"{geometry.bounds[3]} {geometry.bounds[2]}, "
-            f"{geometry.bounds[1]} {geometry.bounds[2]}, "
-            f"{geometry.bounds[1]} {geometry.bounds[0]}))",
-            srid=4326,
-        ),
-        direction_bearing=geometry.direction_bearing,
-        distance_m=geometry.distance_m,
-        elevation_gain_m=geometry.elevation_gain_m,
-        avg_grade_pct=geometry.avg_grade_pct,
-        max_grade_pct=geometry.max_grade_pct,
-        gradient_segments=geometry.gradient_segments,
-        created_by=user.id,
-        source_activity_id=request.activity_id,
     )
 
-    saved = await segment_repo.save(segment)
-    return segment_detail(saved)
+    if not result.success:
+        if result.duplicate_segment_id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "message": result.error,
+                    "duplicate_segment_id": str(result.duplicate_segment_id),
+                },
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=result.error,
+        )
+
+    return segment_detail(result.segment)
 
 
 @router.patch("/{segment_id}")

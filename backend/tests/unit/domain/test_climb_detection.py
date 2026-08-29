@@ -4,12 +4,11 @@ import pytest
 
 from trainingdash.domain.climb_detection import (
     DetectedClimb,
-    GradientSegment,
     categorize_climb,
     compute_gradient_segments,
     detect_climbs,
-    smooth_elevation_simple,
 )
+from trainingdash.domain.segment_geometry import GradientSegment
 
 
 class TestCategorizeClimb:
@@ -57,42 +56,6 @@ class TestCategorizeClimb:
         assert categorize_climb(7999, 10.0) == "1"  # 79,990
         # Just at HC threshold
         assert categorize_climb(8000, 10.0) == "hc"  # 80,000
-
-
-class TestSmoothElevationSimple:
-    """Tests for simple moving average elevation smoothing."""
-
-    def test_smooth_constant_elevation(self):
-        """Constant elevation should remain constant."""
-        altitudes = [100.0, 100.0, 100.0, 100.0, 100.0]
-        result = smooth_elevation_simple(altitudes)
-        assert all(v == 100.0 for v in result)
-
-    def test_smooth_linear_increase(self):
-        """Linear increase should be preserved (smoothed)."""
-        altitudes = [100.0, 110.0, 120.0, 130.0, 140.0, 150.0, 160.0]
-        result = smooth_elevation_simple(altitudes, window=3)
-        # Middle values should be averaged
-        assert abs(result[3] - 130.0) < 0.1
-
-    def test_smooth_removes_noise(self):
-        """Smoothing should reduce noise."""
-        # Linear trend with noise
-        altitudes = [100.0, 115.0, 118.0, 128.0, 142.0]
-        result = smooth_elevation_simple(altitudes, window=3)
-        # Result should be smoother than input
-        assert len(result) == len(altitudes)
-
-    def test_smooth_short_array(self):
-        """Short array (less than window) should return copy."""
-        altitudes = [100.0, 110.0]
-        result = smooth_elevation_simple(altitudes, window=5)
-        assert result == altitudes
-
-    def test_smooth_empty_array(self):
-        """Empty array should return empty."""
-        result = smooth_elevation_simple([])
-        assert result == []
 
 
 class TestComputeGradientSegments:
