@@ -93,15 +93,14 @@ class TestCalculatePowerTargets:
         points = [FineGrainedPoint(0, 100, -10.0)]  # 10% descent
         powers = calculate_power_targets(points, base_power_w=200, grade_power_intercept=1.10, grade_power_slope=0.035)
 
-        # -10% descent: multiplier = 1.10 + 0.035*(-10) = 0.75
-        # But clamped to min 0.50, so power = 200 * 0.75 = 150
-        assert powers[0] == pytest.approx(150, rel=0.01)
+        # -10% descent: Descent Multiplier 0.50 (default) applies (#634)
+        assert powers[0] == pytest.approx(100, rel=0.01)  # 200 * 0.50
 
     def test_steep_descent_clamps_to_minimum(self):
         points = [FineGrainedPoint(0, 100, -20.0)]  # 20% descent
         powers = calculate_power_targets(points, base_power_w=200, grade_power_intercept=1.10, grade_power_slope=0.035)
 
-        # -20%: multiplier = 1.10 - 0.7 = 0.40, clamped to 0.50
+        # -20%: Descent Multiplier 0.50 (default) applies, same as -10%
         assert powers[0] == pytest.approx(100, rel=0.01)  # 200 * 0.50
 
     def test_steep_climb_clamps_to_maximum(self):
@@ -428,3 +427,51 @@ class TestResampleWithGPS:
         # Should have curvature values (Menger, 1/m)
         has_curvature = any(p.curvature_1_m is not None and p.curvature_1_m > 0 for p in result)
         assert has_curvature or len(result) < 3  # Either has curvature or too few points
+
+
+class TestDescentMultiplierApplication:
+    """#634: the Descent Multiplier replaces the grade-power formula on
+    descents. A calibrated coaster no longer gets '255W downhill' plans."""
+
+    def test_descent_uses_multiplier_not_formula(self):
+        """On a -10% point with mult 0.2, target = base × 0.2 — NOT the
+        formula value 1.10 + 0.035×(-10) = 0.75."""
+        points = [FineGrainedPoint(0, 100, -10.0)]
+        powers = calculate_power_targets(
+            points, base_power_w=200, grade_power_intercept=1.10, grade_power_slope=0.035, descent_power_multiplier=0.2
+        )
+        assert powers[0] == pytest.approx(40, rel=0.01)  # 200 × 0.2
+
+    def test_default_multiplier_0_5_on_descents(self):
+        """Uncalibrated riders: mult 0.50 (the documented default) —
+        descents plan at half base power, not the old 0.75 formula value."""
+        points = [FineGrainedPoint(0, 100, -10.0)]
+        powers = calculate_power_targets(points, base_power_w=200, grade_power_intercept=1.10, grade_power_slope=0.035)
+        assert powers[0] == pytest.approx(100, rel=0.01)  # 200 × 0.50
+
+    def test_shallow_descent_threshold_minus_3(self):
+        """Descent Multiplier applies at grade < -3% (same threshold as
+        calibration's descent extractor); -3.0 itself is still formula."""
+        points_desc = [FineGrainedPoint(0, 100, -3.5)]
+        points_edge = [FineGrainedPoint(0, 100, -3.0)]
+        kw = {"base_power_w": 200, "descent_power_multiplier": 0.2}
+        p_desc = calculate_power_targets(points_desc, **kw)
+        p_edge = calculate_power_targets(points_edge, **kw)
+        assert p_desc[0] == pytest.approx(40, rel=0.01)  # multiplier applies
+        assert p_edge[0] == pytest.approx(200 * (1.10 + 0.035 * -3.0), rel=0.01)  # formula
+
+    def test_flat_and_climb_untouched(self):
+        """Non-descent points keep the grade-power formula."""
+        points = [
+            FineGrainedPoint(0, 100, 0.0),
+            FineGrainedPoint(25, 105, 8.0),
+        ]
+        powers = calculate_power_targets(points, base_power_w=200, descent_power_multiplier=0.2)
+        assert powers[0] == pytest.approx(220, rel=0.01)  # 1.10 × 200
+        assert powers[1] == pytest.approx(200 * (1.10 + 0.035 * 8.0), rel=0.01)
+
+    def test_power_cap_still_applies_on_descents(self):
+        """Cap bounds descent targets too (with a huge multiplier)."""
+        points = [FineGrainedPoint(0, 100, -10.0)]
+        powers = calculate_power_targets(points, base_power_w=200, descent_power_multiplier=0.8, power_cap_w=120)
+        assert powers[0] == pytest.approx(120, rel=0.01)

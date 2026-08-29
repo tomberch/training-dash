@@ -171,6 +171,11 @@ GRADE_POWER_SLOPE = 0.035  # Additional multiplier per 1% grade (calibrated from
 # - Descents: Riders coast (actual ~0.1-0.3), but we set minimum 0.50 for modeling
 # - Steep climbs: Power caps around 1.50× avg in practice
 MIN_POWER_MULTIPLIER = 0.50  # Minimum for descents (coasting with some pedaling)
+
+# Descent threshold (ADR 0005 #634): grades below this are "descents" for
+# the Descent Multiplier — same threshold as the calibration extractor's
+# descent sampling (pacing_calibration.extract_descent_samples).
+DESCENT_GRADE_PCT = -3.0
 MAX_POWER_MULTIPLIER = 1.50  # Maximum for very steep climbs (realistic ceiling)
 
 # Default rider parameters used when none are provided
@@ -271,6 +276,20 @@ def effective_a_lat(
     if coefficients is not None and coefficients.activity_count > 0:
         return coefficients.curvature_speed_coefficient
     return a_lat_from_aggressiveness(descent_aggressiveness)
+
+
+def effective_descent_power_multiplier(coefficients: "PacingCoefficients | None") -> float:
+    """Resolve the Descent Multiplier for a plan (ADR 0005 #634).
+
+    The fitted value wins when the rider is calibrated (activity_count
+    > 0; rows invalidated by migration 028 have activity_count = 0 and
+    fall back cleanly). Uncalibrated riders get the documented default
+    0.50 — half base power on descents, until calibration learns their
+    real behavior (coasters ~0.0-0.3, descent-pedalers ~0.5-0.8).
+    """
+    if coefficients is not None and coefficients.activity_count > 0:
+        return coefficients.descent_power_multiplier
+    return DEFAULT_COEFFICIENTS.descent_power_multiplier
 
 
 def calculate_curvature_menger(

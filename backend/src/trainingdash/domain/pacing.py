@@ -20,6 +20,7 @@ from trainingdash.domain.pacing_model import (
     DEFAULT_RIDER_CDA,
     DEFAULT_RIDER_CRR,
     DEFAULT_RIDER_MASS_KG,
+    DESCENT_GRADE_PCT,
     MAX_POWER_MULTIPLIER,
     MIN_POWER_MULTIPLIER,
     RIDE_TYPE_PRESETS,
@@ -28,6 +29,7 @@ from trainingdash.domain.pacing_model import (
     RideTypePreset,
     calculate_intensity_factor,
     calculate_normalized_power,
+    effective_descent_power_multiplier,
     estimate_tss,
     get_grade_power_multiplier,
     resolve_ride_type_params,
@@ -399,8 +401,12 @@ def generate_terrain_adapted_pacing(
     targets: list[PacingTarget] = []
 
     for idx, segment in enumerate(segments):
-        # Calculate power multiplier based on grade using personalized coefficients
-        multiplier = get_grade_power_multiplier(segment.avg_grade_pct, coefficients)
+        # Descent Multiplier on descents, shared grade-power formula elsewhere
+        # (ADR 0005 #634 — the fine-grained path applies it per point)
+        if segment.avg_grade_pct < DESCENT_GRADE_PCT:
+            multiplier = effective_descent_power_multiplier(coefficients)
+        else:
+            multiplier = get_grade_power_multiplier(segment.avg_grade_pct, coefficients)
 
         # Calculate target power, capped at power_cap
         target_power = base_power * multiplier
@@ -546,6 +552,7 @@ def _generate_fine_grained_adapted_pacing(
         max_descent_speed_mps=effective_max_descent_speed,
         power_cap_ftp_pct=power_cap_ftp_pct,
         target_spacing_m=25.0,
+        descent_power_multiplier=effective_descent_power_multiplier(coefficients),
         ride_type=ride_type,
         descent_aggressiveness=descent_aggressiveness,
         wind_speed_mps=wind_speed_mps,

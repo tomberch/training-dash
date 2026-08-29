@@ -173,13 +173,18 @@ async def calibrate_coefficients(
     stats = await use_case.execute(current_user.id, bike_id)
 
     if stats.coefficients_updated:
+        # Partial updates (#634: climb gate rejected, descent learned) carry
+        # their own message; only full calibrations get the default text.
+        message = stats.message or (
+            f"Calibrated from {stats.activities_processed} activities with {stats.climb_samples} climb samples."
+        )
         return CalibrationResponse(
             success=True,
             activities_processed=stats.activities_processed,
             climb_samples=stats.climb_samples,
             descent_samples=stats.descent_samples,
             coefficients_updated=True,
-            message=f"Calibrated from {stats.activities_processed} activities with {stats.climb_samples} climb samples.",
+            message=message,
         )
     else:
         return CalibrationResponse(

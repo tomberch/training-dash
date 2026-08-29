@@ -43,6 +43,10 @@ MIN_ACTIVITIES = 3  # Minimum activities to calibrate
 # (the reference data produced R²=0.009 → "pedal hard downhill" plans).
 MIN_CLIMB_R_SQUARED = 0.25
 
+# Descent multiplier bounds (ADR 0005 #634): riders coast descents (~0.0-0.3)
+# or pedal them (~0.5-0.8); a fitted value outside this band means bad data.
+MAX_DESCENT_POWER_MULT = 0.8
+
 
 @dataclass
 class GradePowerSample:
@@ -277,7 +281,7 @@ def extract_descent_samples(
 
         # Power multiplier
         power = (prev.power_w + curr.power_w) / 2 if curr.power_w and prev.power_w else 0
-        power_mult = power / avg_power if avg_power > 0 and power > 0 else 0.5
+        power_mult = power / avg_power if avg_power > 0 and power > 0 else 0.0
 
         # Curvature from the evenly spaced triple
         curvature = _calculate_curvature(prev2.lat, prev2.lon, curv_mid.lat, curv_mid.lon, curr.lat, curr.lon)
@@ -398,12 +402,35 @@ def fit_descent_coefficients(
     # Confidence based on sample count
     confidence = min(1.0, len(samples) / 1000)
 
-    # Clamp to reasonable bounds
+    # Clamp to reasonable bounds. The descent power multiplier floor is 0.0:
+    # coasting riders hold ~0.0-0.1 of base power on descents (ADR 0005
+    # #634), and clamping them to 0.2 would plan soft-pedaling they don't do.
     max_descent_speed = max(10.0, min(25.0, max_descent_speed))
-    power_mult = max(0.2, min(0.8, power_mult))
+    power_mult = max(0.0, min(MAX_DESCENT_POWER_MULT, power_mult))
     curv_coef = max(1.0, min(8.0, curv_coef))
 
     return max_descent_speed, power_mult, curv_coef, confidence
+
+
+def fit_descent_coefficients_or_none(
+    samples: list[DescentSample],
+) -> tuple[float, float, float, float] | None:
+    """
+    Fit descent coefficients, returning None when the data can't support a fit.
+
+    The descent-side quality gate (ADR 0005 #634): fewer than
+    MIN_DESCENT_SAMPLES samples → None (uncalibrated). Unlike the climb
+    gate, no R² exists here — a time-weighted mean of held power needs
+    volume, not correlation. The caller decides what "None" means for the
+    stored row (use case keeps prior values / falls back to defaults).
+
+    Returns:
+        Tuple of (max_descent_speed, power_multiplier, a_lat, confidence)
+        or None when the sample volume is below the floor.
+    """
+    if len(samples) < MIN_DESCENT_SAMPLES:
+        return None
+    return fit_descent_coefficients(samples)
 
 
 def calibrate_coefficients(

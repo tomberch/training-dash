@@ -776,3 +776,85 @@ class TestPedalingAverageExtraction:
         samples = extract_climb_samples(recs, avg_power=pedaling_average_power(recs))
         assert samples, "climb samples should exist"
         assert all(s.power_mult == pytest.approx(1.0, rel=0.1) for s in samples)
+
+
+class TestDescentMultiplierGate:
+    """#634: the descent multiplier is fitted with a quality gate, decoupled
+    from the climb fit. A rider can coast descents on every ride (perfectly
+    learnable) while their grade-power relationship is noise (unlearnable)."""
+
+    def test_descent_fit_insufficient_samples_signals_none(self):
+        """Too few descent samples → fit returns None (uncalibrated),
+        not a silent default that would masquerade as 'fitted 0.5'."""
+        from trainingdash.domain.pacing_calibration import (
+            MIN_DESCENT_SAMPLES,
+            DescentSample,
+            fit_descent_coefficients_or_none,
+        )
+
+        samples = [
+            DescentSample(grade_pct=-5.0, speed_mps=12.0, power_mult=0.1, curvature=0.008, time_weight=5.0)
+            for _ in range(MIN_DESCENT_SAMPLES - 1)
+        ]
+        assert fit_descent_coefficients_or_none(samples) is None
+
+    def test_descent_fit_recovers_coasting_rider(self):
+        """A full coaster (power_mult ~0.1 everywhere) fits ~0.1 — the
+        0.2 floor clamps soft-pedalers, not coasters... a rider AT 0.1
+        must come back at 0.1 (below the old 0.2 clamp)."""
+        from trainingdash.domain.pacing_calibration import (
+            MIN_DESCENT_SAMPLES,
+            DescentSample,
+            fit_descent_coefficients_or_none,
+        )
+
+        samples = [
+            DescentSample(grade_pct=-6.0, speed_mps=13.0, power_mult=0.1, curvature=0.005, time_weight=5.0)
+            for _ in range(MIN_DESCENT_SAMPLES + 100)
+        ]
+        result = fit_descent_coefficients_or_none(samples)
+        assert result is not None
+        _, power_mult, _, _ = result
+        assert power_mult == pytest.approx(0.1, abs=0.05)
+
+    def test_descent_fit_unrealistic_multiplier_clamped(self):
+        """Garbage samples (mult > 1.4, pedaling harder downhill than at
+        base) must not store; realistic band is [0.0, 0.8]."""
+        from trainingdash.domain.pacing_calibration import (
+            MIN_DESCENT_SAMPLES,
+            DescentSample,
+            fit_descent_coefficients_or_none,
+        )
+
+        samples = [
+            DescentSample(grade_pct=-6.0, speed_mps=13.0, power_mult=1.5, curvature=0.005, time_weight=5.0)
+            for _ in range(MIN_DESCENT_SAMPLES + 100)
+        ]
+        result = fit_descent_coefficients_or_none(samples)
+        assert result is not None
+        _, power_mult, _, _ = result
+        assert 0.0 <= power_mult <= 0.8
+
+    def test_calibrate_coefficients_rejects_poisoned_climb_even_with_good_descent(self):
+        """Climb gate fails → the full-row fit (calibrate_coefficients)
+        stays None; the use case is the sole decoupling point between the
+        climb row and the fitted descent parts (see use-case tests)."""
+        import random
+
+        from trainingdash.domain.pacing_calibration import (
+            DescentSample,
+            GradePowerSample,
+            calibrate_coefficients,
+        )
+
+        rng = random.Random(3)
+        climb = [
+            GradePowerSample(grade_pct=rng.uniform(1, 15), power_mult=rng.uniform(0.5, 2.5), time_weight=5.0)
+            for _ in range(600)
+        ]
+        descent = [
+            DescentSample(grade_pct=-5.0, speed_mps=12.0, power_mult=0.1, curvature=0.008, time_weight=5.0)
+            for _ in range(400)
+        ]
+        # climb gate fails → no full-row calibration
+        assert calibrate_coefficients(climb, descent, activity_count=5) is None

@@ -8,6 +8,7 @@ import trainingdash.use_cases.calibrate_pacing as uc_mod
 from tests.fakes.pacing_coefficients_repo import FakePacingCoefficientsRepo
 from trainingdash.domain.pacing_calibration import (
     MIN_CLIMB_SAMPLES,
+    MIN_DESCENT_SAMPLES,
     DescentSample,
     GradePowerSample,
 )
@@ -92,12 +93,14 @@ async def test_quality_gate_rejection_keeps_coefficients_and_reports(monkeypatch
     monkeypatch.setattr(
         uc_mod, "extract_climb_samples", lambda records, avg_power: _noisy_climb_samples(MIN_CLIMB_SAMPLES + 50)
     )
+    # Descent volume below MIN_DESCENT_SAMPLES so the partial-store path
+    # (#634) doesn't kick in — this test pins "nothing at all is learnable".
     monkeypatch.setattr(
         uc_mod,
         "extract_descent_samples",
         lambda records, avg_power: [
             DescentSample(grade_pct=-5.0, speed_mps=12.0, power_mult=0.4, curvature=0.008, time_weight=5.0)
-            for _ in range(400)
+            for _ in range(50)
         ],
     )
 
@@ -133,3 +136,91 @@ async def test_good_fit_still_stored(monkeypatch, fake_repo):
     assert stored is not None
     assert float(stored.grade_power_intercept) == pytest.approx(1.0, abs=0.2)
     assert float(stored.grade_power_slope) == pytest.approx(0.04, rel=0.3)
+
+
+@pytest.mark.asyncio
+async def test_descent_fit_survives_climb_gate_rejection(monkeypatch, fake_repo):
+    """#634: noisy climb fit (gate rejects) + clean descent data → descent
+    coefficients stored; climb coefficients unchanged (prior row or defaults)."""
+    uc = _stubbed_use_case(monkeypatch, fake_repo, n_activities=5)
+    monkeypatch.setattr(uc_mod, "pedaling_average_power", lambda records: 200.0)
+
+    # Climb: garbage (R² ≈ 0) → gate must reject
+    monkeypatch.setattr(
+        uc_mod, "extract_climb_samples", lambda records, avg_power: _noisy_climb_samples(MIN_CLIMB_SAMPLES + 50)
+    )
+    # Descent: consistent coaster → fitted mult ≈ 0.1
+    monkeypatch.setattr(
+        uc_mod,
+        "extract_descent_samples",
+        lambda records, avg_power: [
+            DescentSample(grade_pct=-6.0, speed_mps=13.0, power_mult=0.1, curvature=0.005, time_weight=5.0)
+            for _ in range(MIN_DESCENT_SAMPLES + 100)
+        ],
+    )
+
+    stats = await uc.execute(user_id=3)
+
+    # The row IS stored (descent knowledge), but flagged as partial
+    assert stats.coefficients_updated is True
+    assert stats.message is not None and "climb" in stats.message.lower()
+    stored = await fake_repo.get_user_default(3)
+    assert stored is not None
+    assert float(stored.descent_power_multiplier) == pytest.approx(0.1, abs=0.05)
+    # Climb coefficients: not poisoned by the garbage fit — defaults kept
+    assert float(stored.grade_power_intercept) == pytest.approx(1.10, abs=0.01)
+    assert float(stored.grade_power_slope) == pytest.approx(0.035, abs=0.001)
+    # Stored row is not treated as climb-calibrated (engine falls back
+    # for climb formula; descent multiplier IS live)
+    assert stored.climb_sample_count == 0
+    assert stored.descent_sample_count == 5 * (MIN_DESCENT_SAMPLES + 100)
+
+
+@pytest.mark.asyncio
+async def test_descent_insufficient_data_no_partial_store(monkeypatch, fake_repo):
+    """#634: climb gate fails AND descent below sample floor → nothing stored."""
+    uc = _stubbed_use_case(monkeypatch, fake_repo, n_activities=5)
+    monkeypatch.setattr(uc_mod, "pedaling_average_power", lambda records: 200.0)
+    monkeypatch.setattr(
+        uc_mod, "extract_climb_samples", lambda records, avg_power: _noisy_climb_samples(MIN_CLIMB_SAMPLES + 50)
+    )
+    monkeypatch.setattr(
+        uc_mod,
+        "extract_descent_samples",
+        lambda records, avg_power: [
+            DescentSample(grade_pct=-6.0, speed_mps=13.0, power_mult=0.1, curvature=0.005, time_weight=5.0)
+            for _ in range(50)  # below MIN_DESCENT_SAMPLES
+        ],
+    )
+
+    stats = await uc.execute(user_id=3)
+    assert stats.coefficients_updated is False
+    assert await fake_repo.list_for_user(3) == []
+
+
+@pytest.mark.asyncio
+async def test_bike_calibration_writes_bike_row(monkeypatch, fake_repo):
+    """#634 (pre-existing bug): execute(bike_id=N) must write the bike-N
+    row, not the user-default row."""
+    uc = _stubbed_use_case(monkeypatch, fake_repo, n_activities=5)
+    monkeypatch.setattr(uc_mod, "pedaling_average_power", lambda records: 200.0)
+    monkeypatch.setattr(
+        uc_mod, "extract_climb_samples", lambda records, avg_power: _decent_samples(MIN_CLIMB_SAMPLES * 4)
+    )
+    monkeypatch.setattr(
+        uc_mod,
+        "extract_descent_samples",
+        lambda records, avg_power: [
+            DescentSample(grade_pct=-6.0, speed_mps=13.0, power_mult=0.2, curvature=0.005, time_weight=5.0)
+            for _ in range(MIN_DESCENT_SAMPLES + 50)
+        ],
+    )
+
+    stats = await uc.execute(user_id=3, bike_id=7)
+
+    assert stats.coefficients_updated is True
+    bike_row = await fake_repo.get_for_bike(3, 7)
+    user_row = await fake_repo.get_user_default(3)
+    assert bike_row is not None, "bike fit must land on the bike row"
+    assert float(bike_row.descent_power_multiplier) == pytest.approx(0.2, abs=0.05)
+    assert user_row is None, "user-default row must not be touched by a bike calibration"

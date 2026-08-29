@@ -33,6 +33,7 @@ from trainingdash.domain.pacing_model import (
     DEFAULT_RIDER_CDA,
     DEFAULT_RIDER_CRR,
     DEFAULT_RIDER_MASS_KG,
+    DESCENT_GRADE_PCT,
     PacingCoefficients,
     calculate_curvature_menger,
     calculate_normalized_power,
@@ -268,6 +269,7 @@ def calculate_power_targets(
     grade_power_intercept: float = 1.10,
     grade_power_slope: float = 0.035,
     power_cap_w: float | None = None,
+    descent_power_multiplier: float = 0.50,
 ) -> list[float]:
     """
     Calculate terrain-adapted power targets at each point.
@@ -279,12 +281,19 @@ def calculate_power_targets(
     This captures natural riding behavior where riders push harder
     on climbs (low aero drag, efficient) and ease off on descents.
 
+    On descents (grade < -3%, the same threshold the calibration
+    extractor uses), the formula is bypassed: the target is
+    base × descent_power_multiplier — the rider's learned descent
+    behavior (ADR 0005 #634). Uncalibrated riders default to 0.50.
+
     Args:
         points: Fine-grained elevation points
         base_power_w: Base power (FTP × target_intensity)
         grade_power_intercept: Base multiplier at 0% grade (default 1.10)
         grade_power_slope: Additional multiplier per 1% grade (default 0.035)
         power_cap_w: Maximum power (e.g., FTP × 1.05). None = no cap.
+        descent_power_multiplier: Fraction of base power targeted on
+            descents (learned per rider; 0.50 default).
 
     Returns:
         List of power targets in watts, one per point
@@ -298,8 +307,12 @@ def calculate_power_targets(
     powers: list[float] = []
 
     for point in points:
-        # Calculate power multiplier based on grade (shared formula)
-        multiplier = get_grade_power_multiplier(point.grade_pct, coefficients)
+        if point.grade_pct < DESCENT_GRADE_PCT:
+            # Descent: learned rider behavior replaces the formula (ADR 0005 #634)
+            multiplier = descent_power_multiplier
+        else:
+            # Calculate power multiplier based on grade (shared formula)
+            multiplier = get_grade_power_multiplier(point.grade_pct, coefficients)
 
         # Apply power cap if specified
         power = base_power_w * multiplier
@@ -543,6 +556,7 @@ def generate_fine_grained_plan(
     max_descent_speed_mps: float = 18.0,
     power_cap_ftp_pct: float = 1.05,
     target_spacing_m: float = 25.0,
+    descent_power_multiplier: float = 0.50,
     ride_type: str = "training",
     descent_aggressiveness: int = 70,
     wind_speed_mps: float | None = None,
@@ -612,6 +626,7 @@ def generate_fine_grained_plan(
         grade_power_intercept=grade_power_intercept,
         grade_power_slope=grade_power_slope,
         power_cap_w=power_cap,
+        descent_power_multiplier=descent_power_multiplier,
     )
 
     # Step 3: Calculate speeds and times (with cornering-speed limit)

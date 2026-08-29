@@ -22,6 +22,7 @@ from trainingdash.domain.pacing_calibration import (
     calibrate_coefficients,
     extract_climb_samples,
     extract_descent_samples,
+    fit_descent_coefficients_or_none,
     pedaling_average_power,
 )
 from trainingdash.domain.pacing_model import PacingCoefficients
@@ -117,60 +118,101 @@ class CalibratePacing:
             len(activities),
         )
 
-        if result is None:
-            # Distinguish gate rejection from insufficient data (ADR 0005)
-            if (len(all_climb_samples) >= MIN_CLIMB_SAMPLES or len(all_descent_samples) >= MIN_DESCENT_SAMPLES) and len(
-                activities
-            ) >= MIN_ACTIVITIES:
-                message = (
-                    f"Fit quality below gate (R² < {MIN_CLIMB_R_SQUARED:.2f}): "
-                    "grade-power relationship too noisy to trust. Keeping previously "
-                    "stored coefficients. More/better ride data may help."
-                )
-            else:
-                message = None  # plain insufficient-data case
+        if result is not None:
+            # Full fit (climb gate passed): store the complete row
+            await self._pacing_repo.upsert(
+                user_id,
+                PacingCoefficients(
+                    grade_power_intercept=result.grade_power_intercept,
+                    grade_power_slope=result.grade_power_slope,
+                    max_descent_speed_mps=result.max_descent_speed_mps,
+                    descent_power_multiplier=result.descent_power_multiplier,
+                    curvature_speed_coefficient=result.curvature_speed_coefficient,
+                    climb_sample_count=result.climb_sample_count,
+                    descent_sample_count=result.descent_sample_count,
+                    activity_count=result.activity_count,
+                    bike_id=bike_id,
+                ),
+            )
+
             logger.info(
-                f"Calibration not stored: climb={len(all_climb_samples)}, "
-                f"descent={len(all_descent_samples)}: {message or 'insufficient data'}"
+                f"Calibrated pacing coefficients for user={user_id} bike={bike_id}: "
+                f"intercept={result.grade_power_intercept:.3f}, "
+                f"slope={result.grade_power_slope:.4f}, "
+                f"max_descent={result.max_descent_speed_mps:.1f}m/s, "
+                f"R²={result.climb_r_squared:.3f}"
+            )
+
+            return CalibrationStats(
+                activities_processed=len(activities),
+                climb_samples=len(all_climb_samples),
+                descent_samples=len(all_descent_samples),
+                coefficients_updated=True,
+                result=result,
+            )
+
+        # Full fit rejected. Decouple the descent fit (ADR 0005 #634):
+        # the climb gate says the grade-power relationship is noise, but the
+        # rider's descent behavior can still be perfectly learnable — a
+        # coaster's held power on descents is volume, not correlation.
+        descent_fit = fit_descent_coefficients_or_none(all_descent_samples)
+        if descent_fit is not None:
+            max_speed, power_mult, curv_coef, _ = descent_fit
+            await self._pacing_repo.upsert(
+                user_id,
+                PacingCoefficients(
+                    # Climb coefficients left at defaults: the climb gate
+                    # rejected the fit, so defaults are the honest state.
+                    # climb_sample_count stays 0 → the engine treats the row
+                    # as climb-uncalibrated while the descent fields are live.
+                    max_descent_speed_mps=max_speed,
+                    descent_power_multiplier=power_mult,
+                    curvature_speed_coefficient=curv_coef,
+                    descent_sample_count=len(all_descent_samples),
+                    activity_count=len(activities),
+                    bike_id=bike_id,
+                ),
+            )
+            message = (
+                f"Climb fit rejected (R² < {MIN_CLIMB_R_SQUARED:.2f}) — grade-power "
+                "defaults kept. Descent behavior learned and stored."
+            )
+            logger.info(
+                f"Partial calibration for user={user_id} bike={bike_id}: "
+                f"descent_power_multiplier={power_mult:.2f} from "
+                f"{len(all_descent_samples)} samples; climb fit rejected"
             )
             return CalibrationStats(
                 activities_processed=len(activities),
                 climb_samples=len(all_climb_samples),
                 descent_samples=len(all_descent_samples),
-                coefficients_updated=False,
+                coefficients_updated=True,
                 result=None,
                 message=message,
             )
 
-        # Save to database
-        await self._pacing_repo.upsert(
-            user_id,
-            PacingCoefficients(
-                grade_power_intercept=result.grade_power_intercept,
-                grade_power_slope=result.grade_power_slope,
-                max_descent_speed_mps=result.max_descent_speed_mps,
-                descent_power_multiplier=result.descent_power_multiplier,
-                curvature_speed_coefficient=result.curvature_speed_coefficient,
-                climb_sample_count=result.climb_sample_count,
-                descent_sample_count=result.descent_sample_count,
-                activity_count=result.activity_count,
-            ),
-        )
-
+        # Nothing fittable: distinguish gate rejection from insufficient data
+        if (len(all_climb_samples) >= MIN_CLIMB_SAMPLES or len(all_descent_samples) >= MIN_DESCENT_SAMPLES) and len(
+            activities
+        ) >= MIN_ACTIVITIES:
+            message = (
+                f"Fit quality below gate (R² < {MIN_CLIMB_R_SQUARED:.2f}): "
+                "grade-power relationship too noisy to trust. Keeping previously "
+                "stored coefficients. More/better ride data may help."
+            )
+        else:
+            message = None  # plain insufficient-data case
         logger.info(
-            f"Calibrated pacing coefficients for user={user_id} bike={bike_id}: "
-            f"intercept={result.grade_power_intercept:.3f}, "
-            f"slope={result.grade_power_slope:.4f}, "
-            f"max_descent={result.max_descent_speed_mps:.1f}m/s, "
-            f"R²={result.climb_r_squared:.3f}"
+            f"Calibration not stored: climb={len(all_climb_samples)}, "
+            f"descent={len(all_descent_samples)}: {message or 'insufficient data'}"
         )
-
         return CalibrationStats(
             activities_processed=len(activities),
             climb_samples=len(all_climb_samples),
             descent_samples=len(all_descent_samples),
-            coefficients_updated=True,
-            result=result,
+            coefficients_updated=False,
+            result=None,
+            message=message,
         )
 
     async def execute_for_all_bikes(
