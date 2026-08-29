@@ -68,6 +68,7 @@ const mockPlan: RacePlanDetail = {
     cda: 0.32,
     crr: 0.004,
   },
+  historical_np_stats: null,
 };
 
 const mockCourse: CourseDetail = {

@@ -125,6 +125,7 @@ const mockPlan: RacePlanDetail = {
   optimization_method: "heuristic",
   sustainability: "green",
   created_at: "2024-01-15T10:00:00Z",
+  historical_np_stats: null,
 };
 
 function renderPlanDetail(planId: string = "1") {
@@ -243,6 +244,60 @@ describe("PlanDetail", () => {
         // VI = NP / Avg = 235 / 220 = 1.07
         expect(screen.getByText("VI 1.07")).toBeInTheDocument();
       });
+    });
+  });
+
+  describe("Historical NP Stats", () => {
+    it("displays historical NP context when stats available", async () => {
+      const planWithHistory = {
+        ...mockPlan,
+        historical_np_stats: {
+          ride_count: 5,
+          avg_np_w: 239,
+          min_np_w: 215,
+          max_np_w: 260,
+          avg_power_w: 205,
+        },
+      };
+      mockFetchRacePlan.mockResolvedValue(planWithHistory);
+
+      renderPlanDetail();
+
+      await waitFor(() => {
+        expect(screen.getByText(/Your rides: 239W avg/)).toBeInTheDocument();
+        expect(screen.getByText(/5 rides/)).toBeInTheDocument();
+      });
+    });
+
+    it("shows singular 'ride' for single historical ride", async () => {
+      const planWithOneRide = {
+        ...mockPlan,
+        historical_np_stats: {
+          ride_count: 1,
+          avg_np_w: 230,
+          min_np_w: 230,
+          max_np_w: 230,
+          avg_power_w: 200,
+        },
+      };
+      mockFetchRacePlan.mockResolvedValue(planWithOneRide);
+
+      renderPlanDetail();
+
+      await waitFor(() => {
+        expect(screen.getByText(/Your rides: 230W avg/)).toBeInTheDocument();
+        expect(screen.getByText(/1 ride\)/)).toBeInTheDocument();
+      });
+    });
+
+    it("does not show historical NP when stats null", async () => {
+      renderPlanDetail();
+
+      await waitFor(() => {
+        expect(screen.getByText("Test Race Plan")).toBeInTheDocument();
+      });
+
+      expect(screen.queryByText(/Your rides:/)).not.toBeInTheDocument();
     });
   });
 

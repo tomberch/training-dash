@@ -621,6 +621,11 @@ export function PlanDetail() {
                 VI {(plan.normalized_power_w / plan.avg_power_w).toFixed(2)}
               </div>
             )}
+            {plan.historical_np_stats && (
+              <div className="text-caption mt-1 text-muted-foreground">
+                Your rides: {Math.round(plan.historical_np_stats.avg_np_w)}W avg ({plan.historical_np_stats.ride_count} {plan.historical_np_stats.ride_count === 1 ? 'ride' : 'rides'})
+              </div>
+            )}
           </div>
           <StatCard
             label="IF"

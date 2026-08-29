@@ -340,6 +340,14 @@ export interface RacePlanListItem {
   created_at: string;
 }
 
+export interface HistoricalNpStats {
+  ride_count: number;
+  avg_np_w: number;
+  min_np_w: number;
+  max_np_w: number;
+  avg_power_w: number;
+}
+
 export interface RacePlanDetail {
   id: number;
   course_id: number;
@@ -362,6 +370,8 @@ export interface RacePlanDetail {
   optimization_method: string | null;
   sustainability: string | null;
   created_at: string;
+  // Historical NP context (#643)
+  historical_np_stats: HistoricalNpStats | null;
 }
 
 export interface GeneratePlanRequest {

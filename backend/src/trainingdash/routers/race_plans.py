@@ -6,7 +6,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
-from trainingdash.auth import CurrentUser
+from trainingdash.auth import CurrentUser, DbSession
 from trainingdash.dependencies import (
     ActivityRepoD,
     BikeRepoD,
@@ -17,6 +17,7 @@ from trainingdash.dependencies import (
     UserRepoD,
 )
 from trainingdash.domain.pacing import RideTypeParams, RideTypePreset
+from trainingdash.domain.historical_np import get_course_historical_np
 from trainingdash.integrations.weather import (
     fetch_race_day_forecast,
     get_calm_conditions,
@@ -177,6 +178,16 @@ class WbalPredictionSchema(BaseModel):
     min_wbal_distance_m: float | None
 
 
+class HistoricalNpStatsSchema(BaseModel):
+    """NP statistics from historical rides on the same/similar course."""
+
+    ride_count: int
+    avg_np_w: float
+    min_np_w: float
+    max_np_w: float
+    avg_power_w: float
+
+
 class ComparisonSchema(BaseModel):
     """Time comparison between pacing strategies."""
 
@@ -271,6 +282,8 @@ class RacePlanDetailResponse(RacePlanResponse):
     wind_override_speed_mps: float | None = None
     wind_override_direction_deg: float | None = None
     max_descent_speed_mps: float | None = None
+    # Historical NP context (#643)
+    historical_np_stats: HistoricalNpStatsSchema | None = None
 
 
 class PlanUpdateSchema(BaseModel):
@@ -472,6 +485,7 @@ async def get_plan(
     plan_id: int,
     current_user: CurrentUser,
     plan_repo: RacePlanRepoD,
+    db: DbSession,
 ):
     """Get full plan details including segment targets."""
     plan = await plan_repo.get_by_id(plan_id, current_user.id)
@@ -494,6 +508,18 @@ async def get_plan(
     if plan.target_date and plan.conditions_fetched_at:
         age = datetime.now(UTC) - plan.conditions_fetched_at
         forecast_stale = age.total_seconds() > 86400  # 24 hours
+
+    # Fetch historical NP stats for this course (#643)
+    historical_stats = await get_course_historical_np(db, current_user.id, plan.course_id)
+    historical_np_stats = None
+    if historical_stats:
+        historical_np_stats = HistoricalNpStatsSchema(
+            ride_count=historical_stats.ride_count,
+            avg_np_w=historical_stats.avg_np_w,
+            min_np_w=historical_stats.min_np_w,
+            max_np_w=historical_stats.max_np_w,
+            avg_power_w=historical_stats.avg_power_w,
+        )
 
     return RacePlanDetailResponse(
         id=plan.id,
@@ -535,6 +561,8 @@ async def get_plan(
         wind_override_speed_mps=plan.wind_override_speed_mps,
         wind_override_direction_deg=plan.wind_override_direction_deg,
         max_descent_speed_mps=plan.max_descent_speed_mps,
+        # Historical NP context (#643)
+        historical_np_stats=historical_np_stats,
     )
 
 
