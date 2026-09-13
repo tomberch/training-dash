@@ -73,7 +73,7 @@ class CoefficientsSource(StrEnum):
 class BarStatus(StrEnum):
     """Tri-state status for numeric bar criteria."""
 
-    PASS = "pass"
+    PASS = "pass"  # noqa: S105
     FAIL = "fail"
     SKIP = "skip"  # No data available
 
@@ -895,9 +895,7 @@ def print_summary(results: list[ActivityResult], behavior_baseline=None) -> None
     print("NUMERIC BAR (ADR 0004 + ADR 0005)")
     print("=" * 70)
 
-    def check_bar(
-        name: str, values: list[float], threshold: float, comparator: str = "le"
-    ) -> BarResult:
+    def check_bar(name: str, values: list[float], threshold: float, comparator: str = "le") -> BarResult:
         """Check a single bar criterion against a threshold.
 
         Args:
@@ -922,31 +920,19 @@ def print_summary(results: list[ActivityResult], behavior_baseline=None) -> None
     mountain_results = [r for r in successful if r.course_type == "mountainous" and r.pedaling_pct > 0]
     mountain_speed_errors = [r.pedaling_speed_error_pct for r in mountain_results]
 
-    bar_results.append(check_bar(
-        "ADR 0004: Mountain pedaling-speed mean < 10%",
-        mountain_speed_errors, 10.0, "lt"
-    ))
+    bar_results.append(check_bar("ADR 0004: Mountain pedaling-speed mean < 10%", mountain_speed_errors, 10.0, "lt"))
     if mountain_results:
         max_error = max(mountain_speed_errors)
         max_status = BarStatus.PASS if max_error < 25.0 else BarStatus.FAIL
-        bar_results.append(BarResult(
-            "ADR 0004: Mountain pedaling-speed max < 25%",
-            max_error, 25.0, max_status
-        ))
+        bar_results.append(BarResult("ADR 0004: Mountain pedaling-speed max < 25%", max_error, 25.0, max_status))
 
     # ADR 0005 bar: NP/VI on hilly/mountain courses (where VI > 1.1 matters)
     varied_terrain = [r for r in successful if r.course_type in ("hilly", "mountainous")]
     np_errors = [r.np_error_pct for r in varied_terrain]
     vi_errors = [r.vi_error_pct for r in varied_terrain]
 
-    bar_results.append(check_bar(
-        "ADR 0005: Hilly/mountain NP error mean ≤ 15%",
-        np_errors, 15.0, "le"
-    ))
-    bar_results.append(check_bar(
-        "ADR 0005: Hilly/mountain VI error mean ≤ 15%",
-        vi_errors, 15.0, "le"
-    ))
+    bar_results.append(check_bar("ADR 0005: Hilly/mountain NP error mean ≤ 15%", np_errors, 15.0, "le"))
+    bar_results.append(check_bar("ADR 0005: Hilly/mountain VI error mean ≤ 15%", vi_errors, 15.0, "le"))
 
     # Print bar results
     bar_passed = all(r.status != BarStatus.FAIL for r in bar_results)

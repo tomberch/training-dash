@@ -6,8 +6,6 @@ duration). Red plans are still generated and flagged — only the
 physically impossible is a hard error (the scale-to-time solver's job).
 """
 
-import pytest
-
 from trainingdash.domain.sustainability import (
     assess_sustainability,
 )
@@ -58,8 +56,12 @@ class TestSustainabilityBoundaries:
     def test_same_if_harder_when_longer(self):
         """IF 0.90 for 40 minutes is green; the same IF for 5 hours is
         yellow or worse — endurance tolerance shrinks with duration."""
-        short = assess_sustainability(intensity_factor=0.90, wbal_min_j=15000.0, w_prime_j=20000.0, ride_duration_s=2400.0)
-        long_ = assess_sustainability(intensity_factor=0.90, wbal_min_j=15000.0, w_prime_j=20000.0, ride_duration_s=18000.0)
+        short = assess_sustainability(
+            intensity_factor=0.90, wbal_min_j=15000.0, w_prime_j=20000.0, ride_duration_s=2400.0
+        )
+        long_ = assess_sustainability(
+            intensity_factor=0.90, wbal_min_j=15000.0, w_prime_j=20000.0, ride_duration_s=18000.0
+        )
         assert short.level == "green"
         assert long_.level in ("yellow", "red")
 
@@ -91,32 +93,48 @@ class TestYellowBoundariesPinned:
     def test_short_ride_yellow_boundary_if_092(self):
         """At 2.5h, IF 0.91 is green, IF 0.92 is yellow."""
         duration_2_5h = 2.5 * 3600
-        green = assess_sustainability(intensity_factor=0.91, wbal_min_j=15000.0, w_prime_j=20000.0, ride_duration_s=duration_2_5h)
-        yellow = assess_sustainability(intensity_factor=0.92, wbal_min_j=15000.0, w_prime_j=20000.0, ride_duration_s=duration_2_5h)
+        green = assess_sustainability(
+            intensity_factor=0.91, wbal_min_j=15000.0, w_prime_j=20000.0, ride_duration_s=duration_2_5h
+        )
+        yellow = assess_sustainability(
+            intensity_factor=0.92, wbal_min_j=15000.0, w_prime_j=20000.0, ride_duration_s=duration_2_5h
+        )
         assert green.level == "green"
         assert yellow.level == "yellow"
 
     def test_short_ride_red_boundary_if_105(self):
         """At 2.5h, IF 1.04 is yellow, IF 1.05 is red."""
         duration_2_5h = 2.5 * 3600
-        yellow = assess_sustainability(intensity_factor=1.04, wbal_min_j=15000.0, w_prime_j=20000.0, ride_duration_s=duration_2_5h)
-        red = assess_sustainability(intensity_factor=1.05, wbal_min_j=15000.0, w_prime_j=20000.0, ride_duration_s=duration_2_5h)
+        yellow = assess_sustainability(
+            intensity_factor=1.04, wbal_min_j=15000.0, w_prime_j=20000.0, ride_duration_s=duration_2_5h
+        )
+        red = assess_sustainability(
+            intensity_factor=1.05, wbal_min_j=15000.0, w_prime_j=20000.0, ride_duration_s=duration_2_5h
+        )
         assert yellow.level == "yellow"
         assert red.level == "red"
 
     def test_long_ride_yellow_boundary_if_080(self):
         """At 5h, IF 0.79 is green, IF 0.80 is yellow."""
         duration_5h = 5.0 * 3600
-        green = assess_sustainability(intensity_factor=0.79, wbal_min_j=15000.0, w_prime_j=20000.0, ride_duration_s=duration_5h)
-        yellow = assess_sustainability(intensity_factor=0.80, wbal_min_j=15000.0, w_prime_j=20000.0, ride_duration_s=duration_5h)
+        green = assess_sustainability(
+            intensity_factor=0.79, wbal_min_j=15000.0, w_prime_j=20000.0, ride_duration_s=duration_5h
+        )
+        yellow = assess_sustainability(
+            intensity_factor=0.80, wbal_min_j=15000.0, w_prime_j=20000.0, ride_duration_s=duration_5h
+        )
         assert green.level == "green"
         assert yellow.level == "yellow"
 
     def test_long_ride_red_boundary_if_090(self):
         """At 5h, IF 0.89 is yellow, IF 0.90 is red."""
         duration_5h = 5.0 * 3600
-        yellow = assess_sustainability(intensity_factor=0.89, wbal_min_j=15000.0, w_prime_j=20000.0, ride_duration_s=duration_5h)
-        red = assess_sustainability(intensity_factor=0.90, wbal_min_j=15000.0, w_prime_j=20000.0, ride_duration_s=duration_5h)
+        yellow = assess_sustainability(
+            intensity_factor=0.89, wbal_min_j=15000.0, w_prime_j=20000.0, ride_duration_s=duration_5h
+        )
+        red = assess_sustainability(
+            intensity_factor=0.90, wbal_min_j=15000.0, w_prime_j=20000.0, ride_duration_s=duration_5h
+        )
         assert yellow.level == "yellow"
         assert red.level == "red"
 
@@ -127,15 +145,21 @@ class TestYellowBoundariesPinned:
     def test_wbal_yellow_boundary_30_percent(self):
         """W'bal at 31% is green (IF-wise), at 30% is yellow."""
         # 31% of 20000 = 6200, 30% = 6000
-        green = assess_sustainability(intensity_factor=0.75, wbal_min_j=6200.0, w_prime_j=20000.0, ride_duration_s=3600.0)
-        yellow = assess_sustainability(intensity_factor=0.75, wbal_min_j=6000.0, w_prime_j=20000.0, ride_duration_s=3600.0)
+        green = assess_sustainability(
+            intensity_factor=0.75, wbal_min_j=6200.0, w_prime_j=20000.0, ride_duration_s=3600.0
+        )
+        yellow = assess_sustainability(
+            intensity_factor=0.75, wbal_min_j=6000.0, w_prime_j=20000.0, ride_duration_s=3600.0
+        )
         assert green.level == "green"
         assert yellow.level == "yellow"
 
     def test_wbal_red_boundary_10_percent(self):
         """W'bal at 11% is yellow, at 10% is red."""
         # 11% of 20000 = 2200, 10% = 2000
-        yellow = assess_sustainability(intensity_factor=0.75, wbal_min_j=2200.0, w_prime_j=20000.0, ride_duration_s=3600.0)
+        yellow = assess_sustainability(
+            intensity_factor=0.75, wbal_min_j=2200.0, w_prime_j=20000.0, ride_duration_s=3600.0
+        )
         red = assess_sustainability(intensity_factor=0.75, wbal_min_j=2000.0, w_prime_j=20000.0, ride_duration_s=3600.0)
         assert yellow.level == "yellow"
         assert red.level == "red"

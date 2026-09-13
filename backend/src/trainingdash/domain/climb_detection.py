@@ -402,9 +402,7 @@ def detect_climbs(
     for start_idx, end_idx in sections:
         length = distances[end_idx] - distances[start_idx]
         if length >= min_length_m:
-            climb = _calculate_climb_metrics(
-                start_idx, end_idx, distances, smoothed, segment_length_m
-            )
+            climb = _calculate_climb_metrics(start_idx, end_idx, distances, smoothed, segment_length_m)
             climbs.append(climb)
 
     return climbs

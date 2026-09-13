@@ -10,7 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from trainingdash.domain.historical_np import HistoricalNpStats
 
-
 # Coordinate conversion constants for Hausdorff distance threshold
 # Convert meters to approximate degrees at mid-latitude (~45°)
 METERS_PER_DEGREE = 111_000.0

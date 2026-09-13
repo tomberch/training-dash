@@ -1,7 +1,5 @@
 """Unit tests for climb detection algorithm."""
 
-import pytest
-
 from trainingdash.domain.climb_detection import (
     DetectedClimb,
     categorize_climb,

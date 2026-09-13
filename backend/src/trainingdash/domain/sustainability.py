@@ -97,9 +97,7 @@ def assess_sustainability(
 
     if intensity_factor >= if_red:
         level = "red"
-        reasons.append(
-            f"Sustained IF {intensity_factor:.2f} is above the {hours:.1f}h-ride limit ({if_red:.2f})"
-        )
+        reasons.append(f"Sustained IF {intensity_factor:.2f} is above the {hours:.1f}h-ride limit ({if_red:.2f})")
     elif intensity_factor >= if_yellow:
         if level != "red":
             level = "yellow"

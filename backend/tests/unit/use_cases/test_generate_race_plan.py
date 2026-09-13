@@ -781,7 +781,7 @@ class TestTargetTimeMode:
 
         assert result.plan.optimization_method == "time_scaled"
         # Terrain-shaped: descents coasted (near-zero), not 200W+
-        descent = [t for t in result.plan.segment_targets if t["segment_idx"] == 2][0]
+        descent = next(t for t in result.plan.segment_targets if t["segment_idx"] == 2)
         assert descent["power_w"] < 100
         # VI reflects variability, not the constant-power fantasy
         vi = result.plan.normalized_power_w / result.plan.avg_power_w
@@ -821,7 +821,10 @@ class TestSustainability:
                 "terrain_type": "rolling",
             },
         ]
-        profile = [{"distance_m": i * 100.0, "elevation_m": 100.0 + i * 0.5, "grade_pct": 0.5, "lat": 47.0, "lon": 8.0} for i in range(401)]
+        profile = [
+            {"distance_m": i * 100.0, "elevation_m": 100.0 + i * 0.5, "grade_pct": 0.5, "lat": 47.0, "lon": 8.0}
+            for i in range(401)
+        ]
         course = RaceCourse(
             id=1,
             user_id=1,
@@ -840,13 +843,17 @@ class TestSustainability:
     @pytest.mark.asyncio
     async def test_easy_plan_is_green_and_saved(self, course_repo_for_effort, bike_repo, user_repo, plan_repo):
         uc = GenerateRacePlan(course_repo_for_effort, bike_repo, user_repo, plan_repo)
-        result = await uc.execute(user_id=1, request=GeneratePlanRequest(course_id=1, ftp_watts=250, target_intensity=0.75))
+        result = await uc.execute(
+            user_id=1, request=GeneratePlanRequest(course_id=1, ftp_watts=250, target_intensity=0.75)
+        )
         assert result.plan.sustainability == "green"
 
     @pytest.mark.asyncio
     async def test_ambitious_plan_is_yellow_or_red(self, course_repo_for_effort, bike_repo, user_repo, plan_repo):
         uc = GenerateRacePlan(course_repo_for_effort, bike_repo, user_repo, plan_repo)
-        result = await uc.execute(user_id=1, request=GeneratePlanRequest(course_id=1, ftp_watts=250, target_intensity=1.05))
+        result = await uc.execute(
+            user_id=1, request=GeneratePlanRequest(course_id=1, ftp_watts=250, target_intensity=1.05)
+        )
         assert result.plan.sustainability in ("yellow", "red")
 
     @pytest.mark.asyncio
@@ -867,7 +874,6 @@ class TestSustainability:
         assert plan.sustainability in ("yellow", "red")
         if plan.sustainability == "red":
             assert any("very hard" in w.lower() or "beyond" in w.lower() or "red" in w.lower() for w in result.warnings)
-
 
     @pytest.mark.asyncio
     async def test_physically_impossible_time_errors_before_save(
