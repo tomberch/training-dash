@@ -6,11 +6,10 @@ from uuid import uuid4
 
 import pytest
 
-from trainingdash.repositories.postgres.models import Segment, SegmentEffort
-from trainingdash.routers.activities import _compute_pr_delta, get_activity_segments
 from tests.fakes.activity_repo import FakeActivityRepo
 from tests.fakes.segment_repos import FakeSegmentEffortRepo
-
+from trainingdash.repositories.postgres.models import Segment, SegmentEffort
+from trainingdash.routers.activities import _compute_pr_delta, get_activity_segments
 
 # =============================================================================
 # Test Fixtures

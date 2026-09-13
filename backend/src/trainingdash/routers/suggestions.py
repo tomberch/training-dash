@@ -1,6 +1,6 @@
 """Suggestions endpoints: list, approve, dismiss segment suggestions."""
 
-from datetime import datetime
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
@@ -15,6 +15,8 @@ from trainingdash.dependencies import (
 )
 from trainingdash.jobs import enqueue_retroactive_match_job
 from trainingdash.routers.datetime_utils import utc_str
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/suggestions", tags=["suggestions"])
 
@@ -198,7 +200,7 @@ async def approve_suggestion(
         await enqueue_retroactive_match_job(str(result.segment.id))
     except Exception:
         # Log but don't fail - segment was approved successfully
-        pass
+        logger.exception("Failed to enqueue retroactive match job for segment %s", result.segment.id)
 
     return segment_response(result.segment)
 

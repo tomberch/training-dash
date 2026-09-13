@@ -13,7 +13,6 @@ from trainingdash.routers.suggestions import (
     suggestion_response,
 )
 
-
 # =============================================================================
 # Request Model Tests
 # =============================================================================
@@ -213,11 +212,11 @@ class TestListSuggestionsEndpoint:
     @pytest.mark.asyncio
     async def test_empty_list(self):
         """Returns empty list when no suggestions."""
-        from trainingdash.routers.suggestions import list_suggestions
         from tests.fakes.segment_repos import (
             FakeSegmentRepo,
             FakeSegmentSuggestionRepo,
         )
+        from trainingdash.routers.suggestions import list_suggestions
 
         user = MagicMock()
         user.id = 1
@@ -247,8 +246,8 @@ class TestDismissSuggestionEndpoint:
         """Returns 404 when suggestion doesn't exist."""
         from fastapi import HTTPException
 
-        from trainingdash.routers.suggestions import dismiss_suggestion
         from tests.fakes.segment_repos import FakeSegmentSuggestionRepo
+        from trainingdash.routers.suggestions import dismiss_suggestion
 
         user = MagicMock()
         user.id = 1
@@ -270,9 +269,9 @@ class TestDismissSuggestionEndpoint:
         """Returns 403 when suggestion belongs to different user."""
         from fastapi import HTTPException
 
+        from tests.fakes.segment_repos import FakeSegmentSuggestionRepo
         from trainingdash.repositories.postgres.models import SegmentSuggestion
         from trainingdash.routers.suggestions import dismiss_suggestion
-        from tests.fakes.segment_repos import FakeSegmentSuggestionRepo
 
         user = MagicMock()
         user.id = 1
@@ -304,9 +303,9 @@ class TestDismissSuggestionEndpoint:
     @pytest.mark.asyncio
     async def test_dismiss_success(self):
         """Successfully dismisses a suggestion."""
+        from tests.fakes.segment_repos import FakeSegmentSuggestionRepo
         from trainingdash.repositories.postgres.models import SegmentSuggestion
         from trainingdash.routers.suggestions import dismiss_suggestion
-        from tests.fakes.segment_repos import FakeSegmentSuggestionRepo
 
         user = MagicMock()
         user.id = 1
@@ -345,9 +344,9 @@ class TestDismissAllEndpoint:
     @pytest.mark.asyncio
     async def test_dismiss_all_success(self):
         """Successfully dismisses all suggestions."""
+        from tests.fakes.segment_repos import FakeSegmentSuggestionRepo
         from trainingdash.repositories.postgres.models import SegmentSuggestion
         from trainingdash.routers.suggestions import dismiss_all_suggestions
-        from tests.fakes.segment_repos import FakeSegmentSuggestionRepo
 
         user = MagicMock()
         user.id = 1

@@ -6,7 +6,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
-from trainingdash.auth import CurrentUser, DbSession
+from trainingdash.auth import CurrentUser
 from trainingdash.dependencies import (
     ActivityRepoD,
     BikeRepoD,
@@ -248,7 +248,8 @@ class RacePlanResponse(BaseModel):
     forecast_stale: bool = False  # True if calm conditions used (no real forecast)
     # Sustainability (ADR 0005 #638): green/yellow/red effort flag
     sustainability: str | None = Field(
-        None, description="green = sustainable, yellow = very hard near-limit, red = beyond capability (still saved, flagged)"
+        None,
+        description="green = sustainable, yellow = very hard near-limit, red = beyond capability (still saved, flagged)",
     )
 
 

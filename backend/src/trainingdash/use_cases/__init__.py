@@ -22,7 +22,6 @@ Example:
 """
 
 from trainingdash.use_cases.breakthrough_evaluator import BreakthroughEvaluator
-from trainingdash.use_cases.create_segment import CreateSegment, CreateSegmentResult
 from trainingdash.use_cases.calibrate_bike import (
     BikeNotEligibleError,
     BikeNotFoundError,
@@ -40,6 +39,7 @@ from trainingdash.use_cases.create_backup import (
     CreateBackup,
     ResticError,
 )
+from trainingdash.use_cases.create_segment import CreateSegment, CreateSegmentResult
 from trainingdash.use_cases.delete_activity import DeleteActivity
 from trainingdash.use_cases.ensure_default_thresholds import EnsureDefaultThresholds
 from trainingdash.use_cases.fitness_model_updater import FitnessModelUpdater

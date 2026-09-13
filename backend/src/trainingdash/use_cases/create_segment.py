@@ -175,9 +175,7 @@ class CreateSegment:
 
         # Validate we have enough GPS points
         segment_records = record_dicts[start_index : end_index + 1]
-        valid_gps_points = sum(
-            1 for r in segment_records if r["lat"] is not None and r["lon"] is not None
-        )
+        valid_gps_points = sum(1 for r in segment_records if r["lat"] is not None and r["lon"] is not None)
         if valid_gps_points < MIN_SEGMENT_POINTS:
             return CreateSegmentResult(
                 success=False,
@@ -215,12 +213,8 @@ class CreateSegment:
             )
 
         # Create PostGIS geometry objects
-        start_point = WKTElement(
-            f"POINT({geometry.start_lon} {geometry.start_lat})", srid=4326
-        )
-        end_point = WKTElement(
-            f"POINT({geometry.end_lon} {geometry.end_lat})", srid=4326
-        )
+        start_point = WKTElement(f"POINT({geometry.start_lon} {geometry.start_lat})", srid=4326)
+        end_point = WKTElement(f"POINT({geometry.end_lon} {geometry.end_lat})", srid=4326)
         min_lat, min_lon, max_lat, max_lon = geometry.bounds
         bounds_polygon = WKTElement(
             f"POLYGON(({min_lon} {min_lat}, {max_lon} {min_lat}, "
@@ -244,8 +238,7 @@ class CreateSegment:
             avg_grade_pct=geometry.avg_grade_pct,
             max_grade_pct=geometry.max_grade_pct,
             gradient_segments=[
-                {"distance_m": gs.distance_m, "grade_pct": gs.grade_pct}
-                for gs in geometry.gradient_segments
+                {"distance_m": gs.distance_m, "grade_pct": gs.grade_pct} for gs in geometry.gradient_segments
             ],
             created_by=user_id,
             source_activity_id=activity_id,
@@ -256,14 +249,10 @@ class CreateSegment:
         # Enqueue retroactive matching job
         try:
             await enqueue_retroactive_match_job(str(saved_segment.id))
-            logger.info(
-                f"Enqueued retroactive match job for segment {saved_segment.id}"
-            )
+            logger.info(f"Enqueued retroactive match job for segment {saved_segment.id}")
         except Exception as e:
             # Log but don't fail - segment was created successfully
-            logger.warning(
-                f"Failed to enqueue retroactive match job for segment {saved_segment.id}: {e}"
-            )
+            logger.warning(f"Failed to enqueue retroactive match job for segment {saved_segment.id}: {e}")
 
         return CreateSegmentResult(success=True, segment=saved_segment)
 
@@ -320,26 +309,18 @@ class CreateSegment:
             # Check start point distance
             # Extract lat/lon from PostGIS Point (WKBElement)
             # For fake repos, these might be simple tuples; for real repos, need extraction
-            candidate_start_lat, candidate_start_lon = self._extract_point_coords(
-                candidate.start_point
-            )
-            candidate_end_lat, candidate_end_lon = self._extract_point_coords(
-                candidate.end_point
-            )
+            candidate_start_lat, candidate_start_lon = self._extract_point_coords(candidate.start_point)
+            candidate_end_lat, candidate_end_lon = self._extract_point_coords(candidate.end_point)
 
             if candidate_start_lat is None or candidate_end_lat is None:
                 continue
 
-            start_dist = haversine_distance(
-                start_lat, start_lon, candidate_start_lat, candidate_start_lon
-            )
+            start_dist = haversine_distance(start_lat, start_lon, candidate_start_lat, candidate_start_lon)
             if start_dist > DUPLICATE_POINT_TOLERANCE_M:
                 continue
 
             # Check end point distance
-            end_dist = haversine_distance(
-                end_lat, end_lon, candidate_end_lat, candidate_end_lon
-            )
+            end_dist = haversine_distance(end_lat, end_lon, candidate_end_lat, candidate_end_lon)
             if end_dist > DUPLICATE_POINT_TOLERANCE_M:
                 continue
 
@@ -371,9 +352,7 @@ class CreateSegment:
 
         return None
 
-    def _extract_point_coords(
-        self, point: object
-    ) -> tuple[float | None, float | None]:
+    def _extract_point_coords(self, point: object) -> tuple[float | None, float | None]:
         """
         Extract lat/lon from a PostGIS Point or simple tuple.
 
@@ -402,6 +381,6 @@ class CreateSegment:
             shape = to_shape(point)
             return (shape.y, shape.x)  # lat, lon
         except Exception:
-            pass
+            logger.exception("Failed to extract lat/lon from point geometry")
 
         return (None, None)

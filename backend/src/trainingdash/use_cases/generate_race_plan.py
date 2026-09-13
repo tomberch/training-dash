@@ -22,9 +22,9 @@ from trainingdash.domain.pacing import (
 )
 from trainingdash.domain.pacing_model import effective_descent_power_multiplier, modulate_descent_power_multiplier
 from trainingdash.domain.pacing_optimizer import optimize_pacing
-from trainingdash.domain.sustainability import assess_sustainability
 from trainingdash.domain.pacing_scale import solve_target_time
 from trainingdash.domain.physics import EnvironmentParams, RiderParams, calculate_headwind
+from trainingdash.domain.sustainability import assess_sustainability
 from trainingdash.domain.wbal import predict_wbal_for_plan
 from trainingdash.integrations.weather import (
     ForecastConditions,

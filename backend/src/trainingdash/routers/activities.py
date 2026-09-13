@@ -8,7 +8,14 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 
 from trainingdash.auth import CurrentUser, DbSession
-from trainingdash.dependencies import ActivityRepoD, BikeRepoD, DeleteActivityD, PacingCoefficientsRepoD, SegmentEffortRepoD, ThresholdRepoD
+from trainingdash.dependencies import (
+    ActivityRepoD,
+    BikeRepoD,
+    DeleteActivityD,
+    PacingCoefficientsRepoD,
+    SegmentEffortRepoD,
+    ThresholdRepoD,
+)
 from trainingdash.domain.activity_type import validate_activity_type
 from trainingdash.domain.fit_modifier import FitModifications
 from trainingdash.repositories.postgres.models import Activity, ActivityPeakPower, Record
@@ -718,7 +725,6 @@ async def list_fit_devices(user: CurrentUser):
 
     devices = get_device_list()
     return {"devices": devices, "total": len(devices)}
-
 
 
 # --- Segment Efforts ---

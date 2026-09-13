@@ -6,23 +6,17 @@ from uuid import uuid4
 
 import pytest
 
-from trainingdash.repositories.postgres.models import Activity, Record, Segment
+from tests.fakes.activity_repo import FakeActivityRepo
+from tests.fakes.record_repo import FakeRecordRepo
+from tests.fakes.segment_repos import FakeSegmentRepo
+from trainingdash.repositories.postgres.models import Activity, Record
 from trainingdash.use_cases.create_segment import (
-    CLIMB_MIN_GRADE_PCT,
-    CLIMB_MIN_LENGTH_M,
-    CreateSegment,
-    CreateSegmentResult,
-    DUPLICATE_OVERLAP_PCT,
-    DUPLICATE_POINT_TOLERANCE_M,
     MAX_NAME_LENGTH,
     MIN_NAME_LENGTH,
     SPRINT_MAX_LENGTH_M,
     SPRINT_MIN_LENGTH_M,
+    CreateSegment,
 )
-from tests.fakes.activity_repo import FakeActivityRepo
-from tests.fakes.record_repo import FakeRecordRepo
-from tests.fakes.segment_repos import FakeSegmentRepo
-
 
 # =============================================================================
 # Test Fixtures
@@ -614,94 +608,69 @@ class TestTypeClassification:
 
     def test_classify_climb_cat4(self):
         """Classifies climb with Cat 4 category."""
-        use_case = CreateSegment(
-            FakeActivityRepo(), FakeRecordRepo(), FakeSegmentRepo()
-        )
+        use_case = CreateSegment(FakeActivityRepo(), FakeRecordRepo(), FakeSegmentRepo())
 
         # Cat 4: score >= 8000
         # 1000m at 8% = 8000
-        seg_type, category = use_case._classify_segment(
-            distance_m=1000, avg_grade_pct=8.0
-        )
+        seg_type, category = use_case._classify_segment(distance_m=1000, avg_grade_pct=8.0)
 
         assert seg_type == "climb"
         assert category == "4"
 
     def test_classify_climb_cat3(self):
         """Classifies climb with Cat 3 category."""
-        use_case = CreateSegment(
-            FakeActivityRepo(), FakeRecordRepo(), FakeSegmentRepo()
-        )
+        use_case = CreateSegment(FakeActivityRepo(), FakeRecordRepo(), FakeSegmentRepo())
 
         # Cat 3: score >= 16000
         # 2000m at 8% = 16000
-        seg_type, category = use_case._classify_segment(
-            distance_m=2000, avg_grade_pct=8.0
-        )
+        seg_type, category = use_case._classify_segment(distance_m=2000, avg_grade_pct=8.0)
 
         assert seg_type == "climb"
         assert category == "3"
 
     def test_classify_climb_hc(self):
         """Classifies climb with HC category."""
-        use_case = CreateSegment(
-            FakeActivityRepo(), FakeRecordRepo(), FakeSegmentRepo()
-        )
+        use_case = CreateSegment(FakeActivityRepo(), FakeRecordRepo(), FakeSegmentRepo())
 
         # HC: score >= 80000
         # 10000m at 8% = 80000
-        seg_type, category = use_case._classify_segment(
-            distance_m=10000, avg_grade_pct=8.0
-        )
+        seg_type, category = use_case._classify_segment(distance_m=10000, avg_grade_pct=8.0)
 
         assert seg_type == "climb"
         assert category == "hc"
 
     def test_classify_sprint(self):
         """Classifies sprint for 150-600m flat sections."""
-        use_case = CreateSegment(
-            FakeActivityRepo(), FakeRecordRepo(), FakeSegmentRepo()
-        )
+        use_case = CreateSegment(FakeActivityRepo(), FakeRecordRepo(), FakeSegmentRepo())
 
-        seg_type, category = use_case._classify_segment(
-            distance_m=300, avg_grade_pct=0.5
-        )
+        seg_type, category = use_case._classify_segment(distance_m=300, avg_grade_pct=0.5)
 
         assert seg_type == "sprint"
         assert category is None
 
     def test_classify_sprint_boundary_min(self):
         """Sprint at minimum length boundary."""
-        use_case = CreateSegment(
-            FakeActivityRepo(), FakeRecordRepo(), FakeSegmentRepo()
-        )
+        use_case = CreateSegment(FakeActivityRepo(), FakeRecordRepo(), FakeSegmentRepo())
 
-        seg_type, category = use_case._classify_segment(
-            distance_m=SPRINT_MIN_LENGTH_M, avg_grade_pct=0.0
-        )
+        seg_type, category = use_case._classify_segment(distance_m=SPRINT_MIN_LENGTH_M, avg_grade_pct=0.0)
 
         assert seg_type == "sprint"
 
     def test_classify_sprint_boundary_max(self):
         """Sprint at maximum length boundary."""
-        use_case = CreateSegment(
-            FakeActivityRepo(), FakeRecordRepo(), FakeSegmentRepo()
-        )
+        use_case = CreateSegment(FakeActivityRepo(), FakeRecordRepo(), FakeSegmentRepo())
 
-        seg_type, category = use_case._classify_segment(
-            distance_m=SPRINT_MAX_LENGTH_M, avg_grade_pct=0.0
-        )
+        seg_type, category = use_case._classify_segment(distance_m=SPRINT_MAX_LENGTH_M, avg_grade_pct=0.0)
 
         assert seg_type == "sprint"
 
     def test_classify_custom_too_long_for_sprint(self):
         """Classifies as custom when too long for sprint but not steep enough for climb."""
-        use_case = CreateSegment(
-            FakeActivityRepo(), FakeRecordRepo(), FakeSegmentRepo()
-        )
+        use_case = CreateSegment(FakeActivityRepo(), FakeRecordRepo(), FakeSegmentRepo())
 
         seg_type, category = use_case._classify_segment(
-            distance_m=1000, avg_grade_pct=1.0  # Too flat for climb, too long for sprint
+            distance_m=1000,
+            avg_grade_pct=1.0,  # Too flat for climb, too long for sprint
         )
 
         assert seg_type == "custom"
@@ -709,25 +678,23 @@ class TestTypeClassification:
 
     def test_classify_custom_too_short_for_climb(self):
         """Classifies as custom when too short for climb criteria."""
-        use_case = CreateSegment(
-            FakeActivityRepo(), FakeRecordRepo(), FakeSegmentRepo()
-        )
+        use_case = CreateSegment(FakeActivityRepo(), FakeRecordRepo(), FakeSegmentRepo())
 
         # Steep but short
         seg_type, category = use_case._classify_segment(
-            distance_m=200, avg_grade_pct=10.0  # Short steep section
+            distance_m=200,
+            avg_grade_pct=10.0,  # Short steep section
         )
 
         assert seg_type == "custom"
 
     def test_classify_negative_grade_not_climb(self):
         """Descent doesn't classify as climb."""
-        use_case = CreateSegment(
-            FakeActivityRepo(), FakeRecordRepo(), FakeSegmentRepo()
-        )
+        use_case = CreateSegment(FakeActivityRepo(), FakeRecordRepo(), FakeSegmentRepo())
 
         seg_type, category = use_case._classify_segment(
-            distance_m=1000, avg_grade_pct=-5.0  # Descent
+            distance_m=1000,
+            avg_grade_pct=-5.0,  # Descent
         )
 
         assert seg_type == "custom"
