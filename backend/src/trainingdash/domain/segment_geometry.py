@@ -143,8 +143,8 @@ def compute_elevation_stats(
         Tuple of (elevation_gain_m, avg_grade_pct, max_grade_pct).
         Max grade uses the shared sliding-200m-window algorithm
         (domain.grade_stats) so segments report Max Grade the same way
-        activities do; segments with fewer than ~11 records or no full
-        window report 0.0.
+        activities do. Max grade is 0.0 when the algorithm returns None:
+        at most 10 records, no window spanning 200m, or no climbing.
 
     Raises:
         ValueError: If lists have different lengths or fewer than 2 points

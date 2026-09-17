@@ -161,19 +161,9 @@ class TestComputeElevationStats:
 
     def test_variable_grade_takes_steepest_window(self):
         """Max grade is the steepest 200m window, not a single pair."""
-        # 2% for 600m, then 20% for 300m, then flat
-        altitudes = [0] * 7
-        distances = [0, 100, 200, 300, 400, 500, 600]
-        alt = 0
-        for i in range(1, 7):
-            alt += 2
-            altitudes[i] = alt
-        for i in range(3):
-            alt += 20
-            altitudes.append(alt)
-            distances.append(distances[-1] + 100)
-        altitudes.append(alt)
-        distances.append(distances[-1] + 100)
+        # 2% for 600m, then 20% for 300m, then flat for 100m
+        altitudes = [0, 2, 4, 6, 8, 10, 12, 32, 52, 72, 72]
+        distances = [0, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]
 
         gain, avg, max_grade = compute_elevation_stats(altitudes, distances)
 
@@ -202,8 +192,22 @@ class TestComputeElevationStats:
 
         assert gain == pytest.approx(80.0)  # Only positive changes
         assert avg == pytest.approx(20.0)  # 60m net / 300m = 20%
-        # Fewer than 11 records — no full window, max grade 0.0
+        # 4 records — at most MIN_RECORDS (10), so max grade is 0.0
         assert max_grade == 0.0
+
+    def test_min_records_boundary(self):
+        """Exactly 10 records → 0.0; 11 records → windowed max grade."""
+        # 10 records: steady 10% over 1000m — too few for the algorithm
+        altitudes = [i * 10 for i in range(10)]
+        distances = [i * 100 for i in range(10)]
+        _, _, max_grade = compute_elevation_stats(altitudes, distances)
+        assert max_grade == 0.0
+
+        # 11 records: same climb, one more record — now windowed
+        altitudes = [i * 10 for i in range(11)]
+        distances = [i * 100 for i in range(11)]
+        _, _, max_grade = compute_elevation_stats(altitudes, distances)
+        assert max_grade == pytest.approx(10.0)
 
     def test_flat_segment(self):
         """Flat segment should have 0% grade."""
