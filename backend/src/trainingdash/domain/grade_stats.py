@@ -1,8 +1,8 @@
 """Shared grade statistics.
 
-Max grade over sliding distance windows — the single algorithm used by both
-activity ingest and segment geometry, so the "Max Grade" shown for a segment
-matches the one shown for its source activity.
+Max grade over sliding distance windows. Used by activity ingest
+(_compute_extended_metrics); segment geometry adopts it in a follow-up so
+the "Max Grade" shown for a segment will match its source activity.
 
 A raw record-to-record grade is dominated by altitude noise (a 0.5m barometric
 wobble over 2m of distance reads as 25%). Windows of ~200m suppress that noise
@@ -23,11 +23,12 @@ def compute_max_grade_pct(
 
     Args:
         records: (distance_m, altitude_m) pairs, ascending by distance.
+            None altitudes must be filtered out by the caller.
         window_m: Minimum distance span for each grade window.
 
     Returns:
         The maximum grade in percent over all windows, or None if there are
-        too few records (< MIN_RECORDS) or no window spans window_m.
+        too few records (at most MIN_RECORDS) or no window spans window_m.
         Negative grades never count; a route with no climbing returns None.
     """
     if len(records) <= MIN_RECORDS:
