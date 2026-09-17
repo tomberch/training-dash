@@ -13,6 +13,7 @@ Used when creating segments from activity selections or climb detection.
 import math
 from dataclasses import dataclass
 
+from trainingdash.domain.grade_stats import compute_max_grade_pct
 from trainingdash.domain.polyline import decode_polyline, encode_polyline
 
 # Re-export for convenience
@@ -139,7 +140,11 @@ def compute_elevation_stats(
         distances: List of cumulative distance values in meters
 
     Returns:
-        Tuple of (elevation_gain_m, avg_grade_pct, max_grade_pct)
+        Tuple of (elevation_gain_m, avg_grade_pct, max_grade_pct).
+        Max grade uses the shared sliding-200m-window algorithm
+        (domain.grade_stats) so segments report Max Grade the same way
+        activities do; segments with fewer than ~11 records or no full
+        window report 0.0.
 
     Raises:
         ValueError: If lists have different lengths or fewer than 2 points
@@ -150,23 +155,17 @@ def compute_elevation_stats(
         raise ValueError("Need at least 2 points to compute elevation stats")
 
     elevation_gain = 0.0
-    max_grade = 0.0
-    grades = []
 
     for i in range(1, len(altitudes)):
         delta_alt = altitudes[i] - altitudes[i - 1]
-        delta_dist = distances[i] - distances[i - 1]
 
         # Only count positive elevation changes for gain
         if delta_alt > 0:
             elevation_gain += delta_alt
 
-        # Compute grade for this segment
-        if delta_dist > 0:
-            grade = (delta_alt / delta_dist) * 100
-            grades.append(grade)
-            if grade > max_grade:
-                max_grade = grade
+    # Max grade over sliding 200m windows (shared with activity ingest)
+    windowed_max = compute_max_grade_pct(list(zip(distances, altitudes)))
+    max_grade = windowed_max if windowed_max is not None else 0.0
 
     # Average grade is total elevation change over total distance
     total_elevation_change = altitudes[-1] - altitudes[0]

@@ -149,24 +149,50 @@ class TestComputeElevationStats:
     """Tests for compute_elevation_stats function."""
 
     def test_steady_climb(self):
-        """Steady 10% climb over 1000m should show correct stats."""
-        altitudes = [0, 25, 50, 75, 100]  # 100m gain
-        distances = [0, 250, 500, 750, 1000]  # 1000m distance
+        """Steady 10% climb over 1100m should show correct stats."""
+        # 12 records at 100m spacing so a full 200m window exists
+        altitudes = [i * 10 for i in range(12)]  # 110m gain
+        distances = [i * 100 for i in range(12)]  # 1100m distance
         gain, avg, max_grade = compute_elevation_stats(altitudes, distances)
 
-        assert gain == pytest.approx(100.0)
-        assert avg == pytest.approx(10.0)  # 100m / 1000m = 10%
+        assert gain == pytest.approx(110.0)
+        assert avg == pytest.approx(10.0)  # 110m / 1100m = 10%
         assert max_grade == pytest.approx(10.0)
 
-    def test_variable_grade(self):
-        """Variable grade should track max correctly."""
-        altitudes = [0, 10, 30, 40, 50]  # gains: 10, 20, 10, 10
-        distances = [0, 100, 200, 300, 400]  # each segment 100m
+    def test_variable_grade_takes_steepest_window(self):
+        """Max grade is the steepest 200m window, not a single pair."""
+        # 2% for 600m, then 20% for 300m, then flat
+        altitudes = [0] * 7
+        distances = [0, 100, 200, 300, 400, 500, 600]
+        alt = 0
+        for i in range(1, 7):
+            alt += 2
+            altitudes[i] = alt
+        for i in range(3):
+            alt += 20
+            altitudes.append(alt)
+            distances.append(distances[-1] + 100)
+        altitudes.append(alt)
+        distances.append(distances[-1] + 100)
+
         gain, avg, max_grade = compute_elevation_stats(altitudes, distances)
 
-        assert gain == pytest.approx(50.0)
-        assert avg == pytest.approx(12.5)  # 50m / 400m = 12.5%
-        assert max_grade == pytest.approx(20.0)  # 20m / 100m = 20%
+        # The steep pitch's 200m windows see 20m/100m = 20%
+        assert max_grade == pytest.approx(20.0)
+
+    def test_noise_spike_suppressed(self):
+        """A +2m jump over 2m does not dominate max grade."""
+        # Steady 2% over 1200m with one noise spike inserted
+        altitudes = [i * 2 for i in range(13)]
+        distances = [i * 100 for i in range(13)]
+        spike_alt = altitudes[6] + 2
+        altitudes = altitudes[:7] + [spike_alt] + altitudes[7:]
+        distances = distances[:7] + [602] + [d + 2 for d in distances[7:]]
+
+        gain, avg, max_grade = compute_elevation_stats(altitudes, distances)
+
+        # Raw pair grade at the spike would be 100%; windows see ~2%
+        assert max_grade < 5.0
 
     def test_climb_with_descent(self):
         """Descent should not count toward gain."""
@@ -176,6 +202,8 @@ class TestComputeElevationStats:
 
         assert gain == pytest.approx(80.0)  # Only positive changes
         assert avg == pytest.approx(20.0)  # 60m net / 300m = 20%
+        # Fewer than 11 records — no full window, max grade 0.0
+        assert max_grade == 0.0
 
     def test_flat_segment(self):
         """Flat segment should have 0% grade."""
@@ -195,7 +223,7 @@ class TestComputeElevationStats:
 
         assert gain == 0.0  # No positive elevation change
         assert avg == pytest.approx(-10.0)  # -100m / 1000m = -10%
-        assert max_grade == 0.0  # Max of negative grades is 0
+        assert max_grade == 0.0  # No climbing windows
 
     def test_different_lengths_raises(self):
         """Different length lists should raise ValueError."""
@@ -439,8 +467,20 @@ class TestComputeSegmentGeometry:
 
         # 100m elevation over 750m = 13.3% average
         assert geom.avg_grade_pct == pytest.approx(13.33, abs=0.1)
-        # Max segment has the steepest grade
-        assert geom.max_grade_pct > 0
+        # Only 6 records — below the windowed algorithm's minimum, so 0.0
+        assert geom.max_grade_pct == 0.0
+
+    def test_avg_and_max_grade_long_segment(self):
+        """Windowed max grade over a longer segment with enough records."""
+        # 20 records, 100m apart, steady 10% climb
+        records = [
+            {"lat": 46.90 + i * 0.001, "lon": 7.40, "altitude_m": 500 + i * 10, "distance_m": i * 100}
+            for i in range(20)
+        ]
+        geom = compute_segment_geometry(records, start_index=0, end_index=19)
+
+        assert geom.avg_grade_pct == pytest.approx(10.0)
+        assert geom.max_grade_pct == pytest.approx(10.0)
 
     def test_distance_computed_from_gps_if_missing(self):
         """Distance computed from GPS when distance_m not available."""
