@@ -301,6 +301,48 @@ class TestComputeExtendedMetricsAltitude:
         assert 130 <= result["elevation_loss_m"] <= 170
 
 
+class TestComputeExtendedMetricsMaxGrade:
+    """Tests for max grade computation in _compute_extended_metrics."""
+
+    @staticmethod
+    def _climb_records(total_m: float, step_m: float, grade_pct: float) -> list[dict]:
+        records = []
+        dist = 0.0
+        alt = 100.0
+        n = int(total_m / step_m)
+        for _ in range(n + 1):
+            records.append({"distance_m": dist, "altitude_m": alt})
+            dist += step_m
+            alt += step_m * grade_pct / 100
+        return records
+
+    def test_steady_climb_max_grade(self):
+        records = self._climb_records(total_m=1000, step_m=10, grade_pct=8)
+        result = _compute_extended_metrics(records, 1000.0, 200)
+
+        assert result["max_grade_pct"] == 8.0
+
+    def test_noise_spike_not_reported(self):
+        # +2m jump over 2m — raw pair grade would be 100%
+        records = self._climb_records(total_m=1000, step_m=10, grade_pct=2)
+        result = _compute_extended_metrics(records, 1000.0, 200)
+
+        assert result["max_grade_pct"] is not None
+        assert result["max_grade_pct"] < 5.0
+
+    def test_too_few_distance_records_returns_none(self):
+        records = [{"altitude_m": 100 + i} for i in range(12)]  # no distance_m
+        result = _compute_extended_metrics(records, 100.0, 50)
+
+        assert result["max_grade_pct"] is None
+
+    def test_no_climbing_returns_none(self):
+        records = self._climb_records(total_m=1000, step_m=10, grade_pct=-5)
+        result = _compute_extended_metrics(records, 1000.0, 200)
+
+        assert result["max_grade_pct"] is None
+
+
 class TestComputeExtendedMetricsPower:
     """Tests for max power computation in _compute_extended_metrics."""
 

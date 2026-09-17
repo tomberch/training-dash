@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from trainingdash.activity_pipeline import ActivityPipeline
 from trainingdash.domain.activity_type import detect_activity_type
 from trainingdash.domain.fitness import fit_cp_model
+from trainingdash.domain.grade_stats import compute_max_grade_pct
 from trainingdash.domain.metrics import (
     compute_intensity_factor,
     compute_normalized_power,
@@ -186,27 +187,9 @@ def _compute_extended_metrics(
         for r in records
         if r.get("distance_m") is not None and r.get("altitude_m") is not None
     ]
-    if len(records_with_data) > 10:
-        segment_length = 200  # meters
-        max_grade = 0.0
-        i = 0
-        while i < len(records_with_data):
-            start_dist, start_alt = records_with_data[i]
-            # Find end of segment
-            j = i + 1
-            while j < len(records_with_data):
-                end_dist, end_alt = records_with_data[j]
-                dist_diff = end_dist - start_dist
-                if dist_diff >= segment_length:
-                    if dist_diff > 0:
-                        grade = ((end_alt - start_alt) / dist_diff) * 100
-                        if grade > max_grade:
-                            max_grade = grade
-                    break
-                j += 1
-            i += 1
-        if max_grade > 0:
-            result["max_grade_pct"] = round(max_grade, 1)
+    max_grade = compute_max_grade_pct(records_with_data)
+    if max_grade is not None:
+        result["max_grade_pct"] = round(max_grade, 1)
 
     # Max power
     powers = [r["power_w"] for r in records if r.get("power_w") is not None and r["power_w"] > 0]
