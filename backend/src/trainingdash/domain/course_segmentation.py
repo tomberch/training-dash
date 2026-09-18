@@ -162,6 +162,8 @@ class CourseSegment:
     elevation_gain_m: float
     elevation_loss_m: float
     terrain_type: str  # from grade.classify_terrain
+    start_elevation_m: float = 0.0  # Elevation at segment start
+    end_elevation_m: float = 0.0  # Elevation at segment end
     bearing_deg: float | None = None  # Direction of travel (0=N, 90=E, 180=S, 270=W)
 
 
@@ -288,6 +290,8 @@ def _create_segment(
         elevation_gain_m=elevation_gain,
         elevation_loss_m=elevation_loss,
         terrain_type=terrain_type,
+        start_elevation_m=float(start_elev),
+        end_elevation_m=float(end_elev),
     )
 
 
@@ -319,8 +323,8 @@ def _merge_short_segments(segments: list[CourseSegment], min_length_m: float) ->
 def _merge_two_segments(seg1: CourseSegment, seg2: CourseSegment) -> CourseSegment:
     """Merge two adjacent segments into one.
 
-    Length is computed from endpoints to preserve full coverage,
-    not by summing individual lengths (which would lose any gaps).
+    Length and elevation are computed from endpoints to preserve full coverage,
+    not by summing individual values (which would lose any gaps).
     """
     # Use endpoint math to ensure no distance is lost
     total_length = seg2.end_distance_m - seg1.start_distance_m
@@ -331,14 +335,21 @@ def _merge_two_segments(seg1: CourseSegment, seg2: CourseSegment) -> CourseSegme
     else:
         avg_grade = 0.0
 
+    # Recompute elevation from endpoints for consistency
+    elev_change = seg2.end_elevation_m - seg1.start_elevation_m
+    elevation_gain = max(0.0, elev_change)
+    elevation_loss = max(0.0, -elev_change)
+
     return CourseSegment(
         start_distance_m=seg1.start_distance_m,
         end_distance_m=seg2.end_distance_m,
         length_m=total_length,
         avg_grade_pct=avg_grade,
-        elevation_gain_m=seg1.elevation_gain_m + seg2.elevation_gain_m,
-        elevation_loss_m=seg1.elevation_loss_m + seg2.elevation_loss_m,
+        elevation_gain_m=elevation_gain,
+        elevation_loss_m=elevation_loss,
         terrain_type=classify_terrain(avg_grade),
+        start_elevation_m=seg1.start_elevation_m,
+        end_elevation_m=seg2.end_elevation_m,
     )
 
 

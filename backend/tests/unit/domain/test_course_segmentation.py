@@ -222,6 +222,38 @@ class TestSegmentCoverage:
         total_length = sum(s.length_m for s in segments)
         assert total_length == pytest.approx(1000, rel=0.001)
 
+    def test_elevation_endpoints_preserved_after_merge(self):
+        """Merged segments should preserve endpoint elevations."""
+        # Course with short segments that will be merged
+        distances = np.array([0, 50, 100, 200, 300, 400, 500])
+        grades = np.array([0.10, 0.10, 0.05, 0.05, 0.05, 0.05, 0.05])
+        elevations = np.array([100, 105, 110, 115, 120, 125, 130])
+
+        # min_segment_m=200 will merge the short segments
+        segments = segment_course(distances, grades, elevations, min_segment_m=200)
+
+        # First segment should start at course start elevation
+        assert segments[0].start_elevation_m == pytest.approx(100, rel=0.001)
+
+        # Last segment should end at course end elevation
+        assert segments[-1].end_elevation_m == pytest.approx(130, rel=0.001)
+
+        # Adjacent segments should share elevation boundaries
+        for i in range(len(segments) - 1):
+            assert segments[i].end_elevation_m == pytest.approx(
+                segments[i + 1].start_elevation_m, rel=0.001
+            ), f"Elevation gap between segment {i} and {i+1}"
+
+        # Each segment's gain/loss should match endpoint difference
+        for seg in segments:
+            expected_change = seg.end_elevation_m - seg.start_elevation_m
+            if expected_change >= 0:
+                assert seg.elevation_gain_m == pytest.approx(expected_change, rel=0.001)
+                assert seg.elevation_loss_m == 0.0
+            else:
+                assert seg.elevation_gain_m == 0.0
+                assert seg.elevation_loss_m == pytest.approx(-expected_change, rel=0.001)
+
 
 class TestDetectClimbs:
     """Tests for climb detection."""
