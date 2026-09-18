@@ -67,8 +67,8 @@ export function SettingsTabs({ activeTab, onTabChange }: SettingsTabsProps) {
   };
 
   return (
-    <div className="mb-8 border-b border-border overflow-x-auto">
-      <div className="flex gap-6 md:gap-8 min-w-max">
+    <div className="mb-8 border-b border-border">
+      <div className="flex gap-6 md:gap-8">
         {TABS.map((tab) => (
           <button
             key={tab.id}
