@@ -128,6 +128,24 @@ class TestCalculateGrade:
         var_large = np.var(grades_large)
         assert var_large < var_small
 
+    def test_stationary_gps_cluster(self):
+        """Grade must remain finite when GPS points bunch at one distance.
+
+        Real-world GPX tracks contain clusters of points at (nearly) the
+        same distance with bouncing elevation. The window must expand past
+        the cluster instead of collapsing to a ~0m span, which previously
+        produced grades like 2422%.
+        """
+        # Stationary cluster: 9 points within 0.22m, elevation bouncing ±3m
+        distances = np.array([45677.0, 45701.9, 45739.5, 45739.5, 45739.5, 45739.6, 45739.6, 45739.6, 45739.7, 45821.3])
+        elevations = np.array([2013.7, 2017.5, 2020.5, 2022.5, 2023.3, 2022.3, 2022.0, 2022.7, 2025.9, 2028.2])
+
+        grades = calculate_grade(distances, elevations, window_m=50)
+
+        # The min-span expansion bounds the window at ~10.9% over the
+        # cluster (real course data previously produced 2422%)
+        assert np.abs(grades).max() < 0.11, f"grade exploded: {grades}"
+
     def test_known_profile(self):
         """Test against a known hill profile."""
         # 1km climb at 8%, then 500m flat, then 500m descent at 6%

@@ -67,6 +67,22 @@ def calculate_grade(
             if i < n - 1:
                 fwd_idx = i + 1
 
+        # Guarantee a minimum window span. GPS tracks contain clusters of
+        # points at (nearly) identical distances; without this the window
+        # can collapse to a ~0m span and produce enormous grades (real
+        # course data showed 2422%). Expand outward — preferring the side
+        # with more room — until the span covers at least half the window.
+        min_span_m = half_window
+        while distances[fwd_idx] - distances[back_idx] < min_span_m and (back_idx > 0 or fwd_idx < n - 1):
+            if back_idx == 0:
+                fwd_idx += 1
+            elif fwd_idx == n - 1 or (current_dist - distances[back_idx - 1]) >= (
+                distances[fwd_idx + 1] - current_dist
+            ):
+                back_idx -= 1
+            else:
+                fwd_idx += 1
+
         # Calculate grade over the window
         d_dist = distances[fwd_idx] - distances[back_idx]
         d_elev = elevations[fwd_idx] - elevations[back_idx]
