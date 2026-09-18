@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { useUserOptional } from "./contexts/UserContext";
 
 interface SidebarProps {
   isAdmin?: boolean;
@@ -123,6 +124,22 @@ function AdminIcon() {
   );
 }
 
+function RouteIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 19a3 3 0 100-6 3 3 0 000 6zm0 0V5m12 0a3 3 0 100 6 3 3 0 000-6zm0 0v14" />
+    </svg>
+  );
+}
+
+function FlagIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 21v-4m0 0V5a1 1 0 011-1h4a1 1 0 011 1v4m0 0h6a1 1 0 011 1v6a1 1 0 01-1 1H9m0-8v8m0 0v4" />
+    </svg>
+  );
+}
+
 function MenuIcon() {
   return (
     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -161,9 +178,10 @@ interface NavItemProps {
   label: string;
   collapsed: boolean;
   onClick?: () => void;
+  badge?: number;
 }
 
-function NavItem({ to, icon, label, collapsed, onClick }: NavItemProps) {
+function NavItem({ to, icon, label, collapsed, onClick, badge }: NavItemProps) {
   return (
     <NavLink
       to={to}
@@ -179,7 +197,20 @@ function NavItem({ to, icon, label, collapsed, onClick }: NavItemProps) {
       }
       title={collapsed ? label : undefined}
     >
-      {icon}
+      <span className="relative">
+        {icon}
+        {badge !== undefined && badge > 0 && (
+          <span
+            className={cn(
+              "absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-primary text-primary-foreground text-xs font-semibold flex items-center justify-center leading-none",
+              collapsed && "top-0 right-0"
+            )}
+            aria-label={`${label}: ${badge} pending`}
+          >
+            {badge > 99 ? "99+" : badge}
+          </span>
+        )}
+      </span>
       {!collapsed && <span className="text-sm font-medium">{label}</span>}
     </NavLink>
   );
@@ -215,6 +246,7 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
   });
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
+  const user = useUserOptional();
 
   // Close mobile menu on route change
   useEffect(() => {
@@ -243,6 +275,11 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
     { to: "/events", icon: <CalendarIcon />, label: "Events" },
     { to: "/race-planner", icon: <MapIcon />, label: "Race Planner" },
     { to: "/athlete", icon: <UserIcon />, label: "Athlete" },
+  ];
+
+  const segmentsSection = [
+    { to: "/segments", icon: <RouteIcon />, label: "Segments" },
+    { to: "/suggestions", icon: <FlagIcon />, label: "Suggestions" },
   ];
   
   const gearItem = { to: "/gear", icon: <WrenchIcon />, label: "Gear" };
@@ -314,6 +351,21 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
               label={item.label}
               collapsed={collapsed && !isMobile}
               onClick={isMobile ? () => setMobileOpen(false) : undefined}
+            />
+          ))}
+        </NavSection>
+
+        {/* Segments Section */}
+        <NavSection title="Segments" collapsed={collapsed && !isMobile}>
+          {segmentsSection.map((item) => (
+            <NavItem
+              key={item.to}
+              to={item.to}
+              icon={item.icon}
+              label={item.label}
+              collapsed={collapsed && !isMobile}
+              onClick={isMobile ? () => setMobileOpen(false) : undefined}
+              badge={item.to === "/suggestions" ? user?.pending_suggestions : undefined}
             />
           ))}
         </NavSection>

@@ -151,3 +151,18 @@ export function formatRelativeTime(dateString: string): string {
   if (diffDays < 60) return "1 month ago";
   return `${Math.floor(diffDays / 30)} months ago`;
 }
+
+
+
+/**
+ * Format time delta between a time and a PR time.
+ * Returns "+M:SS" or "-M:SS" format showing how much slower/faster.
+ */
+export function formatTimeDelta(seconds: number, prSeconds: number): string {
+  const delta = seconds - prSeconds;
+  const sign = delta >= 0 ? "+" : "-";
+  const abs = Math.abs(delta);
+  const m = Math.floor(abs / 60);
+  const s = Math.floor(abs % 60);
+  return `${sign}${m}:${s.toString().padStart(2, "0")}`;
+}

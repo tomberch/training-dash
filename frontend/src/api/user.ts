@@ -31,6 +31,7 @@ export interface User {
   hr_derived_power_enabled: boolean;
   map_tile_style: "osm" | "positron" | "dark_matter" | "voyager";
   hr_power_model: HrPowerModelStatus | null;
+  pending_suggestions?: number;
 }
 
 export interface Notification {

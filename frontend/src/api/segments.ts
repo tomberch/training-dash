@@ -4,6 +4,7 @@
 
 import { apiGet, apiPatch, apiDelete, ApiError, API_BASE } from "./base";
 import type { SegmentSuggestion } from "./suggestions";
+import type { ElevationPoint } from "./types";
 
 // --- Types ---
 
@@ -34,11 +35,6 @@ export interface PaginationMeta {
 export interface PaginatedSegments {
   segments: SegmentSummary[];
   pagination: PaginationMeta;
-}
-
-export interface GradientSegment {
-  distance_m: number;
-  grade_pct: number;
 }
 
 export interface LatLng {
@@ -77,7 +73,7 @@ export interface SegmentDetailData {
   elevation_gain_m: number;
   avg_grade_pct: number;
   max_grade_pct: number;
-  gradient_segments: GradientSegment[];
+  elevation_profile: ElevationPoint[];
   effort_count: number;
   athlete_count: number;
   created_by: number | null;

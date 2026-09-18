@@ -34,6 +34,9 @@ const EventsPage = lazy(() => import("./pages/EventsPage").then(m => ({ default:
 const EventDetailPage = lazy(() => import("./pages/EventDetailPage").then(m => ({ default: m.EventDetailPage })));
 const EventFormPage = lazy(() => import("./pages/EventFormPage").then(m => ({ default: m.EventFormPage })));
 const EventEditPage = lazy(() => import("./pages/EventEditPage").then(m => ({ default: m.EventEditPage })));
+const SegmentsPage = lazy(() => import("./pages/SegmentsPage").then(m => ({ default: m.SegmentsPage })));
+const SegmentDetailPage = lazy(() => import("./pages/SegmentDetailPage").then(m => ({ default: m.SegmentDetailPage })));
+const SuggestionsPage = lazy(() => import("./pages/SuggestionsPage").then(m => ({ default: m.SuggestionsPage })));
 const GearPage = lazy(() => import("./pages/GearPage").then(m => ({ default: m.GearPage })));
 const RacePlannerDashboard = lazy(() => import("./pages/RacePlanner").then(m => ({ default: m.RacePlannerDashboard })));
 const CourseList = lazy(() => import("./pages/RacePlanner").then(m => ({ default: m.CourseList })));
@@ -158,6 +161,18 @@ function AppLayout({ user, onLogout, onUserUpdate }: {
               <Route path="/events/new" element={<EventFormPage />} />
               <Route path="/events/:id" element={<EventDetailPage />} />
               <Route path="/events/:id/edit" element={<EventEditPage />} />
+              <Route
+                path="/segments"
+                element={<SegmentsPage unitSystem={user.unit_system} />}
+              />
+              <Route
+                path="/segments/:segmentId"
+                element={<SegmentDetailPage unitSystem={user.unit_system} currentUserId={user.id} />}
+              />
+              <Route
+                path="/suggestions"
+                element={<SuggestionsPage unitSystem={user.unit_system} />}
+              />
               <Route path="/athlete" element={<AthletePage user={user} onUserUpdate={onUserUpdate} />} />
               <Route path="/prototype/event-detail" element={<PrototypeEventDetail />} />
               <Route path="/prototype/event-list" element={<PrototypeEventList />} />
@@ -347,7 +362,16 @@ export default function App() {
   }
 
   return (
-    <UserContext.Provider value={{ user, updateUser: setUser }}>
+    <UserContext.Provider
+      value={{
+        user,
+        updateUser: setUser,
+        decrementPendingSuggestions: (by = 1) =>
+          setUser((u) =>
+            u ? { ...u, pending_suggestions: Math.max(0, (u.pending_suggestions ?? 0) - by) } : u
+          ),
+      }}
+    >
       <BrowserRouter>
         <AppLayout user={user} onLogout={handleLogout} onUserUpdate={setUser} />
         <OnboardingDialog
