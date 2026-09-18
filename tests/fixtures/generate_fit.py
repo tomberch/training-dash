@@ -206,6 +206,7 @@ def make_test_fit(
     start_lon: float = 8.5417,
     reverse: bool = False,
     out_and_back: bool = False,
+    sparse_session: bool = False,
 ) -> bytes:
     builder = FitFileBuilder()
 
@@ -264,6 +265,11 @@ def make_test_fit(
     session = SessionMessage()
     session.timestamp = lap_end_ms
     session.start_time = base_ts_ms
+    if sparse_session:
+        # Karoo-via-Xert style: session message stripped of summary fields
+        builder.add(session)
+        fit = builder.build()
+        return fit.to_bytes()
     session.total_distance = total_distance
     session.total_elapsed_time = elapsed_s
     session.total_moving_time = elapsed_s

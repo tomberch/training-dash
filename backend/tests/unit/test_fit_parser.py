@@ -1,6 +1,8 @@
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "tests" / "fixtures"))
 from generate_fit import make_test_fit
 
@@ -76,3 +78,31 @@ class TestParseRecords:
         assert len(parsed["records"]) == 3
         assert all(r["lat"] is None for r in parsed["records"])
         assert all(r["lon"] is None for r in parsed["records"])
+
+
+class TestParseRecordsSparseSession:
+    """Karoo-via-Xert FITs have session messages missing summary fields.
+
+    The parser must fall back to computing summaries from records rather
+    than storing literal zeros. Expected values are the exact
+    record-derived aggregates for make_test_fit(num_records=10,
+    sparse_session=True): 10 records, 10m apart, HR 120-129, power
+    200-209, speed ~8 m/s, altitude 500-504.
+    """
+
+    @pytest.mark.parametrize(
+        ("field", "expected"),
+        [
+            ("total_distance_m", 90.0),  # last record distance (9 * 10m)
+            ("avg_speed_mps", 8.045),
+            ("max_speed_mps", 8.09),
+            ("elevation_gain_m", 2.0),  # 4m raw ascent, smoothed
+            ("avg_hr_bpm", 124),
+            ("max_hr_bpm", 129),
+            ("avg_power_w", 204),
+        ],
+    )
+    def test_missing_session_field_computed_from_records(self, field, expected):
+        data = make_test_fit(num_records=10, sparse_session=True)
+        parsed = parse_records(data)
+        assert parsed[field] == expected

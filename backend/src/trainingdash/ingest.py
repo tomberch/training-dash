@@ -130,19 +130,28 @@ def _compute_extended_metrics(
     Compute extended metrics from activity records.
 
     Returns dict with:
-    - elevation_loss_m, min_altitude_m, max_altitude_m, max_grade_pct
+    - total_distance_m, avg_speed_mps, max_speed_mps (from records)
+    - elevation_gain_m, elevation_loss_m, min_altitude_m, max_altitude_m, max_grade_pct
     - avg_speed_moving_mps
     - max_power_w
+    - avg_hr_bpm, max_hr_bpm, avg_power_w
     - avg_cadence_rpm, avg_cadence_pedaling_rpm, max_cadence_rpm
     - avg_temperature_c, min_temperature_c, max_temperature_c
     """
     result: dict[str, Any] = {
+        "total_distance_m": None,
+        "avg_speed_mps": None,
+        "max_speed_mps": None,
+        "elevation_gain_m": None,
         "elevation_loss_m": None,
         "min_altitude_m": None,
         "max_altitude_m": None,
         "max_grade_pct": None,
         "avg_speed_moving_mps": None,
         "max_power_w": None,
+        "avg_hr_bpm": None,
+        "max_hr_bpm": None,
+        "avg_power_w": None,
         "avg_cadence_rpm": None,
         "avg_cadence_pedaling_rpm": None,
         "max_cadence_rpm": None,
@@ -153,6 +162,31 @@ def _compute_extended_metrics(
 
     if not records:
         return result
+
+    # Distance: last record's cumulative distance
+    last_distance = records[-1].get("distance_m")
+    if last_distance is not None and last_distance > 0:
+        result["total_distance_m"] = last_distance
+
+    # Speed: avg over all records, max of all records
+    speeds = [r["speed_mps"] for r in records if r.get("speed_mps") is not None]
+    if speeds:
+        result["avg_speed_mps"] = sum(speeds) / len(speeds)
+        result["max_speed_mps"] = max(speeds)
+
+    # HR: avg over all records (including zeros), max of all records
+    hrs = [r["hr_bpm"] for r in records if r.get("hr_bpm") is not None]
+    if hrs:
+        result["avg_hr_bpm"] = int(sum(hrs) / len(hrs))
+        result["max_hr_bpm"] = max(hrs)
+
+    # Power: avg over records with power data, max of positive values
+    powers = [r["power_w"] for r in records if r.get("power_w") is not None]
+    if powers:
+        result["avg_power_w"] = int(sum(powers) / len(powers))
+        positive_powers = [p for p in powers if p > 0]
+        if positive_powers:
+            result["max_power_w"] = max(positive_powers)
 
     # Compute avg_speed_moving from distance and moving time
     if moving_time_s > 0 and total_distance_m > 0:
@@ -173,12 +207,17 @@ def _compute_extended_metrics(
             end = min(len(altitudes), i + smooth_window // 2 + 1)
             smoothed.append(sum(altitudes[start:end]) / (end - start))
 
+        elev_gain = 0.0
+
         elev_loss = 0.0
         for i in range(1, len(smoothed)):
             diff = smoothed[i] - smoothed[i - 1]
             if diff < 0:
                 elev_loss += abs(diff)
+            else:
+                elev_gain += diff
         result["elevation_loss_m"] = round(elev_loss, 1)
+        result["elevation_gain_m"] = round(elev_gain, 1)
 
     # Compute max grade (steepest gradient over ~200m segments)
     # Need both altitude and distance
@@ -190,11 +229,6 @@ def _compute_extended_metrics(
     max_grade = compute_max_grade_pct(records_with_data)
     if max_grade is not None:
         result["max_grade_pct"] = round(max_grade, 1)
-
-    # Max power
-    powers = [r["power_w"] for r in records if r.get("power_w") is not None and r["power_w"] > 0]
-    if powers:
-        result["max_power_w"] = max(powers)
 
     # Cadence: avg overall (including zeros) and avg while pedaling (excluding zeros)
     cadences = [r["cadence_rpm"] for r in records if r.get("cadence_rpm") is not None]
@@ -382,13 +416,13 @@ def parse_records(fit_bytes: bytes) -> dict[str, Any]:
         else:
             moving_time = timer_time or 0
 
-        elev_gain = session_data["total_ascent"] or 0
+        elev_gain = session_data["total_ascent"]
         elev_loss = session_data["total_descent"]
-        avg_speed = session_data["avg_speed"] or 0
+        avg_speed = session_data["avg_speed"]
         avg_hr = session_data["avg_hr"]
         avg_power = session_data["avg_power"]
         max_power = session_data["max_power"]
-        max_speed = session_data["max_speed"] or 0
+        max_speed = session_data["max_speed"]
         max_hr = session_data["max_hr"]
         avg_cadence = session_data["avg_cadence"]
         avg_temperature = session_data["avg_temperature"]
@@ -399,13 +433,13 @@ def parse_records(fit_bytes: bytes) -> dict[str, Any]:
         moving_time = _compute_moving_time(records)
         timer_time = None
         elapsed_time = len(records) if records else 0
-        elev_gain = 0
+        elev_gain = None
         elev_loss = None
-        avg_speed = 0
+        avg_speed = None
         avg_hr = None
         avg_power = None
         max_power = None
-        max_speed = 0
+        max_speed = None
         max_hr = None
         avg_cadence = None
         avg_temperature = None
@@ -413,9 +447,32 @@ def parse_records(fit_bytes: bytes) -> dict[str, Any]:
     # Compute extended metrics from records
     extended = _compute_extended_metrics(records, total_distance, moving_time)
 
-    # Use FIT session values if available, otherwise use computed values
+    # Session messages from some sources (e.g. Karoo via Xert) can be missing
+    # summary fields. Fall back to record-derived values when a session value
+    # is absent — a missing field must not become a literal zero.
+    if total_distance is None or total_distance <= 0:
+        total_distance = extended["total_distance_m"] or 0
+
+    # avg_speed_moving needs the corrected distance
+    if moving_time > 0 and total_distance > 0:
+        extended["avg_speed_moving_mps"] = round(total_distance / moving_time, 3)
+
+    if elev_gain is None:
+        elev_gain = extended["elevation_gain_m"] or 0
     if elev_loss is None:
         elev_loss = extended["elevation_loss_m"]
+    if avg_speed is None or avg_speed <= 0:
+        avg_speed = extended["avg_speed_mps"] or 0
+    if max_speed is None or max_speed <= 0:
+        max_speed = extended["max_speed_mps"] or 0
+    if avg_hr is None:
+        avg_hr = extended["avg_hr_bpm"]
+    if max_hr is None:
+        max_hr = extended["max_hr_bpm"]
+    if avg_power is None:
+        avg_power = extended["avg_power_w"]
+    if max_power is None:
+        max_power = extended["max_power_w"]
 
     # Detect activity type from FIT sport/sub_sport fields
     sport = session_data.get("sport") if session_data else None
@@ -444,7 +501,7 @@ def parse_records(fit_bytes: bytes) -> dict[str, Any]:
         "max_hr_bpm": max_hr,
         # Power metrics
         "avg_power_w": avg_power,
-        "max_power_w": max_power if max_power else extended["max_power_w"],
+        "max_power_w": max_power,
         # Cadence: FIT's avg_cadence is typically the "pedaling average" (excluding zeros)
         # We always compute the overall average from records to get the true average
         "avg_cadence_rpm": extended["avg_cadence_rpm"],  # Always from records (includes zeros)
