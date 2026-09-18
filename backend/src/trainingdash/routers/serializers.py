@@ -86,6 +86,9 @@ def activity_summary(a: Activity) -> dict[str, Any]:
         "avg_power_w": a.avg_power_w,
         "max_power_w": a.max_power_w,
         "power_source": a.power_source,
+        # Calories
+        "calories": a.calories,
+        "calories_source": a.calories_source,
         # Cadence metrics
         "avg_cadence_rpm": a.avg_cadence_rpm,
         "avg_cadence_pedaling_rpm": a.avg_cadence_pedaling_rpm,

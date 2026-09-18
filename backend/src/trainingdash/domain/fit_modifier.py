@@ -5,19 +5,20 @@ The primary use case is changing the device type to unlock device-specific featu
 on platforms like Garmin Connect.
 
 Architecture:
-- Uses fit_tool to parse and serialize FIT files
-- Modifies manufacturer/product fields in FileIdMessage and DeviceInfoMessage
-- Preserves ALL other data exactly as-is (same file size, all messages intact)
+- Uses surgical byte-patching via fit_writer module
+- Walks FIT record structure, patches manufacturer/product fields in-place
+- Preserves ALL other data exactly as-is (unknown fields, developer data, everything)
+- Recomputes CRC after modification
 
-This approach ensures no data loss - all messages, fields, and custom data are preserved.
+This approach survives real-world FIT files that fit_tool cannot round-trip (files with
+unknown fields, developer data, etc. cause fit_tool to skip data and produce CRC mismatches).
 """
 
 from dataclasses import dataclass
 
-from fit_tool.fit_file import FitFile
-from fit_tool.profile.messages.device_info_message import DeviceInfoMessage
-from fit_tool.profile.messages.file_id_message import FileIdMessage
 from garmin_fit_sdk import Profile
+
+from trainingdash.domain.fit_writer import FitWriteError, spoof_device
 
 
 class FitModificationError(Exception):
@@ -68,9 +69,9 @@ def get_device_list() -> list[dict]:
 def modify_fit(fit_bytes: bytes, modifications: FitModifications) -> bytes:
     """Apply modifications to a FIT file and return new FIT bytes.
 
-    Uses fit_tool to parse the FIT file, modify manufacturer/product fields
-    in FileIdMessage and DeviceInfoMessage records, then serialize back.
-    All other data is preserved exactly as-is.
+    Uses surgical byte-patching to modify manufacturer/product fields
+    in file_id and device_info messages. All other data is preserved
+    exactly as-is, including unknown fields and developer data.
 
     Args:
         fit_bytes: Original FIT file bytes
@@ -87,28 +88,10 @@ def modify_fit(fit_bytes: bytes, modifications: FitModifications) -> bytes:
         return fit_bytes
 
     try:
-        # Parse the FIT file
-        fit = FitFile.from_bytes(fit_bytes)
-
-        # Modify manufacturer/product in FileIdMessage and DeviceInfoMessage records
-        for record in fit.records:
-            if not hasattr(record, "message"):
-                continue
-
-            msg = record.message
-            if not isinstance(msg, (FileIdMessage, DeviceInfoMessage)):
-                continue
-
-            # Update manufacturer if present
-            if hasattr(msg, "manufacturer") and msg.manufacturer is not None:
-                msg.manufacturer = modifications.manufacturer_id
-
-            # Update product if present
-            if hasattr(msg, "product") and msg.product is not None:
-                msg.product = modifications.device_product_id
-
-        # Serialize back to bytes
-        return fit.to_bytes()
-
-    except Exception as e:
+        return spoof_device(
+            fit_bytes,
+            manufacturer_id=modifications.manufacturer_id,
+            product_id=modifications.device_product_id,
+        )
+    except FitWriteError as e:
         raise FitModificationError(f"Failed to modify FIT file: {e}") from e

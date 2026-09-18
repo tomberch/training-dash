@@ -220,6 +220,19 @@ FIELD_DEFINITIONS: dict[str, FieldDef] = {
         nullable=True,
         description="Power confidence for hr_derived (0-1)",
     ),
+    # Calories
+    "calories": FieldDef(
+        "calories",
+        FieldType.NUMBER,
+        nullable=True,
+        description="Calories (kcal)",
+    ),
+    "calories_source": FieldDef(
+        "calories_source",
+        FieldType.STRING,
+        nullable=True,
+        description="Calories source (device, computed_power)",
+    ),
     # Cadence fields
     "avg_cadence_rpm": FieldDef(
         "avg_cadence_rpm",
@@ -463,6 +476,9 @@ FIELD_ALIASES: dict[str, str] = {
     "max_power": "max_power_w",
     "np": "np_power_w",
     "normalized_power": "np_power_w",
+    # Calories aliases
+    "kcal": "calories",
+    "energy": "calories",
     # Cadence aliases
     "cadence": "avg_cadence_rpm",
     "rpm": "avg_cadence_rpm",
@@ -664,6 +680,8 @@ AGGREGATABLE_FIELDS: set[str] = {
     "avg_power_w",
     "max_power_w",
     "np_power_w",
+    # Calories
+    "calories",
     # Cadence
     "avg_cadence_rpm",
     "avg_cadence_pedaling_rpm",

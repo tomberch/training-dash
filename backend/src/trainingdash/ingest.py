@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from trainingdash.activity_pipeline import ActivityPipeline
 from trainingdash.domain.activity_type import detect_activity_type
+from trainingdash.domain.calories import resolve_calories
 from trainingdash.domain.fitness import fit_cp_model
 from trainingdash.domain.grade_stats import compute_max_grade_pct
 from trainingdash.domain.metrics import (
@@ -382,6 +383,8 @@ def parse_records(fit_bytes: bytes) -> dict[str, Any]:
             # Sport/sub_sport for activity type detection
             "sport": msg.get("sport"),
             "sub_sport": msg.get("sub_sport"),
+            # Calories (device-reported, if present)
+            "total_calories": _safe_int(msg.get("total_calories")),
         }
 
     # Process activity messages for UTC offset
@@ -479,6 +482,9 @@ def parse_records(fit_bytes: bytes) -> dict[str, Any]:
     sub_sport = session_data.get("sub_sport") if session_data else None
     activity_type = detect_activity_type(sport, sub_sport)
 
+    # Resolve calories: device value if available, else compute from power
+    session_calories = session_data.get("total_calories") if session_data else None
+
     return {
         "started_at": started_at,
         "total_distance_m": float(total_distance),
@@ -511,6 +517,8 @@ def parse_records(fit_bytes: bytes) -> dict[str, Any]:
         "avg_temperature_c": avg_temperature if avg_temperature else extended["avg_temperature_c"],
         "min_temperature_c": extended["min_temperature_c"],
         "max_temperature_c": extended["max_temperature_c"],
+        # Calories (for resolve_calories in _store_parsed_fit)
+        "session_calories": session_calories,
         # Metadata
         "utc_offset_minutes": utc_offset_minutes,
         "activity_type": activity_type,
@@ -633,6 +641,12 @@ async def _store_parsed_fit(
     Handles the ORM construction and flush so ingest_fit() stays at three
     readable steps: parse → store → pipeline.
     """
+    # Resolve calories: device value takes precedence, else compute from power
+    calories, calories_source = resolve_calories(
+        parsed.get("session_calories"),
+        parsed["records"],
+    )
+
     activity = Activity(
         user_id=user_id,
         source=source,
@@ -659,6 +673,9 @@ async def _store_parsed_fit(
         # Power metrics
         avg_power_w=parsed["avg_power_w"],
         max_power_w=parsed["max_power_w"],
+        # Calories
+        calories=calories,
+        calories_source=calories_source,
         # Cadence metrics
         avg_cadence_rpm=parsed["avg_cadence_rpm"],
         avg_cadence_pedaling_rpm=parsed["avg_cadence_pedaling_rpm"],

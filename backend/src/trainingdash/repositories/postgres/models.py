@@ -188,6 +188,9 @@ class Activity(Base):
     np_power_w: Mapped[int | None] = mapped_column(Integer, nullable=True)
     power_source: Mapped[str | None] = mapped_column(String(20), nullable=True)  # "measured" or "hr_derived"
     power_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)  # 0.0-1.0 for hr_derived
+    # Calories (energy expenditure)
+    calories: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    calories_source: Mapped[str | None] = mapped_column(String(20), nullable=True)  # "device" or "computed_power"
     # Cadence metrics
     avg_cadence_rpm: Mapped[int | None] = mapped_column(Integer, nullable=True)
     avg_cadence_pedaling_rpm: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Only when cadence > 0
