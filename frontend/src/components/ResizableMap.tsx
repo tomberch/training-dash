@@ -1,7 +1,7 @@
 import { MapContainer, Polyline, TileLayer, Marker, CircleMarker, useMap } from "react-leaflet";
 import type { LatLngBounds } from "leaflet";
 import L from "leaflet";
-import { useEffect, useRef } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import { useTileConfig } from "../hooks/useTileUrl";
 
 // Component to fit map bounds to polyline - only runs once on initial load
@@ -56,7 +56,7 @@ interface ResizableMapProps {
   showResizeHandle?: boolean;
 }
 
-export function ResizableMap({
+export const ResizableMap = memo(function ResizableMap({
   positions,
   coloredSegments = [],
   otherPositions,
@@ -69,16 +69,19 @@ export function ResizableMap({
   // Get tile URL from user preference (must be called before any conditional returns)
   const { url: tileUrl, attribution } = useTileConfig();
 
-  if (positions.length === 0) return null;
+  const center = useMemo<[number, number]>(() => {
+    if (positions.length === 0) return [0, 0];
+    return [
+      positions.reduce((sum, p) => sum + p[0], 0) / positions.length,
+      positions.reduce((sum, p) => sum + p[1], 0) / positions.length,
+    ];
+  }, [positions]);
 
-  const center: [number, number] = [
-    positions.reduce((sum, p) => sum + p[0], 0) / positions.length,
-    positions.reduce((sum, p) => sum + p[1], 0) / positions.length,
-  ];
+  if (positions.length === 0) return null;
 
   return (
     <div className="relative">
-      <div 
+      <div
         className="bg-card rounded-t-lg border border-b-0 border-border overflow-hidden"
         style={{ height: `${height}px` }}
       >
@@ -182,4 +185,4 @@ export function ResizableMap({
       )}
     </div>
   );
-}
+});
