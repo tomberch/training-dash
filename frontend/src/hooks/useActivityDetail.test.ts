@@ -61,6 +61,8 @@ const mockActivity = {
   wbal_min_pct: null,
   power_source: null,
   power_confidence: null,
+  calories: null,
+  calories_source: null,
   avg_cadence_rpm: null,
   avg_cadence_pedaling_rpm: null,
   max_cadence_rpm: null,

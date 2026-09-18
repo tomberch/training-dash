@@ -56,6 +56,9 @@ const baseActivity = {
   wbal_min_pct: null,
   power_source: null,
   power_confidence: null,
+  // Calorie metrics
+  calories: null as number | null,
+  calories_source: null as "device" | "computed_power" | null,
   // Cadence metrics
   avg_cadence_rpm: null as number | null,
   avg_cadence_pedaling_rpm: null as number | null,

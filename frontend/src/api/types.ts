@@ -157,6 +157,9 @@ export interface Activity {
   wbal_min_pct: number | null;
   power_source: "measured" | "hr_derived" | null;
   power_confidence: number | null;
+  // Calorie metrics
+  calories: number | null;
+  calories_source: "device" | "computed_power" | null;
   // Cadence metrics
   avg_cadence_rpm: number | null;
   avg_cadence_pedaling_rpm: number | null;
