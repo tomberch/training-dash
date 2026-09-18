@@ -87,7 +87,7 @@ def segment_detail(segment: Segment, my_stats: dict | None = None) -> dict:
         "elevation_gain_m": segment.elevation_gain_m,
         "avg_grade_pct": segment.avg_grade_pct,
         "max_grade_pct": segment.max_grade_pct,
-        "gradient_segments": segment.gradient_segments,
+        "elevation_profile": segment.elevation_profile,
         "effort_count": segment.effort_count,
         "athlete_count": segment.athlete_count,
         "created_by": segment.created_by,

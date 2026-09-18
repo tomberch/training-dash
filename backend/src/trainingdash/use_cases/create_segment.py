@@ -237,8 +237,9 @@ class CreateSegment:
             elevation_gain_m=geometry.elevation_gain_m,
             avg_grade_pct=geometry.avg_grade_pct,
             max_grade_pct=geometry.max_grade_pct,
-            gradient_segments=[
-                {"distance_m": gs.distance_m, "grade_pct": gs.grade_pct} for gs in geometry.gradient_segments
+            elevation_profile=[
+                {"distance_m": ep.distance_m, "elevation_m": ep.elevation_m, "grade_pct": ep.grade_pct}
+                for ep in geometry.elevation_profile
             ],
             created_by=user_id,
             source_activity_id=activity_id,

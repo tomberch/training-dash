@@ -43,7 +43,7 @@ def make_segment(
         elevation_gain_m=elevation_gain_m,
         avg_grade_pct=7.5,
         max_grade_pct=12.0,
-        gradient_segments=[{"distance_m": 500, "grade_pct": 7.5}],
+        elevation_profile=[{"distance_m": 0, "elevation_m": 500, "grade_pct": 0}, {"distance_m": 500, "elevation_m": 538, "grade_pct": 7.5}],
         effort_count=effort_count,
         athlete_count=athlete_count,
     )

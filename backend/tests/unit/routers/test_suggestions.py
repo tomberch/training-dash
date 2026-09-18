@@ -75,7 +75,7 @@ class TestSuggestionResponse:
         segment.avg_grade_pct = 8.0
         segment.max_grade_pct = 12.5
         segment.polyline = "encoded_polyline"
-        segment.gradient_segments = [{"distance_m": 500, "grade_pct": 8.0}]
+        segment.elevation_profile = [{"distance_m": 0, "elevation_m": 500, "grade_pct": 0}, {"distance_m": 500, "elevation_m": 540, "grade_pct": 8.0}]
 
         # Mock PostGIS geometry
         start_shape = MagicMock()
@@ -103,7 +103,7 @@ class TestSuggestionResponse:
         assert result["max_grade_pct"] == 12.5
         assert result["repetition_count"] == 3
         assert result["polyline"] == "encoded_polyline"
-        assert result["gradient_segments"] == [{"distance_m": 500, "grade_pct": 8.0}]
+        assert result["elevation_profile"] == [{"distance_m": 0, "elevation_m": 500, "grade_pct": 0}, {"distance_m": 500, "elevation_m": 540, "grade_pct": 8.0}]
         assert result["start_point"] == {"lat": 47.0, "lng": 8.0}
         assert result["end_point"] == {"lat": 47.05, "lng": 8.01}
 
@@ -125,7 +125,7 @@ class TestSuggestionResponse:
         segment.avg_grade_pct = 1.5
         segment.max_grade_pct = 2.0
         segment.polyline = "sprint_polyline"
-        segment.gradient_segments = []
+        segment.elevation_profile = []
 
         start_shape = MagicMock()
         start_shape.y = 47.0
@@ -162,7 +162,7 @@ class TestSegmentResponse:
         segment.elevation_gain_m = 100.0
         segment.avg_grade_pct = 10.0
         segment.max_grade_pct = 15.0
-        segment.gradient_segments = [{"distance_m": 500, "grade_pct": 10.0}]
+        segment.elevation_profile = [{"distance_m": 0, "elevation_m": 500, "grade_pct": 0}, {"distance_m": 500, "elevation_m": 550, "grade_pct": 10.0}]
         segment.effort_count = 50
         segment.athlete_count = 10
         segment.created_by = 1
@@ -193,7 +193,7 @@ class TestSegmentResponse:
         assert result["elevation_gain_m"] == 100.0
         assert result["avg_grade_pct"] == 10.0
         assert result["max_grade_pct"] == 15.0
-        assert result["gradient_segments"] == [{"distance_m": 500, "grade_pct": 10.0}]
+        assert result["elevation_profile"] == [{"distance_m": 0, "elevation_m": 500, "grade_pct": 0}, {"distance_m": 500, "elevation_m": 550, "grade_pct": 10.0}]
         assert result["effort_count"] == 50
         assert result["athlete_count"] == 10
         assert result["created_by"] == 1

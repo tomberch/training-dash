@@ -12,7 +12,6 @@ from tests.fakes.segment_repos import (
     FakeSegmentSuggestionRepo,
 )
 from trainingdash.domain.climb_detection import DetectedClimb
-from trainingdash.domain.segment_geometry import GradientSegment
 from trainingdash.domain.segment_matching import SegmentCandidate, SegmentMatch
 from trainingdash.repositories.postgres.models import (
     Activity,
@@ -107,7 +106,7 @@ def make_segment(
         elevation_gain_m=100,
         avg_grade_pct=10.0,
         max_grade_pct=15.0,
-        gradient_segments=[],
+        elevation_profile=[],
         effort_count=0,
         athlete_count=0,
     )
@@ -340,7 +339,7 @@ class TestProcessActivitySegments:
             avg_grade_pct=10.0,
             max_grade_pct=12.0,
             category="4",
-            gradient_segments=[GradientSegment(distance_m=500, grade_pct=10.0)],
+            gradient_segments=[],
         )
 
         with patch.object(use_case, "_find_candidates", return_value=[]):

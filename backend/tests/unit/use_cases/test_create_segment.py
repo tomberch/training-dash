@@ -266,7 +266,7 @@ class TestCreateSegmentHappyPath:
         assert segment.avg_grade_pct is not None
         assert segment.max_grade_pct is not None
         assert segment.direction_bearing is not None
-        assert segment.gradient_segments is not None
+        assert segment.elevation_profile is not None
 
 
 # =============================================================================

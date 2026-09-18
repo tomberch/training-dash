@@ -75,7 +75,7 @@ def make_segment(
         elevation_gain_m=100,
         avg_grade_pct=10.0,
         max_grade_pct=15.0,
-        gradient_segments=[],
+        elevation_profile=[],
         effort_count=0,
         athlete_count=0,
         matching_job_id=matching_job_id,

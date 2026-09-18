@@ -482,7 +482,10 @@ class ProcessActivitySegments:
             elevation_gain_m=climb.elevation_gain_m,
             avg_grade_pct=climb.avg_grade_pct,
             max_grade_pct=climb.max_grade_pct,
-            gradient_segments=[{"distance_m": g.distance_m, "grade_pct": g.grade_pct} for g in climb.gradient_segments],
+            elevation_profile=[
+                {"distance_m": ep.distance_m, "elevation_m": ep.elevation_m, "grade_pct": ep.grade_pct}
+                for ep in geometry.elevation_profile
+            ],
             created_by=user_id,
             source_activity_id=activity.id,
         )

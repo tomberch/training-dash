@@ -67,7 +67,7 @@ def suggestion_response(suggestion, segment) -> dict:
         "last_ridden_at": utc_str(suggestion.last_ridden_at),
         "expires_at": utc_str(suggestion.expires_at),
         "polyline": segment.polyline,
-        "gradient_segments": segment.gradient_segments,
+        "elevation_profile": segment.elevation_profile,
         "start_point": {"lat": start_point.y, "lng": start_point.x},
         "end_point": {"lat": end_point.y, "lng": end_point.x},
     }
@@ -91,7 +91,7 @@ def segment_response(segment) -> dict:
         "elevation_gain_m": segment.elevation_gain_m,
         "avg_grade_pct": segment.avg_grade_pct,
         "max_grade_pct": segment.max_grade_pct,
-        "gradient_segments": segment.gradient_segments,
+        "elevation_profile": segment.elevation_profile,
         "effort_count": segment.effort_count,
         "athlete_count": segment.athlete_count,
         "created_by": segment.created_by,
