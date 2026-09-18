@@ -5,7 +5,7 @@ This module provides utilities for computing segment geometry from GPS records:
 - Bounding box calculation
 - Bearing (direction) calculation
 - Elevation statistics (gain, avg grade, max grade)
-- Gradient segments at fixed intervals
+- Elevation profile at fixed intervals
 
 Used when creating segments from activity selections or climb detection.
 """
@@ -18,12 +18,13 @@ from trainingdash.domain.polyline import decode_polyline, encode_polyline
 
 # Re-export for convenience
 __all__ = [
-    "GradientSegment",
+    "ElevationPoint",
+    "GradientSegment",  # Deprecated alias for backward compatibility with climb_detection
     "SegmentGeometry",
     "compute_bearing",
     "compute_bounds",
+    "compute_elevation_profile",
     "compute_elevation_stats",
-    "compute_gradient_segments",
     "compute_segment_geometry",
     "decode_polyline",
     "encode_polyline",
@@ -32,8 +33,27 @@ __all__ = [
 
 
 @dataclass
+class ElevationPoint:
+    """A point on the elevation profile with distance, altitude, and preceding grade.
+
+    Attributes:
+        distance_m: Cumulative distance from segment start in meters.
+        elevation_m: Altitude at this point in meters.
+        grade_pct: Grade of the preceding ~50m window, rounded to 1 decimal.
+    """
+
+    distance_m: float
+    elevation_m: float
+    grade_pct: float
+
+
+@dataclass
 class GradientSegment:
-    """A fixed-distance section with its average grade."""
+    """Deprecated: A fixed-distance section with its average grade.
+
+    This dataclass is kept for backward compatibility with climb_detection.py.
+    New code should use ElevationPoint instead.
+    """
 
     distance_m: float
     grade_pct: float
@@ -54,7 +74,7 @@ class SegmentGeometry:
     elevation_gain_m: float
     avg_grade_pct: float
     max_grade_pct: float
-    gradient_segments: list[GradientSegment]
+    elevation_profile: list[ElevationPoint]
 
 
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -179,66 +199,98 @@ def compute_elevation_stats(
     return (elevation_gain, avg_grade, max_grade)
 
 
-def compute_gradient_segments(
+def compute_elevation_profile(
     records: list[dict],
-    segment_length_m: float = 50.0,
-) -> list[GradientSegment]:
+    sample_interval_m: float = 50.0,
+) -> list[ElevationPoint]:
     """
-    Compute gradient at fixed distance intervals.
+    Compute elevation profile at fixed distance intervals.
+
+    Each point records the altitude at that distance plus the grade of the
+    preceding window. Points are cumulative-distance-anchored so the chart
+    X axis is true distance from segment start.
 
     Args:
-        records: List of record dicts with 'altitude_m' and 'distance_m' keys
-        segment_length_m: Target length for each gradient segment
+        records: List of record dicts with 'altitude_m' and 'distance_m' keys.
+        sample_interval_m: Target interval between sample points (default 50m).
 
     Returns:
-        List of GradientSegment with distance and grade for each interval
+        List of ElevationPoint with distance, elevation, and preceding grade.
+        Returns empty list if fewer than 2 records.
     """
     if len(records) < 2:
         return []
 
-    segments = []
+    profile: list[ElevationPoint] = []
+    base_distance = records[0].get("distance_m", 0.0)
+
     start_idx = 0
     start_distance = records[0].get("distance_m", 0.0)
     start_altitude = records[0].get("altitude_m", 0.0)
 
+    # First point at distance 0 with grade 0 (no preceding window)
+    profile.append(
+        ElevationPoint(
+            distance_m=0.0,
+            elevation_m=float(start_altitude),
+            grade_pct=0.0,
+        )
+    )
+
     for i in range(1, len(records)):
         current_distance = records[i].get("distance_m", 0.0)
-        segment_dist = current_distance - start_distance
+        window_dist = current_distance - start_distance
 
-        if segment_dist >= segment_length_m:
+        if window_dist >= sample_interval_m:
             current_altitude = records[i].get("altitude_m", 0.0)
             delta_alt = current_altitude - start_altitude
 
-            if segment_dist > 0:
-                grade = (delta_alt / segment_dist) * 100
+            if window_dist > 0:
+                grade = (delta_alt / window_dist) * 100
             else:
                 grade = 0.0
 
-            segments.append(GradientSegment(distance_m=segment_dist, grade_pct=round(grade, 1)))
+            profile.append(
+                ElevationPoint(
+                    distance_m=round(current_distance - base_distance, 1),
+                    elevation_m=float(current_altitude),
+                    grade_pct=round(grade, 1),
+                )
+            )
 
             start_idx = i
             start_distance = current_distance
             start_altitude = current_altitude
 
-    # Handle remaining distance (final partial segment)
+    # Handle remaining distance - emit final point if remainder > 10m
     if start_idx < len(records) - 1:
         final_distance = records[-1].get("distance_m", 0.0)
         final_altitude = records[-1].get("altitude_m", 0.0)
         remaining_dist = final_distance - start_distance
 
-        if remaining_dist > 0:
+        if remaining_dist > 10.0:  # Only emit if > 10m remainder
             delta_alt = final_altitude - start_altitude
-            grade = (delta_alt / remaining_dist) * 100
-            segments.append(GradientSegment(distance_m=remaining_dist, grade_pct=round(grade, 1)))
+            if remaining_dist > 0:
+                grade = (delta_alt / remaining_dist) * 100
+            else:
+                grade = 0.0
 
-    return segments
+            profile.append(
+                ElevationPoint(
+                    distance_m=round(final_distance - base_distance, 1),
+                    elevation_m=float(final_altitude),
+                    grade_pct=round(grade, 1),
+                )
+            )
+
+    return profile
 
 
 def compute_segment_geometry(
     records: list[dict],
     start_index: int,
     end_index: int,
-    gradient_segment_length_m: float = 50.0,
+    sample_interval_m: float = 50.0,
 ) -> SegmentGeometry:
     """
     Compute all geometry and stats for a segment from activity records.
@@ -255,7 +307,7 @@ def compute_segment_geometry(
             - distance_m: cumulative distance in meters
         start_index: Start index in records (inclusive)
         end_index: End index in records (inclusive)
-        gradient_segment_length_m: Length for gradient segments
+        sample_interval_m: Interval for elevation profile samples (default 50m)
 
     Returns:
         SegmentGeometry with all computed values
@@ -328,8 +380,8 @@ def compute_segment_geometry(
         avg_grade_pct = 0.0
         max_grade_pct = 0.0
 
-    # Gradient segments
-    gradient_segments = compute_gradient_segments(segment_records, gradient_segment_length_m)
+    # Elevation profile
+    elevation_profile = compute_elevation_profile(segment_records, sample_interval_m)
 
     return SegmentGeometry(
         polyline=polyline,
@@ -343,5 +395,5 @@ def compute_segment_geometry(
         elevation_gain_m=round(elevation_gain_m, 1),
         avg_grade_pct=round(avg_grade_pct, 2),
         max_grade_pct=round(max_grade_pct, 2),
-        gradient_segments=gradient_segments,
+        elevation_profile=elevation_profile,
     )

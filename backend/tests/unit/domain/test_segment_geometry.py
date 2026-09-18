@@ -3,12 +3,12 @@
 import pytest
 
 from trainingdash.domain.segment_geometry import (
-    GradientSegment,
+    ElevationPoint,
     SegmentGeometry,
     compute_bearing,
     compute_bounds,
+    compute_elevation_profile,
     compute_elevation_stats,
-    compute_gradient_segments,
     compute_segment_geometry,
     decode_polyline,
     encode_polyline,
@@ -241,15 +241,15 @@ class TestComputeElevationStats:
 
 
 # =============================================================================
-# Gradient Segments Tests
+# Elevation Profile Tests
 # =============================================================================
 
 
-class TestComputeGradientSegments:
-    """Tests for compute_gradient_segments function."""
+class TestComputeElevationProfile:
+    """Tests for compute_elevation_profile function."""
 
-    def test_even_segments(self):
-        """Records divide evenly into segments."""
+    def test_profile_spacing_approximately_50m(self):
+        """Profile points should be spaced at ~50m intervals."""
         records = [
             {"altitude_m": 0, "distance_m": 0},
             {"altitude_m": 5, "distance_m": 50},
@@ -257,62 +257,120 @@ class TestComputeGradientSegments:
             {"altitude_m": 15, "distance_m": 150},
             {"altitude_m": 20, "distance_m": 200},
         ]
-        segments = compute_gradient_segments(records, segment_length_m=50)
+        profile = compute_elevation_profile(records, sample_interval_m=50)
 
-        assert len(segments) == 4
-        for seg in segments:
-            assert seg.distance_m == pytest.approx(50, abs=1)
-            assert seg.grade_pct == pytest.approx(10.0)  # 5m / 50m = 10%
+        # First point at 0, then points at 50, 100, 150, 200
+        assert len(profile) == 5
+        assert profile[0].distance_m == 0.0
+        assert profile[1].distance_m == pytest.approx(50.0)
+        assert profile[2].distance_m == pytest.approx(100.0)
+        assert profile[3].distance_m == pytest.approx(150.0)
+        assert profile[4].distance_m == pytest.approx(200.0)
 
-    def test_uneven_final_segment(self):
-        """Final segment may be shorter than target length."""
+    def test_profile_cumulative_distance(self):
+        """Distance should be cumulative from segment start."""
+        records = [
+            {"altitude_m": 100, "distance_m": 1000},  # Segment starts at 1000m
+            {"altitude_m": 110, "distance_m": 1100},
+            {"altitude_m": 120, "distance_m": 1200},
+        ]
+        profile = compute_elevation_profile(records, sample_interval_m=100)
+
+        # Distances should be relative to segment start (0, 100, 200)
+        assert profile[0].distance_m == 0.0
+        assert profile[1].distance_m == pytest.approx(100.0)
+        assert profile[2].distance_m == pytest.approx(200.0)
+
+    def test_profile_includes_elevation(self):
+        """Each point should include altitude."""
+        records = [
+            {"altitude_m": 500, "distance_m": 0},
+            {"altitude_m": 510, "distance_m": 50},
+            {"altitude_m": 525, "distance_m": 100},
+        ]
+        profile = compute_elevation_profile(records, sample_interval_m=50)
+
+        assert profile[0].elevation_m == 500.0
+        assert profile[1].elevation_m == 510.0
+        assert profile[2].elevation_m == 525.0
+
+    def test_profile_includes_preceding_grade(self):
+        """Each point should include grade of preceding window."""
+        records = [
+            {"altitude_m": 0, "distance_m": 0},
+            {"altitude_m": 10, "distance_m": 100},  # 10% grade
+            {"altitude_m": 15, "distance_m": 200},  # 5% grade
+        ]
+        profile = compute_elevation_profile(records, sample_interval_m=100)
+
+        assert profile[0].grade_pct == 0.0  # First point has no preceding window
+        assert profile[1].grade_pct == pytest.approx(10.0)
+        assert profile[2].grade_pct == pytest.approx(5.0)
+
+    def test_final_partial_window_emitted_if_over_10m(self):
+        """Final point emitted if remaining distance > 10m."""
         records = [
             {"altitude_m": 0, "distance_m": 0},
             {"altitude_m": 5, "distance_m": 50},
-            {"altitude_m": 7, "distance_m": 70},  # Only 20m more
+            {"altitude_m": 7, "distance_m": 70},  # 20m remaining > 10m threshold
         ]
-        segments = compute_gradient_segments(records, segment_length_m=50)
+        profile = compute_elevation_profile(records, sample_interval_m=50)
 
-        assert len(segments) == 2
-        assert segments[0].distance_m == pytest.approx(50)
-        assert segments[1].distance_m == pytest.approx(20)
+        assert len(profile) == 3  # 0, 50, 70
+        assert profile[-1].distance_m == pytest.approx(70.0)
+        assert profile[-1].elevation_m == 7.0
+        # Grade for final 20m: 2m / 20m = 10%
+        assert profile[-1].grade_pct == pytest.approx(10.0)
+
+    def test_final_partial_window_skipped_if_under_10m(self):
+        """Final point not emitted if remaining distance <= 10m."""
+        records = [
+            {"altitude_m": 0, "distance_m": 0},
+            {"altitude_m": 5, "distance_m": 50},
+            {"altitude_m": 5.5, "distance_m": 55},  # Only 5m remaining
+        ]
+        profile = compute_elevation_profile(records, sample_interval_m=50)
+
+        assert len(profile) == 2  # 0, 50 (no 55m point)
+        assert profile[-1].distance_m == pytest.approx(50.0)
 
     def test_variable_grades(self):
-        """Variable grades should be computed per segment."""
+        """Variable grades should be computed per window."""
         records = [
             {"altitude_m": 0, "distance_m": 0},
             {"altitude_m": 10, "distance_m": 100},  # 10%
             {"altitude_m": 15, "distance_m": 200},  # 5%
             {"altitude_m": 30, "distance_m": 300},  # 15%
         ]
-        segments = compute_gradient_segments(records, segment_length_m=100)
+        profile = compute_elevation_profile(records, sample_interval_m=100)
 
-        assert len(segments) == 3
-        assert segments[0].grade_pct == pytest.approx(10.0)
-        assert segments[1].grade_pct == pytest.approx(5.0)
-        assert segments[2].grade_pct == pytest.approx(15.0)
+        assert len(profile) == 4
+        assert profile[1].grade_pct == pytest.approx(10.0)
+        assert profile[2].grade_pct == pytest.approx(5.0)
+        assert profile[3].grade_pct == pytest.approx(15.0)
 
     def test_empty_records(self):
         """Empty records returns empty list."""
-        segments = compute_gradient_segments([])
-        assert segments == []
+        profile = compute_elevation_profile([])
+        assert profile == []
 
     def test_single_record(self):
         """Single record returns empty list."""
-        segments = compute_gradient_segments([{"altitude_m": 0, "distance_m": 0}])
-        assert segments == []
+        profile = compute_elevation_profile([{"altitude_m": 0, "distance_m": 0}])
+        assert profile == []
 
-    def test_segment_shorter_than_threshold(self):
-        """Very short segment should still be included."""
+    def test_two_records_short_segment(self):
+        """Two records with distance > 10m should produce 2 points."""
         records = [
             {"altitude_m": 0, "distance_m": 0},
-            {"altitude_m": 1, "distance_m": 10},  # Only 10m
+            {"altitude_m": 1, "distance_m": 15},  # Only 15m, > 10m threshold
         ]
-        segments = compute_gradient_segments(records, segment_length_m=50)
+        profile = compute_elevation_profile(records, sample_interval_m=50)
 
-        # Should have one short segment
-        assert len(segments) == 1
-        assert segments[0].distance_m == pytest.approx(10)
+        # First point at 0, final partial window at 15m (> 10m)
+        assert len(profile) == 2
+        assert profile[0].distance_m == 0.0
+        assert profile[1].distance_m == pytest.approx(15.0)
 
 
 # =============================================================================
@@ -406,12 +464,15 @@ class TestComputeSegmentGeometry:
         decoded = decode_polyline(geom.polyline)
         assert len(decoded) == 6  # All 6 points
 
-    def test_gradient_segments_generated(self, sample_records):
-        """Test gradient segments are generated."""
-        geom = compute_segment_geometry(sample_records, start_index=0, end_index=5, gradient_segment_length_m=150)
+    def test_elevation_profile_generated(self, sample_records):
+        """Test elevation profile is generated."""
+        geom = compute_segment_geometry(sample_records, start_index=0, end_index=5, sample_interval_m=150)
 
-        # 750m / 150m = 5 segments expected
-        assert len(geom.gradient_segments) == 5
+        # First point at 0, then points at ~150m intervals, plus possible final point
+        # 750m / 150m = 5 full intervals, so 6 points (0, 150, 300, 450, 600, 750)
+        assert len(geom.elevation_profile) >= 5
+        assert geom.elevation_profile[0].distance_m == 0.0
+        assert geom.elevation_profile[0].elevation_m == 500.0
 
     def test_subset_of_records(self, sample_records):
         """Test using a subset via start/end indices."""
@@ -515,20 +576,21 @@ class TestSegmentGeometryDataclass:
             elevation_gain_m=100.0,
             avg_grade_pct=10.0,
             max_grade_pct=15.0,
-            gradient_segments=[GradientSegment(500.0, 10.0)],
+            elevation_profile=[ElevationPoint(0.0, 500.0, 0.0), ElevationPoint(500.0, 550.0, 10.0)],
         )
 
         assert geom.polyline == "test"
         assert geom.start_lat == 46.0
         assert geom.bounds == (46.0, 7.0, 47.0, 8.0)
-        assert len(geom.gradient_segments) == 1
+        assert len(geom.elevation_profile) == 2
 
 
-class TestGradientSegmentDataclass:
-    """Tests for GradientSegment dataclass."""
+class TestElevationPointDataclass:
+    """Tests for ElevationPoint dataclass."""
 
     def test_dataclass_fields(self):
         """Verify fields exist and are correct types."""
-        seg = GradientSegment(distance_m=100.0, grade_pct=8.5)
-        assert seg.distance_m == 100.0
-        assert seg.grade_pct == 8.5
+        point = ElevationPoint(distance_m=100.0, elevation_m=550.0, grade_pct=8.5)
+        assert point.distance_m == 100.0
+        assert point.elevation_m == 550.0
+        assert point.grade_pct == 8.5

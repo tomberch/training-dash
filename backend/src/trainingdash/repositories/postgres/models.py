@@ -1023,7 +1023,7 @@ class Segment(Base):
     elevation_gain_m: Mapped[float] = mapped_column(Float, nullable=False)
     avg_grade_pct: Mapped[float] = mapped_column(Float, nullable=False)
     max_grade_pct: Mapped[float] = mapped_column(Float, nullable=False)
-    gradient_segments = mapped_column(JSONB, nullable=False)  # [{distance_m, grade_pct}, ...]
+    elevation_profile = mapped_column(JSONB, nullable=False)  # [{distance_m, elevation_m, grade_pct}, ...]
 
     # Denormalized counts (updated by triggers or application code)
     effort_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))

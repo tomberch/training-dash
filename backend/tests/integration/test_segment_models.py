@@ -45,7 +45,11 @@ class TestSegmentModel:
             elevation_gain_m=200.0,
             avg_grade_pct=8.0,
             max_grade_pct=15.0,
-            gradient_segments=[{"distance_m": 500, "grade_pct": 6.0}, {"distance_m": 500, "grade_pct": 10.0}],
+            elevation_profile=[
+                {"distance_m": 0, "elevation_m": 500, "grade_pct": 0},
+                {"distance_m": 500, "elevation_m": 530, "grade_pct": 6.0},
+                {"distance_m": 1000, "elevation_m": 580, "grade_pct": 10.0},
+            ],
             created_by=seed_user.id,
         )
         db_session.add(segment)
@@ -87,7 +91,7 @@ class TestSegmentModel:
             elevation_gain_m=10.0,
             avg_grade_pct=1.0,
             max_grade_pct=3.0,
-            gradient_segments=[],
+            elevation_profile=[],
             direction_bearing=45.0,
             created_by=seed_user.id,
         )
@@ -124,7 +128,7 @@ class TestSegmentModel:
             elevation_gain_m=100.0,
             avg_grade_pct=10.0,
             max_grade_pct=15.0,
-            gradient_segments=[],
+            elevation_profile=[],
         )
         db_session.add(segment)
         with pytest.raises(IntegrityError):
@@ -156,7 +160,7 @@ class TestSegmentModel:
             elevation_gain_m=100.0,
             avg_grade_pct=10.0,
             max_grade_pct=15.0,
-            gradient_segments=[],
+            elevation_profile=[],
         )
         db_session.add(segment)
         with pytest.raises(IntegrityError):
@@ -187,7 +191,7 @@ class TestSegmentModel:
             elevation_gain_m=100.0,
             avg_grade_pct=10.0,
             max_grade_pct=15.0,
-            gradient_segments=[],
+            elevation_profile=[],
         )
         db_session.add(segment)
         await db_session.commit()
@@ -230,7 +234,7 @@ class TestSegmentModel:
             elevation_gain_m=100.0,
             avg_grade_pct=10.0,
             max_grade_pct=15.0,
-            gradient_segments=[],
+            elevation_profile=[],
             created_by=user.id,
         )
         db_session.add(segment)
@@ -275,7 +279,7 @@ class TestSegmentEffortModel:
             elevation_gain_m=100.0,
             avg_grade_pct=10.0,
             max_grade_pct=15.0,
-            gradient_segments=[],
+            elevation_profile=[],
         )
         db_session.add(segment)
         await db_session.commit()
@@ -374,7 +378,7 @@ class TestSegmentEffortModel:
             elevation_gain_m=100.0,
             avg_grade_pct=10.0,
             max_grade_pct=15.0,
-            gradient_segments=[],
+            elevation_profile=[],
         )
         db_session.add(segment)
         await db_session.commit()
@@ -448,7 +452,7 @@ class TestSegmentSuggestionModel:
             elevation_gain_m=100.0,
             avg_grade_pct=10.0,
             max_grade_pct=15.0,
-            gradient_segments=[],
+            elevation_profile=[],
         )
         db_session.add(segment)
         await db_session.commit()
@@ -551,7 +555,7 @@ class TestSegmentSuggestionModel:
             elevation_gain_m=100.0,
             avg_grade_pct=10.0,
             max_grade_pct=15.0,
-            gradient_segments=[],
+            elevation_profile=[],
         )
         db_session.add(segment)
         await db_session.commit()
@@ -625,7 +629,7 @@ class TestSpatialQueries:
             elevation_gain_m=100.0,
             avg_grade_pct=10.0,
             max_grade_pct=15.0,
-            gradient_segments=[],
+            elevation_profile=[],
         )
         db_session.add(segment)
         await db_session.commit()
