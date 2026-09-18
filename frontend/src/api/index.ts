@@ -33,6 +33,7 @@ export type {
   WbalPoint,
   WbalResponse,
   JobStatus,
+  ElevationPoint,
 } from "./types";
 export { ACTIVITY_TYPES, ACTIVITY_TYPE_LABELS, BIKE_TYPES, BIKE_TYPE_LABELS } from "./types";
 
