@@ -112,7 +112,7 @@ const mockPlanResponse: RacePlanResponse = {
 
 function renderGeneratePlan(initialRoute = "/race-planner/generate") {
   return render(
-    <UserContext.Provider value={{ user: mockUser, updateUser: vi.fn() }}>
+    <UserContext.Provider value={{ user: mockUser, updateUser: vi.fn(), decrementPendingSuggestions: vi.fn() }}>
       <MemoryRouter initialEntries={[initialRoute]}>
         <Routes>
           <Route path="/race-planner/generate" element={<GeneratePlan />} />
