@@ -6,6 +6,9 @@ from trainingdash.domain.polyline import encode_polyline
 from trainingdash.domain.segment_geometry import compute_bearing, haversine_distance
 from trainingdash.domain.segment_matching import (
     SegmentCandidate,
+    SegmentMatch,
+    _deduplicate_matches,
+    _ranges_overlap_significantly,
     bearings_match,
     compute_path_overlap,
     match_activity_to_segments,
@@ -678,3 +681,265 @@ class TestMatchActivityToSegments:
         assert len(matches) == 3
         for i in range(len(matches) - 1):
             assert matches[i].start_index < matches[i + 1].start_index
+
+
+
+# =============================================================================
+# _ranges_overlap_significantly tests
+# =============================================================================
+
+
+class TestRangesOverlapSignificantly:
+    """Tests for _ranges_overlap_significantly function."""
+
+    def test_no_overlap(self):
+        """Non-overlapping ranges return False."""
+        assert _ranges_overlap_significantly(0, 10, 20, 30) is False
+        assert _ranges_overlap_significantly(20, 30, 0, 10) is False
+
+    def test_adjacent_ranges(self):
+        """Adjacent ranges (no overlap) return False."""
+        assert _ranges_overlap_significantly(0, 10, 11, 20) is False
+        assert _ranges_overlap_significantly(11, 20, 0, 10) is False
+
+    def test_full_overlap_identical(self):
+        """Identical ranges return True."""
+        assert _ranges_overlap_significantly(0, 10, 0, 10) is True
+
+    def test_full_overlap_contained(self):
+        """One range fully contained in another returns True."""
+        assert _ranges_overlap_significantly(0, 20, 5, 15) is True
+        assert _ranges_overlap_significantly(5, 15, 0, 20) is True
+
+    def test_partial_overlap_above_threshold(self):
+        """Partial overlap above 50% threshold returns True."""
+        # Range 0-10 (11 elements) overlaps with 5-15 (11 elements)
+        # Overlap is 5-10 (6 elements) = 6/11 = 54.5% > 50%
+        assert _ranges_overlap_significantly(0, 10, 5, 15) is True
+
+    def test_partial_overlap_below_threshold(self):
+        """Partial overlap below 50% threshold returns False."""
+        # Range 0-10 (11 elements) overlaps with 8-20 (13 elements)
+        # Overlap is 8-10 (3 elements) = 3/11 = 27% < 50%
+        assert _ranges_overlap_significantly(0, 10, 8, 20) is False
+
+    def test_custom_threshold(self):
+        """Custom threshold is respected."""
+        # Range 0-10 overlaps with 7-20
+        # Overlap is 7-10 (4 elements) = 4/11 = 36%
+        assert _ranges_overlap_significantly(0, 10, 7, 20, threshold=0.3) is True
+        assert _ranges_overlap_significantly(0, 10, 7, 20, threshold=0.5) is False
+
+    def test_single_point_overlap(self):
+        """Single point overlap returns False (below default threshold)."""
+        # Range 0-10 overlaps with 10-20 at single point 10
+        # Overlap is 1 element = 1/11 = 9% < 50%
+        assert _ranges_overlap_significantly(0, 10, 10, 20) is False
+
+    def test_exact_threshold_boundary(self):
+        """Exact 50% overlap returns True."""
+        # Range 0-9 (10 elements) overlaps with 5-14 (10 elements)
+        # Overlap is 5-9 (5 elements) = 5/10 = 50%
+        assert _ranges_overlap_significantly(0, 9, 5, 14, threshold=0.5) is True
+
+
+# =============================================================================
+# _deduplicate_matches tests
+# =============================================================================
+
+
+class TestDeduplicateMatches:
+    """Tests for _deduplicate_matches function."""
+
+    def test_empty_list(self):
+        """Empty list returns empty list."""
+        assert _deduplicate_matches([]) == []
+
+    def test_single_match(self):
+        """Single match is returned unchanged."""
+        segment_id = uuid4()
+        match = SegmentMatch(segment_id=segment_id, start_index=0, end_index=10, overlap_pct=95.0)
+        result = _deduplicate_matches([match])
+        assert len(result) == 1
+        assert result[0] == match
+
+    def test_non_overlapping_same_segment(self):
+        """Non-overlapping matches for same segment are kept (loop ride)."""
+        segment_id = uuid4()
+        match1 = SegmentMatch(segment_id=segment_id, start_index=0, end_index=100, overlap_pct=95.0)
+        match2 = SegmentMatch(segment_id=segment_id, start_index=500, end_index=600, overlap_pct=93.0)
+        
+        result = _deduplicate_matches([match1, match2])
+        
+        assert len(result) == 2
+        assert match1 in result
+        assert match2 in result
+
+    def test_overlapping_same_segment_keeps_best(self):
+        """Overlapping matches for same segment keeps highest overlap."""
+        segment_id = uuid4()
+        # These ranges overlap significantly (same end, different starts)
+        match1 = SegmentMatch(segment_id=segment_id, start_index=0, end_index=100, overlap_pct=92.0)
+        match2 = SegmentMatch(segment_id=segment_id, start_index=5, end_index=100, overlap_pct=95.0)
+        match3 = SegmentMatch(segment_id=segment_id, start_index=10, end_index=100, overlap_pct=90.0)
+        
+        result = _deduplicate_matches([match1, match2, match3])
+        
+        assert len(result) == 1
+        assert result[0].overlap_pct == 95.0  # Kept the best one
+
+    def test_different_segments_not_deduplicated(self):
+        """Overlapping matches for different segments are all kept."""
+        segment1_id = uuid4()
+        segment2_id = uuid4()
+        match1 = SegmentMatch(segment_id=segment1_id, start_index=0, end_index=100, overlap_pct=95.0)
+        match2 = SegmentMatch(segment_id=segment2_id, start_index=0, end_index=100, overlap_pct=93.0)
+        
+        result = _deduplicate_matches([match1, match2])
+        
+        assert len(result) == 2
+
+    def test_multiple_segments_with_duplicates(self):
+        """Mix of segments with and without duplicates."""
+        segment1_id = uuid4()
+        segment2_id = uuid4()
+        
+        # Segment 1: two overlapping matches (should dedupe to 1)
+        match1a = SegmentMatch(segment_id=segment1_id, start_index=0, end_index=100, overlap_pct=92.0)
+        match1b = SegmentMatch(segment_id=segment1_id, start_index=5, end_index=100, overlap_pct=95.0)
+        
+        # Segment 2: single match (should keep)
+        match2 = SegmentMatch(segment_id=segment2_id, start_index=200, end_index=300, overlap_pct=91.0)
+        
+        result = _deduplicate_matches([match1a, match1b, match2])
+        
+        assert len(result) == 2
+        segment_ids = {m.segment_id for m in result}
+        assert segment1_id in segment_ids
+        assert segment2_id in segment_ids
+        
+        # Check that segment1's best match was kept
+        seg1_match = next(m for m in result if m.segment_id == segment1_id)
+        assert seg1_match.overlap_pct == 95.0
+
+    def test_result_sorted_by_start_index(self):
+        """Result is sorted by start_index."""
+        segment1_id = uuid4()
+        segment2_id = uuid4()
+        
+        # Create matches in unsorted order
+        match1 = SegmentMatch(segment_id=segment1_id, start_index=500, end_index=600, overlap_pct=95.0)
+        match2 = SegmentMatch(segment_id=segment2_id, start_index=100, end_index=200, overlap_pct=93.0)
+        
+        result = _deduplicate_matches([match1, match2])
+        
+        assert len(result) == 2
+        assert result[0].start_index < result[1].start_index
+
+    def test_gps_wobble_scenario(self):
+        """Real-world GPS wobble: multiple points near start/end create duplicates."""
+        segment_id = uuid4()
+        # Simulate GPS wobble creating 5 slightly different matches
+        # All have same end but different starts (typical GPS wobble near segment start)
+        matches = [
+            SegmentMatch(segment_id=segment_id, start_index=310, end_index=917, overlap_pct=94.5),
+            SegmentMatch(segment_id=segment_id, start_index=311, end_index=917, overlap_pct=94.8),
+            SegmentMatch(segment_id=segment_id, start_index=312, end_index=917, overlap_pct=95.2),
+            SegmentMatch(segment_id=segment_id, start_index=313, end_index=917, overlap_pct=95.0),
+            SegmentMatch(segment_id=segment_id, start_index=314, end_index=917, overlap_pct=94.3),
+            SegmentMatch(segment_id=segment_id, start_index=315, end_index=917, overlap_pct=93.8),
+        ]
+        
+        result = _deduplicate_matches(matches)
+        
+        # Should deduplicate to just 1 match
+        assert len(result) == 1
+        # Should keep the one with highest overlap (95.2%)
+        assert result[0].overlap_pct == 95.2
+        assert result[0].start_index == 312
+
+
+# =============================================================================
+# Integration: match_activity_to_segments with deduplication
+# =============================================================================
+
+
+class TestMatchActivityDeduplication:
+    """Integration tests for deduplication in match_activity_to_segments."""
+
+    def test_gps_wobble_produces_single_match(self):
+        """GPS wobble near segment boundaries produces single best match."""
+        # Create a segment
+        segment_coords = [
+            (47.0, 8.0),
+            (47.001, 8.0),
+            (47.002, 8.0),
+            (47.003, 8.0),
+        ]
+        
+        # Create activity with multiple points within tolerance of segment start
+        # This simulates GPS wobble where several consecutive points are all
+        # within 25m of the segment start
+        activity_coords = [
+            # Multiple points near segment start (within 25m tolerance)
+            (47.00002, 8.0),   # ~2m from start
+            (47.00005, 8.0),   # ~5m from start  
+            (47.00010, 8.0),   # ~11m from start
+            (47.00015, 8.0),   # ~17m from start
+            (47.00020, 8.0),   # ~22m from start
+            # Continue along segment
+            (47.001, 8.0),
+            (47.002, 8.0),
+            # Multiple points near segment end (within 25m tolerance)
+            (47.00280, 8.0),   # ~22m from end
+            (47.00285, 8.0),   # ~17m from end
+            (47.00290, 8.0),   # ~11m from end
+            (47.00295, 8.0),   # ~5m from end
+            (47.003, 8.0),     # at end
+        ]
+        
+        records = make_records(activity_coords)
+        candidate = make_candidate(segment_coords)
+        
+        matches = match_activity_to_segments(records, [candidate])
+        
+        # Should produce exactly 1 match despite multiple valid start/end combinations
+        assert len(matches) == 1
+        assert matches[0].segment_id == candidate.id
+        assert matches[0].overlap_pct >= 90
+
+    def test_loop_ride_produces_multiple_distinct_matches(self):
+        """Loop ride crossing segment twice produces two distinct matches."""
+        segment_coords = [
+            (47.0, 8.0),
+            (47.001, 8.0),
+            (47.002, 8.0),
+        ]
+        
+        # Activity: cross segment, loop far away, cross again
+        activity_coords = [
+            # First crossing
+            (47.0, 8.0),
+            (47.001, 8.0),
+            (47.002, 8.0),
+            # Loop far away (well outside segment area)
+            (47.002, 8.005),
+            (47.001, 8.005),
+            (47.0, 8.005),
+            # Return and cross again  
+            (47.0, 8.0),
+            (47.001, 8.0),
+            (47.002, 8.0),
+        ]
+        
+        records = make_records(activity_coords)
+        candidate = make_candidate(segment_coords)
+        
+        matches = match_activity_to_segments(records, [candidate])
+        
+        # Should have exactly 2 matches (one per crossing)
+        assert len(matches) == 2
+        # Both should be for the same segment
+        assert all(m.segment_id == candidate.id for m in matches)
+        # They should have different start indices
+        assert matches[0].start_index != matches[1].start_index

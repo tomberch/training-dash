@@ -372,4 +372,98 @@ def match_activity_to_segments(
     # Sort by start index
     matches.sort(key=lambda m: m.start_index)
 
+    # Deduplicate overlapping matches for the same segment
+    # Keep the match with highest overlap when ranges overlap significantly
+    matches = _deduplicate_matches(matches)
+
     return matches
+
+
+def _deduplicate_matches(matches: list[SegmentMatch]) -> list[SegmentMatch]:
+    """
+    Remove duplicate matches for the same segment that overlap significantly.
+
+    When multiple matches exist for the same segment with overlapping index ranges,
+    keep only the one with the highest overlap percentage. Two matches are considered
+    overlapping if their index ranges share more than 50% of the smaller range.
+
+    Args:
+        matches: List of matches sorted by start_index
+
+    Returns:
+        Deduplicated list of matches
+    """
+    if len(matches) <= 1:
+        return matches
+
+    # Group matches by segment_id
+    by_segment: dict[UUID, list[SegmentMatch]] = {}
+    for match in matches:
+        if match.segment_id not in by_segment:
+            by_segment[match.segment_id] = []
+        by_segment[match.segment_id].append(match)
+
+    result = []
+
+    for segment_id, segment_matches in by_segment.items():
+        if len(segment_matches) == 1:
+            result.append(segment_matches[0])
+            continue
+
+        # Sort by overlap descending to prefer better matches
+        segment_matches.sort(key=lambda m: -m.overlap_pct)
+
+        kept: list[SegmentMatch] = []
+        for match in segment_matches:
+            # Check if this match overlaps significantly with any kept match
+            overlaps_existing = False
+            for kept_match in kept:
+                if _ranges_overlap_significantly(
+                    match.start_index,
+                    match.end_index,
+                    kept_match.start_index,
+                    kept_match.end_index,
+                ):
+                    overlaps_existing = True
+                    break
+
+            if not overlaps_existing:
+                kept.append(match)
+
+        result.extend(kept)
+
+    # Re-sort by start index
+    result.sort(key=lambda m: m.start_index)
+    return result
+
+
+def _ranges_overlap_significantly(
+    start1: int, end1: int, start2: int, end2: int, threshold: float = 0.5
+) -> bool:
+    """
+    Check if two index ranges overlap by more than threshold of the smaller range.
+
+    Args:
+        start1, end1: First range (inclusive)
+        start2, end2: Second range (inclusive)
+        threshold: Minimum overlap fraction to consider significant (default 0.5)
+
+    Returns:
+        True if ranges overlap significantly
+    """
+    # Calculate overlap
+    overlap_start = max(start1, start2)
+    overlap_end = min(end1, end2)
+
+    if overlap_start > overlap_end:
+        # No overlap
+        return False
+
+    overlap_size = overlap_end - overlap_start + 1
+
+    # Size of smaller range
+    size1 = end1 - start1 + 1
+    size2 = end2 - start2 + 1
+    smaller_size = min(size1, size2)
+
+    return (overlap_size / smaller_size) >= threshold
