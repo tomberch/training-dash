@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from trainingdash.crypto import EncryptionError, decrypt
 from trainingdash.domain.fit_modifier import FitModificationError, FitModifications, modify_fit
+from trainingdash.domain.fit_writer import inject_session_calories
 from trainingdash.repositories.postgres.models import (
     Activity,
     GarminCredentials,
@@ -234,7 +235,33 @@ class UploadToProvider:
         activity: Activity,
         fit_bytes: bytes,
     ) -> UploadResult:
-        """Upload FIT to Garmin Connect."""
+        """Upload FIT to Garmin Connect.
+
+        Per spec #675, injects computed calories into the FIT file if:
+        - Activity has computed calories (calories_source == 'computed_power')
+        - Best-effort: if injection fails, upload proceeds with original bytes
+        """
+        # Inject computed calories if available (Garmin only, per spec #675)
+        # This is best-effort: if injection fails, we proceed with original bytes
+        if activity.calories is not None and activity.calories_source == "computed_power":
+            injected_bytes, injected = inject_session_calories(
+                fit_bytes,
+                activity.calories,
+                only_if_missing=True,
+            )
+            if injected:
+                fit_bytes = injected_bytes
+                logger.info(
+                    "Injected computed calories (%d kcal) into FIT for activity %s",
+                    activity.calories,
+                    activity.id,
+                )
+            else:
+                logger.debug(
+                    "Skipped calorie injection for activity %s (field missing or already set)",
+                    activity.id,
+                )
+
         # Get credentials
         result = await self._db.execute(select(GarminCredentials).where(GarminCredentials.user_id == user_id))
         creds = result.scalar_one_or_none()

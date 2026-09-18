@@ -71,7 +71,7 @@ async def backfill_activity(
         parsed = parse_records(activity.raw_fit)
 
         # Get session calories (device-reported) and records for power computation
-        session_calories = parsed.get("total_calories")
+        session_calories = parsed.get("session_calories")
         records = parsed.get("records", [])
 
         # Resolve calories using the same logic as ingest
@@ -165,6 +165,7 @@ async def backfill_all(
 
 
 def main():
+    """CLI entrypoint for calories backfill."""
     parser = argparse.ArgumentParser(
         description="Backfill calories for existing activities"
     )
