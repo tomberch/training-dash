@@ -17,11 +17,7 @@ export interface UseActivitySummaryResult {
   activity: Activity | null;
   setActivity: (activity: Activity | null) => void;
 
-  // Title editing
-  isEditingTitle: boolean;
-  setIsEditingTitle: (editing: boolean) => void;
-  editedTitle: string;
-  setEditedTitle: (title: string) => void;
+  // Title editing (the editing UI state lives in the TitleEditor component)
   saveTitle: (title: string) => Promise<void>;
 
   // Title generation
@@ -38,9 +34,7 @@ export function useActivitySummary(activityId: string): UseActivitySummaryResult
   const [error, setError] = useState<Error | ApiError | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Title editing state
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [editedTitle, setEditedTitle] = useState("");
+  // Title generation state
   const [isGeneratingTitle, setIsGeneratingTitle] = useState(false);
 
   // Fetch activity on mount/id change
@@ -60,7 +54,6 @@ export function useActivitySummary(activityId: string): UseActivitySummaryResult
       setActivity((prev) =>
         prev ? { ...prev, title: updated.title, title_source: updated.title_source } : prev
       );
-      setIsEditingTitle(false);
     },
     [activityId]
   );
@@ -83,10 +76,6 @@ export function useActivitySummary(activityId: string): UseActivitySummaryResult
     setError,
     activity,
     setActivity,
-    isEditingTitle,
-    setIsEditingTitle,
-    editedTitle,
-    setEditedTitle,
     saveTitle,
     isGeneratingTitle,
     generateTitle,

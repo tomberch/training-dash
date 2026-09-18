@@ -29,6 +29,7 @@ import {
 import { toast } from "sonner";
 import { deleteActivity, fetchMyXertCredentials, fetchMyGarminCredentials, updateActivityType, updateActivityBike, ACTIVITY_TYPES, ACTIVITY_TYPE_LABELS } from "./api";
 import type { ActivityType, Bike } from "./api";
+import { ApiError } from "./api";
 import { fetchBikes } from "./api/bikes";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
@@ -51,6 +52,50 @@ interface ChartConfig {
   dataKey: string;
 }
 
+interface TitleEditorProps {
+  title: string;
+  onSave: (title: string) => Promise<void>;
+  onError: (error: unknown) => void;
+  children?: React.ReactNode;
+}
+
+/**
+ * Title editor with local state: keystrokes stay inside this component,
+ * so editing never re-renders the parent's charts.
+ */
+function TitleEditor({ title, onSave, onError, children }: TitleEditorProps): React.ReactElement {
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [editedTitle, setEditedTitle] = React.useState("");
+
+  function save(value: string): void {
+    onSave(value)
+      .then(() => setIsEditing(false))
+      .catch(onError);
+  }
+
+  if (isEditing) {
+    return (
+      <div className="flex items-center gap-2 mb-2">
+        <input type="text" value={editedTitle} onChange={(e) => setEditedTitle(e.target.value)}
+          className="flex-1 max-w-2xl px-3 py-2 text-page-title bg-input border border-input-border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring" autoFocus
+          onKeyDown={(e) => { if (e.key === "Enter") save(editedTitle); else if (e.key === "Escape") setIsEditing(false); }} />
+        <button onClick={() => save(editedTitle)} className="px-3 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-lg hover:bg-primary/80">Save</button>
+        <button onClick={() => setIsEditing(false)} className="px-3 py-2 text-sm font-medium text-foreground bg-card border border-border rounded-lg hover:bg-muted">Cancel</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-start gap-2">
+      <h1 className="text-page-title">{title}</h1>
+      <button onClick={() => { setEditedTitle(title); setIsEditing(true); }} className="p-1.5 text-muted-foreground hover:text-primary transition mt-1" title="Edit title">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+      </button>
+      {children}
+    </div>
+  );
+}
+
 const CHARTS: ChartConfig[] = [
   { key: "speed", label: "Speed", unit: "m/s", color: "#6366f1", dataKey: "speed_mps" },
   { key: "hr", label: "Heart Rate", unit: "bpm", color: "#ef4444", dataKey: "hr_bpm" },
@@ -69,9 +114,9 @@ interface Props {
 export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Props) {
   const {
     loading: summaryLoading, error: summaryError, setError, activity, setActivity,
-    isEditingTitle, setIsEditingTitle, editedTitle, setEditedTitle,
     saveTitle, isGeneratingTitle, generateTitle,
   } = useActivitySummary(activityId);
+  const onTitleError = React.useCallback((err: unknown) => setError(err as Error | ApiError | null), [setError]);
 
   const {
     loading: recordsLoading, error: recordsError, geojson, records,
@@ -270,33 +315,23 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
           Back to activities
         </button>
-        {isEditingTitle ? (
-          <div className="flex items-center gap-2 mb-2">
-            <input type="text" value={editedTitle} onChange={(e) => setEditedTitle(e.target.value)}
-              className="flex-1 max-w-2xl px-3 py-2 text-page-title bg-input border border-input-border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring" autoFocus
-              onKeyDown={(e) => { if (e.key === "Enter") saveTitle(editedTitle).catch((err) => setError(err)); else if (e.key === "Escape") setIsEditingTitle(false); }} />
-            <button onClick={() => saveTitle(editedTitle).catch((err) => setError(err))} className="px-3 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-lg hover:bg-primary/80">Save</button>
-            <button onClick={() => setIsEditingTitle(false)} className="px-3 py-2 text-sm font-medium text-foreground bg-card border border-border rounded-lg hover:bg-muted">Cancel</button>
-          </div>
-        ) : (
-          <div className="flex items-start gap-2">
-            <h1 className="text-page-title">{activity.title || formatActivityDate(activity.started_at, activity.utc_offset_minutes, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</h1>
-            <button onClick={() => { setEditedTitle(activity.title || ""); setIsEditingTitle(true); }} className="p-1.5 text-muted-foreground hover:text-primary transition mt-1" title="Edit title">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+        <TitleEditor
+          title={activity.title || formatActivityDate(activity.started_at, activity.utc_offset_minutes, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+          onSave={saveTitle}
+          onError={onTitleError}
+        >
+          {activity.title_source === "pending" && (
+            <button onClick={() => generateTitle().catch((err) => setError(err))} disabled={isGeneratingTitle} className="p-1.5 text-primary hover:text-primary/80 disabled:opacity-50 mt-1" title="Generate location-based title from GPS">
+              {isGeneratingTitle ? <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
             </button>
-            {activity.title_source === "pending" && (
-              <button onClick={() => generateTitle().catch((err) => setError(err))} disabled={isGeneratingTitle} className="p-1.5 text-primary hover:text-primary/80 disabled:opacity-50 mt-1" title="Generate location-based title from GPS">
-                {isGeneratingTitle ? <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                  : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
-              </button>
-            )}
-            {activity.is_breakthrough && (
-              <span className="bg-warning/20 text-warning border border-warning/30 px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1 mt-1.5">
-                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>Breakthrough
-              </span>
-            )}
-          </div>
-        )}
+          )}
+          {activity.is_breakthrough && (
+            <span className="bg-warning/20 text-warning border border-warning/30 px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1 mt-1.5">
+              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>Breakthrough
+            </span>
+          )}
+        </TitleEditor>
 
 
         <div className="text-body-secondary mt-2">
