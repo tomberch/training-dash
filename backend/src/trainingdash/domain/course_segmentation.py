@@ -255,16 +255,23 @@ def _create_segment(
     start_idx: int,
     end_idx: int,
 ) -> CourseSegment:
-    """Create a CourseSegment from array slices."""
+    """Create a CourseSegment from array slices.
+
+    The segment spans from distances[start_idx] to distances[end_idx].
+    This ensures adjacent segments share boundaries with no gaps.
+    """
     start_dist = distances[start_idx]
-    end_dist = distances[end_idx - 1] if end_idx <= len(distances) else distances[-1]
+    # End at the split point itself, not the point before it
+    end_dist = distances[end_idx] if end_idx < len(distances) else distances[-1]
     length = end_dist - start_dist
 
+    # Include grades up to (but not including) end_idx for averaging
     segment_grades = grades[start_idx:end_idx]
     avg_grade = float(np.mean(segment_grades)) if len(segment_grades) > 0 else 0.0
 
     start_elev = elevations[start_idx]
-    end_elev = elevations[end_idx - 1] if end_idx <= len(elevations) else elevations[-1]
+    # Elevation at the end point
+    end_elev = elevations[end_idx] if end_idx < len(elevations) else elevations[-1]
     elev_change = end_elev - start_elev
 
     elevation_gain = max(0.0, elev_change)
@@ -310,8 +317,13 @@ def _merge_short_segments(segments: list[CourseSegment], min_length_m: float) ->
 
 
 def _merge_two_segments(seg1: CourseSegment, seg2: CourseSegment) -> CourseSegment:
-    """Merge two adjacent segments into one."""
-    total_length = seg1.length_m + seg2.length_m
+    """Merge two adjacent segments into one.
+
+    Length is computed from endpoints to preserve full coverage,
+    not by summing individual lengths (which would lose any gaps).
+    """
+    # Use endpoint math to ensure no distance is lost
+    total_length = seg2.end_distance_m - seg1.start_distance_m
 
     # Weighted average grade
     if total_length > 0:

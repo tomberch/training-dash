@@ -132,6 +132,97 @@ class TestSegmentCourse:
         assert len(segments) >= 1
 
 
+class TestSegmentCoverage:
+    """Tests that segments fully tile the course with no gaps."""
+
+    def test_segments_tile_course_no_gaps(self):
+        """Adjacent segments should share boundaries with no gaps."""
+        distances = np.array([0, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000])
+        grades = np.array([0.05, 0.05, 0.05, 0.05, 0.05, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+        elevations = np.array([100, 105, 110, 115, 120, 125, 125, 125, 125, 125, 125])
+
+        segments = segment_course(distances, grades, elevations, min_segment_m=200)
+
+        # First segment starts at 0
+        assert segments[0].start_distance_m == 0
+
+        # Last segment ends at total distance
+        assert segments[-1].end_distance_m == pytest.approx(1000, rel=0.001)
+
+        # Adjacent segments share boundaries
+        for i in range(len(segments) - 1):
+            assert segments[i].end_distance_m == pytest.approx(
+                segments[i + 1].start_distance_m, rel=0.001
+            ), f"Gap between segment {i} and {i+1}"
+
+    def test_sum_of_lengths_equals_total_distance(self):
+        """Sum of segment lengths should equal total course distance."""
+        distances = np.array([0, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000])
+        grades = np.array([0.05, 0.05, 0.05, 0.05, 0.05, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+        elevations = np.array([100, 105, 110, 115, 120, 125, 125, 125, 125, 125, 125])
+
+        segments = segment_course(distances, grades, elevations, min_segment_m=200)
+
+        total_segment_length = sum(s.length_m for s in segments)
+        total_course_distance = distances[-1] - distances[0]
+
+        assert total_segment_length == pytest.approx(total_course_distance, rel=0.001)
+
+    def test_length_m_matches_endpoint_difference(self):
+        """Each segment's length_m should equal end - start distance."""
+        distances = np.array([0, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000])
+        grades = np.array([0.08, 0.08, 0.05, 0.05, 0.0, 0.0, -0.03, -0.03, 0.02, 0.02, 0.02])
+        elevations = np.array([100, 108, 116, 121, 126, 126, 126, 123, 120, 122, 124])
+
+        segments = segment_course(distances, grades, elevations, min_segment_m=100)
+
+        for seg in segments:
+            expected_length = seg.end_distance_m - seg.start_distance_m
+            assert seg.length_m == pytest.approx(expected_length, rel=0.001), (
+                f"Segment length_m ({seg.length_m}) != end - start ({expected_length})"
+            )
+
+    def test_coverage_with_many_grade_changes(self):
+        """Coverage should be maintained even with many grade transitions."""
+        # Create course with many grade changes
+        n_points = 101
+        distances = np.linspace(0, 10000, n_points)
+        # Oscillating grades
+        grades = np.array([0.05 * np.sin(i * 0.3) for i in range(n_points)])
+        elevations = np.cumsum(np.concatenate([[0], np.diff(distances) * grades[:-1]])) + 100
+
+        segments = segment_course(distances, grades, elevations, grade_threshold_pct=2.0, min_segment_m=200)
+
+        # Verify full coverage
+        assert segments[0].start_distance_m == 0
+        assert segments[-1].end_distance_m == pytest.approx(10000, rel=0.001)
+
+        total_length = sum(s.length_m for s in segments)
+        assert total_length == pytest.approx(10000, rel=0.001)
+
+        # No gaps between adjacent segments
+        for i in range(len(segments) - 1):
+            assert segments[i].end_distance_m == pytest.approx(
+                segments[i + 1].start_distance_m, rel=0.001
+            )
+
+    def test_merge_preserves_coverage(self):
+        """Merging short segments should not create gaps."""
+        # Create segments that will need merging
+        distances = np.array([0, 50, 100, 150, 200, 250, 300, 500, 600, 700, 800, 900, 1000])
+        grades = np.array([0.08, 0.0, 0.08, 0.0, 0.08, 0.0, 0.08, 0.08, 0.08, 0.0, 0.0, 0.0, 0.0])
+        elevations = np.array([100, 104, 104, 108, 108, 112, 112, 128, 136, 136, 136, 136, 136])
+
+        segments = segment_course(distances, grades, elevations, min_segment_m=200)
+
+        # Coverage invariants
+        assert segments[0].start_distance_m == 0
+        assert segments[-1].end_distance_m == pytest.approx(1000, rel=0.001)
+
+        total_length = sum(s.length_m for s in segments)
+        assert total_length == pytest.approx(1000, rel=0.001)
+
+
 class TestDetectClimbs:
     """Tests for climb detection."""
 
