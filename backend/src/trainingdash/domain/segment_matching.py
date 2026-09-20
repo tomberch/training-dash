@@ -18,6 +18,9 @@ from trainingdash.domain.polyline import decode_polyline
 from trainingdash.domain.segment_geometry import compute_bearing, haversine_distance
 
 __all__ = [
+    "SAME_SEGMENT_ENDPOINT_TOLERANCE_M",
+    "SAME_SEGMENT_MIN_OVERLAP_PCT",
+    "SUGGESTION_VISIBILITY_THRESHOLD",
     "SegmentCandidate",
     "SegmentMatch",
     "bearings_match",
@@ -25,8 +28,6 @@ __all__ = [
     "is_same_segment",
     "match_activity_to_segments",
     "point_to_segment_distance",
-    "SAME_SEGMENT_ENDPOINT_TOLERANCE_M",
-    "SAME_SEGMENT_MIN_OVERLAP_PCT",
 ]
 
 
@@ -290,6 +291,10 @@ def compute_path_overlap(
 # Duplicate-segment criteria (ticket #473)
 SAME_SEGMENT_ENDPOINT_TOLERANCE_M = 25.0
 SAME_SEGMENT_MIN_OVERLAP_PCT = 95.0
+
+# Suggestion visibility: climbs are proposed after 3+ repeat rides
+# (CONTEXT.md — Segment Suggestion lifecycle)
+SUGGESTION_VISIBILITY_THRESHOLD = 3
 
 
 def is_same_segment(

@@ -13,7 +13,10 @@ from geoalchemy2.shape import to_shape
 from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from trainingdash.domain.segment_matching import is_same_segment
+from trainingdash.domain.segment_matching import (
+    SUGGESTION_VISIBILITY_THRESHOLD,
+    is_same_segment,
+)
 from trainingdash.repositories.postgres.models import (
     Segment,
     SegmentEffort,
@@ -437,6 +440,10 @@ class PostgresSegmentSuggestionRepo:
         """
         List suggestions for a user.
 
+        Only suggestions with repetition_count >=
+        SUGGESTION_VISIBILITY_THRESHOLD are returned — climbs are
+        proposed after 3+ repeat rides.
+
         Args:
             user_id: User ID
             include_dismissed: If True, include dismissed suggestions
@@ -446,7 +453,10 @@ class PostgresSegmentSuggestionRepo:
         Returns:
             List of SegmentSuggestion objects ordered by repetition_count desc
         """
-        query = select(SegmentSuggestion).where(SegmentSuggestion.user_id == user_id)
+        query = select(SegmentSuggestion).where(
+            SegmentSuggestion.user_id == user_id,
+            SegmentSuggestion.repetition_count >= SUGGESTION_VISIBILITY_THRESHOLD,
+        )
 
         if not include_dismissed:
             query = query.where(SegmentSuggestion.dismissed_at.is_(None))
@@ -457,8 +467,11 @@ class PostgresSegmentSuggestionRepo:
         return list(result.scalars().all())
 
     async def count_for_user(self, user_id: int, include_dismissed: bool = False) -> int:
-        """Count suggestions for a user."""
-        query = select(func.count(SegmentSuggestion.id)).where(SegmentSuggestion.user_id == user_id)
+        """Count visible suggestions for a user (3+ repetitions only)."""
+        query = select(func.count(SegmentSuggestion.id)).where(
+            SegmentSuggestion.user_id == user_id,
+            SegmentSuggestion.repetition_count >= SUGGESTION_VISIBILITY_THRESHOLD,
+        )
 
         if not include_dismissed:
             query = query.where(SegmentSuggestion.dismissed_at.is_(None))

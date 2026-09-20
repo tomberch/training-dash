@@ -433,13 +433,14 @@ class TestFakeSegmentSuggestionRepo:
 
     @pytest.mark.asyncio
     async def test_list_for_user_pagination(self, repo: FakeSegmentSuggestionRepo):
+        # Only repetition_count >= 3 is visible (SUGGESTION_VISIBILITY_THRESHOLD)
         for i in range(5):
-            await repo.save(make_suggestion(segment_id=uuid4(), user_id=1, repetition_count=i))
+            await repo.save(make_suggestion(segment_id=uuid4(), user_id=1, repetition_count=i + 3))
 
         result = await repo.list_for_user(user_id=1, limit=2, offset=1)
         assert len(result) == 2
-        assert result[0].repetition_count == 3
-        assert result[1].repetition_count == 2
+        assert result[0].repetition_count == 6
+        assert result[1].repetition_count == 5
 
     @pytest.mark.asyncio
     async def test_count_for_user(self, repo: FakeSegmentSuggestionRepo):

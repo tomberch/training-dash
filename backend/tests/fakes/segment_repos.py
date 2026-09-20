@@ -3,6 +3,7 @@
 from datetime import datetime
 from uuid import UUID
 
+from trainingdash.domain.segment_matching import SUGGESTION_VISIBILITY_THRESHOLD
 from trainingdash.repositories.postgres.models import (
     Segment,
     SegmentEffort,
@@ -261,6 +262,8 @@ class FakeSegmentSuggestionRepo:
     In-memory fake implementation of SegmentSuggestionRepo protocol.
 
     Stores suggestions in a dict keyed by suggestion_id.
+    Visibility: only suggestions with repetition_count >=
+    SUGGESTION_VISIBILITY_THRESHOLD appear in list/count queries.
     """
 
     def __init__(self) -> None:
@@ -283,6 +286,8 @@ class FakeSegmentSuggestionRepo:
         if not include_dismissed:
             suggestions = [s for s in suggestions if s.dismissed_at is None]
 
+        suggestions = [s for s in suggestions if s.repetition_count >= SUGGESTION_VISIBILITY_THRESHOLD]
+
         # Sort by repetition_count descending
         suggestions.sort(key=lambda s: s.repetition_count, reverse=True)
 
@@ -293,6 +298,8 @@ class FakeSegmentSuggestionRepo:
 
         if not include_dismissed:
             suggestions = [s for s in suggestions if s.dismissed_at is None]
+
+        suggestions = [s for s in suggestions if s.repetition_count >= SUGGESTION_VISIBILITY_THRESHOLD]
 
         return len(suggestions)
 
