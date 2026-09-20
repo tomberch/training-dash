@@ -254,6 +254,20 @@ class ImportFromProvider:
                             provider.make_source_ref(activity.id),
                             user_id,
                         )
+                        # Chain segment processing (matching + climb detection),
+                        # mirroring the manual-upload path. Best-effort: the
+                        # activity is already persisted, so a queue hiccup must
+                        # not fail the import.
+                        try:
+                            from trainingdash.jobs import enqueue_segment_process_job
+
+                            await enqueue_segment_process_job(str(result.id), user_id)
+                        except Exception:
+                            logger.exception(
+                                "%s: Failed to enqueue segment processing for activity %s",
+                                log_prefix,
+                                result.id,
+                            )
                     else:
                         logger.warning(
                             "%s: Failed to ingest activity %s for user %s",
