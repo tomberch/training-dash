@@ -62,6 +62,7 @@ ENV PATH="/opt/venv/bin:$PATH" \
 # Copy application code
 COPY backend/alembic.ini ./
 COPY backend/migrations/ ./migrations/
+COPY backend/scripts/ ./scripts/
 
 # Copy built frontend
 COPY --from=frontend-builder /frontend/dist ./static/
