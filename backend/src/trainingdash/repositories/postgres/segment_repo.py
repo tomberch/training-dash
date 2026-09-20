@@ -7,10 +7,13 @@ Uses SQLAlchemy async session and PostGIS for spatial queries.
 from datetime import datetime
 from uuid import UUID
 
-from geoalchemy2.functions import ST_Buffer, ST_Intersects, ST_MakeEnvelope
+from geoalchemy2 import WKTElement
+from geoalchemy2.functions import ST_Buffer, ST_DWithin, ST_Intersects, ST_MakeEnvelope
+from geoalchemy2.shape import to_shape
 from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from trainingdash.domain.segment_matching import is_same_segment
 from trainingdash.repositories.postgres.models import (
     Segment,
     SegmentEffort,
@@ -227,6 +230,58 @@ class PostgresSegmentRepo:
 
         await self._session.execute(update(Segment).where(Segment.id == segment_id).values(**values))
         await self._session.commit()
+
+    async def find_similar_suggested(
+        self,
+        start_lat: float,
+        start_lon: float,
+        end_lat: float,
+        end_lon: float,
+        polyline: str,
+    ) -> Segment | None:
+        """
+        Find an existing suggested segment describing the same road.
+
+        Prefilters with a spatial query — suggested segments whose bounds
+        come within 100m of the candidate start point — then applies the
+        precise duplicate criteria (is_same_segment) in Python.
+
+        Returns the matching Segment, or None.
+        """
+        # Cheap spatial prefilter: suggested segments near the start point
+        start_point = WKTElement(f"POINT({start_lon} {start_lat})", srid=4326)
+        candidates = (
+            (
+                await self._session.execute(
+                    select(Segment).where(
+                        Segment.status == "suggested",
+                        Segment.deleted_at.is_(None),
+                        ST_DWithin(Segment.start_point, start_point, 0.001),  # ~100m
+                    ).limit(50)
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+        for candidate in candidates:
+            cand_start = to_shape(candidate.start_point)
+            cand_end = to_shape(candidate.end_point)
+            if is_same_segment(
+                start_lat=start_lat,
+                start_lon=start_lon,
+                end_lat=end_lat,
+                end_lon=end_lon,
+                polyline=polyline,
+                other_start_lat=cand_start.y,
+                other_start_lon=cand_start.x,
+                other_end_lat=cand_end.y,
+                other_end_lon=cand_end.x,
+                other_polyline=candidate.polyline,
+            ):
+                return candidate
+
+        return None
 
 
 class PostgresSegmentEffortRepo:

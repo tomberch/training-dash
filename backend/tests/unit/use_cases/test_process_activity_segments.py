@@ -30,14 +30,26 @@ from trainingdash.use_cases.process_activity_segments import (
 
 
 def setup_mock_db(mock_db, activity: Activity | None, records: list[Record]) -> None:
-    """Configure mock_db to return activity and records."""
+    """Configure mock_db to return activity then records on each execute cycle.
+
+    The side_effect cycles, so repeated use_case.execute() calls (e.g.
+    processing the same activity twice) keep working.
+    """
     mock_result_activity = MagicMock()
     mock_result_activity.scalar_one_or_none.return_value = activity
 
     mock_result_records = MagicMock()
     mock_result_records.scalars.return_value.all.return_value = records
 
-    mock_db.execute = AsyncMock(side_effect=[mock_result_activity, mock_result_records])
+    results = [mock_result_activity, mock_result_records]
+    counter = {"i": 0}
+
+    async def execute_side_effect(*args, **kwargs):
+        result = results[counter["i"] % len(results)]
+        counter["i"] += 1
+        return result
+
+    mock_db.execute = AsyncMock(side_effect=execute_side_effect)
 
 
 def make_activity(user_id: int = 1, activity_id=None) -> Activity:
@@ -317,6 +329,170 @@ class TestProcessActivitySegments:
         pr_efforts = [e for e in efforts if e.is_pr]
         assert len(pr_efforts) == 1
         assert pr_efforts[0].elapsed_time_seconds == 60  # The faster one
+
+    @pytest.mark.asyncio
+    async def test_same_climb_detected_twice_increments_repetition(
+        self, use_case, mock_db, segment_repo, suggestion_repo
+    ):
+        """Riding the same climb twice reuses the suggested segment.
+
+        Regression test for the dedup bug: _process_detected_climb used to
+        create a fresh Segment for every detection and then look up a
+        suggestion for that fresh id — repetition_count could never grow.
+        """
+        activity = make_activity()
+        base_time = datetime.now()
+        records = [
+            make_record(activity.id, 47.0, 8.0, 0, altitude_m=100, timestamp=base_time),
+            make_record(activity.id, 47.005, 8.0, 500, altitude_m=150, timestamp=base_time + timedelta(seconds=60)),
+            make_record(activity.id, 47.01, 8.0, 1000, altitude_m=200, timestamp=base_time + timedelta(seconds=120)),
+        ]
+        setup_mock_db(mock_db, activity, records)
+
+        detected_climb = DetectedClimb(
+            start_index=0,
+            end_index=2,
+            distance_m=1000,
+            elevation_gain_m=100,
+            avg_grade_pct=10.0,
+            max_grade_pct=12.0,
+            category="4",
+            gradient_segments=[],
+        )
+
+        async def run_once():
+            with patch.object(use_case, "_find_candidates", return_value=[]):
+                with patch(
+                    "trainingdash.use_cases.process_activity_segments.match_activity_to_segments",
+                    return_value=[],
+                ):
+                    with patch(
+                        "trainingdash.use_cases.process_activity_segments.detect_climbs",
+                        return_value=[detected_climb],
+                    ):
+                        return await use_case.execute(activity.id, user_id=1)
+
+        await run_once()
+        await run_once()
+
+        # One suggested segment, not two
+        suggested_segments = [s for s in segment_repo.all() if s.status == "suggested"]
+        assert len(suggested_segments) == 1
+
+        # One suggestion with repetition_count=2
+        suggestions = suggestion_repo.all()
+        assert len(suggestions) == 1
+        assert suggestions[0].repetition_count == 2
+
+    @pytest.mark.asyncio
+    async def test_different_climbs_create_separate_segments(self, use_case, mock_db, segment_repo, suggestion_repo):
+        """Two distinct climbs on one ride each get their own segment."""
+        activity = make_activity()
+        base_time = datetime.now()
+        records = [
+            make_record(activity.id, 47.0, 8.0, 0, altitude_m=100, timestamp=base_time),
+            make_record(activity.id, 47.005, 8.0, 500, altitude_m=150, timestamp=base_time + timedelta(seconds=60)),
+            make_record(activity.id, 47.01, 8.0, 1000, altitude_m=200, timestamp=base_time + timedelta(seconds=120)),
+        ]
+        setup_mock_db(mock_db, activity, records)
+
+        climb_a = DetectedClimb(
+            start_index=0,
+            end_index=2,
+            distance_m=1000,
+            elevation_gain_m=100,
+            avg_grade_pct=10.0,
+            max_grade_pct=12.0,
+            category="4",
+            gradient_segments=[],
+        )
+        # Second climb starts ~3km north — far outside the 25m tolerance
+        climb_b = DetectedClimb(
+            start_index=0,
+            end_index=2,
+            distance_m=1000,
+            elevation_gain_m=100,
+            avg_grade_pct=10.0,
+            max_grade_pct=12.0,
+            category="4",
+            gradient_segments=[],
+        )
+
+        # Reuse the same activity records but give climb_b different coordinates
+        records_b = [
+            make_record(activity.id, 47.03, 8.0, 0, altitude_m=100, timestamp=base_time),
+            make_record(activity.id, 47.035, 8.0, 500, altitude_m=150, timestamp=base_time + timedelta(seconds=60)),
+            make_record(activity.id, 47.04, 8.0, 1000, altitude_m=200, timestamp=base_time + timedelta(seconds=120)),
+        ]
+
+        with patch.object(use_case, "_find_candidates", return_value=[]):
+            with patch(
+                "trainingdash.use_cases.process_activity_segments.match_activity_to_segments",
+                return_value=[],
+            ):
+                # Process activity A with climb_a
+                with patch(
+                    "trainingdash.use_cases.process_activity_segments.detect_climbs",
+                    return_value=[climb_a],
+                ):
+                    await use_case.execute(activity.id, user_id=1)
+
+                # Reload db mock for the second activity's records
+                setup_mock_db(mock_db, activity, records_b)
+                with patch(
+                    "trainingdash.use_cases.process_activity_segments.detect_climbs",
+                    return_value=[climb_b],
+                ):
+                    await use_case.execute(activity.id, user_id=1)
+
+        suggested_segments = [s for s in segment_repo.all() if s.status == "suggested"]
+        assert len(suggested_segments) == 2
+        assert len(suggestion_repo.all()) == 2
+
+    @pytest.mark.asyncio
+    async def test_repeated_climb_by_second_user_shares_segment(
+        self, use_case, mock_db, segment_repo, suggestion_repo
+    ):
+        """A second user riding the same climb gets their own suggestion row
+        on the shared suggested segment (CONTEXT.md: one segment per
+        real-world climb, per-user suggestion rows)."""
+        activity = make_activity()
+        base_time = datetime.now()
+        records = [
+            make_record(activity.id, 47.0, 8.0, 0, altitude_m=100, timestamp=base_time),
+            make_record(activity.id, 47.005, 8.0, 500, altitude_m=150, timestamp=base_time + timedelta(seconds=60)),
+            make_record(activity.id, 47.01, 8.0, 1000, altitude_m=200, timestamp=base_time + timedelta(seconds=120)),
+        ]
+        setup_mock_db(mock_db, activity, records)
+
+        detected_climb = DetectedClimb(
+            start_index=0,
+            end_index=2,
+            distance_m=1000,
+            elevation_gain_m=100,
+            avg_grade_pct=10.0,
+            max_grade_pct=12.0,
+            category="4",
+            gradient_segments=[],
+        )
+
+        with patch.object(use_case, "_find_candidates", return_value=[]):
+            with patch(
+                "trainingdash.use_cases.process_activity_segments.match_activity_to_segments",
+                return_value=[],
+            ):
+                with patch(
+                    "trainingdash.use_cases.process_activity_segments.detect_climbs",
+                    return_value=[detected_climb],
+                ):
+                    await use_case.execute(activity.id, user_id=1)
+                    await use_case.execute(activity.id, user_id=2)
+
+        suggested_segments = [s for s in segment_repo.all() if s.status == "suggested"]
+        assert len(suggested_segments) == 1
+        suggestions = suggestion_repo.all()
+        assert len(suggestions) == 2
+        assert {s.user_id for s in suggestions} == {1, 2}
 
     @pytest.mark.asyncio
     async def test_detect_climb_creates_suggestion(self, use_case, mock_db, segment_repo, suggestion_repo):

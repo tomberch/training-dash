@@ -1394,6 +1394,32 @@ class SegmentRepo(Protocol):
         """
         ...
 
+    async def find_similar_suggested(
+        self,
+        start_lat: float,
+        start_lon: float,
+        end_lat: float,
+        end_lon: float,
+        polyline: str,
+    ) -> "Segment | None":
+        """
+        Find an existing suggested segment that describes the same road.
+
+        Used by climb-detection dedup: before creating a new suggested
+        segment, check whether an equivalent one already exists so repeat
+        rides increment the repetition count instead of spawning
+        duplicates.
+
+        Args:
+            start_lat, start_lon: Candidate start point
+            end_lat, end_lon: Candidate end point
+            polyline: Candidate encoded polyline
+
+        Returns:
+            The matching suggested Segment, or None if this road is new.
+        """
+        ...
+
 
 class SegmentEffortRepo(Protocol):
     """

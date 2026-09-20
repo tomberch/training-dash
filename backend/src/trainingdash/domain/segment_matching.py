@@ -22,8 +22,11 @@ __all__ = [
     "SegmentMatch",
     "bearings_match",
     "compute_path_overlap",
+    "is_same_segment",
     "match_activity_to_segments",
     "point_to_segment_distance",
+    "SAME_SEGMENT_ENDPOINT_TOLERANCE_M",
+    "SAME_SEGMENT_MIN_OVERLAP_PCT",
 ]
 
 
@@ -282,6 +285,66 @@ def compute_path_overlap(
             covered_count += 1
 
     return (covered_count / len(segment_points)) * 100
+
+
+# Duplicate-segment criteria (ticket #473)
+SAME_SEGMENT_ENDPOINT_TOLERANCE_M = 25.0
+SAME_SEGMENT_MIN_OVERLAP_PCT = 95.0
+
+
+def is_same_segment(
+    *,
+    start_lat: float,
+    start_lon: float,
+    end_lat: float,
+    end_lon: float,
+    polyline: str,
+    other_start_lat: float,
+    other_start_lon: float,
+    other_end_lat: float,
+    other_end_lon: float,
+    other_polyline: str,
+    endpoint_tolerance_m: float = SAME_SEGMENT_ENDPOINT_TOLERANCE_M,
+    min_overlap_pct: float = SAME_SEGMENT_MIN_OVERLAP_PCT,
+) -> bool:
+    """
+    Decide whether two segments describe the same stretch of road.
+
+    Duplicate criteria (ticket #473): start points within 25m, end points
+    within 25m, and >= 95% path overlap (with the caller's polyline
+    measured against the other's). Used by suggestion approval and
+    climb-detection dedup so every flow agrees on "the same segment".
+
+    Returns False on empty or undecodable polylines — a corrupt candidate
+    is never a duplicate.
+    """
+    # Endpoint proximity gates — cheap and directional by construction
+    if (
+        haversine_distance(start_lat, start_lon, other_start_lat, other_start_lon)
+        > endpoint_tolerance_m
+    ):
+        return False
+    if haversine_distance(end_lat, end_lon, other_end_lat, other_end_lon) > endpoint_tolerance_m:
+        return False
+
+    # Path overlap — measure the other's coverage of the caller's polyline
+    try:
+        other_points = decode_polyline(other_polyline)
+    except Exception:
+        return False
+    if not other_points:
+        return False
+
+    fake_records = [{"lat": lat, "lon": lon} for lat, lon in other_points]
+    overlap = compute_path_overlap(
+        activity_records=fake_records,
+        start_index=0,
+        end_index=len(fake_records) - 1,
+        segment_polyline=polyline,
+        buffer_m=endpoint_tolerance_m,
+    )
+
+    return overlap >= min_overlap_pct
 
 
 def match_activity_to_segments(

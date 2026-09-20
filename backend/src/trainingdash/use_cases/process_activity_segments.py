@@ -440,8 +440,11 @@ class ProcessActivitySegments:
         """
         Process a detected climb — create/update segment and suggestion.
 
-        Creates a suggested segment and increments the user's suggestion
-        repetition count. Suggestions appear after 3+ repetitions.
+        Dedup: if an equivalent suggested segment already exists (same
+        start/end within 25m, >= 95% path overlap), reuse it so repeat
+        rides increment the user's suggestion repetition count instead of
+        spawning duplicate segments. Suggestions appear after 3+
+        repetitions.
         """
         # Compute geometry from the climb records
         geometry = compute_segment_geometry(
@@ -450,47 +453,59 @@ class ProcessActivitySegments:
             climb.end_index,
         )
 
-        # Extract climb coordinates for PostGIS geometries
-        start_lat = records[climb.start_index]["lat"]
-        start_lon = records[climb.start_index]["lon"]
-        end_lat = records[climb.end_index]["lat"]
-        end_lon = records[climb.end_index]["lon"]
-
-        # Create segment (status=suggested)
-        start_wkt = WKTElement(f"POINT({start_lon} {start_lat})", srid=4326)
-        end_wkt = WKTElement(f"POINT({end_lon} {end_lat})", srid=4326)
-
-        # bounds is (min_lat, min_lon, max_lat, max_lon) = (sw_lat, sw_lng, ne_lat, ne_lng)
-        sw_lat, sw_lng, ne_lat, ne_lng = geometry.bounds
-        bounds_wkt = WKTElement(
-            f"POLYGON(({sw_lng} {sw_lat}, {ne_lng} {sw_lat}, {ne_lng} {ne_lat}, {sw_lng} {ne_lat}, {sw_lng} {sw_lat}))",
-            srid=4326,
-        )
-
-        segment = Segment(
-            id=uuid4(),
-            name="Detected Climb",  # Will be named by user if approved
-            type="climb",
-            status="suggested",
-            climb_category=climb.category,
+        # Reuse an existing suggested segment for this road if one exists
+        existing_segment = await self._segment_repo.find_similar_suggested(
+            start_lat=geometry.start_lat,
+            start_lon=geometry.start_lon,
+            end_lat=geometry.end_lat,
+            end_lon=geometry.end_lon,
             polyline=geometry.polyline,
-            start_point=start_wkt,
-            end_point=end_wkt,
-            bounds=bounds_wkt,
-            direction_bearing=geometry.direction_bearing,
-            distance_m=climb.distance_m,
-            elevation_gain_m=climb.elevation_gain_m,
-            avg_grade_pct=climb.avg_grade_pct,
-            max_grade_pct=climb.max_grade_pct,
-            elevation_profile=[
-                {"distance_m": ep.distance_m, "elevation_m": ep.elevation_m, "grade_pct": ep.grade_pct}
-                for ep in geometry.elevation_profile
-            ],
-            created_by=user_id,
-            source_activity_id=activity.id,
         )
 
-        saved_segment = await self._segment_repo.save(segment)
+        if existing_segment is not None:
+            saved_segment = existing_segment
+        else:
+            # Extract climb coordinates for PostGIS geometries
+            start_lat = records[climb.start_index]["lat"]
+            start_lon = records[climb.start_index]["lon"]
+            end_lat = records[climb.end_index]["lat"]
+            end_lon = records[climb.end_index]["lon"]
+
+            # Create segment (status=suggested)
+            start_wkt = WKTElement(f"POINT({start_lon} {start_lat})", srid=4326)
+            end_wkt = WKTElement(f"POINT({end_lon} {end_lat})", srid=4326)
+
+            # bounds is (min_lat, min_lon, max_lat, max_lon) = (sw_lat, sw_lng, ne_lat, ne_lng)
+            sw_lat, sw_lng, ne_lat, ne_lng = geometry.bounds
+            bounds_wkt = WKTElement(
+                f"POLYGON(({sw_lng} {sw_lat}, {ne_lng} {sw_lat}, {ne_lng} {ne_lat}, {sw_lng} {ne_lat}, {sw_lng} {sw_lat}))",
+                srid=4326,
+            )
+
+            segment = Segment(
+                id=uuid4(),
+                name="Detected Climb",  # Will be named by user if approved
+                type="climb",
+                status="suggested",
+                climb_category=climb.category,
+                polyline=geometry.polyline,
+                start_point=start_wkt,
+                end_point=end_wkt,
+                bounds=bounds_wkt,
+                direction_bearing=geometry.direction_bearing,
+                distance_m=climb.distance_m,
+                elevation_gain_m=climb.elevation_gain_m,
+                avg_grade_pct=climb.avg_grade_pct,
+                max_grade_pct=climb.max_grade_pct,
+                elevation_profile=[
+                    {"distance_m": ep.distance_m, "elevation_m": ep.elevation_m, "grade_pct": ep.grade_pct}
+                    for ep in geometry.elevation_profile
+                ],
+                created_by=user_id,
+                source_activity_id=activity.id,
+            )
+
+            saved_segment = await self._segment_repo.save(segment)
 
         # Create or update suggestion
         now = datetime.now()
