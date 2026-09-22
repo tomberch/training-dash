@@ -33,6 +33,16 @@ class ApproveSuggestionRequest(BaseModel):
     """Request body for approving a suggestion."""
 
     name: str = Field(min_length=3, max_length=100)
+    start_index: int | None = Field(
+        default=None,
+        ge=0,
+        description="Optional adjusted start index on the source activity's GPS track",
+    )
+    end_index: int | None = Field(
+        default=None,
+        ge=0,
+        description="Optional adjusted end index on the source activity's GPS track",
+    )
 
 
 class PaginationMeta(BaseModel):
@@ -70,6 +80,7 @@ def suggestion_response(suggestion, segment) -> dict:
         "elevation_profile": segment.elevation_profile,
         "start_point": {"lat": start_point.y, "lng": start_point.x},
         "end_point": {"lat": end_point.y, "lng": end_point.x},
+        "source_activity_id": str(segment.source_activity_id) if segment.source_activity_id else None,
     }
 
 
@@ -167,6 +178,8 @@ async def approve_suggestion(
         user_id=user.id,
         suggestion_id=suggestion_id,
         name=request.name,
+        start_index=request.start_index,
+        end_index=request.end_index,
     )
 
     if not result.success:

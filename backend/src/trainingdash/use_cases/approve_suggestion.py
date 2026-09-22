@@ -8,10 +8,46 @@ Handles duplicate detection against existing approved segments.
 from dataclasses import dataclass
 from uuid import UUID
 
-from trainingdash.domain.segment_geometry import haversine_distance
+from geoalchemy2 import WKTElement
+
+from trainingdash.domain.climb_detection import categorize_climb
+from trainingdash.domain.segment_geometry import (
+    compute_segment_geometry,
+    haversine_distance,
+)
 from trainingdash.domain.segment_matching import compute_path_overlap
 from trainingdash.repositories.postgres.models import Segment
-from trainingdash.repositories.protocols import SegmentRepo, SegmentSuggestionRepo
+from trainingdash.repositories.protocols import RecordRepo, SegmentRepo, SegmentSuggestionRepo
+
+
+# Type classification thresholds (shared with CreateSegment)
+CLIMB_MIN_GRADE_PCT = 3.0
+CLIMB_MIN_LENGTH_M = 300.0
+SPRINT_MIN_LENGTH_M = 150.0
+SPRINT_MAX_LENGTH_M = 600.0
+SPRINT_MAX_GRADE_PCT = 3.0
+SPRINT_MIN_GRADE_PCT = -3.0
+
+
+def classify_segment(distance_m: float, avg_grade_pct: float) -> tuple[str, str | None]:
+    """
+    Classify a segment as climb / sprint / custom from its geometry.
+
+    Shared by suggestion approval (endpoint overrides may change the
+    shape, so the type must be re-derived) and manual creation.
+
+    Returns (type, climb_category); climb_category is None for
+    non-climb segments.
+    """
+    if avg_grade_pct >= CLIMB_MIN_GRADE_PCT and distance_m >= CLIMB_MIN_LENGTH_M:
+        category = categorize_climb(distance_m, avg_grade_pct)
+        return ("climb", category)
+    if (
+        SPRINT_MIN_LENGTH_M <= distance_m <= SPRINT_MAX_LENGTH_M
+        and SPRINT_MIN_GRADE_PCT <= avg_grade_pct <= SPRINT_MAX_GRADE_PCT
+    ):
+        return ("sprint", None)
+    return ("custom", None)
 
 
 def _extract_point_coords(point) -> tuple[float, float]:
@@ -69,15 +105,28 @@ class ApproveSuggestion:
         self,
         segment_repo: SegmentRepo,
         suggestion_repo: SegmentSuggestionRepo,
+        record_repo: "RecordRepo | None" = None,
     ) -> None:
+        """
+        Args:
+            segment_repo: Repository for segment operations
+            suggestion_repo: Repository for suggestion operations
+            record_repo: Repository for activity records. Required only
+                when approving with endpoint overrides (the source
+                activity's GPS track is re-sliced); None disables
+                adjustments.
+        """
         self._segment_repo = segment_repo
         self._suggestion_repo = suggestion_repo
+        self._record_repo = record_repo
 
     async def execute(
         self,
         user_id: int,
         suggestion_id: UUID,
         name: str,
+        start_index: int | None = None,
+        end_index: int | None = None,
     ) -> ApproveResult:
         """
         Approve a suggestion with the given name.
@@ -86,6 +135,14 @@ class ApproveSuggestion:
             user_id: ID of the user approving the suggestion
             suggestion_id: UUID of the suggestion to approve
             name: Name to give the approved segment
+            start_index: Optional start index on the source activity's GPS
+                track — adjusts the segment's start point
+            end_index: Optional end index — adjusts the segment's end point
+
+        When either index is provided, the segment's geometry is recomputed
+        from the source activity's records between the (possibly adjusted)
+        indices, and the duplicate check runs against the NEW geometry —
+        a 409 must still be possible for an adjusted shape.
 
         Returns:
             ApproveResult with success status and either the approved segment
@@ -141,6 +198,13 @@ class ApproveSuggestion:
                 error="Segment has already been approved",
             )
 
+        # Apply endpoint overrides: recompute geometry from the source
+        # activity's GPS track before the duplicate check
+        if start_index is not None or end_index is not None:
+            adjusted = await self._apply_overrides(segment, start_index, end_index)
+            if adjusted is not None:
+                return adjusted
+
         # Check for duplicates among approved segments
         duplicate = await self._find_duplicate(segment)
         if duplicate is not None:
@@ -163,6 +227,95 @@ class ApproveSuggestion:
             success=True,
             segment=saved_segment,
         )
+
+    async def _apply_overrides(
+        self,
+        segment: Segment,
+        start_index: int | None,
+        end_index: int | None,
+    ) -> ApproveResult | None:
+        """
+        Rewrite the segment's geometry from the source activity's records.
+
+        Both indices must be provided together (partial adjustment of one
+        endpoint is ambiguous — the detected indices are not stored, so a
+        lone index can't be paired with a default).
+
+        Returns an ApproveResult on failure (caller returns it directly),
+        or None on success (segment mutated in place).
+        """
+        if start_index is None or end_index is None:
+            return ApproveResult(
+                success=False,
+                error="Both start and end index are required to adjust a suggestion",
+            )
+        if self._record_repo is None:
+            return ApproveResult(
+                success=False,
+                error="Endpoint adjustment is not available for this suggestion",
+            )
+        if segment.source_activity_id is None:
+            return ApproveResult(
+                success=False,
+                error="Suggestion has no source activity to adjust against",
+            )
+        if start_index < 0 or end_index <= start_index:
+            return ApproveResult(
+                success=False,
+                error="End index must be greater than start index",
+            )
+
+        records = await self._record_repo.list_for_activity(segment.source_activity_id)
+        if not records:
+            return ApproveResult(
+                success=False,
+                error="Source activity has no records",
+            )
+        if end_index >= len(records):
+            return ApproveResult(
+                success=False,
+                error=f"End index {end_index} exceeds record count {len(records)}",
+            )
+
+        record_dicts = [
+            {"lat": r.lat, "lon": r.lon, "altitude_m": r.altitude_m, "distance_m": r.distance_m}
+            for r in records
+        ]
+
+        try:
+            geometry = compute_segment_geometry(record_dicts, start_index, end_index)
+        except ValueError as e:
+            return ApproveResult(success=False, error=f"Failed to compute geometry: {e}")
+
+        # Reclassify from the adjusted shape (reuse CreateSegment's rules)
+        segment_type, climb_category = classify_segment(
+            distance_m=geometry.distance_m,
+            avg_grade_pct=geometry.avg_grade_pct,
+        )
+
+        # Rewrite geometry columns
+        segment.start_point = WKTElement(f"POINT({geometry.start_lon} {geometry.start_lat})", srid=4326)
+        segment.end_point = WKTElement(f"POINT({geometry.end_lon} {geometry.end_lat})", srid=4326)
+        sw_lat, sw_lng, ne_lat, ne_lng = geometry.bounds
+        segment.bounds = WKTElement(
+            f"POLYGON(({sw_lng} {sw_lat}, {ne_lng} {sw_lat}, {ne_lng} {ne_lat}, "
+            f"{sw_lng} {ne_lat}, {sw_lng} {sw_lat}))",
+            srid=4326,
+        )
+        segment.polyline = geometry.polyline
+        segment.direction_bearing = geometry.direction_bearing
+        segment.distance_m = geometry.distance_m
+        segment.elevation_gain_m = geometry.elevation_gain_m
+        segment.avg_grade_pct = geometry.avg_grade_pct
+        segment.max_grade_pct = geometry.max_grade_pct
+        segment.elevation_profile = [
+            {"distance_m": ep.distance_m, "elevation_m": ep.elevation_m, "grade_pct": ep.grade_pct}
+            for ep in geometry.elevation_profile
+        ]
+        segment.type = segment_type
+        segment.climb_category = climb_category
+
+        return None
 
     async def _find_duplicate(self, segment: Segment) -> Segment | None:
         """

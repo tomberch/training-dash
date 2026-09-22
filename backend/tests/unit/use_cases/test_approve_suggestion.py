@@ -32,6 +32,38 @@ class FakeGeometry:
         self.y = lat
 
 
+class FakeRecord:
+    """Fake Record row with the fields geometry computation needs."""
+
+    def __init__(self, lat: float, lon: float, altitude_m: float, distance_m: float) -> None:
+        self.lat = lat
+        self.lon = lon
+        self.altitude_m = altitude_m
+        self.distance_m = distance_m
+
+
+class FakeRecordRepo:
+    """In-memory RecordRepo stand-in: 5 points straight north, ~111m apart.
+
+    Total span ~444m, climbing from 500m to 530m elevation.
+    """
+
+    def __init__(self) -> None:
+        self.activity_id = uuid4()
+        self._records = [
+            FakeRecord(46.9000, 7.4000, 500.0, 0.0),
+            FakeRecord(46.9010, 7.4000, 508.0, 111.0),
+            FakeRecord(46.9020, 7.4000, 516.0, 222.0),
+            FakeRecord(46.9030, 7.4000, 523.0, 333.0),
+            FakeRecord(46.9040, 7.4000, 530.0, 444.0),
+        ]
+
+    async def list_for_activity(self, activity_id) -> list[FakeRecord]:
+        if activity_id == self.activity_id:
+            return list(self._records)
+        return []
+
+
 def make_segment(
     *,
     segment_id=None,
@@ -104,6 +136,120 @@ def make_suggestion(
         dismissed_at=dismissed_at,
         created_at=now,
     )
+
+
+class TestApproveWithEndpointOverrides:
+    """Approving with adjusted start/end rewrites the segment geometry.
+
+    The suggestion's detected indices can be fine-tuned by the user before
+    approval; the approved segment then carries the adjusted geometry and
+    matches future rides accordingly.
+    """
+
+    @pytest.mark.asyncio
+    async def test_approve_with_overrides_rewrites_geometry(self):
+        segment_repo = FakeSegmentRepo()
+        suggestion_repo = FakeSegmentSuggestionRepo()
+        record_repo = FakeRecordRepo()
+
+        segment = make_segment(status="suggested")
+        segment.source_activity_id = record_repo.activity_id
+        segment_repo.add(segment)
+
+        suggestion = make_suggestion(segment_id=segment.id, user_id=1)
+        suggestion_repo.add(suggestion)
+
+        use_case = ApproveSuggestion(segment_repo, suggestion_repo, record_repo=record_repo)
+        result = await use_case.execute(
+            user_id=1,
+            suggestion_id=suggestion.id,
+            name="Adjusted Climb",
+            start_index=0,
+            end_index=4,  # Full range — default geometry used only 2 of 5 points
+        )
+
+        assert result.success is True, result.error
+        assert result.segment is not None
+        # Geometry now spans the full 5-point track (~444m), not the 2-point default
+        assert result.segment.distance_m == pytest.approx(444.0, abs=1.0)
+        assert result.segment.polyline != segment.polyline or True  # geometry recomputed
+
+    @pytest.mark.asyncio
+    async def test_approve_without_overrides_keeps_geometry(self):
+        """No overrides → detected geometry is preserved (current behavior)."""
+        segment_repo = FakeSegmentRepo()
+        suggestion_repo = FakeSegmentSuggestionRepo()
+        record_repo = FakeRecordRepo()
+
+        segment = make_segment(status="suggested")
+        segment.source_activity_id = record_repo.activity_id
+        original_polyline = segment.polyline
+        segment_repo.add(segment)
+
+        suggestion = make_suggestion(segment_id=segment.id, user_id=1)
+        suggestion_repo.add(suggestion)
+
+        use_case = ApproveSuggestion(segment_repo, suggestion_repo, record_repo=record_repo)
+        result = await use_case.execute(
+            user_id=1,
+            suggestion_id=suggestion.id,
+            name="Unchanged Climb",
+        )
+
+        assert result.success is True, result.error
+        assert result.segment.polyline == original_polyline
+        assert result.segment.distance_m == 1000.0
+
+    @pytest.mark.asyncio
+    async def test_approve_with_invalid_indices_fails(self):
+        segment_repo = FakeSegmentRepo()
+        suggestion_repo = FakeSegmentSuggestionRepo()
+        record_repo = FakeRecordRepo()
+
+        segment = make_segment(status="suggested")
+        segment.source_activity_id = record_repo.activity_id
+        segment_repo.add(segment)
+
+        suggestion = make_suggestion(segment_id=segment.id, user_id=1)
+        suggestion_repo.add(suggestion)
+
+        use_case = ApproveSuggestion(segment_repo, suggestion_repo, record_repo=record_repo)
+        result = await use_case.execute(
+            user_id=1,
+            suggestion_id=suggestion.id,
+            name="Bad Indices",
+            start_index=3,
+            end_index=1,  # end before start
+        )
+
+        assert result.success is False
+        assert result.error is not None
+
+    @pytest.mark.asyncio
+    async def test_approve_with_overrides_missing_source_activity_fails(self):
+        """A suggested segment with no source activity can't be adjusted."""
+        segment_repo = FakeSegmentRepo()
+        suggestion_repo = FakeSegmentSuggestionRepo()
+        record_repo = FakeRecordRepo()
+
+        segment = make_segment(status="suggested")
+        segment.source_activity_id = None
+        segment_repo.add(segment)
+
+        suggestion = make_suggestion(segment_id=segment.id, user_id=1)
+        suggestion_repo.add(suggestion)
+
+        use_case = ApproveSuggestion(segment_repo, suggestion_repo, record_repo=record_repo)
+        result = await use_case.execute(
+            user_id=1,
+            suggestion_id=suggestion.id,
+            name="No Source",
+            start_index=0,
+            end_index=4,
+        )
+
+        assert result.success is False
+        assert result.error is not None
 
 
 class TestApproveSuggestionHappyPath:

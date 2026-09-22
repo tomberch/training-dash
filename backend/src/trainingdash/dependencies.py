@@ -345,9 +345,14 @@ from trainingdash.use_cases.create_segment import CreateSegment
 async def get_approve_suggestion_use_case(
     segment_repo: SegmentRepoD,
     suggestion_repo: SegmentSuggestionRepoD,
+    record_repo: RecordRepoD,
 ) -> ApproveSuggestion:
-    """Create an ApproveSuggestion use case with its dependencies."""
-    return ApproveSuggestion(segment_repo, suggestion_repo)
+    """Create an ApproveSuggestion use case with its dependencies.
+
+    record_repo enables endpoint adjustment (approving with start/end
+    overrides recomputes geometry from the source activity).
+    """
+    return ApproveSuggestion(segment_repo, suggestion_repo, record_repo=record_repo)
 
 
 async def get_create_segment_use_case(
