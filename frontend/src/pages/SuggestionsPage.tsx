@@ -62,38 +62,45 @@ function SuggestionCard({
 }): JSX.Element {
   return (
     <Card className="overflow-hidden">
-      <div className="grid grid-cols-3">
-        <div className="h-full">
-          <SegmentMiniMap polyline={suggestion.polyline} />
+      <CardContent className="space-y-3">
+        {/* Header: type, category, repetitions */}
+        <div className="flex items-center gap-2">
+          <SegmentTypeIcon type={suggestion.segment_type} />
+          <span className="font-medium">Detected Climb</span>
+          <ClimbCategoryBadge category={suggestion.climb_category} />
+          <span className="text-caption ml-auto">{suggestion.repetition_count}× ridden</span>
         </div>
-        <CardContent className="col-span-2 py-4 px-4 space-y-2">
-          <div className="flex items-center gap-2">
-            <SegmentTypeIcon type={suggestion.segment_type} />
-            <ClimbCategoryBadge category={suggestion.climb_category} />
-            <span className="text-caption">
-              {suggestion.repetition_count}× ridden
-            </span>
+
+        {/* Map left, profile + stats right */}
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+          <div className="md:col-span-2">
+            <SegmentMiniMap polyline={suggestion.polyline} height={256} />
           </div>
-          <div className="text-body-secondary">
-            {formatDistance(suggestion.distance_m, unitSystem)} ·{" "}
-            {formatElevation(suggestion.elevation_gain_m, unitSystem)} ·{" "}
-            {suggestion.avg_grade_pct.toFixed(1)}% avg
+          <div className="md:col-span-3 space-y-2">
+            <ElevationProfile
+              profile={suggestion.elevation_profile}
+              height={112}
+              formatDistanceLabel={formatDistanceAxis}
+            />
+            <div className="text-body-secondary">
+              {formatDistance(suggestion.distance_m, unitSystem)} ·{" "}
+              {formatElevation(suggestion.elevation_gain_m, unitSystem)} ·{" "}
+              {suggestion.avg_grade_pct.toFixed(1)}% avg ·{" "}
+              {suggestion.max_grade_pct.toFixed(1)}% max
+            </div>
           </div>
-          <ElevationProfile
-            profile={suggestion.elevation_profile}
-            height={32}
-            formatDistanceLabel={formatDistanceAxis}
-          />
-          <div className="flex gap-2 pt-1">
-            <Button size="sm" onClick={() => onApprove(suggestion)}>
-              Save
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => onDismiss(suggestion.id)}>
-              Dismiss
-            </Button>
-          </div>
-        </CardContent>
-      </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-2">
+          <Button size="sm" onClick={() => onApprove(suggestion)}>
+            Save
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => onDismiss(suggestion.id)}>
+            Dismiss
+          </Button>
+        </div>
+      </CardContent>
     </Card>
   );
 }
@@ -101,14 +108,16 @@ function SuggestionCard({
 function SuggestionCardSkeleton(): JSX.Element {
   return (
     <Card className="overflow-hidden">
-      <div className="grid grid-cols-3">
-        <div className="h-full min-h-[120px] bg-muted" />
-        <CardContent className="col-span-2 py-4 px-4 space-y-3">
-          <Skeleton className="h-5 w-24" />
-          <Skeleton className="h-4 w-40" />
-          <Skeleton className="h-8 w-full" />
-        </CardContent>
-      </div>
+      <CardContent className="space-y-3">
+        <Skeleton className="h-5 w-40" />
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+          <div className="md:col-span-2 min-h-[256px] bg-muted" />
+          <div className="md:col-span-3 space-y-2">
+            <Skeleton className="h-[112px] w-full" />
+            <Skeleton className="h-4 w-48" />
+          </div>
+        </div>
+      </CardContent>
     </Card>
   );
 }
@@ -182,7 +191,7 @@ export function SuggestionsPage({ unitSystem }: SuggestionsPageProps): JSX.Eleme
   const isEmpty = !isLoading && !error && items.length === 0;
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="max-w-4xl mx-auto p-6 space-y-6">
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-page-title">Segment Suggestions</h1>
@@ -219,7 +228,7 @@ export function SuggestionsPage({ unitSystem }: SuggestionsPageProps): JSX.Eleme
       )}
 
       {isLoading && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4">
           {Array.from({ length: 4 }, (_, i) => (
             <SuggestionCardSkeleton key={i} />
           ))}
@@ -235,7 +244,7 @@ export function SuggestionsPage({ unitSystem }: SuggestionsPageProps): JSX.Eleme
 
       {!isLoading && !error && items.length > 0 && (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4">
             {items.map((suggestion) => (
               <SuggestionCard
                 key={suggestion.id}

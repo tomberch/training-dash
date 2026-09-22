@@ -11,7 +11,11 @@ vi.mock("@/api/suggestions", () => ({
 }));
 
 vi.mock("react-leaflet", () => ({
-  MapContainer: ({ children }: { children: React.ReactNode }) => <div data-testid="map">{children}</div>,
+  MapContainer: ({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) => (
+    <div data-testid="map" style={style}>
+      {children}
+    </div>
+  ),
   TileLayer: () => null,
   Polyline: () => null,
   useMap: () => ({ fitBounds: () => null }),
@@ -177,6 +181,41 @@ describe("SuggestionsPage", () => {
 
     await waitFor(() => {
       expect(mockDismissAll).toHaveBeenCalled();
+    });
+  });
+
+  it("renders cards in single-column review list with readable elevation profile", async () => {
+    const withPolyline = { ...mockSuggestion, polyline: "_p~iF~ps|U_ulLnnqC_mqNvxq`@" };
+    mockFetch.mockResolvedValue(paginated([withPolyline]));
+
+    renderWithRouter(<SuggestionsPage unitSystem="metric" />);
+
+    await waitFor(() => {
+      expect(screen.getByText("5× ridden")).toBeInTheDocument();
+    });
+
+    // Single-column list: no md:grid-cols-2 on the card grid
+    const grid = document.querySelector(".grid");
+    expect(grid).not.toBeNull();
+    expect(grid?.className).not.toContain("md:grid-cols-2");
+
+    // The elevation profile renders at a readable height (112px, not 32px)
+    const profile = await screen.findByTestId("elevation-profile");
+    expect(profile).toHaveStyle({ height: "112px" });
+
+    // The mini map renders at 256px tall
+    const map = screen.getByTestId("map");
+    expect(map).toHaveStyle({ minHeight: "256px" });
+  });
+
+  it("shows max grade in the card stats", async () => {
+    mockFetch.mockResolvedValue(paginated([mockSuggestion]));
+
+    renderWithRouter(<SuggestionsPage unitSystem="metric" />);
+
+    await waitFor(() => {
+      // mockSuggestion has max_grade_pct 12.1
+      expect(screen.getByText(/12\.1% max/)).toBeInTheDocument();
     });
   });
 });
