@@ -10,12 +10,18 @@ vi.mock("@/api/suggestions", () => ({
   dismissSuggestion: vi.fn(),
 }));
 
+vi.mock("@/api/activities", () => ({
+  fetchActivityRecords: vi.fn(),
+}));
+
 vi.mock("sonner", () => ({ toast: vi.fn() }));
 
 import { approveSuggestion, dismissSuggestion } from "@/api/suggestions";
+import { fetchActivityRecords } from "@/api/activities";
 
 const mockApprove = vi.mocked(approveSuggestion);
 const mockDismiss = vi.mocked(dismissSuggestion);
+const mockRecords = vi.mocked(fetchActivityRecords);
 
 function makeEffort(overrides: Partial<ActivitySegmentEffort> = {}): ActivitySegmentEffort {
   return {
@@ -59,6 +65,7 @@ function makeSuggestion(overrides: Partial<SegmentSuggestion> = {}): SegmentSugg
     ],
     start_point: { lat: 43.7, lng: 7.3 },
     end_point: { lat: 43.8, lng: 7.4 },
+    source_activity_id: "act-1",
     ...overrides,
   };
 }
@@ -117,6 +124,21 @@ describe("SuggestionInlineCard", () => {
 
   it("opens naming dialog and approves", async () => {
     mockApprove.mockResolvedValue({ id: "seg-2", name: "My Climb" });
+    mockRecords.mockResolvedValue({
+      features: Array.from({ length: 5 }, (_, i) => ({
+        type: "Feature" as const,
+        geometry: { type: "Point" as const, coordinates: [7.3, 43.7 + i * 0.001] },
+        properties: {
+          timestamp: `2026-09-20T10:0${i}:00Z`,
+          distance_m: i * 111,
+          hr_bpm: null,
+          power_w: null,
+          speed_mps: null,
+          altitude_m: 800 + i * 3,
+          cadence_rpm: null,
+        },
+      })),
+    } as never);
     const onApproved = vi.fn();
     render(
       <MemoryRouter>
@@ -135,7 +157,12 @@ describe("SuggestionInlineCard", () => {
     fireEvent.change(screen.getByLabelText("Segment name"), { target: { value: "My Climb" } });
     fireEvent.click(screen.getByRole("button", { name: "Create Segment" }));
 
-    await waitFor(() => expect(mockApprove).toHaveBeenCalledWith("sug-1", "My Climb"));
+    await waitFor(() =>
+      expect(mockApprove).toHaveBeenCalledWith("sug-1", "My Climb", {
+        start_index: 0,
+        end_index: 4,
+      })
+    );
   });
 
   it("dismisses the suggestion", async () => {

@@ -10,6 +10,10 @@ vi.mock("@/api/suggestions", () => ({
   dismissAllSuggestions: vi.fn(),
 }));
 
+vi.mock("@/api/activities", () => ({
+  fetchActivityRecords: vi.fn(),
+}));
+
 vi.mock("react-leaflet", () => ({
   MapContainer: ({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) => (
     <div data-testid="map" style={style}>
@@ -18,11 +22,17 @@ vi.mock("react-leaflet", () => ({
   ),
   TileLayer: () => null,
   Polyline: () => null,
+  Marker: () => null,
+  useMapEvents: () => null,
   useMap: () => ({ fitBounds: () => null }),
 }));
 
 vi.mock("leaflet", () => ({
-  default: { latLngBounds: () => ({}), latLng: () => ({}) },
+  default: {
+    latLngBounds: () => ({}),
+    latLng: () => ({}),
+    divIcon: (opts: Record<string, unknown>) => opts,
+  },
 }));
 
 vi.mock("sonner", () => ({ toast: vi.fn() }));
@@ -33,12 +43,14 @@ import {
   dismissSuggestion,
   dismissAllSuggestions,
 } from "@/api/suggestions";
+import { fetchActivityRecords } from "@/api/activities";
 import type { PaginatedSuggestions, SegmentSuggestion } from "@/api/suggestions";
 
 const mockFetch = vi.mocked(fetchSuggestions);
 const mockApprove = vi.mocked(approveSuggestion);
 const mockDismiss = vi.mocked(dismissSuggestion);
 const mockDismissAll = vi.mocked(dismissAllSuggestions);
+const mockRecords = vi.mocked(fetchActivityRecords);
 
 function renderWithRouter(ui: React.ReactElement) {
   return render(<MemoryRouter>{ui}</MemoryRouter>);
@@ -65,6 +77,7 @@ const mockSuggestion: SegmentSuggestion = {
   ],
   start_point: { lat: 43.7, lng: 7.3 },
   end_point: { lat: 43.8, lng: 7.4 },
+  source_activity_id: "act-1",
 };
 
 function paginated(items: SegmentSuggestion[], total?: number): PaginatedSuggestions {
@@ -82,6 +95,22 @@ function paginated(items: SegmentSuggestion[], total?: number): PaginatedSuggest
 describe("SuggestionsPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default: any dialog opened during a test can load a track
+    mockRecords.mockResolvedValue({
+      features: Array.from({ length: 5 }, (_, i) => ({
+        type: "Feature" as const,
+        geometry: { type: "Point" as const, coordinates: [7.4, 46.9 + i * 0.001] },
+        properties: {
+          timestamp: `2026-09-20T10:0${i}:00Z`,
+          distance_m: i * 111,
+          hr_bpm: null,
+          power_w: null,
+          speed_mps: null,
+          altitude_m: 500 + i * 3,
+          cadence_rpm: null,
+        },
+      })),
+    } as never);
   });
 
   it("renders suggestion cards", async () => {
@@ -120,6 +149,21 @@ describe("SuggestionsPage", () => {
   it("opens naming modal and approves on Save", async () => {
     mockFetch.mockResolvedValue(paginated([mockSuggestion]));
     mockApprove.mockResolvedValue({ id: "seg-1", name: "My Climb" });
+    mockRecords.mockResolvedValue({
+      features: Array.from({ length: 5 }, (_, i) => ({
+        type: "Feature" as const,
+        geometry: { type: "Point" as const, coordinates: [7.4, 46.9 + i * 0.001] },
+        properties: {
+          timestamp: `2026-09-20T10:0${i}:00Z`,
+          distance_m: i * 111,
+          hr_bpm: null,
+          power_w: null,
+          speed_mps: null,
+          altitude_m: 500 + i * 3,
+          cadence_rpm: null,
+        },
+      })),
+    } as never);
 
     renderWithRouter(<SuggestionsPage unitSystem="metric" />);
 
@@ -139,7 +183,11 @@ describe("SuggestionsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create Segment" }));
 
     await waitFor(() => {
-      expect(mockApprove).toHaveBeenCalledWith("sug-1", "My Climb");
+      // Full track selected by default → indices 0..4 sent with the approval
+      expect(mockApprove).toHaveBeenCalledWith("sug-1", "My Climb", {
+        start_index: 0,
+        end_index: 4,
+      });
     });
   });
 

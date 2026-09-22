@@ -23,6 +23,7 @@ export interface SegmentSuggestion {
   elevation_profile: ElevationPoint[];
   start_point: { lat: number; lng: number };
   end_point: { lat: number; lng: number };
+  source_activity_id: string | null;
 }
 
 export interface PaginatedSuggestions {
@@ -47,12 +48,22 @@ export async function fetchSuggestions(
   return apiGet<PaginatedSuggestions>(`/suggestions?page=${page}&per_page=${perPage}`);
 }
 
+/** Options for approving a suggestion with adjusted endpoints. */
+export interface ApproveSuggestionOptions {
+  start_index?: number;
+  end_index?: number;
+}
+
 /** Approve a suggestion with a name, creating the segment. Returns the approved segment. */
 export async function approveSuggestion(
   id: string,
-  name: string
+  name: string,
+  options?: ApproveSuggestionOptions
 ): Promise<ApproveSuggestionResult> {
-  return apiPost<ApproveSuggestionResult>(`/suggestions/${id}/approve`, { name }, "Failed to create segment");
+  const body: Record<string, unknown> = { name };
+  if (options?.start_index !== undefined) body.start_index = options.start_index;
+  if (options?.end_index !== undefined) body.end_index = options.end_index;
+  return apiPost<ApproveSuggestionResult>(`/suggestions/${id}/approve`, body, "Failed to create segment");
 }
 
 /** Dismiss a single suggestion. */
