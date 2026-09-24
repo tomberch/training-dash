@@ -106,15 +106,20 @@ test.describe.serial('Activity Detail', () => {
     await page.goto(`/activities/${sharedActivityId}`);
     await expect(page.getByRole('button', { name: 'Back' })).toBeVisible({ timeout: 15000 });
 
+    // Scroll down to make sure all metrics sections are loaded
+    await page.evaluate(() => window.scrollBy(0, 500));
+    await page.waitForTimeout(300);
+
     // Check for Training Load section with training metrics
-    // The Training Load card uses an h3 element, scroll to it
-    const trainingLoadHeader = page.locator('h3', { hasText: 'Training Load' }).first();
-    await trainingLoadHeader.scrollIntoViewIfNeeded();
-    await expect(trainingLoadHeader).toBeVisible();
+    // Look for the Training Load header
+    const trainingLoadHeader = page.getByRole('heading', { name: 'Training Load' });
+    await expect(trainingLoadHeader).toBeVisible({ timeout: 10000 });
     
-    // Check for training metric labels within the page
-    await expect(page.getByText('TSS').first()).toBeVisible();
-    await expect(page.getByText('IF').first()).toBeVisible();
+    // Find the card containing Training Load and verify TSS/IF are present
+    // The card has class bg-card and contains the metrics
+    const trainingLoadCard = page.locator('.bg-card').filter({ has: trainingLoadHeader });
+    await expect(trainingLoadCard.getByText('TSS')).toBeVisible();
+    await expect(trainingLoadCard.getByText('IF')).toBeVisible();
   });
 
   test('performance section with charts renders', async ({ page }) => {
