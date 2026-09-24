@@ -419,22 +419,27 @@ async def compare_activities(
             {
                 "distance_m": r.distance_m,
                 "timestamp_s": (r.timestamp - first_ts).total_seconds(),
+                "speed_mps": r.speed_mps,
             }
             for r in records
         ]
 
-    from trainingdash.domain.resampler import compute_time_gap_series
+    from trainingdash.domain.resampler import compute_moving_time, compute_time_gap_series_dual
 
-    gap_series = compute_time_gap_series(
-        to_resample_input(records_a, first_ts_a),
-        to_resample_input(records_b, first_ts_b),
-    )
+    # Add cumulative moving time to records
+    input_a = compute_moving_time(to_resample_input(records_a, first_ts_a))
+    input_b = compute_moving_time(to_resample_input(records_b, first_ts_b))
+
+    # Compute both elapsed and moving time gap series
+    elapsed_gap_series, moving_gap_series = compute_time_gap_series_dual(input_a, input_b)
 
     other_geojson = records_to_geojson(records_b, ["timestamp", "distance_m", "speed_mps"])
 
     return {
         "comparable": True,
-        "gap_series": gap_series,
+        "gap_series": moving_gap_series,  # Default to moving time (new behavior)
+        "elapsed_gap_series": elapsed_gap_series,
+        "moving_gap_series": moving_gap_series,
         "other_geojson": other_geojson,
     }
 

@@ -262,6 +262,8 @@ export interface GapPoint {
 export interface CompareResponse {
   comparable: boolean;
   gap_series: GapPoint[];
+  elapsed_gap_series?: GapPoint[];
+  moving_gap_series?: GapPoint[];
   other_geojson: GeoJSONFeatureCollection | null;
   reason?: "different_routes" | "opposite_direction" | "insufficient_gps" | "no_gps_match" | "missing_gps";
   message?: string;

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
-import type { Activity, GeoJSONFeatureCollection, SameRouteResponse, CompareResponse } from "../api";
+import type { Activity, GeoJSONFeatureCollection, SameRouteResponse, CompareResponse, GapPoint } from "../api";
 import { fetchActivity, fetchActivityRecords, fetchSameRouteActivities, fetchComparison } from "../api";
 import { ActivitySelector } from "../components/ActivitySelector";
 import { ResizableMap } from "../components/ResizableMap";
@@ -14,6 +14,14 @@ import {
   PowerComparisonChart, StatsTable, gapColor, formatDistanceKm, formatGap, smoothGapData,
   type GapChartPoint,
 } from "../components/compare";
+import {
+  Tooltip as UITooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+
+type TimeMode = "moving" | "elapsed";
 
 export function ComparePage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -28,6 +36,7 @@ export function ComparePage() {
   const [comparison, setComparison] = useState<CompareResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [hoveredPosition, setHoveredPosition] = useState<[number, number] | null>(null);
+  const [timeMode, setTimeMode] = useState<TimeMode>("moving");
   
   const loadedBaseFromUrl = useRef(false);
   const loadedCompareFromUrl = useRef(false);
@@ -141,10 +150,20 @@ export function ComparePage() {
     return map;
   }, [baseGeojson]);
 
+  // Select the gap series based on the time mode
+  const activeGapSeries: GapPoint[] = useMemo(() => {
+    if (!comparison) return [];
+    if (timeMode === "elapsed" && comparison.elapsed_gap_series) {
+      return comparison.elapsed_gap_series;
+    }
+    // Default to moving_gap_series, fall back to gap_series for backward compatibility
+    return comparison.moving_gap_series ?? comparison.gap_series ?? [];
+  }, [comparison, timeMode]);
+
   const gapChartData = useMemo((): GapChartPoint[] => {
-    if (!comparison?.gap_series || comparison.gap_series.length === 0) return [];
-    return smoothGapData(comparison.gap_series, elevationByDistance);
-  }, [comparison, elevationByDistance]);
+    if (activeGapSeries.length === 0) return [];
+    return smoothGapData(activeGapSeries, elevationByDistance);
+  }, [activeGapSeries, elevationByDistance]);
 
 
 
@@ -166,13 +185,12 @@ export function ComparePage() {
   };
 
   const coloredSegments = useMemo(() => {
-    if (!comparison?.gap_series || comparison.gap_series.length < 2 || posByDist.length < 2) return [];
-    const gapSeries = comparison.gap_series;
+    if (activeGapSeries.length < 2 || posByDist.length < 2) return [];
     const segments: { positions: [number, number][]; color: string }[] = [];
-    for (let i = 0; i < gapSeries.length - 1; i++) {
-      const distStart = gapSeries[i].distance_m;
-      const distEnd = gapSeries[i + 1].distance_m;
-      const color = gapColor(gapSeries[i].gap_s);
+    for (let i = 0; i < activeGapSeries.length - 1; i++) {
+      const distStart = activeGapSeries[i].distance_m;
+      const distEnd = activeGapSeries[i + 1].distance_m;
+      const color = gapColor(activeGapSeries[i].gap_s);
       const pointsInSegment: [number, number][] = [];
       for (const p of posByDist) {
         if (p.distance_m >= distStart && p.distance_m <= distEnd) pointsInSegment.push(p.pos);
@@ -180,7 +198,7 @@ export function ComparePage() {
       if (pointsInSegment.length >= 2) segments.push({ positions: pointsInSegment, color });
     }
     return segments;
-  }, [comparison, posByDist]);
+  }, [activeGapSeries, posByDist]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleChartHover = (state: any) => {
@@ -321,7 +339,47 @@ export function ComparePage() {
             {comparison?.comparable && gapChartData.length > 0 && (
               <ChartErrorBoundary>
                 <div className="bg-card rounded-lg border border-border p-4">
-                  <h3 className="text-sm font-medium text-foreground mb-3">Time Gap vs Distance</h3>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-medium text-foreground">Time Gap vs Distance</h3>
+                    <TooltipProvider>
+                      <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
+                        <UITooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              onClick={() => setTimeMode("moving")}
+                              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
+                                timeMode === "moving"
+                                  ? "bg-card text-foreground shadow-sm"
+                                  : "text-muted-foreground hover:text-foreground"
+                              }`}
+                            >
+                              Moving
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom">
+                            <p className="text-xs max-w-48">Compares riding time only, excluding stops</p>
+                          </TooltipContent>
+                        </UITooltip>
+                        <UITooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              onClick={() => setTimeMode("elapsed")}
+                              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
+                                timeMode === "elapsed"
+                                  ? "bg-card text-foreground shadow-sm"
+                                  : "text-muted-foreground hover:text-foreground"
+                              }`}
+                            >
+                              Elapsed
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom">
+                            <p className="text-xs max-w-48">Compares total time including stops</p>
+                          </TooltipContent>
+                        </UITooltip>
+                      </div>
+                    </TooltipProvider>
+                  </div>
                   <div style={{ height: 350 }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <ComposedChart data={gapChartData} onMouseMove={handleChartHover} onMouseLeave={handleChartLeave} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
@@ -342,6 +400,11 @@ export function ComparePage() {
                       </ComposedChart>
                     </ResponsiveContainer>
                   </div>
+                  {gapChartData.length > 0 && (
+                    <p className="text-xs text-muted-foreground mt-2 text-center">
+                      Compared up to {formatDistanceKm(gapChartData[gapChartData.length - 1].distance_m)} (shorter ride distance)
+                    </p>
+                  )}
                 </div>
               </ChartErrorBoundary>
             )}

@@ -40,6 +40,13 @@ export function StatsTable({ baseActivity, compareActivity, comparison }: StatsT
     };
 
     rows.push({
+      label: "Elapsed Time", baseValue: formatTime(baseActivity.elapsed_time_s), compareValue: formatTime(compareActivity.elapsed_time_s),
+      baseRaw: baseActivity.elapsed_time_s, compareRaw: compareActivity.elapsed_time_s,
+      delta: formatDelta(baseActivity.elapsed_time_s, compareActivity.elapsed_time_s, (v) => formatTime(Math.abs(v))),
+      winner: getWinner(baseActivity.elapsed_time_s, compareActivity.elapsed_time_s, true), lowerIsBetter: true,
+    });
+
+    rows.push({
       label: "Moving Time", baseValue: formatTime(baseActivity.moving_time_s), compareValue: formatTime(compareActivity.moving_time_s),
       baseRaw: baseActivity.moving_time_s, compareRaw: compareActivity.moving_time_s,
       delta: formatDelta(baseActivity.moving_time_s, compareActivity.moving_time_s, (v) => formatTime(Math.abs(v))),
@@ -139,7 +146,7 @@ export function StatsTable({ baseActivity, compareActivity, comparison }: StatsT
     if (comparison?.gap_series && comparison.gap_series.length > 0) {
       const finalGap = comparison.gap_series[comparison.gap_series.length - 1].gap_s;
       rows.push({
-        label: "Final Time Gap", baseValue: finalGap < 0 ? formatGap(Math.abs(finalGap)) + " ahead" : "—",
+        label: "Gap at Finish", baseValue: finalGap < 0 ? formatGap(Math.abs(finalGap)) + " ahead" : "—",
         compareValue: finalGap > 0 ? formatGap(finalGap) + " ahead" : "—",
         baseRaw: -finalGap, compareRaw: finalGap, delta: formatGap(finalGap),
         winner: finalGap < -0.5 ? "base" : finalGap > 0.5 ? "compare" : "tie",
