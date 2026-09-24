@@ -16,3 +16,9 @@
 .recharts-responsive-container {
   min-height: 200px;
 }
+
+/* Compact ElevationProfile slots (suggestion cards, activity detail):
+   the consumer's height prop wins over the global 200px floor. */
+.elevation-profile .recharts-responsive-container {
+  min-height: 0;
+}

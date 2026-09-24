@@ -80,6 +80,10 @@ export function ElevationProfile({
     }));
   }, [profile]);
 
+  // Scoped override: the global `.recharts-responsive-container { min-height: 200px }`
+  // rule (index.css / App.css) forces every chart to >=200px, overflowing the
+  // compact slots this component is used in (suggestion cards, activity detail)
+  // and covering neighbouring buttons. The consumer's `height` prop wins here.
   const heightStyle = typeof height === "number" ? `${height}px` : height;
 
   // Empty state
@@ -113,7 +117,7 @@ export function ElevationProfile({
 
   return (
     <div
-      className={cn("w-full", className)}
+      className={cn("w-full elevation-profile", className)}
       style={{ height: heightStyle }}
       data-testid="elevation-profile"
     >
