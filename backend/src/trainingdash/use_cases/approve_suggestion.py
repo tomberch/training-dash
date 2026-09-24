@@ -17,7 +17,12 @@ from trainingdash.domain.segment_geometry import (
 )
 from trainingdash.domain.segment_matching import compute_path_overlap
 from trainingdash.repositories.postgres.models import Segment
-from trainingdash.repositories.protocols import RecordRepo, SegmentRepo, SegmentSuggestionRepo
+from trainingdash.repositories.protocols import (
+    ActivityRepo,
+    RecordRepo,
+    SegmentRepo,
+    SegmentSuggestionRepo,
+)
 
 # Type classification thresholds (shared with CreateSegment)
 CLIMB_MIN_GRADE_PCT = 3.0
@@ -105,6 +110,7 @@ class ApproveSuggestion:
         segment_repo: SegmentRepo,
         suggestion_repo: SegmentSuggestionRepo,
         record_repo: "RecordRepo | None" = None,
+        activity_repo: "ActivityRepo | None" = None,
     ) -> None:
         """
         Args:
@@ -114,10 +120,14 @@ class ApproveSuggestion:
                 when approving with endpoint overrides (the source
                 activity's GPS track is re-sliced); None disables
                 adjustments.
+            activity_repo: Repository for activity ownership checks.
+                Required alongside record_repo — the source activity must
+                belong to the approving user before its records are read.
         """
         self._segment_repo = segment_repo
         self._suggestion_repo = suggestion_repo
         self._record_repo = record_repo
+        self._activity_repo = activity_repo
 
     async def execute(
         self,
@@ -200,7 +210,7 @@ class ApproveSuggestion:
         # Apply endpoint overrides: recompute geometry from the source
         # activity's GPS track before the duplicate check
         if start_index is not None or end_index is not None:
-            adjusted = await self._apply_overrides(segment, start_index, end_index)
+            adjusted = await self._apply_overrides(segment, user_id, start_index, end_index)
             if adjusted is not None:
                 return adjusted
 
@@ -230,6 +240,7 @@ class ApproveSuggestion:
     async def _apply_overrides(
         self,
         segment: Segment,
+        user_id: int,
         start_index: int | None,
         end_index: int | None,
     ) -> ApproveResult | None:
@@ -257,6 +268,21 @@ class ApproveSuggestion:
             return ApproveResult(
                 success=False,
                 error="Suggestion has no source activity to adjust against",
+            )
+        if self._activity_repo is None:
+            return ApproveResult(
+                success=False,
+                error="Endpoint adjustment is not available for this suggestion",
+            )
+
+        # Ownership: the source activity must belong to the approving user.
+        # Suggested segments are global; without this check a second user
+        # could read the original rider's GPS track via crafted indices.
+        activity = await self._activity_repo.get_by_id(segment.source_activity_id, user_id)
+        if activity is None:
+            return ApproveResult(
+                success=False,
+                error="Source activity not found or not owned by user",
             )
         if start_index < 0 or end_index <= start_index:
             return ApproveResult(

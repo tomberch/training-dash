@@ -50,6 +50,7 @@ class FakeRecordRepo:
 
     def __init__(self) -> None:
         self.activity_id = uuid4()
+        self.read_count = 0
         self._records = [
             FakeRecord(46.9000, 7.4000, 500.0, 0.0),
             FakeRecord(46.9010, 7.4000, 508.0, 111.0),
@@ -59,9 +60,30 @@ class FakeRecordRepo:
         ]
 
     async def list_for_activity(self, activity_id) -> list[FakeRecord]:
+        self.read_count += 1
         if activity_id == self.activity_id:
             return list(self._records)
         return []
+
+
+class FakeActivity:
+    """Fake Activity row for ownership checks."""
+
+    def __init__(self, activity_id, user_id: int) -> None:
+        self.id = activity_id
+        self.user_id = user_id
+
+
+class FakeActivityRepo:
+    """In-memory ActivityRepo.get_by_id stand-in enforcing ownership."""
+
+    def __init__(self, owner_id: int) -> None:
+        self._owner_id = owner_id
+
+    async def get_by_id(self, activity_id, user_id: int):
+        if user_id == self._owner_id:
+            return FakeActivity(activity_id, user_id)
+        return None
 
 
 def make_segment(
@@ -159,7 +181,9 @@ class TestApproveWithEndpointOverrides:
         suggestion = make_suggestion(segment_id=segment.id, user_id=1)
         suggestion_repo.add(suggestion)
 
-        use_case = ApproveSuggestion(segment_repo, suggestion_repo, record_repo=record_repo)
+        use_case = ApproveSuggestion(
+            segment_repo, suggestion_repo, record_repo=record_repo, activity_repo=FakeActivityRepo(owner_id=1)
+        )
         result = await use_case.execute(
             user_id=1,
             suggestion_id=suggestion.id,
@@ -189,7 +213,9 @@ class TestApproveWithEndpointOverrides:
         suggestion = make_suggestion(segment_id=segment.id, user_id=1)
         suggestion_repo.add(suggestion)
 
-        use_case = ApproveSuggestion(segment_repo, suggestion_repo, record_repo=record_repo)
+        use_case = ApproveSuggestion(
+            segment_repo, suggestion_repo, record_repo=record_repo, activity_repo=FakeActivityRepo(owner_id=1)
+        )
         result = await use_case.execute(
             user_id=1,
             suggestion_id=suggestion.id,
@@ -213,7 +239,9 @@ class TestApproveWithEndpointOverrides:
         suggestion = make_suggestion(segment_id=segment.id, user_id=1)
         suggestion_repo.add(suggestion)
 
-        use_case = ApproveSuggestion(segment_repo, suggestion_repo, record_repo=record_repo)
+        use_case = ApproveSuggestion(
+            segment_repo, suggestion_repo, record_repo=record_repo, activity_repo=FakeActivityRepo(owner_id=1)
+        )
         result = await use_case.execute(
             user_id=1,
             suggestion_id=suggestion.id,
@@ -239,7 +267,9 @@ class TestApproveWithEndpointOverrides:
         suggestion = make_suggestion(segment_id=segment.id, user_id=1)
         suggestion_repo.add(suggestion)
 
-        use_case = ApproveSuggestion(segment_repo, suggestion_repo, record_repo=record_repo)
+        use_case = ApproveSuggestion(
+            segment_repo, suggestion_repo, record_repo=record_repo, activity_repo=FakeActivityRepo(owner_id=1)
+        )
         result = await use_case.execute(
             user_id=1,
             suggestion_id=suggestion.id,
@@ -250,6 +280,46 @@ class TestApproveWithEndpointOverrides:
 
         assert result.success is False
         assert result.error is not None
+
+
+    @pytest.mark.asyncio
+    async def test_approve_with_overrides_rejects_unowned_source_activity(self):
+        """The source activity must belong to the approving user.
+
+        Suggested segments are global — a second user approving the same
+        climb must not be able to read user A's GPS track by passing
+        crafted indices. Mirrors CreateSegment's ownership check.
+        """
+        segment_repo = FakeSegmentRepo()
+        suggestion_repo = FakeSegmentSuggestionRepo()
+        record_repo = FakeRecordRepo()
+        # record_repo.activity_id is owned by user 1 (fake returns records
+        # regardless of user); the activity repo mediates ownership
+        activity_repo = FakeActivityRepo(owner_id=1)
+
+        segment = make_segment(status="suggested")
+        segment.source_activity_id = record_repo.activity_id
+        segment_repo.add(segment)
+
+        # User 2 approves the shared suggestion
+        suggestion = make_suggestion(segment_id=segment.id, user_id=2)
+        suggestion_repo.add(suggestion)
+
+        use_case = ApproveSuggestion(
+            segment_repo, suggestion_repo, record_repo=record_repo, activity_repo=activity_repo
+        )
+        result = await use_case.execute(
+            user_id=2,
+            suggestion_id=suggestion.id,
+            name="Stolen Track",
+            start_index=0,
+            end_index=4,
+        )
+
+        assert result.success is False
+        assert result.error is not None
+        # No records were read
+        assert record_repo.read_count == 0
 
 
 class TestApproveSuggestionHappyPath:

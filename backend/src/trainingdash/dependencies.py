@@ -346,13 +346,17 @@ async def get_approve_suggestion_use_case(
     segment_repo: SegmentRepoD,
     suggestion_repo: SegmentSuggestionRepoD,
     record_repo: RecordRepoD,
+    activity_repo: ActivityRepoD,
 ) -> ApproveSuggestion:
     """Create an ApproveSuggestion use case with its dependencies.
 
-    record_repo enables endpoint adjustment (approving with start/end
-    overrides recomputes geometry from the source activity).
+    record_repo + activity_repo enable endpoint adjustment (approving
+    with start/end overrides recomputes geometry from the source
+    activity, after verifying the approving user owns it).
     """
-    return ApproveSuggestion(segment_repo, suggestion_repo, record_repo=record_repo)
+    return ApproveSuggestion(
+        segment_repo, suggestion_repo, record_repo=record_repo, activity_repo=activity_repo
+    )
 
 
 async def get_create_segment_use_case(
