@@ -19,7 +19,6 @@ from trainingdash.domain.segment_matching import compute_path_overlap
 from trainingdash.repositories.postgres.models import Segment
 from trainingdash.repositories.protocols import RecordRepo, SegmentRepo, SegmentSuggestionRepo
 
-
 # Type classification thresholds (shared with CreateSegment)
 CLIMB_MIN_GRADE_PCT = 3.0
 CLIMB_MIN_LENGTH_M = 300.0
