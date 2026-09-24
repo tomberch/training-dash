@@ -87,7 +87,7 @@ function SegmentMap({ polyline }: { polyline: string }): JSX.Element {
   }
 
   return (
-    <MapContainer center={positions[0]} zoom={13} className="h-64 rounded-t-lg">
+    <MapContainer center={positions[0]} zoom={13} className="h-64 rounded-t-lg" style={{ height: "256px" }}>
       <TileLayer url={tileUrl} attribution={attribution} />
       <Polyline positions={positions} pathOptions={{ color: "#f97316", weight: 5 }} />
       <Marker position={positions[0]} />

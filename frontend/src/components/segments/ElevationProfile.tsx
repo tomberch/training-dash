@@ -5,7 +5,7 @@
  * Resamples large profiles to ≤200 points for chart performance.
  */
 
-import { useMemo, useId } from "react";
+import { useMemo } from "react";
 import {
   AreaChart,
   Area,
@@ -57,10 +57,6 @@ export function ElevationProfile({
   formatDistanceLabel,
   className,
 }: ElevationProfileProps) {
-  // Generate unique gradient ID for multiple instances on same page
-  const instanceId = useId();
-  const gradientId = `elevationGradient-${instanceId}`;
-
   // Resample to ≤200 points for chart performance
   const chartData = useMemo((): ChartPoint[] => {
     if (profile.length === 0) return [];
@@ -81,7 +77,7 @@ export function ElevationProfile({
   }, [profile]);
 
   // Scoped override: the global `.recharts-responsive-container { min-height: 200px }`
-  // rule (index.css / App.css) forces every chart to >=200px, overflowing the
+  // rule (index.css / App.css) forces every chart to ≥200px, overflowing the
   // compact slots this component is used in (suggestion cards, activity detail)
   // and covering neighbouring buttons. The consumer's `height` prop wins here.
   const heightStyle = typeof height === "number" ? `${height}px` : height;
@@ -110,7 +106,7 @@ export function ElevationProfile({
   // Default distance formatter
   const defaultFormatDistance = (meters: number): string => {
     const km = meters / 1000;
-    return km >= 1 ? `${km.toFixed(1)}` : `${(meters / 1000).toFixed(2)}`;
+    return km >= 1 ? `${km.toFixed(1)} km` : `${(meters / 1000).toFixed(2)} km`;
   };
 
   const distanceFormatter = formatDistanceLabel || defaultFormatDistance;
@@ -126,44 +122,40 @@ export function ElevationProfile({
           data={chartData}
           margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
         >
-          <defs>
-            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-              <stop
-                offset="5%"
-                stopColor="hsl(var(--primary))"
-                stopOpacity={0.3}
-              />
-              <stop
-                offset="95%"
-                stopColor="hsl(var(--primary))"
-                stopOpacity={0.05}
-              />
-            </linearGradient>
-          </defs>
-          <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+          <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
           <XAxis
             dataKey="distance_m"
             tickFormatter={distanceFormatter}
-            className="text-xs"
-            tick={{ fill: "hsl(var(--muted-foreground))" }}
+            stroke="#9ca3af"
+            fontSize={12}
           />
           <YAxis
             domain={[minEle - padding, maxEle + padding]}
-            tickFormatter={(v) => `${Math.round(v)}`}
-            className="text-xs"
-            tick={{ fill: "hsl(var(--muted-foreground))" }}
-            width={45}
+            tickFormatter={(v) => `${Math.round(v)}m`}
+            stroke="#9ca3af"
+            fontSize={12}
+            width={50}
           />
           <Tooltip
+            contentStyle={{
+              backgroundColor: "#1f2937",
+              border: "1px solid #374151",
+              borderRadius: "0.375rem",
+              color: "#f9fafb",
+            }}
             content={({ active, payload }) => {
               if (!active || !payload || payload.length === 0) return null;
               const point = payload[0].payload as ChartPoint;
               return (
                 <div
-                  className="bg-popover border border-border rounded-lg p-3 shadow-lg text-sm"
+                  className="bg-card border border-border rounded-lg p-3 shadow-lg text-sm"
+                  style={{
+                    backgroundColor: "#1f2937",
+                    border: "1px solid #374151",
+                  }}
                   data-testid="elevation-profile-tooltip"
                 >
-                  <div className="font-medium mb-1">
+                  <div className="font-medium mb-1 text-foreground">
                     {point.distance_km.toFixed(2)} km
                   </div>
                   <div className="space-y-0.5 text-muted-foreground">
@@ -190,9 +182,11 @@ export function ElevationProfile({
           <Area
             type="monotone"
             dataKey="elevation_m"
-            stroke="hsl(var(--primary))"
-            strokeWidth={2}
-            fill={`url(#${gradientId})`}
+            fill="#10b981"
+            fillOpacity={0.15}
+            stroke="#10b981"
+            strokeWidth={1.5}
+            strokeOpacity={0.7}
           />
         </AreaChart>
       </ResponsiveContainer>
