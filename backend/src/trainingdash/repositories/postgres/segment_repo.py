@@ -8,7 +8,12 @@ from datetime import datetime
 from uuid import UUID
 
 from geoalchemy2 import WKTElement
-from geoalchemy2.functions import ST_Buffer, ST_DWithin, ST_Intersects, ST_MakeEnvelope
+from geoalchemy2.functions import (
+    ST_Buffer,
+    ST_DWithin,
+    ST_Intersects,
+    ST_MakeEnvelope,
+)
 from geoalchemy2.shape import to_shape
 from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -251,16 +256,23 @@ class PostgresSegmentRepo:
 
         Returns the matching Segment, or None.
         """
-        # Cheap spatial prefilter: suggested segments near the start point
+        # Cheap spatial prefilter: suggested segments near the start point.
+        # Ordered deterministically (nearest first) so the limit always
+        # keeps the most likely duplicates.
         start_point = WKTElement(f"POINT({start_lon} {start_lat})", srid=4326)
         candidates = (
             (
                 await self._session.execute(
-                    select(Segment).where(
+                    select(Segment)
+                    .where(
                         Segment.status == "suggested",
                         Segment.deleted_at.is_(None),
                         ST_DWithin(Segment.start_point, start_point, 0.001),  # ~100m
-                    ).limit(50)
+                    )
+                    .order_by(
+                        func.ST_Distance(Segment.start_point, start_point).asc()
+                    )
+                    .limit(50)
                 )
             )
             .scalars()
@@ -456,6 +468,10 @@ class PostgresSegmentSuggestionRepo:
         query = select(SegmentSuggestion).where(
             SegmentSuggestion.user_id == user_id,
             SegmentSuggestion.repetition_count >= SUGGESTION_VISIBILITY_THRESHOLD,
+            or_(
+                SegmentSuggestion.expires_at.is_(None),
+                SegmentSuggestion.expires_at >= datetime.now(),
+            ),
         )
 
         if not include_dismissed:
@@ -471,6 +487,10 @@ class PostgresSegmentSuggestionRepo:
         query = select(func.count(SegmentSuggestion.id)).where(
             SegmentSuggestion.user_id == user_id,
             SegmentSuggestion.repetition_count >= SUGGESTION_VISIBILITY_THRESHOLD,
+            or_(
+                SegmentSuggestion.expires_at.is_(None),
+                SegmentSuggestion.expires_at >= datetime.now(),
+            ),
         )
 
         if not include_dismissed:
@@ -509,7 +529,11 @@ class PostgresSegmentSuggestionRepo:
 
     async def dismiss_all(self, user_id: int) -> int:
         """
-        Dismiss all suggestions for a user.
+        Dismiss all VISIBLE suggestions for a user (>= threshold).
+
+        Below-threshold suggestions the user has never seen are left
+        untouched — the confirm dialog quotes the visible total, so
+        dismissing must not remove more than that.
 
         Returns the count of suggestions dismissed.
         """
@@ -518,6 +542,11 @@ class PostgresSegmentSuggestionRepo:
             .where(
                 SegmentSuggestion.user_id == user_id,
                 SegmentSuggestion.dismissed_at.is_(None),
+                SegmentSuggestion.repetition_count >= SUGGESTION_VISIBILITY_THRESHOLD,
+                or_(
+                    SegmentSuggestion.expires_at.is_(None),
+                    SegmentSuggestion.expires_at >= datetime.now(),
+                ),
             )
             .values(dismissed_at=datetime.now())
         )

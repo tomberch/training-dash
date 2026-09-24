@@ -49,8 +49,11 @@ _pending_garmin_mfa: dict[int, dict] = {}
 async def get_me(db: DbSession, user: CurrentUser):
     """Get the current user's info including HR-derived power status."""
     from trainingdash.hr_power import get_ef_model_status
+    from trainingdash.routers.serializers import count_pending_suggestions
 
-    response = user_response(user)
+    response = user_response(
+        user, pending_suggestions=await count_pending_suggestions(db, user.id)
+    )
     response["hr_power_model"] = await get_ef_model_status(db, user.id)
     return response
 
@@ -137,7 +140,11 @@ async def update_me(db: DbSession, user: CurrentUser, request: UpdateMeRequest):
     await db.commit()
     await db.refresh(user)
 
-    response = user_response(user)
+    from trainingdash.routers.serializers import count_pending_suggestions
+
+    response = user_response(
+        user, pending_suggestions=await count_pending_suggestions(db, user.id)
+    )
     response["hr_power_model"] = await get_ef_model_status(db, user.id)
     return response
 

@@ -26,6 +26,7 @@ __all__ = [
     "bearings_match",
     "compute_path_overlap",
     "is_same_segment",
+    "is_suggestion_visible",
     "match_activity_to_segments",
     "point_to_segment_distance",
 ]
@@ -295,6 +296,21 @@ SAME_SEGMENT_MIN_OVERLAP_PCT = 95.0
 # Suggestion visibility: climbs are proposed after 3+ repeat rides
 # (CONTEXT.md — Segment Suggestion lifecycle)
 SUGGESTION_VISIBILITY_THRESHOLD = 3
+
+
+def is_suggestion_visible(repetition_count: int, expires_at, now) -> bool:
+    """
+    Visibility rule shared by listing, counting, and dismissal.
+
+    A suggestion is visible when the user has ridden the climb at least
+    SUGGESTION_VISIBILITY_THRESHOLD times and the suggestion has not
+    expired (CONTEXT.md: expires 90 days after last ride).
+    """
+    if repetition_count < SUGGESTION_VISIBILITY_THRESHOLD:
+        return False
+    if expires_at is not None and now is not None and expires_at < now:
+        return False
+    return True
 
 
 def is_same_segment(

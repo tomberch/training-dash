@@ -3,7 +3,6 @@
 from datetime import datetime
 from uuid import UUID
 
-from trainingdash.domain.segment_matching import SUGGESTION_VISIBILITY_THRESHOLD
 from trainingdash.repositories.postgres.models import (
     Segment,
     SegmentEffort,
@@ -281,12 +280,17 @@ class FakeSegmentSuggestionRepo:
         limit: int = 20,
         offset: int = 0,
     ) -> list[SegmentSuggestion]:
+        from trainingdash.domain.segment_matching import is_suggestion_visible
+
+        now = datetime.now()
         suggestions = [s for s in self._suggestions.values() if s.user_id == user_id]
 
         if not include_dismissed:
             suggestions = [s for s in suggestions if s.dismissed_at is None]
 
-        suggestions = [s for s in suggestions if s.repetition_count >= SUGGESTION_VISIBILITY_THRESHOLD]
+        suggestions = [
+            s for s in suggestions if is_suggestion_visible(s.repetition_count, s.expires_at, now)
+        ]
 
         # Sort by repetition_count descending
         suggestions.sort(key=lambda s: s.repetition_count, reverse=True)
@@ -294,12 +298,15 @@ class FakeSegmentSuggestionRepo:
         return suggestions[offset : offset + limit]
 
     async def count_for_user(self, user_id: int, include_dismissed: bool = False) -> int:
+        from trainingdash.domain.segment_matching import is_suggestion_visible
+
+        now = datetime.now()
         suggestions = [s for s in self._suggestions.values() if s.user_id == user_id]
 
         if not include_dismissed:
             suggestions = [s for s in suggestions if s.dismissed_at is None]
 
-        suggestions = [s for s in suggestions if s.repetition_count >= SUGGESTION_VISIBILITY_THRESHOLD]
+        suggestions = [s for s in suggestions if is_suggestion_visible(s.repetition_count, s.expires_at, now)]
 
         return len(suggestions)
 
@@ -317,9 +324,22 @@ class FakeSegmentSuggestionRepo:
         return False
 
     async def dismiss_all(self, user_id: int) -> int:
+        """Dismiss all VISIBLE suggestions for a user (>= threshold, not expired).
+
+        Below-threshold and expired suggestions the user has never seen are
+        left untouched — the confirm dialog quotes the visible total, so
+        dismissing must not remove more than that.
+        """
+        from trainingdash.domain.segment_matching import is_suggestion_visible
+
+        now = datetime.now()
         count = 0
         for suggestion in self._suggestions.values():
-            if suggestion.user_id == user_id and suggestion.dismissed_at is None:
+            if (
+                suggestion.user_id == user_id
+                and suggestion.dismissed_at is None
+                and is_suggestion_visible(suggestion.repetition_count, suggestion.expires_at, now)
+            ):
                 suggestion.dismissed_at = datetime.now()
                 count += 1
         return count

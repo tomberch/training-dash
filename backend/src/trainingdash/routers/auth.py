@@ -15,7 +15,7 @@ from trainingdash.auth import (
 )
 from trainingdash.dependencies import UserRepoD
 from trainingdash.repositories.postgres.models import AppSettings, User
-from trainingdash.routers.serializers import user_response
+from trainingdash.routers.serializers import count_pending_suggestions, user_response
 
 router = APIRouter(prefix="/api", tags=["auth"])
 
@@ -55,19 +55,23 @@ async def register(db: DbSession, user_repo: UserRepoD, request: RegisterRequest
 
     # Auto-login the user
     cookie = create_session_cookie(user.id)
-    response = JSONResponse(user_response(user))
+    response = JSONResponse(
+        user_response(user, pending_suggestions=await count_pending_suggestions(db, user.id))
+    )
     response.set_cookie("session", cookie, httponly=True, samesite="lax")
     return response
 
 
 @router.post("/login")
-async def login(user_repo: UserRepoD, request: LoginRequest):
+async def login(db: DbSession, user_repo: UserRepoD, request: LoginRequest):
     """Authenticate user and set session cookie."""
     user = await user_repo.get_by_email(request.email)
     if user is None or not verify_password(request.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     cookie = create_session_cookie(user.id)
-    response = JSONResponse(user_response(user))
+    response = JSONResponse(
+        user_response(user, pending_suggestions=await count_pending_suggestions(db, user.id))
+    )
     response.set_cookie("session", cookie, httponly=True, samesite="lax")
     return response
 

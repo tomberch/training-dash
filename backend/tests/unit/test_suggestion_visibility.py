@@ -62,6 +62,49 @@ class TestSuggestionVisibilityThreshold:
         assert [s.repetition_count for s in visible] == [3]
 
     @pytest.mark.asyncio
+    async def test_dismiss_all_only_dismisses_visible(self):
+        """Dismiss-all must not touch below-threshold suggestions the user
+        has never seen — the confirm dialog quotes the visible total."""
+        repo = FakeSegmentSuggestionRepo()
+        repo.add(make_suggestion(user_id=1, repetition_count=1))
+        repo.add(make_suggestion(user_id=1, repetition_count=2))
+        repo.add(make_suggestion(user_id=1, repetition_count=5))
+
+        dismissed = await repo.dismiss_all(user_id=1)
+
+        assert dismissed == 1  # only the visible one
+        # The two below-threshold suggestions are untouched
+        untouched = [s for s in repo.all() if s.dismissed_at is None]
+        assert len(untouched) == 2
+        assert {s.repetition_count for s in untouched} == {1, 2}
+
+    @pytest.mark.asyncio
+    async def test_expired_suggestions_not_shown(self):
+        """CONTEXT.md: suggestions expire 90 days after the last ride."""
+        repo = FakeSegmentSuggestionRepo()
+        expired = make_suggestion(user_id=1, repetition_count=9)
+        expired.expires_at = datetime.now() - timedelta(days=1)
+        repo.add(expired)
+        repo.add(make_suggestion(user_id=1, repetition_count=4))
+
+        visible = await repo.list_for_user(user_id=1)
+
+        assert [s.repetition_count for s in visible] == [4]
+        assert await repo.count_for_user(user_id=1) == 1
+
+    @pytest.mark.asyncio
+    async def test_dismiss_all_skips_expired(self):
+        repo = FakeSegmentSuggestionRepo()
+        expired = make_suggestion(user_id=1, repetition_count=9)
+        expired.expires_at = datetime.now() - timedelta(days=1)
+        repo.add(expired)
+        repo.add(make_suggestion(user_id=1, repetition_count=4))
+
+        dismissed = await repo.dismiss_all(user_id=1)
+
+        assert dismissed == 1
+
+    @pytest.mark.asyncio
     async def test_other_users_suggestions_not_mixed_in(self):
         repo = FakeSegmentSuggestionRepo()
         repo.add(make_suggestion(user_id=2, repetition_count=9))

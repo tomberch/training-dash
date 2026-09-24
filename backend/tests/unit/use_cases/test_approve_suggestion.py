@@ -196,7 +196,6 @@ class TestApproveWithEndpointOverrides:
         assert result.segment is not None
         # Geometry now spans the full 5-point track (~444m), not the 2-point default
         assert result.segment.distance_m == pytest.approx(444.0, abs=1.0)
-        assert result.segment.polyline != segment.polyline or True  # geometry recomputed
 
     @pytest.mark.asyncio
     async def test_approve_without_overrides_keeps_geometry(self):

@@ -13,8 +13,29 @@ from trainingdash.repositories.postgres.models import (
 from trainingdash.routers.datetime_utils import utc_str
 
 
-def user_response(user: User) -> dict:
-    """Return a dict of user info for API responses."""
+async def count_pending_suggestions(db: Any, user_id: int) -> int:
+    """Count VISIBLE segment suggestions for the user (>= visibility
+    threshold, not dismissed) — drives the sidebar badge.
+
+    Best-effort: returns 0 on any error so auth/me responses never fail
+    over a badge count.
+    """
+    try:
+        from trainingdash.repositories.postgres.segment_repo import (
+            PostgresSegmentSuggestionRepo,
+        )
+
+        return await PostgresSegmentSuggestionRepo(db).count_for_user(user_id)
+    except Exception:
+        return 0
+
+
+def user_response(user: User, pending_suggestions: int = 0) -> dict:
+    """Return a dict of user info for API responses.
+
+    pending_suggestions: count of VISIBLE segment suggestions (>=
+    visibility threshold, not dismissed) — drives the sidebar badge.
+    """
     return {
         "id": user.id,
         "email": user.email,
@@ -32,6 +53,7 @@ def user_response(user: User) -> dict:
         "hr_zone_percentages": user.hr_zone_percentages,
         "hr_derived_power_enabled": user.hr_derived_power_enabled,
         "map_tile_style": user.map_tile_style,
+        "pending_suggestions": pending_suggestions,
     }
 
 

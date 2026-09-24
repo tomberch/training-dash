@@ -261,7 +261,16 @@ class ImportFromProvider:
                         try:
                             from trainingdash.jobs import enqueue_segment_process_job
 
-                            await enqueue_segment_process_job(str(result.id), user_id)
+                            job_key = await enqueue_segment_process_job(str(result.id), user_id)
+                            if job_key is None:
+                                # Queue unavailable — without a log this would
+                                # silently skip segment processing forever.
+                                logger.warning(
+                                    "%s: Queue unavailable, segment processing skipped for activity %s "
+                                    "(run scripts/backfill_segment_processing.py to recover)",
+                                    log_prefix,
+                                    result.id,
+                                )
                         except Exception:
                             logger.exception(
                                 "%s: Failed to enqueue segment processing for activity %s",
