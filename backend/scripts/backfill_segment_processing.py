@@ -11,13 +11,20 @@ Idempotency: an activity is skipped when it already has segment efforts
 or is the source of an existing suggested segment — running the script
 twice produces the same result.
 
+Known limitation: the skip is per-activity, not per-climb. An activity
+that already has an effort on one segment (e.g. a manually created
+commute segment) is skipped entirely, so any *other* undetected climbs
+on that ride do not accumulate repetition counts. Re-running the script
+does not fill this gap; the trade-off is accepted because reprocessing
+would risk duplicating efforts on the already-matched segments.
+
 Usage:
     docker exec traindash-dev-app-1 python scripts/backfill_segment_processing.py
 """
 
 import asyncio
 import logging
-import sys
+import os
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -92,6 +99,10 @@ async def backfill(db_url: str) -> None:
                     f"prs={result_stats.new_prs}"
                 )
             except Exception:
+                # Roll back so the shared session isn't left in an aborted
+                # transaction state — without this, one DB error fails every
+                # remaining activity with InFailedSqlTransaction.
+                await session.rollback()
                 totals["failed"] += 1
                 logger.exception(f"  [{i}/{len(activities)}] {activity.id}: FAILED")
 
@@ -104,7 +115,6 @@ async def backfill(db_url: str) -> None:
 
 
 def main() -> None:
-    import os
 
     db_url = os.environ.get(
         "DATABASE_URL", "postgresql+asyncpg://trainingdash:trainingdash@db:5432/trainingdash"
