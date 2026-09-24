@@ -79,6 +79,7 @@ class MessageDef:
     fields: list[FieldDef]
     dev_fields: list[FieldDef]
     total_data_size: int
+    is_big_endian: bool = False  # Architecture: 0 = little-endian, 1 = big-endian
 
 
 @dataclass
@@ -172,12 +173,13 @@ def walk_records(fit_bytes: bytes) -> list[RecordInfo]:
 
             # reserved, architecture, global_id (2 bytes), num_fields
             arch = fit_bytes[pos + 1]
-            if arch != 0:
-                raise FitWriteError(
-                    f"Big-endian FIT files not supported (offset {start})"
-                )
+            is_big_endian = arch == 1
 
-            global_id = struct.unpack("<H", fit_bytes[pos + 2 : pos + 4])[0]
+            # Read global_id with correct endianness
+            if is_big_endian:
+                global_id = struct.unpack(">H", fit_bytes[pos + 2 : pos + 4])[0]
+            else:
+                global_id = struct.unpack("<H", fit_bytes[pos + 2 : pos + 4])[0]
             num_fields = fit_bytes[pos + 4]
             pos += 5
 
@@ -216,6 +218,7 @@ def walk_records(fit_bytes: bytes) -> list[RecordInfo]:
                 fields=fields,
                 dev_fields=dev_fields,
                 total_data_size=total_data_size,
+                is_big_endian=is_big_endian,
             )
             definitions[local_id] = msg_def
 
@@ -322,19 +325,23 @@ def spoof_device(
         else:
             continue
 
+        # Determine byte order from the message definition
+        is_big_endian = record.msg_def.is_big_endian if record.msg_def else False
+        pack_format = ">H" if is_big_endian else "<H"
+
         # Patch manufacturer if present
         mfr_loc = _find_field_offset(record, manufacturer_field)
         if mfr_loc:
             offset, size = mfr_loc
             if size == 2:
-                struct.pack_into("<H", result, offset, manufacturer_id)
+                struct.pack_into(pack_format, result, offset, manufacturer_id)
 
         # Patch product if present
         prod_loc = _find_field_offset(record, product_field)
         if prod_loc:
             offset, size = prod_loc
             if size == 2:
-                struct.pack_into("<H", result, offset, product_id)
+                struct.pack_into(pack_format, result, offset, product_id)
 
     return bytes(_recompute_crc(result))
 
@@ -360,7 +367,7 @@ def inject_session_calories(
     Note:
         This is a best-effort operation per spec #675. If the session message
         definition doesn't include total_calories (common in Karoo files),
-        returns original bytes unchanged rather than failing the upload.
+        we attempt to rebuild the file using fit_tool to add the field.
     """
     try:
         records = walk_records(fit_bytes)
@@ -370,6 +377,7 @@ def inject_session_calories(
 
     result = bytearray(fit_bytes)
     patched = False
+    needs_rebuild = False
 
     for record in records:
         if record.is_definition or record.global_id != MESG_SESSION:
@@ -377,14 +385,20 @@ def inject_session_calories(
 
         field_loc = _find_field_offset(record, FIELD_SESSION_TOTAL_CALORIES)
         if field_loc is None:
-            # Field not in definition — can't inject, return original (best-effort)
+            # Field not in definition — need to rebuild the file
+            needs_rebuild = True
             continue
 
         offset, size = field_loc
 
+        # Determine byte order from the message definition
+        is_big_endian = record.msg_def.is_big_endian if record.msg_def else False
+        pack_format = ">H" if is_big_endian else "<H"
+        unpack_format = ">H" if is_big_endian else "<H"
+
         # Check current value if only_if_missing
         if only_if_missing:
-            current = struct.unpack("<H", fit_bytes[offset : offset + size])[0]
+            current = struct.unpack(unpack_format, fit_bytes[offset : offset + size])[0]
             if current != 0xFFFF and current != 0:
                 # Field has a value, skip
                 continue
@@ -393,10 +407,197 @@ def inject_session_calories(
             # Unexpected field size — skip this record
             continue
 
-        struct.pack_into("<H", result, offset, calories)
+        struct.pack_into(pack_format, result, offset, calories)
         patched = True
 
     if patched:
         return bytes(_recompute_crc(result)), True
-    else:
-        return fit_bytes, False
+
+    if needs_rebuild:
+        # Try rebuilding the file with fit_tool to add the calories field
+        rebuilt = _rebuild_with_calories(fit_bytes, calories)
+        if rebuilt is not None:
+            return rebuilt, True
+
+    return fit_bytes, False
+
+
+def _rebuild_with_calories(fit_bytes: bytes, calories: int) -> bytes | None:
+    """Rebuild FIT file using fit_tool to add calories to session message.
+
+    This is used when the original file's session message doesn't include
+    the total_calories field (common in Karoo files).
+
+    Args:
+        fit_bytes: Original FIT file bytes
+        calories: Calorie value to inject
+
+    Returns:
+        Rebuilt FIT bytes with calories, or None if rebuild fails
+    """
+    try:
+        from fit_tool.fit_file import FitFile
+        from fit_tool.fit_file_builder import FitFileBuilder
+        from fit_tool.profile.messages.session_message import SessionMessage
+        from garmin_fit_sdk import Decoder, Stream
+
+        fit_file = FitFile.from_bytes(fit_bytes)
+        builder = FitFileBuilder()
+
+        for record in fit_file.records:
+            msg = record.message
+            if isinstance(msg, SessionMessage):
+                # Create a new session message and copy all fields
+                new_session = SessionMessage()
+
+                # Copy all attributes that have values
+                # These are the common session fields we want to preserve
+                _copy_session_fields(msg, new_session)
+
+                # Now set calories - this works because new_session has all fields
+                new_session.total_calories = calories
+
+                builder.add(new_session)
+            else:
+                builder.add(msg)
+
+        new_fit = builder.build()
+        new_bytes = new_fit.to_bytes()
+
+        # Verify the rebuilt file is valid by trying to decode it
+        stream = Stream.from_byte_array(new_bytes)
+        decoder = Decoder(stream)
+        _, errors = decoder.read()
+        if errors:
+            # Rebuilt file is invalid, fall back to original
+            return None
+
+        return new_bytes
+
+    except Exception:
+        # If anything fails, return None to fall back to original bytes
+        return None
+
+
+def _copy_session_fields(src: "SessionMessage", dst: "SessionMessage") -> None:
+    """Copy all available fields from source to destination session message.
+
+    This preserves as much data as possible when rebuilding with fit_tool.
+    """
+    # List of session message attributes to copy
+    # These are the standard FIT SDK session fields
+    fields_to_copy = [
+        "timestamp",
+        "start_time",
+        "start_position_lat",
+        "start_position_long",
+        "sport",
+        "sub_sport",
+        "total_elapsed_time",
+        "total_timer_time",
+        "total_distance",
+        "total_cycles",
+        "total_strides",
+        "total_calories",
+        "total_fat_calories",
+        "avg_speed",
+        "max_speed",
+        "avg_heart_rate",
+        "max_heart_rate",
+        "avg_cadence",
+        "max_cadence",
+        "avg_power",
+        "max_power",
+        "total_ascent",
+        "total_descent",
+        "total_training_effect",
+        "first_lap_index",
+        "num_laps",
+        "event",
+        "event_type",
+        "event_group",
+        "trigger",
+        "nec_lat",
+        "nec_long",
+        "swc_lat",
+        "swc_long",
+        "end_position_lat",
+        "end_position_long",
+        "normalized_power",
+        "training_stress_score",
+        "intensity_factor",
+        "left_right_balance",
+        "avg_stroke_count",
+        "avg_stroke_distance",
+        "swim_stroke",
+        "pool_length",
+        "threshold_power",
+        "pool_length_unit",
+        "num_active_lengths",
+        "total_work",
+        "avg_altitude",
+        "max_altitude",
+        "min_altitude",
+        "gps_accuracy",
+        "avg_grade",
+        "avg_pos_grade",
+        "avg_neg_grade",
+        "max_pos_grade",
+        "max_neg_grade",
+        "avg_temperature",
+        "max_temperature",
+        "min_temperature",
+        "total_moving_time",
+        "avg_pos_vertical_speed",
+        "avg_neg_vertical_speed",
+        "max_pos_vertical_speed",
+        "max_neg_vertical_speed",
+        "min_heart_rate",
+        "time_in_hr_zone",
+        "time_in_speed_zone",
+        "time_in_cadence_zone",
+        "time_in_power_zone",
+        "avg_lap_time",
+        "best_lap_index",
+        "enhanced_avg_speed",
+        "enhanced_max_speed",
+        "enhanced_avg_altitude",
+        "enhanced_min_altitude",
+        "enhanced_max_altitude",
+        "avg_vam",
+        "total_anaerobic_training_effect",
+        "avg_fractional_cadence",
+        "max_fractional_cadence",
+        "total_fractional_cycles",
+        "sport_profile_name",
+        "sport_index",
+        "time_standing",
+        "stand_count",
+        "avg_left_torque_effectiveness",
+        "avg_right_torque_effectiveness",
+        "avg_left_pedal_smoothness",
+        "avg_right_pedal_smoothness",
+        "avg_combined_pedal_smoothness",
+        "avg_left_pco",
+        "avg_right_pco",
+        "avg_vertical_oscillation",
+        "avg_stance_time_percent",
+        "avg_stance_time",
+        "avg_vertical_ratio",
+        "avg_stance_time_balance",
+        "avg_step_length",
+        "training_load_peak",
+        "total_grit",
+        "total_flow",
+        "avg_grit",
+        "avg_flow",
+    ]
+
+    for field in fields_to_copy:
+        try:
+            value = getattr(src, field, None)
+            if value is not None:
+                setattr(dst, field, value)
+        except Exception:
+            # Skip fields that can't be copied (e.g., read-only or incompatible)
+            pass
