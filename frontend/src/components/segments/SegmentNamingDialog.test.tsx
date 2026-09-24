@@ -24,7 +24,9 @@ vi.mock("react-leaflet", () => ({
   ),
   TileLayer: () => null,
   Polyline: () => null,
-  Marker: () => null,
+  Marker: ({ position }: { position: [number, number] }) => (
+    <div data-testid="marker" data-position={JSON.stringify(position)} />
+  ),
   useMapEvents: () => null,
   useMap: () => ({ fitBounds: () => null }),
 }));
@@ -134,6 +136,65 @@ describe("SegmentNamingDialog", () => {
         start_index: 0,
         end_index: 19,
       });
+    });
+  });
+
+  it("places markers at the correct track points when records have GPS dropouts", async () => {
+    // Track with a null-geometry record at index 2 — filtered positions
+    // shift, but indices sent to the backend stay in original space
+    const withDropout: GeoJSONFeatureCollection = {
+      type: "FeatureCollection",
+      activity_id: "act-1",
+      features: Array.from({ length: 6 }, (_, i) => ({
+        type: "Feature" as const,
+        geometry:
+          i === 2
+            ? null
+            : { type: "Point" as const, coordinates: [7.4 + i * 0.001, 46.9 + i * 0.001] },
+        properties: {
+          timestamp: `2026-09-20T10:0${i}:00Z`,
+          distance_m: i * 111,
+          hr_bpm: null,
+          power_w: null,
+          speed_mps: null,
+          altitude_m: 500 + i * 3,
+          cadence_rpm: null,
+        },
+      })),
+    };
+    mockRecords.mockResolvedValue(withDropout as never);
+
+    renderDialog();
+
+    await waitFor(() => expect(screen.getByTestId("map")).toBeInTheDocument());
+
+    // The start marker must sit at the first VALID point (46.9), i.e. the
+    // marker at original index 0 — the markers array from the mock:
+    const markers = screen.getAllByTestId("marker");
+    expect(markers.length).toBe(2);
+    // Marker positions rendered via captured props (see react-leaflet mock)
+    const startMarker = JSON.parse(markers[0].getAttribute("data-position") ?? "{}");
+    expect(startMarker[0]).toBeCloseTo(46.9, 5);
+  });
+
+  it("sends no indices when snapping to the detected endpoints fails", async () => {
+    // Suggestion points are far away from the track — snap fails
+    const farSuggestion: SegmentSuggestion = {
+      ...suggestion,
+      start_point: { lat: 10.0, lng: 10.0 },
+      end_point: { lat: 20.0, lng: 20.0 },
+    };
+    mockApprove.mockResolvedValue({ id: "seg-1", name: "My Climb" });
+    renderDialog(farSuggestion);
+
+    await waitFor(() => expect(screen.getByTestId("map")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText("Segment name"), { target: { value: "My Climb" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create Segment" }));
+
+    await waitFor(() => {
+      // No silent whole-ride selection: backend keeps the detected geometry
+      expect(mockApprove).toHaveBeenCalledWith("sug-1", "My Climb", undefined);
     });
   });
 

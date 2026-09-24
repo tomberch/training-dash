@@ -75,8 +75,8 @@ const mockSuggestion: SegmentSuggestion = {
     { distance_m: 6200, elevation_m: 1172, grade_pct: 9.0 },
     { distance_m: 12400, elevation_m: 1727, grade_pct: 9.0 },
   ],
-  start_point: { lat: 43.7, lng: 7.3 },
-  end_point: { lat: 43.8, lng: 7.4 },
+  start_point: { lat: 46.9, lng: 7.4 },
+  end_point: { lat: 46.904, lng: 7.4 },
   source_activity_id: "act-1",
 };
 

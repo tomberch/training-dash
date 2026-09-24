@@ -60,21 +60,29 @@ function endIcon(): L.DivIcon {
 
 interface TrackMapProps {
   features: GeoJSONFeatureCollection["features"];
+  /** Selection index in ORIGINAL feature space (as stored/returned). */
   startIndex: number | null;
   endIndex: number | null;
+  /** Called with an index in ORIGINAL feature space. */
   onSelect: (index: number) => void;
 }
 
 function TrackMap({ features, startIndex, endIndex, onSelect }: TrackMapProps): JSX.Element {
   const { url: tileUrl, attribution } = useTileConfig();
 
-  const positions = useMemo<[number, number][]>(
-    () =>
-      features
-        .filter((f) => f.geometry !== null && f.geometry.coordinates.length >= 2)
-        .map((f) => [f.geometry!.coordinates[1], f.geometry!.coordinates[0]] as [number, number]),
-    [features]
-  );
+  // Map original feature index -> position, skipping invalid features once
+  // (GPS dropouts). Selection indices stay in original space end-to-end:
+  // nearestFeatureIndex, computeSegmentPreview and the backend all use the
+  // unfiltered feature array, so only rendering translates through this map.
+  const indexToPosition = useMemo<Map<number, [number, number]>>(() => {
+    const map = new Map<number, [number, number]>();
+    features.forEach((f, index) => {
+      if (f.geometry !== null && f.geometry.coordinates.length >= 2) {
+        map.set(index, [f.geometry!.coordinates[1], f.geometry!.coordinates[0]] as [number, number]);
+      }
+    });
+    return map;
+  }, [features]);
 
   useMapEvents({
     click: (e) => {
@@ -83,17 +91,22 @@ function TrackMap({ features, startIndex, endIndex, onSelect }: TrackMapProps): 
     },
   });
 
-  const startPos = startIndex !== null ? positions[startIndex] : null;
-  const endPos = endIndex !== null ? positions[endIndex] : null;
+  const startPos = startIndex !== null ? indexToPosition.get(startIndex) : undefined;
+  const endPos = endIndex !== null ? indexToPosition.get(endIndex) : undefined;
   const previewPositions =
     startIndex !== null && endIndex !== null
-      ? positions.slice(Math.min(startIndex, endIndex), Math.max(startIndex, endIndex) + 1)
+      ? [...indexToPosition.entries()]
+          .filter(([index]) => index >= Math.min(startIndex, endIndex) && index <= Math.max(startIndex, endIndex))
+          .map(([, pos]) => pos)
       : [];
 
   return (
     <>
       <TileLayer url={tileUrl} attribution={attribution} />
-      <Polyline positions={positions} pathOptions={{ color: "#6364f1", weight: 3, opacity: 0.5 }} />
+      <Polyline
+        positions={[...indexToPosition.values()]}
+        pathOptions={{ color: "#6364f1", weight: 3, opacity: 0.5 }}
+      />
       {previewPositions.length >= 2 && (
         <Polyline positions={previewPositions} pathOptions={{ color: "#f97316", weight: 5 }} />
       )}
@@ -135,7 +148,10 @@ export function SegmentNamingDialog({
           setGeojson(data);
           // Default selection: the detected climb itself. The suggestion's
           // start/end points snap to their nearest track indices, so the
-          // preview matches what was detected (not the whole ride).
+          // preview matches what was detected. If snapping fails (geometry
+          // predates the track, or both endpoints snap to one point), send
+          // NO indices on approve — the backend then keeps the detected
+          // geometry instead of silently redefining the segment.
           const features = data.features;
           const startIdx = nearestFeatureIndex(
             features,
@@ -150,13 +166,6 @@ export function SegmentNamingDialog({
           if (startIdx !== null && endIdx !== null && startIdx !== endIdx) {
             setStartIndex(Math.min(startIdx, endIdx));
             setEndIndex(Math.max(startIdx, endIdx));
-          } else {
-            // Fall back to full track if snapping fails
-            const n = features.filter((f) => f.geometry !== null).length;
-            if (n >= 2) {
-              setStartIndex(0);
-              setEndIndex(n - 1);
-            }
           }
         })
         .catch(() => setTrackError("Could not load the source activity track"));
