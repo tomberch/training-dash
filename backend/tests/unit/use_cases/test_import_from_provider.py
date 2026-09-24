@@ -24,9 +24,7 @@ class MockAsyncSession:
         m = mock.MagicMock()
         m.scalar_one_or_none = mock.MagicMock(return_value=None)
         m.scalar_one = mock.MagicMock(return_value=None)
-        m.scalars = mock.MagicMock(
-            return_value=mock.MagicMock(all=mock.MagicMock(return_value=[]))
-        )
+        m.scalars = mock.MagicMock(return_value=mock.MagicMock(all=mock.MagicMock(return_value=[])))
         return m
 
     async def commit(self):
@@ -111,9 +109,7 @@ def make_use_case():
 
 @pytest.fixture
 def patched_crypto():
-    with mock.patch(
-        "trainingdash.use_cases.import_from_provider.decrypt", return_value="pw"
-    ):
+    with mock.patch("trainingdash.use_cases.import_from_provider.decrypt", return_value="pw"):
         yield
 
 

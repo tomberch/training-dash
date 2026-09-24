@@ -450,9 +450,7 @@ class TestProcessActivitySegments:
         assert len(suggestion_repo.all()) == 2
 
     @pytest.mark.asyncio
-    async def test_repeated_climb_by_second_user_shares_segment(
-        self, use_case, mock_db, segment_repo, suggestion_repo
-    ):
+    async def test_repeated_climb_by_second_user_shares_segment(self, use_case, mock_db, segment_repo, suggestion_repo):
         """A second user riding the same climb gets their own suggestion row
         on the shared suggested segment (CONTEXT.md: one segment per
         real-world climb, per-user suggestion rows)."""

@@ -10,8 +10,6 @@ because typical cycling efficiency is ~24% and 1 kcal = 4.184 kJ:
 This is a standard approximation used by power-based training platforms.
 """
 
-from datetime import datetime
-
 # Maximum interval between records before we consider it a gap (seconds).
 # Matches the convention in ingest._compute_moving_time.
 MAX_RECORD_INTERVAL_S = 30

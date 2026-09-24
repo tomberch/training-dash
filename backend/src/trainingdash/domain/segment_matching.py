@@ -308,8 +308,9 @@ def is_suggestion_visible(repetition_count: int, expires_at, now) -> bool:
     """
     if repetition_count < SUGGESTION_VISIBILITY_THRESHOLD:
         return False
-    if expires_at is not None and now is not None and expires_at < now:
-        return False
+    # Check if suggestion has expired
+    if expires_at is not None and now is not None:
+        return expires_at >= now
     return True
 
 
@@ -340,10 +341,7 @@ def is_same_segment(
     is never a duplicate.
     """
     # Endpoint proximity gates — cheap and directional by construction
-    if (
-        haversine_distance(start_lat, start_lon, other_start_lat, other_start_lon)
-        > endpoint_tolerance_m
-    ):
+    if haversine_distance(start_lat, start_lon, other_start_lat, other_start_lon) > endpoint_tolerance_m:
         return False
     if haversine_distance(end_lat, end_lon, other_end_lat, other_end_lon) > endpoint_tolerance_m:
         return False
@@ -521,9 +519,7 @@ def _deduplicate_matches(matches: list[SegmentMatch]) -> list[SegmentMatch]:
     return result
 
 
-def _ranges_overlap_significantly(
-    start1: int, end1: int, start2: int, end2: int, threshold: float = 0.5
-) -> bool:
+def _ranges_overlap_significantly(start1: int, end1: int, start2: int, end2: int, threshold: float = 0.5) -> bool:
     """
     Check if two index ranges overlap by more than threshold of the smaller range.
 

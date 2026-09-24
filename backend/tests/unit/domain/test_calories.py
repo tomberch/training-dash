@@ -2,10 +2,7 @@
 
 from datetime import datetime, timedelta
 
-import pytest
-
 from trainingdash.domain.calories import (
-    MAX_RECORD_INTERVAL_S,
     compute_calories_from_power,
     resolve_calories,
 )
@@ -109,9 +106,9 @@ class TestComputeCaloriesFromPower:
         # Simulate smart recording: more samples during hard efforts
         records = [
             {"timestamp": base, "power_w": 150},
-            {"timestamp": base + timedelta(seconds=5), "power_w": 300},   # 5s × 300W = 1500J
-            {"timestamp": base + timedelta(seconds=6), "power_w": 350},   # 1s × 350W = 350J
-            {"timestamp": base + timedelta(seconds=7), "power_w": 320},   # 1s × 320W = 320J
+            {"timestamp": base + timedelta(seconds=5), "power_w": 300},  # 5s × 300W = 1500J
+            {"timestamp": base + timedelta(seconds=6), "power_w": 350},  # 1s × 350W = 350J
+            {"timestamp": base + timedelta(seconds=7), "power_w": 320},  # 1s × 320W = 320J
             {"timestamp": base + timedelta(seconds=12), "power_w": 150},  # 5s × 150W = 750J
         ]
         result = compute_calories_from_power(records)
@@ -136,10 +133,7 @@ class TestComputeCaloriesFromPower:
         base = datetime(2024, 1, 1, 10, 0, 0)
         duration_s = 3600
         avg_power = 159.4
-        records = [
-            {"timestamp": base + timedelta(seconds=i), "power_w": avg_power}
-            for i in range(duration_s + 1)
-        ]
+        records = [{"timestamp": base + timedelta(seconds=i), "power_w": avg_power} for i in range(duration_s + 1)]
         result = compute_calories_from_power(records)
         # Should be approximately 574 kcal
         assert 570 <= result <= 578
@@ -163,10 +157,7 @@ class TestResolveCalories:
     def test_falls_back_to_computed_when_no_device(self):
         """Computes from power when no device value."""
         base = datetime(2024, 1, 1, 10, 0, 0)
-        records = [
-            {"timestamp": base + timedelta(seconds=i), "power_w": 200}
-            for i in range(61)
-        ]
+        records = [{"timestamp": base + timedelta(seconds=i), "power_w": 200} for i in range(61)]
         calories, source = resolve_calories(None, records)
         assert calories == 12  # 200W × 60s = 12 kJ
         assert source == "computed_power"
@@ -174,10 +165,7 @@ class TestResolveCalories:
     def test_zero_device_value_falls_back_to_computed(self):
         """Zero device value is treated as missing."""
         base = datetime(2024, 1, 1, 10, 0, 0)
-        records = [
-            {"timestamp": base + timedelta(seconds=i), "power_w": 200}
-            for i in range(61)
-        ]
+        records = [{"timestamp": base + timedelta(seconds=i), "power_w": 200} for i in range(61)]
         calories, source = resolve_calories(0, records)
         assert calories == 12
         assert source == "computed_power"

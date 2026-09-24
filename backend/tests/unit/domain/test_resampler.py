@@ -1,7 +1,7 @@
 from trainingdash.domain.resampler import (
+    compute_moving_time,
     compute_time_gap_series,
     compute_time_gap_series_dual,
-    compute_moving_time,
     resample_by_distance,
 )
 
@@ -52,10 +52,7 @@ class TestResampler:
 class TestMovingTime:
     def test_compute_moving_time_all_moving(self):
         """All records have speed above threshold → moving time equals elapsed time."""
-        records = [
-            {"distance_m": i * 100, "timestamp_s": float(i * 10), "speed_mps": 10.0}
-            for i in range(10)
-        ]
+        records = [{"distance_m": i * 100, "timestamp_s": float(i * 10), "speed_mps": 10.0} for i in range(10)]
         result = compute_moving_time(records)
         assert len(result) == 10
         # First record has 0 moving time, subsequent ones accumulate
@@ -69,8 +66,8 @@ class TestMovingTime:
         records = [
             {"distance_m": 0, "timestamp_s": 0.0, "speed_mps": 10.0},
             {"distance_m": 100, "timestamp_s": 10.0, "speed_mps": 10.0},  # moving
-            {"distance_m": 100, "timestamp_s": 20.0, "speed_mps": 0.0},   # stopped
-            {"distance_m": 100, "timestamp_s": 30.0, "speed_mps": 0.0},   # still stopped
+            {"distance_m": 100, "timestamp_s": 20.0, "speed_mps": 0.0},  # stopped
+            {"distance_m": 100, "timestamp_s": 30.0, "speed_mps": 0.0},  # still stopped
             {"distance_m": 200, "timestamp_s": 40.0, "speed_mps": 10.0},  # moving again
         ]
         result = compute_moving_time(records)
@@ -140,10 +137,7 @@ class TestDualGapSeries:
 
     def test_dual_gap_series_identical_returns_zero_for_both(self):
         """Identical rides should have zero gap in both series."""
-        records = [
-            {"distance_m": i * 10, "timestamp_s": float(i), "speed_mps": 10.0}
-            for i in range(20)
-        ]
+        records = [{"distance_m": i * 10, "timestamp_s": float(i), "speed_mps": 10.0} for i in range(20)]
         input_records = compute_moving_time(records)
         elapsed, moving = compute_time_gap_series_dual(input_records, input_records)
 

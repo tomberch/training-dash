@@ -303,8 +303,7 @@ class ApproveSuggestion:
             )
 
         record_dicts = [
-            {"lat": r.lat, "lon": r.lon, "altitude_m": r.altitude_m, "distance_m": r.distance_m}
-            for r in records
+            {"lat": r.lat, "lon": r.lon, "altitude_m": r.altitude_m, "distance_m": r.distance_m} for r in records
         ]
 
         try:
@@ -323,8 +322,7 @@ class ApproveSuggestion:
         segment.end_point = WKTElement(f"POINT({geometry.end_lon} {geometry.end_lat})", srid=4326)
         sw_lat, sw_lng, ne_lat, ne_lng = geometry.bounds
         segment.bounds = WKTElement(
-            f"POLYGON(({sw_lng} {sw_lat}, {ne_lng} {sw_lat}, {ne_lng} {ne_lat}, "
-            f"{sw_lng} {ne_lat}, {sw_lng} {sw_lat}))",
+            f"POLYGON(({sw_lng} {sw_lat}, {ne_lng} {sw_lat}, {ne_lng} {ne_lat}, {sw_lng} {ne_lat}, {sw_lng} {sw_lat}))",
             srid=4326,
         )
         segment.polyline = geometry.polyline

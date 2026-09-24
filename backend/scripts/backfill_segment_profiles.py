@@ -63,9 +63,7 @@ async def find_segment_indices(
 
 async def load_activity_records(db: AsyncSession, activity_id: UUID) -> list[dict]:
     """Load activity records as dicts for domain functions."""
-    result = await db.execute(
-        select(Record).where(Record.activity_id == activity_id).order_by(Record.timestamp)
-    )
+    result = await db.execute(select(Record).where(Record.activity_id == activity_id).order_by(Record.timestamp))
     records = result.scalars().all()
 
     return [
@@ -109,9 +107,7 @@ async def backfill_segment(
         return False
 
     if end_index >= len(records):
-        logger.warning(
-            f"Skipping {segment.id}: end_index {end_index} exceeds record count {len(records)}"
-        )
+        logger.warning(f"Skipping {segment.id}: end_index {end_index} exceeds record count {len(records)}")
         return False
 
     # Recompute geometry
@@ -197,13 +193,7 @@ async def backfill_all(
 
         while offset < total:
             # Fetch batch
-            query = (
-                select(Segment)
-                .where(*base_filter)
-                .order_by(Segment.created_at)
-                .offset(offset)
-                .limit(batch_size)
-            )
+            query = select(Segment).where(*base_filter).order_by(Segment.created_at).offset(offset).limit(batch_size)
 
             result = await db.execute(query)
             segments = result.scalars().all()
@@ -227,9 +217,7 @@ async def backfill_all(
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Backfill elevation profiles for existing segments"
-    )
+    parser = argparse.ArgumentParser(description="Backfill elevation profiles for existing segments")
     parser.add_argument(
         "--dry-run",
         action="store_true",

@@ -354,9 +354,7 @@ async def get_approve_suggestion_use_case(
     with start/end overrides recomputes geometry from the source
     activity, after verifying the approving user owns it).
     """
-    return ApproveSuggestion(
-        segment_repo, suggestion_repo, record_repo=record_repo, activity_repo=activity_repo
-    )
+    return ApproveSuggestion(segment_repo, suggestion_repo, record_repo=record_repo, activity_repo=activity_repo)
 
 
 async def get_create_segment_use_case(

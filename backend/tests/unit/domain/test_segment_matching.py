@@ -683,7 +683,6 @@ class TestMatchActivityToSegments:
             assert matches[i].start_index < matches[i + 1].start_index
 
 
-
 # =============================================================================
 # _ranges_overlap_significantly tests
 # =============================================================================
@@ -768,9 +767,9 @@ class TestDeduplicateMatches:
         segment_id = uuid4()
         match1 = SegmentMatch(segment_id=segment_id, start_index=0, end_index=100, overlap_pct=95.0)
         match2 = SegmentMatch(segment_id=segment_id, start_index=500, end_index=600, overlap_pct=93.0)
-        
+
         result = _deduplicate_matches([match1, match2])
-        
+
         assert len(result) == 2
         assert match1 in result
         assert match2 in result
@@ -782,9 +781,9 @@ class TestDeduplicateMatches:
         match1 = SegmentMatch(segment_id=segment_id, start_index=0, end_index=100, overlap_pct=92.0)
         match2 = SegmentMatch(segment_id=segment_id, start_index=5, end_index=100, overlap_pct=95.0)
         match3 = SegmentMatch(segment_id=segment_id, start_index=10, end_index=100, overlap_pct=90.0)
-        
+
         result = _deduplicate_matches([match1, match2, match3])
-        
+
         assert len(result) == 1
         assert result[0].overlap_pct == 95.0  # Kept the best one
 
@@ -794,30 +793,30 @@ class TestDeduplicateMatches:
         segment2_id = uuid4()
         match1 = SegmentMatch(segment_id=segment1_id, start_index=0, end_index=100, overlap_pct=95.0)
         match2 = SegmentMatch(segment_id=segment2_id, start_index=0, end_index=100, overlap_pct=93.0)
-        
+
         result = _deduplicate_matches([match1, match2])
-        
+
         assert len(result) == 2
 
     def test_multiple_segments_with_duplicates(self):
         """Mix of segments with and without duplicates."""
         segment1_id = uuid4()
         segment2_id = uuid4()
-        
+
         # Segment 1: two overlapping matches (should dedupe to 1)
         match1a = SegmentMatch(segment_id=segment1_id, start_index=0, end_index=100, overlap_pct=92.0)
         match1b = SegmentMatch(segment_id=segment1_id, start_index=5, end_index=100, overlap_pct=95.0)
-        
+
         # Segment 2: single match (should keep)
         match2 = SegmentMatch(segment_id=segment2_id, start_index=200, end_index=300, overlap_pct=91.0)
-        
+
         result = _deduplicate_matches([match1a, match1b, match2])
-        
+
         assert len(result) == 2
         segment_ids = {m.segment_id for m in result}
         assert segment1_id in segment_ids
         assert segment2_id in segment_ids
-        
+
         # Check that segment1's best match was kept
         seg1_match = next(m for m in result if m.segment_id == segment1_id)
         assert seg1_match.overlap_pct == 95.0
@@ -826,13 +825,13 @@ class TestDeduplicateMatches:
         """Result is sorted by start_index."""
         segment1_id = uuid4()
         segment2_id = uuid4()
-        
+
         # Create matches in unsorted order
         match1 = SegmentMatch(segment_id=segment1_id, start_index=500, end_index=600, overlap_pct=95.0)
         match2 = SegmentMatch(segment_id=segment2_id, start_index=100, end_index=200, overlap_pct=93.0)
-        
+
         result = _deduplicate_matches([match1, match2])
-        
+
         assert len(result) == 2
         assert result[0].start_index < result[1].start_index
 
@@ -849,9 +848,9 @@ class TestDeduplicateMatches:
             SegmentMatch(segment_id=segment_id, start_index=314, end_index=917, overlap_pct=94.3),
             SegmentMatch(segment_id=segment_id, start_index=315, end_index=917, overlap_pct=93.8),
         ]
-        
+
         result = _deduplicate_matches(matches)
-        
+
         # Should deduplicate to just 1 match
         assert len(result) == 1
         # Should keep the one with highest overlap (95.2%)
@@ -876,33 +875,33 @@ class TestMatchActivityDeduplication:
             (47.002, 8.0),
             (47.003, 8.0),
         ]
-        
+
         # Create activity with multiple points within tolerance of segment start
         # This simulates GPS wobble where several consecutive points are all
         # within 25m of the segment start
         activity_coords = [
             # Multiple points near segment start (within 25m tolerance)
-            (47.00002, 8.0),   # ~2m from start
-            (47.00005, 8.0),   # ~5m from start  
-            (47.00010, 8.0),   # ~11m from start
-            (47.00015, 8.0),   # ~17m from start
-            (47.00020, 8.0),   # ~22m from start
+            (47.00002, 8.0),  # ~2m from start
+            (47.00005, 8.0),  # ~5m from start
+            (47.00010, 8.0),  # ~11m from start
+            (47.00015, 8.0),  # ~17m from start
+            (47.00020, 8.0),  # ~22m from start
             # Continue along segment
             (47.001, 8.0),
             (47.002, 8.0),
             # Multiple points near segment end (within 25m tolerance)
-            (47.00280, 8.0),   # ~22m from end
-            (47.00285, 8.0),   # ~17m from end
-            (47.00290, 8.0),   # ~11m from end
-            (47.00295, 8.0),   # ~5m from end
-            (47.003, 8.0),     # at end
+            (47.00280, 8.0),  # ~22m from end
+            (47.00285, 8.0),  # ~17m from end
+            (47.00290, 8.0),  # ~11m from end
+            (47.00295, 8.0),  # ~5m from end
+            (47.003, 8.0),  # at end
         ]
-        
+
         records = make_records(activity_coords)
         candidate = make_candidate(segment_coords)
-        
+
         matches = match_activity_to_segments(records, [candidate])
-        
+
         # Should produce exactly 1 match despite multiple valid start/end combinations
         assert len(matches) == 1
         assert matches[0].segment_id == candidate.id
@@ -915,7 +914,7 @@ class TestMatchActivityDeduplication:
             (47.001, 8.0),
             (47.002, 8.0),
         ]
-        
+
         # Activity: cross segment, loop far away, cross again
         activity_coords = [
             # First crossing
@@ -926,17 +925,17 @@ class TestMatchActivityDeduplication:
             (47.002, 8.005),
             (47.001, 8.005),
             (47.0, 8.005),
-            # Return and cross again  
+            # Return and cross again
             (47.0, 8.0),
             (47.001, 8.0),
             (47.002, 8.0),
         ]
-        
+
         records = make_records(activity_coords)
         candidate = make_candidate(segment_coords)
-        
+
         matches = match_activity_to_segments(records, [candidate])
-        
+
         # Should have exactly 2 matches (one per crossing)
         assert len(matches) == 2
         # Both should be for the same segment

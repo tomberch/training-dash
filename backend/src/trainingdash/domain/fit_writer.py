@@ -112,9 +112,7 @@ def _parse_header(fit_bytes: bytes) -> tuple[int, int]:
     # Verify file is large enough for declared data + CRC
     min_size = header_size + data_size + 2  # +2 for trailing CRC
     if len(fit_bytes) < min_size:
-        raise FitWriteError(
-            f"FIT file truncated: expected {min_size} bytes, got {len(fit_bytes)}"
-        )
+        raise FitWriteError(f"FIT file truncated: expected {min_size} bytes, got {len(fit_bytes)}")
 
     return header_size, data_size
 
@@ -144,9 +142,7 @@ def walk_records(fit_bytes: bytes) -> list[RecordInfo]:
             local_id = (header_byte >> 5) & 0x03
             pos += 1
             if local_id not in definitions:
-                raise FitWriteError(
-                    f"Data record for undefined local id {local_id} at offset {start}"
-                )
+                raise FitWriteError(f"Data record for undefined local id {local_id} at offset {start}")
             msg_def = definitions[local_id]
             pos += msg_def.total_data_size
             records.append(
@@ -210,9 +206,7 @@ def walk_records(fit_bytes: bytes) -> list[RecordInfo]:
                     dev_fields.append(FieldDef(field_num, field_size, dev_index))
                     pos += 3
 
-            total_data_size = sum(f.size for f in fields) + sum(
-                f.size for f in dev_fields
-            )
+            total_data_size = sum(f.size for f in fields) + sum(f.size for f in dev_fields)
             msg_def = MessageDef(
                 global_id=global_id,
                 fields=fields,
@@ -236,9 +230,7 @@ def walk_records(fit_bytes: bytes) -> list[RecordInfo]:
         else:
             # Data message
             if local_id not in definitions:
-                raise FitWriteError(
-                    f"Data record for undefined local id {local_id} at offset {start}"
-                )
+                raise FitWriteError(f"Data record for undefined local id {local_id} at offset {start}")
             msg_def = definitions[local_id]
             pos += msg_def.total_data_size
 
@@ -479,10 +471,14 @@ def _rebuild_with_calories(fit_bytes: bytes, calories: int) -> bytes | None:
         return None
 
 
-def _copy_session_fields(src: "SessionMessage", dst: "SessionMessage") -> None:
+def _copy_session_fields(src: object, dst: object) -> None:
     """Copy all available fields from source to destination session message.
 
     This preserves as much data as possible when rebuilding with fit_tool.
+
+    Args:
+        src: Source SessionMessage from fit_tool
+        dst: Destination SessionMessage to populate
     """
     # List of session message attributes to copy
     # These are the standard FIT SDK session fields
@@ -598,6 +594,6 @@ def _copy_session_fields(src: "SessionMessage", dst: "SessionMessage") -> None:
             value = getattr(src, field, None)
             if value is not None:
                 setattr(dst, field, value)
-        except Exception:
-            # Skip fields that can't be copied (e.g., read-only or incompatible)
-            pass
+        except (AttributeError, TypeError):
+            # Skip fields that can't be copied (read-only, incompatible types, etc.)
+            continue

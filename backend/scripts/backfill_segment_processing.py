@@ -116,9 +116,7 @@ async def backfill(db_url: str) -> None:
 
 def main() -> None:
 
-    db_url = os.environ.get(
-        "DATABASE_URL", "postgresql+asyncpg://trainingdash:trainingdash@db:5432/trainingdash"
-    )
+    db_url = os.environ.get("DATABASE_URL", "postgresql+asyncpg://trainingdash:trainingdash@db:5432/trainingdash")
     # SQLAlchemy async engine needs the asyncpg driver even when the env
     # var uses the default driver name
     if db_url.startswith("postgresql://"):

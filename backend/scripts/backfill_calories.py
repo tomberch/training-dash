@@ -82,10 +82,7 @@ async def backfill_activity(
             return False
 
         if dry_run:
-            logger.info(
-                f"[DRY RUN] Would update {activity.id}: "
-                f"calories={calories}, source={source}"
-            )
+            logger.info(f"[DRY RUN] Would update {activity.id}: calories={calories}, source={source}")
         else:
             activity.calories = calories
             activity.calories_source = source
@@ -134,13 +131,7 @@ async def backfill_all(
 
         while True:
             # Fetch batch
-            query = (
-                select(Activity)
-                .where(base_filter)
-                .order_by(Activity.started_at)
-                .offset(offset)
-                .limit(batch_size)
-            )
+            query = select(Activity).where(base_filter).order_by(Activity.started_at).offset(offset).limit(batch_size)
 
             result = await db.execute(query)
             activities = result.scalars().all()
@@ -166,9 +157,7 @@ async def backfill_all(
 
 def main():
     """CLI entrypoint for calories backfill."""
-    parser = argparse.ArgumentParser(
-        description="Backfill calories for existing activities"
-    )
+    parser = argparse.ArgumentParser(description="Backfill calories for existing activities")
     parser.add_argument(
         "--dry-run",
         action="store_true",

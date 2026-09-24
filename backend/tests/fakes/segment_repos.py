@@ -288,9 +288,7 @@ class FakeSegmentSuggestionRepo:
         if not include_dismissed:
             suggestions = [s for s in suggestions if s.dismissed_at is None]
 
-        suggestions = [
-            s for s in suggestions if is_suggestion_visible(s.repetition_count, s.expires_at, now)
-        ]
+        suggestions = [s for s in suggestions if is_suggestion_visible(s.repetition_count, s.expires_at, now)]
 
         # Sort by repetition_count descending
         suggestions.sort(key=lambda s: s.repetition_count, reverse=True)

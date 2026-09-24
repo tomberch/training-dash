@@ -55,9 +55,7 @@ async def register(db: DbSession, user_repo: UserRepoD, request: RegisterRequest
 
     # Auto-login the user
     cookie = create_session_cookie(user.id)
-    response = JSONResponse(
-        user_response(user, pending_suggestions=await count_pending_suggestions(db, user.id))
-    )
+    response = JSONResponse(user_response(user, pending_suggestions=await count_pending_suggestions(db, user.id)))
     response.set_cookie("session", cookie, httponly=True, samesite="lax")
     return response
 
@@ -69,9 +67,7 @@ async def login(db: DbSession, user_repo: UserRepoD, request: LoginRequest):
     if user is None or not verify_password(request.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     cookie = create_session_cookie(user.id)
-    response = JSONResponse(
-        user_response(user, pending_suggestions=await count_pending_suggestions(db, user.id))
-    )
+    response = JSONResponse(user_response(user, pending_suggestions=await count_pending_suggestions(db, user.id)))
     response.set_cookie("session", cookie, httponly=True, samesite="lax")
     return response
 

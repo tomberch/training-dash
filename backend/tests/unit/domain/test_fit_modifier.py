@@ -162,8 +162,6 @@ class TestModifyFit:
         assert not errors, f"CRC or decode errors: {errors}"
 
 
-
-
 class TestFileIdSpoofing:
     """Tests for file_id message spoofing (when fields are present)."""
 

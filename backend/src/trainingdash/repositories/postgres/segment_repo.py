@@ -269,9 +269,7 @@ class PostgresSegmentRepo:
                         Segment.deleted_at.is_(None),
                         ST_DWithin(Segment.start_point, start_point, 0.001),  # ~100m
                     )
-                    .order_by(
-                        func.ST_Distance(Segment.start_point, start_point).asc()
-                    )
+                    .order_by(func.ST_Distance(Segment.start_point, start_point).asc())
                     .limit(50)
                 )
             )

@@ -151,9 +151,9 @@ class TestSegmentCoverage:
 
         # Adjacent segments share boundaries
         for i in range(len(segments) - 1):
-            assert segments[i].end_distance_m == pytest.approx(
-                segments[i + 1].start_distance_m, rel=0.001
-            ), f"Gap between segment {i} and {i+1}"
+            assert segments[i].end_distance_m == pytest.approx(segments[i + 1].start_distance_m, rel=0.001), (
+                f"Gap between segment {i} and {i + 1}"
+            )
 
     def test_sum_of_lengths_equals_total_distance(self):
         """Sum of segment lengths should equal total course distance."""
@@ -202,9 +202,7 @@ class TestSegmentCoverage:
 
         # No gaps between adjacent segments
         for i in range(len(segments) - 1):
-            assert segments[i].end_distance_m == pytest.approx(
-                segments[i + 1].start_distance_m, rel=0.001
-            )
+            assert segments[i].end_distance_m == pytest.approx(segments[i + 1].start_distance_m, rel=0.001)
 
     def test_merge_preserves_coverage(self):
         """Merging short segments should not create gaps."""
@@ -240,9 +238,9 @@ class TestSegmentCoverage:
 
         # Adjacent segments should share elevation boundaries
         for i in range(len(segments) - 1):
-            assert segments[i].end_elevation_m == pytest.approx(
-                segments[i + 1].start_elevation_m, rel=0.001
-            ), f"Elevation gap between segment {i} and {i+1}"
+            assert segments[i].end_elevation_m == pytest.approx(segments[i + 1].start_elevation_m, rel=0.001), (
+                f"Elevation gap between segment {i} and {i + 1}"
+            )
 
         # Each segment's gain/loss should match endpoint difference
         for seg in segments:

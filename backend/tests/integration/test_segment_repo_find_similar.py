@@ -122,9 +122,7 @@ class TestFindSimilarSuggested:
 
     @pytest.mark.asyncio
     async def test_ignores_approved_segments(self, db_session, repo, seed_user):
-        approved = make_segment_row(
-            start_lat=46.9, start_lon=7.4, end_lat=46.91, end_lon=7.4, status="approved"
-        )
+        approved = make_segment_row(start_lat=46.9, start_lon=7.4, end_lat=46.91, end_lon=7.4, status="approved")
         db_session.add(approved)
         await db_session.commit()
 
@@ -133,9 +131,7 @@ class TestFindSimilarSuggested:
         assert found is None
 
     @pytest.mark.asyncio
-    async def test_candidate_far_from_start_prefilter_still_finds_via_precise_check(
-        self, db_session, repo, seed_user
-    ):
+    async def test_candidate_far_from_start_prefilter_still_finds_via_precise_check(self, db_session, repo, seed_user):
         """A climb detected from a later point on the same road — the
         candidate start differs slightly but stays within the ~100m
         prefilter radius. Guards against prefilter false negatives."""

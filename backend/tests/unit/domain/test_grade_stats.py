@@ -48,7 +48,7 @@ class TestComputeMaxGradePct:
         records = _climb_records(total_m=1000, step_m=10, grade_pct=2)
         base = [(d, a) for d, a in records if d <= 500]
         rest = [(d + 2, a) for d, a in records if d > 500]
-        spike_alt = [a for d, a in records if d == 500][0] + 2
+        spike_alt = next(a for d, a in records if d == 500) + 2
         records = base + [(502, spike_alt)] + rest
         # Max over 200m windows should be ~2%, not 100%
         assert compute_max_grade_pct(records) < 5.0

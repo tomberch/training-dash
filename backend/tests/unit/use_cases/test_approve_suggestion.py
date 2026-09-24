@@ -118,7 +118,10 @@ def make_segment(
         elevation_gain_m=100.0,
         avg_grade_pct=10.0,
         max_grade_pct=15.0,
-        elevation_profile=[{"distance_m": 0, "elevation_m": 500, "grade_pct": 0}, {"distance_m": 50, "elevation_m": 505, "grade_pct": 10}],
+        elevation_profile=[
+            {"distance_m": 0, "elevation_m": 500, "grade_pct": 0},
+            {"distance_m": 50, "elevation_m": 505, "grade_pct": 10},
+        ],
         effort_count=0,
         athlete_count=0,
         created_by=created_by,
@@ -279,7 +282,6 @@ class TestApproveWithEndpointOverrides:
 
         assert result.success is False
         assert result.error is not None
-
 
     @pytest.mark.asyncio
     async def test_approve_with_overrides_rejects_unowned_source_activity(self):
