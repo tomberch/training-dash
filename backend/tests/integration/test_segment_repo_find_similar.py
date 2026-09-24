@@ -7,7 +7,6 @@ finds the same duplicates the fake does — no false negatives, no false
 positives.
 """
 
-from datetime import datetime
 from uuid import uuid4
 
 import pytest
