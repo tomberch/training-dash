@@ -207,7 +207,15 @@ export function SegmentNamingDialog({
           ? { start_index: startIndex, end_index: endIndex }
           : undefined;
       const segment = await approveSuggestion(suggestion.id, name.trim(), options);
-      toast("Segment created");
+      // Endpoint adjustment can change the shape enough that the backend
+      // reclassifies the segment (climb → sprint/custom) — surface it.
+      if (suggestion.segment_type !== segment.segment_type) {
+        toast(
+          `Segment reclassified: detected as ${suggestion.segment_type}, saved as ${segment.segment_type}`
+        );
+      } else {
+        toast("Segment created");
+      }
       onOpenChange(false);
       onCreated(segment.id);
     } catch (err) {

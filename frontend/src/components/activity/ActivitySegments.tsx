@@ -1,34 +1,17 @@
 /**
- * Activity segments card and inline suggestion card.
+ * Activity segments card.
  *
- * Shown on the activity detail page: a list of segment efforts crossed
- * during the ride, plus (when present) an inline card to approve/dismiss the
- * pending suggestion whose climb was auto-detected from this activity.
+ * Shown on the activity detail page: the segment efforts crossed during
+ * the ride. Suggestion approval lives on the dedicated Suggestions page
+ * (/suggestions) — the segments endpoint returns only efforts.
  */
 
-import { useState } from "react";
 import type { JSX } from "react";
 import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import type { ActivitySegmentEffort, ActivitySegments } from "@/api/segments";
-import type { SegmentSuggestion } from "@/api/suggestions";
-import { dismissSuggestion } from "@/api/suggestions";
-import { useDecrementPendingSuggestions } from "@/contexts/UserContext";
-import {
-  ClimbCategoryBadge,
-  SegmentTypeIcon,
-} from "@/components/segments/SegmentBadges";
-import { ElevationProfile } from "@/components/segments/ElevationProfile";
-import { SegmentMiniMap } from "@/components/segments/SegmentMiniMap";
-import { SegmentNamingDialog } from "@/components/segments/SegmentNamingDialog";
-import {
-  formatDistance,
-  formatElevation,
-  formatElapsedTime,
-  formatDistanceAxis,
-  type UnitSystem,
-} from "@/format";
+import { ClimbCategoryBadge, SegmentTypeIcon } from "@/components/segments/SegmentBadges";
+import { formatElapsedTime } from "@/format";
 
 // =============================================================================
 // Segments card
@@ -77,116 +60,17 @@ export function ActivitySegmentsCard({ efforts }: ActivitySegmentsCardProps): JS
 }
 
 // =============================================================================
-// Inline suggestion card
-// =============================================================================
-
-interface SuggestionInlineCardProps {
-  suggestion: SegmentSuggestion;
-  unitSystem: UnitSystem;
-  onDismissed: () => void;
-  onApproved: () => void;
-}
-
-export function SuggestionInlineCard({
-  suggestion,
-  unitSystem,
-  onDismissed,
-  onApproved,
-}: SuggestionInlineCardProps): JSX.Element {
-  const decrementPendingSuggestions = useDecrementPendingSuggestions();
-  const [naming, setNaming] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [dismissing, setDismissing] = useState(false);
-  const [hiddenForSession, setHiddenForSession] = useState(false);
-
-  if (hiddenForSession) return <></>;
-
-  const handleApproved = (): void => {
-    setNaming(false);
-    decrementPendingSuggestions(1);
-    onApproved();
-  };
-
-  const handleDismiss = async (): Promise<void> => {
-    setDismissing(true);
-    try {
-      await dismissSuggestion(suggestion.id);
-      decrementPendingSuggestions(1);
-      onDismissed();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to dismiss suggestion");
-      setDismissing(false);
-    }
-  };
-
-  return (
-    <Card>
-      <CardContent className="py-4 px-4 space-y-3">
-        <div className="flex items-center gap-2">
-          <SegmentTypeIcon type={suggestion.segment_type} />
-          <span className="font-medium">Climb Detected</span>
-          <ClimbCategoryBadge category={suggestion.climb_category} />
-          <span className="text-caption ml-auto">{suggestion.repetition_count}× ridden</span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <SegmentMiniMap polyline={suggestion.polyline} height={96} />
-          <div className="space-y-2">
-            <ElevationProfile
-              profile={suggestion.elevation_profile}
-              height={48}
-              formatDistanceLabel={formatDistanceAxis}
-            />
-            <div className="text-body-secondary">
-              {formatDistance(suggestion.distance_m, unitSystem)} ·{" "}
-              {formatElevation(suggestion.elevation_gain_m, unitSystem)} ·{" "}
-              {suggestion.avg_grade_pct.toFixed(1)}%
-            </div>
-          </div>
-        </div>
-
-        <div className="flex gap-2">
-          <Button size="sm" onClick={() => setNaming(true)}>
-            Save as Segment
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => setHiddenForSession(true)}>
-            Later
-          </Button>
-          <Button size="sm" variant="ghost" onClick={handleDismiss} disabled={dismissing}>
-            Dismiss
-          </Button>
-        </div>
-
-        {error && <p className="text-sm text-destructive">{error}</p>}
-
-        <SegmentNamingDialog
-          suggestion={suggestion}
-          open={naming}
-          onOpenChange={setNaming}
-          unitSystem={unitSystem}
-          onCreated={handleApproved}
-        />
-      </CardContent>
-    </Card>
-  );
-}
-
-// =============================================================================
 // Combined section
 // =============================================================================
 
 interface ActivitySegmentsSectionProps {
   data: ActivitySegments | null;
   loading: boolean;
-  unitSystem: UnitSystem;
-  onSuggestionChange: () => void;
 }
 
 export function ActivitySegmentsSection({
   data,
   loading,
-  unitSystem,
-  onSuggestionChange,
 }: ActivitySegmentsSectionProps): JSX.Element | null {
   if (loading) {
     return (
@@ -201,20 +85,7 @@ export function ActivitySegmentsSection({
 
   if (!data) return null;
 
-  const efforts = data.efforts;
-  const suggestion = data.suggestion;
-
-  return (
-    <div className="space-y-3">
-      {suggestion !== null && (
-        <SuggestionInlineCard
-          suggestion={suggestion}
-          unitSystem={unitSystem}
-          onDismissed={onSuggestionChange}
-          onApproved={onSuggestionChange}
-        />
-      )}
-      <ActivitySegmentsCard efforts={efforts} />
-    </div>
-  );
+  // The segments endpoint returns only efforts — suggestion approval lives
+  // on the dedicated Suggestions page (/suggestions).
+  return <ActivitySegmentsCard efforts={data.efforts} />;
 }

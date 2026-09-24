@@ -39,6 +39,7 @@ export interface PaginatedSuggestions {
 export interface ApproveSuggestionResult {
   id: string;
   name: string;
+  segment_type: SegmentType;
 }
 
 export async function fetchSuggestions(

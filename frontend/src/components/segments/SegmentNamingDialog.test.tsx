@@ -121,7 +121,7 @@ describe("SegmentNamingDialog", () => {
   });
 
   it("approves with the detected endpoints snapped to the track", async () => {
-    mockApprove.mockResolvedValue({ id: "seg-1", name: "My Climb" });
+    mockApprove.mockResolvedValue({ id: "seg-1", name: "My Climb", segment_type: "climb" });
     renderDialog();
 
     await waitFor(() => expect(screen.getByTestId("map")).toBeInTheDocument());
@@ -137,6 +137,31 @@ describe("SegmentNamingDialog", () => {
         end_index: 19,
       });
     });
+  });
+
+  it("activates adjust mode via Move Start / Move End buttons", async () => {
+    renderDialog();
+
+    await waitFor(() => expect(screen.getByTestId("map")).toBeInTheDocument());
+
+    const moveStart = screen.getByRole("button", { name: "Move Start" });
+    const moveEnd = screen.getByRole("button", { name: "Move End" });
+
+    // Activate start-adjust mode
+    fireEvent.click(moveStart);
+    expect(moveStart.getAttribute("data-variant")).toBe("default");
+    expect(screen.getByText(/Click the track to set the start point/)).toBeInTheDocument();
+
+    // Switch to end-adjust mode
+    fireEvent.click(moveEnd);
+    expect(moveEnd.getAttribute("data-variant")).toBe("default");
+    expect(moveStart.getAttribute("data-variant")).toBe("outline");
+    expect(screen.getByText(/Click the track to set the end point/)).toBeInTheDocument();
+
+    // Deactivate
+    fireEvent.click(moveEnd);
+    expect(moveEnd.getAttribute("data-variant")).toBe("outline");
+    expect(screen.getByText(/Adjust endpoints if the detected climb needs fine-tuning/)).toBeInTheDocument();
   });
 
   it("places markers at the correct track points when records have GPS dropouts", async () => {
@@ -184,7 +209,7 @@ describe("SegmentNamingDialog", () => {
       start_point: { lat: 10.0, lng: 10.0 },
       end_point: { lat: 20.0, lng: 20.0 },
     };
-    mockApprove.mockResolvedValue({ id: "seg-1", name: "My Climb" });
+    mockApprove.mockResolvedValue({ id: "seg-1", name: "My Climb", segment_type: "climb" });
     renderDialog(farSuggestion);
 
     await waitFor(() => expect(screen.getByTestId("map")).toBeInTheDocument());
@@ -195,6 +220,25 @@ describe("SegmentNamingDialog", () => {
     await waitFor(() => {
       // No silent whole-ride selection: backend keeps the detected geometry
       expect(mockApprove).toHaveBeenCalledWith("sug-1", "My Climb", undefined);
+    });
+  });
+
+  it("notifies when the backend reclassifies the segment", async () => {
+    // Adjusting endpoints can shrink/flatten the shape enough that the
+    // backend reclassifies climb → custom; the toast must say so.
+    const { toast } = await import("sonner");
+    mockApprove.mockResolvedValue({ id: "seg-1", name: "My Climb", segment_type: "custom" });
+    renderDialog();
+
+    await waitFor(() => expect(screen.getByTestId("map")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText("Segment name"), { target: { value: "My Climb" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create Segment" }));
+
+    await waitFor(() => {
+      expect(toast).toHaveBeenCalledWith(
+        "Segment reclassified: detected as climb, saved as custom"
+      );
     });
   });
 

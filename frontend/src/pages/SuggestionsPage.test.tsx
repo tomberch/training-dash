@@ -148,7 +148,7 @@ describe("SuggestionsPage", () => {
 
   it("opens naming modal and approves on Save", async () => {
     mockFetch.mockResolvedValue(paginated([mockSuggestion]));
-    mockApprove.mockResolvedValue({ id: "seg-1", name: "My Climb" });
+    mockApprove.mockResolvedValue({ id: "seg-1", name: "My Climb", segment_type: "climb" });
     mockRecords.mockResolvedValue({
       features: Array.from({ length: 5 }, (_, i) => ({
         type: "Feature" as const,
