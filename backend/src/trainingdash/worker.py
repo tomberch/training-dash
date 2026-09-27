@@ -118,19 +118,39 @@ def tracked_job(job_name: str) -> Callable:
                 duration_ms = int((time.monotonic() - start_time) * 1000)
                 error_msg = str(e)[:500]
 
+                # Dead-letter detection (ADR 0006, decision 1): SAQ TTL-deletes terminal
+                # rows after 600s, so the final failed attempt must leave a durable record
+                # with the job's kwargs (the Retry action re-enqueues from this payload).
+                saq_job = ctx.get("job")
+                attempts = getattr(saq_job, "attempts", None)
+                retries = getattr(saq_job, "retries", None)
+                is_dead_letter = (
+                    attempts is not None
+                    and retries is not None
+                    and attempts >= retries
+                )
+
                 # Emit job.failed event
                 try:
                     async with worker_db_session(ctx) as db:
                         event_repo = PostgresEventRepo(db)
+                        payload = {
+                            "job_name": job_name,
+                            "duration_ms": duration_ms,
+                            "error": error_msg,
+                        }
+                        if is_dead_letter:
+                            payload["dead_letter"] = True
+                        if attempts is not None:
+                            payload["attempts"] = attempts
+                        if is_dead_letter:
+                            payload["job_key"] = getattr(saq_job, "key", None)
+                            payload["kwargs"] = dict(kwargs)
                         await event_repo.log(
                             event_type=EventType.JOB_FAILED.value,
                             outcome=EventOutcome.FAILURE.value,
                             user_id=user_id,
-                            payload={
-                                "job_name": job_name,
-                                "duration_ms": duration_ms,
-                                "error": error_msg,
-                            },
+                            payload=payload,
                         )
                         await db.commit()
                 except Exception:
