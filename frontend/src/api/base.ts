@@ -30,7 +30,12 @@ export async function extractError(
   let errorId: string | undefined;
   try {
     const body = await res.json();
-    detail = body.detail || detail;
+    // Handle structured error responses where detail is an object with a message
+    if (body.detail && typeof body.detail === "object" && body.detail.message) {
+      detail = body.detail.message;
+    } else if (typeof body.detail === "string") {
+      detail = body.detail;
+    }
     errorId = body.error_id;
   } catch {
     detail = res.statusText || detail;

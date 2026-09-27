@@ -37,7 +37,6 @@ logger = logging.getLogger(__name__)
 
 # Constants
 DEFAULT_BATCH_SIZE = 100
-DIRECTION_TOLERANCE = 60  # degrees ±60° for direction matching
 
 
 @dataclass
@@ -223,10 +222,13 @@ class RetroactiveMatch:
         limit: int,
     ) -> list[Activity]:
         """
-        Find activities whose direction matches the segment bearing.
+        Find candidate activities for segment matching.
 
-        Filters by direction bearing (±60°) for candidate selection.
-        Activities are ordered by id for stable pagination.
+        Returns activities ordered by id for stable pagination.
+        Direction filtering is NOT applied here because the activity's overall
+        direction bearing may differ from the direction at the segment location
+        (e.g., a loop ride going southeast overall may climb a northwest segment).
+        Direction is checked by match_activity_to_segments at the actual match location.
 
         Args:
             segment: The segment to match against
@@ -237,19 +239,11 @@ class RetroactiveMatch:
             List of candidate Activity objects ordered by id for stable pagination
         """
         # TODO: Add ST_Intersects spatial filter for performance optimization
-        # Currently relies on direction filter; spatial filter would reduce
-        # candidates further by checking activity bounds vs segment bounds
+        # to check if activity path intersects segment bounding box
 
-        # Build direction filter
-        # Activities must have direction_bearing within ±60° of segment
-        segment_bearing = segment.direction_bearing or 0
-        low_bearing = (segment_bearing - DIRECTION_TOLERANCE) % 360
-        high_bearing = (segment_bearing + DIRECTION_TOLERANCE) % 360
-
-        # Build query
+        # Build query - no direction filter, let match_activity_to_segments handle it
         query = (
             select(Activity)
-            .where(Activity.direction_bearing.isnot(None))
             .order_by(Activity.id)  # Stable ordering for pagination
             .limit(limit)
         )
@@ -257,20 +251,6 @@ class RetroactiveMatch:
         # Add after_id filter for pagination
         if after_id:
             query = query.where(Activity.id > after_id)
-
-        # Direction bearing filter
-        # Handle wraparound (e.g., bearing 350° with tolerance crosses 0°)
-        if low_bearing < high_bearing:
-            # Normal case: low < bearing < high
-            query = query.where(
-                Activity.direction_bearing >= low_bearing,
-                Activity.direction_bearing <= high_bearing,
-            )
-        else:
-            # Wraparound case: bearing > low OR bearing < high
-            query = query.where(
-                (Activity.direction_bearing >= low_bearing) | (Activity.direction_bearing <= high_bearing)
-            )
 
         result = await self._db.execute(query)
         return list(result.scalars().all())

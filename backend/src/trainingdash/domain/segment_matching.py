@@ -8,11 +8,18 @@ This module matches activity GPS tracks against known segments:
 
 The algorithm handles GPS wobble, multiple crossings of the same segment,
 and correctly rejects parallel roads or opposite-direction travel.
+
+Performance note: compute_path_overlap uses Shapely's buffer + prepared geometry
+approach for O(n log m) complexity instead of O(n*m) brute force. This enables
+sub-second matching for segments with 5000 points against activities with 20000 records.
 """
 
 import math
 from dataclasses import dataclass
 from uuid import UUID
+
+import numpy as np
+from shapely import LineString, contains_xy, prepare
 
 from trainingdash.domain.polyline import decode_polyline
 from trainingdash.domain.segment_geometry import compute_bearing, haversine_distance
@@ -25,6 +32,7 @@ __all__ = [
     "SegmentMatch",
     "bearings_match",
     "compute_path_overlap",
+    "describes_same_road",
     "is_same_segment",
     "is_suggestion_visible",
     "match_activity_to_segments",
@@ -220,32 +228,95 @@ def _compute_activity_bearing(records: list[dict], start_idx: int, end_idx: int)
     return compute_bearing(start_lat, start_lon, end_lat, end_lon)
 
 
+def _meters_to_degrees(meters: float, latitude: float) -> float:
+    """
+    Convert meters to approximate degrees at a given latitude.
+
+    Uses the WGS84 approximation where 1 degree latitude ≈ 111,320m
+    and 1 degree longitude ≈ 111,320m * cos(latitude).
+
+    For a buffer, we use the smaller dimension (longitude at high latitudes)
+    to ensure the buffer covers at least the specified distance in all directions.
+
+    Args:
+        meters: Distance in meters
+        latitude: Reference latitude in degrees
+
+    Returns:
+        Approximate degrees (conservative estimate)
+    """
+    # Meters per degree latitude (roughly constant)
+    meters_per_deg_lat = 111320.0
+    # Meters per degree longitude (varies with latitude)
+    meters_per_deg_lon = 111320.0 * math.cos(math.radians(latitude))
+
+    # Use the smaller scale factor (more degrees needed) for conservative buffer
+    meters_per_deg = min(meters_per_deg_lat, meters_per_deg_lon)
+
+    return meters / meters_per_deg
+
+
+def _simplify_path(
+    points: list[tuple[float, float]], tolerance_m: float, center_lat: float
+) -> list[tuple[float, float]]:
+    """
+    Simplify a path using Douglas-Peucker algorithm.
+
+    Args:
+        points: List of (lat, lon) tuples
+        tolerance_m: Simplification tolerance in meters
+        center_lat: Reference latitude for meter-to-degree conversion
+
+    Returns:
+        Simplified list of (lat, lon) tuples
+    """
+    if len(points) < 3:
+        return points
+
+    # Convert to (lon, lat) for Shapely
+    coords = [(lon, lat) for lat, lon in points]
+    line = LineString(coords)
+
+    # Convert tolerance from meters to degrees
+    tolerance_deg = _meters_to_degrees(tolerance_m, center_lat)
+
+    simplified = line.simplify(tolerance_deg, preserve_topology=True)
+
+    # Convert back to (lat, lon)
+    return [(lat, lon) for lon, lat in simplified.coords]
+
+
 def compute_path_overlap(
     activity_records: list[dict],
     start_index: int,
     end_index: int,
     segment_polyline: str,
     buffer_m: float = 35,
+    max_segment_points: int = 500,  # Kept for API compatibility, but not used in new algorithm
 ) -> float:
     """
     Compute what percentage of segment path is covered by activity.
 
-    Decodes the segment polyline and checks what fraction of segment
-    points are within buffer_m of the activity path.
+    Uses Shapely's buffer + prepared geometry approach for O(n log m) complexity
+    instead of O(n*m) brute force. The algorithm:
+    1. Simplifies both paths using Douglas-Peucker (10m tolerance)
+    2. Creates a buffer polygon around the activity path
+    3. Uses vectorized point-in-polygon tests via shapely.contains_xy()
 
     Args:
         activity_records: Activity records with lat/lon
         start_index: Start index in activity
         end_index: End index in activity (inclusive)
         segment_polyline: Google-encoded polyline of segment
-        buffer_m: Buffer distance in meters
+        buffer_m: Buffer distance in meters (default 35m)
+        max_segment_points: Unused, kept for API compatibility
 
     Returns:
         Overlap percentage (0-100)
     """
     # Decode segment polyline
     segment_points = decode_polyline(segment_polyline)
-    if not segment_points:
+    if not segment_points or len(segment_points) < 2:
         return 0.0
 
     # Extract activity section
@@ -253,8 +324,8 @@ def compute_path_overlap(
     if len(activity_section) < 2:
         return 0.0
 
-    # Build activity path segments for distance checking
-    activity_points = []
+    # Extract activity coordinates
+    activity_points: list[tuple[float, float]] = []
     for r in activity_section:
         lat = r.get("lat")
         lon = r.get("lon")
@@ -264,34 +335,57 @@ def compute_path_overlap(
     if len(activity_points) < 2:
         return 0.0
 
-    # Check each segment point against activity path
-    covered_count = 0
+    # Calculate center latitude for coordinate conversions
+    center_lat = sum(p[0] for p in segment_points) / len(segment_points)
 
-    for seg_lat, seg_lon in segment_points:
-        # Find minimum distance to any activity path segment
-        min_dist = float("inf")
+    # Simplify paths for performance (10m tolerance is safe for 35m buffer)
+    simplify_tolerance_m = 10.0
+    segment_simplified = _simplify_path(segment_points, simplify_tolerance_m, center_lat)
+    activity_simplified = _simplify_path(activity_points, simplify_tolerance_m, center_lat)
 
-        for i in range(len(activity_points) - 1):
-            dist = point_to_segment_distance(
-                seg_lat,
-                seg_lon,
-                activity_points[i][0],
-                activity_points[i][1],
-                activity_points[i + 1][0],
-                activity_points[i + 1][1],
-            )
-            if dist < min_dist:
-                min_dist = dist
+    if len(segment_simplified) < 2 or len(activity_simplified) < 2:
+        return 0.0
 
-        if min_dist <= buffer_m:
-            covered_count += 1
+    # Create activity LineString (Shapely uses lon, lat order)
+    activity_coords = [(lon, lat) for lat, lon in activity_simplified]
+    activity_line = LineString(activity_coords)
 
-    return (covered_count / len(segment_points)) * 100
+    # Create buffer around activity path
+    # Convert buffer distance from meters to degrees
+    buffer_deg = _meters_to_degrees(buffer_m, center_lat)
+    activity_buffer = activity_line.buffer(buffer_deg, cap_style="round", join_style="round")
+
+    # Prepare the buffer for fast repeated point-in-polygon tests
+    # This builds an R-tree index on the polygon boundary
+    prepare(activity_buffer)
+
+    # Extract segment coordinates as numpy arrays for vectorized testing
+    seg_lons = np.array([lon for lat, lon in segment_simplified])
+    seg_lats = np.array([lat for lat, lon in segment_simplified])
+
+    # Vectorized point-in-polygon test
+    # contains_xy returns a boolean array indicating which points are inside the buffer
+    covered = contains_xy(activity_buffer, seg_lons, seg_lats)
+
+    # Calculate coverage percentage
+    covered_count = int(np.sum(covered))
+    return (covered_count / len(segment_simplified)) * 100.0
 
 
 # Duplicate-segment criteria (ticket #473)
 SAME_SEGMENT_ENDPOINT_TOLERANCE_M = 25.0
 SAME_SEGMENT_MIN_OVERLAP_PCT = 95.0
+
+# Same-road criteria for suggestion dedup (ticket #473 follow-up).
+# Auto-detected climb boundaries wobble between rides: the detector may
+# start the same climb metres apart, or extend it partway down the descent.
+# Endpoint gates (is_same_segment) reject those near-duplicates, so repeat
+# rides never reach the 3-repetition visibility threshold. Instead we ask
+# whether one path essentially *contains* the other: >= 90% of the shorter
+# path's resampled points lie within 35 m of the longer path.
+SAME_ROAD_MIN_CONTAINMENT_PCT = 90.0
+SAME_ROAD_BUFFER_M = 35.0
+SAME_ROAD_RESAMPLE_SPACING_M = 15.0
 
 # Suggestion visibility: climbs are proposed after 3+ repeat rides
 # (CONTEXT.md — Segment Suggestion lifecycle)
@@ -364,6 +458,115 @@ def is_same_segment(
     )
 
     return overlap >= min_overlap_pct
+
+
+def _resample_path(
+    points: list[tuple[float, float]], spacing_m: float
+) -> list[tuple[float, float]]:
+    """Resample a path to roughly fixed spacing (keeps endpoints).
+
+    Thins dense GPS captures by keeping the first point at least spacing_m
+    past the last kept point, and *densifies* sparse paths by interpolating
+    between vertices so a 2-point polyline is measured like its dense
+    real-world shape.
+    """
+    if len(points) < 2:
+        return list(points)
+
+    out = [points[0]]
+    kept = points[0]
+    acc = 0.0  # distance walked since the last kept point
+    for curr in points[1:]:
+        acc += haversine_distance(kept[0], kept[1], curr[0], curr[1])
+        if acc < spacing_m:
+            continue
+        # Reached spacing: interpolate from kept toward curr at spacing_m,
+        # then keep curr itself as the new anchor.
+        seg_d = haversine_distance(kept[0], kept[1], curr[0], curr[1])
+        if seg_d > 0:
+            n_steps = int(acc / spacing_m)
+            for k in range(1, n_steps + 1):
+                frac = min(k * spacing_m / seg_d, 1.0)
+                out.append(
+                    (
+                        kept[0] + (curr[0] - kept[0]) * frac,
+                        kept[1] + (curr[1] - kept[1]) * frac,
+                    )
+                )
+        out.append(curr)
+        kept = curr
+        acc = 0.0
+    if out[-1] != points[-1]:
+        out.append(points[-1])
+    return out
+
+
+def _path_containment_pct(
+    shorter: list[tuple[float, float]],
+    longer: list[tuple[float, float]],
+    buffer_m: float,
+) -> float:
+    """Percentage of `shorter` path points within buffer_m of `longer` path.
+
+    Distance is point-to-*segment* (projection onto each of the longer
+    path's segments), not point-to-vertex: vertex-only measurement with
+    100 m-spaced vertices undercounts by up to ~50 m even on identical
+    roads, which breaks the containment test.
+    """
+    covered = 0
+    segments = list(zip(longer, longer[1:]))
+    for lat, lon in shorter:
+        for (s_lat, s_lon), (e_lat, e_lon) in segments:
+            d = point_to_segment_distance(lat, lon, s_lat, s_lon, e_lat, e_lon)
+            if d <= buffer_m:
+                covered += 1
+                break
+    return (covered / len(shorter)) * 100
+
+
+def describes_same_road(
+    polyline: str,
+    other_polyline: str,
+    min_containment_pct: float = SAME_ROAD_MIN_CONTAINMENT_PCT,
+    buffer_m: float = SAME_ROAD_BUFFER_M,
+) -> bool:
+    """
+    Decide whether two auto-detected segments describe the same road.
+
+    Containment criterion: resample both paths to fixed spacing, then check
+    whether >= min_containment_pct of the *shorter* path lies within
+    buffer_m of the *longer* one. Symmetric by construction (the shorter
+    is always the one measured). Tolerates boundary wobble between rides
+    — start/end may differ by hundreds of metres — while rejecting
+    diverging, parallel, or merely crossing roads.
+
+    Used by climb-detection dedup (find_similar_suggested). Strict
+    endpoint+overlap matching (is_same_segment) remains the gate for
+    suggestion approval, where exact-duplicate protection matters.
+
+    Returns False on empty or undecodable polylines — a corrupt candidate
+    is never a duplicate.
+    """
+    try:
+        points = decode_polyline(polyline)
+        other_points = decode_polyline(other_polyline)
+    except Exception:
+        return False
+    if len(points) < 2 or len(other_points) < 2:
+        return False
+
+    points = _resample_path(points, SAME_ROAD_RESAMPLE_SPACING_M)
+    other_points = _resample_path(other_points, SAME_ROAD_RESAMPLE_SPACING_M)
+
+    # Measure containment in both directions and take the max: one detection
+    # may cover only part of the other's road (e.g. climb caught with or
+    # without its run-in), and equal point counts don't imply equal length.
+    containment = max(
+        _path_containment_pct(points, other_points, buffer_m),
+        _path_containment_pct(other_points, points, buffer_m),
+    )
+
+    return containment >= min_containment_pct
 
 
 def match_activity_to_segments(
