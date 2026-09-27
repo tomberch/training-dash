@@ -444,6 +444,25 @@ async def recalculate_metrics_job(ctx: dict, *, user_id: int) -> dict:
         }
 
 
+@tracked_job("recover_strands")
+async def recover_strands_job(ctx: dict) -> dict:
+    """Hourly cron: mark app-level status rows failed when their worker died mid-run (ADR 0006, decision 2)."""
+    from trainingdash.repositories.postgres.backup_repo import PostgresBackupRepo
+    from trainingdash.repositories.postgres.event_repo import PostgresEventRepo
+    from trainingdash.repositories.postgres.recalculation_job_repo import PostgresRecalculationJobRepo
+    from trainingdash.use_cases.recover_strands import RecoverStrands
+
+    async with worker_db_session(ctx) as db:
+        use_case = RecoverStrands(
+            recalculation_job_repo=PostgresRecalculationJobRepo(db),
+            backup_repo=PostgresBackupRepo(db),
+            event_repo=PostgresEventRepo(db),
+        )
+        result = await use_case.execute()
+        await db.commit()
+        return result
+
+
 async def flush_cache_stats(ctx: dict) -> dict:
     """
     Hourly cron: flush in-memory cache stats to the database.
@@ -697,6 +716,18 @@ def settings():
 
     from trainingdash.queue import get_queue_url
 
+    # Cron jobs carry flat retry budgets (retries=2, delay=60, no backoff) so
+    # all attempts finish inside the hourly tick (ADR 0006, decision 1).
+    # CronJob (SAQ 0.26.4) is a dataclass without retry_delay/retry_backoff
+    # fields, but Worker.schedule copies cron_job.__dict__ through to
+    # queue.enqueue, which routes extra kwargs to Job fields — so we set
+    # them as attributes post-construction.
+    def _cron(fn, cron: str):
+        cj = CronJob(fn, cron=cron, unique=True, retries=2)
+        cj.retry_delay = 60
+        cj.retry_backoff = False
+        return cj
+
     return {
         "queue": PostgresQueue.from_url(
             get_queue_url(),
@@ -716,6 +747,7 @@ def settings():
             import_xert_job,
             import_garmin_job,
             backup_job,
+            recover_strands_job,
             hourly_import_scheduler,
             hourly_backup_scheduler,
             flush_cache_stats,
@@ -725,12 +757,13 @@ def settings():
         "startup": startup,
         "shutdown": shutdown,
         # Cron schedule: run the import scheduler at the top of every hour,
-        # backup scheduler at :01 past each hour,
-        # flush cache stats at :05 past each hour, and prune old data daily at 4 AM
+        # backup scheduler at :01 past each hour, flush cache stats at :05,
+        # prune old data daily at 4 AM, and run the strand-recovery sweeper at :10.
         "cron_jobs": [
-            CronJob(hourly_import_scheduler, cron="0 * * * *", unique=True),
-            CronJob(hourly_backup_scheduler, cron="1 * * * *", unique=True),
-            CronJob(flush_cache_stats, cron="5 * * * *", unique=True),
-            CronJob(prune_old_data, cron="0 4 * * *", unique=True),
+            _cron(hourly_import_scheduler, "0 * * * *"),
+            _cron(hourly_backup_scheduler, "1 * * * *"),
+            _cron(flush_cache_stats, "5 * * * *"),
+            _cron(recover_strands_job, "10 * * * *"),
+            _cron(prune_old_data, "0 4 * * *"),
         ],
     }
