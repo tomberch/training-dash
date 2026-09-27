@@ -5,9 +5,9 @@
 - POST /api/admin/system/jobs/{key}/retry (re-enqueue from dead-letter args)
 """
 
+import pytest
 from sqlalchemy import text
 
-import pytest
 
 @pytest.fixture(autouse=True)
 def _database_url_env(monkeypatch, db_session):

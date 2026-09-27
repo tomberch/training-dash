@@ -6,7 +6,6 @@ waiting out the full timeout. The refresh helper touches the heartbeat between
 steps.
 """
 
-from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -23,9 +22,10 @@ from trainingdash.jobs import (
 
 @pytest.fixture
 def mock_queue():
-    with patch("trainingdash.jobs.queue_available", return_value=True), patch(
-        "trainingdash.jobs.get_queue", new_callable=AsyncMock
-    ) as get_queue:
+    with (
+        patch("trainingdash.jobs.queue_available", return_value=True),
+        patch("trainingdash.jobs.get_queue", new_callable=AsyncMock) as get_queue,
+    ):
         queue = get_queue.return_value
         queue.enqueue = AsyncMock(return_value=type("J", (), {"key": "k"})())
         yield queue

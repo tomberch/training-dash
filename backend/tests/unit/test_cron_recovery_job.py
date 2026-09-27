@@ -5,17 +5,11 @@
   so all attempts finish inside the hourly tick
 """
 
-import inspect
 from unittest.mock import patch
 
 import pytest
 
 from trainingdash.worker import (
-    CronJob,
-    flush_cache_stats,
-    hourly_backup_scheduler,
-    hourly_import_scheduler,
-    prune_old_data,
     recover_strands_job,
     settings,
 )
@@ -67,7 +61,6 @@ def test_cron_jobs_have_flat_retry_budget(settings_dict):
 
 def test_recover_strands_job_is_tracked():
     """recover_strands_job is wrapped by tracked_job (event instrumentation)."""
-    from trainingdash.worker import tracked_job
 
     assert getattr(recover_strands_job, "__name__", "") == "recover_strands_job"
     # The wrapper closes over job_name; check via attribute set by functools.wraps chain
@@ -76,7 +69,7 @@ def test_recover_strands_job_is_tracked():
 
 async def test_recover_strands_job_wires_repos():
     """The job function constructs the use case with both repos and an event repo."""
-    from unittest.mock import AsyncMock, MagicMock, patch
+    from unittest.mock import AsyncMock, MagicMock
 
     from trainingdash.worker import recover_strands_job as job
 

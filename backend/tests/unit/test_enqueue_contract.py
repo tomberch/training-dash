@@ -22,9 +22,10 @@ from trainingdash.jobs import (
 @pytest.fixture
 def mock_queue():
     """A connected SAQ queue mock for real (non-fallback) enqueue calls."""
-    with patch("trainingdash.jobs.queue_available", return_value=True), patch(
-        "trainingdash.jobs.get_queue", new_callable=AsyncMock
-    ) as get_queue:
+    with (
+        patch("trainingdash.jobs.queue_available", return_value=True),
+        patch("trainingdash.jobs.get_queue", new_callable=AsyncMock) as get_queue,
+    ):
         queue = get_queue.return_value
         queue.enqueue = AsyncMock(return_value=type("J", (), {"key": "job-key"})())
         yield queue
@@ -58,9 +59,7 @@ async def test_key_param_passed_through(mock_queue):
 async def test_default_key_is_none(mock_queue):
     """No key passed → SAQ auto-generates one (manual triggers must always fire)."""
     await enqueue_import_xert_job(user_id=7)
-    assert "key" not in mock_queue.enqueue.call_args.kwargs or (
-        mock_queue.enqueue.call_args.kwargs.get("key") is None
-    )
+    assert "key" not in mock_queue.enqueue.call_args.kwargs or (mock_queue.enqueue.call_args.kwargs.get("key") is None)
 
 
 async def test_match_route_job_raises_enqueue_error(mock_queue):

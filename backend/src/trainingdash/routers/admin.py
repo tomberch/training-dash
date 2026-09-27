@@ -1,11 +1,12 @@
 """Admin endpoints: user management, credential management, sync triggers, nuke operations."""
 
+import logging
+
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import delete, func, select, text, update
 
 from trainingdash.auth import AdminUser, DbSession, hash_password
-from trainingdash.routers.datetime_utils import utc_str
 from trainingdash.crypto import EncryptionError, encrypt
 from trainingdash.dependencies import (
     EventRepoD,
@@ -31,7 +32,10 @@ from trainingdash.repositories.postgres.models import (
     User,
     XertCredentials,
 )
+from trainingdash.routers.datetime_utils import utc_str
 from trainingdash.routers.serializers import user_summary
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -59,12 +63,18 @@ async def admin_list_users(user_repo: UserRepoD, admin: AdminUser, db: DbSession
     users = await user_repo.list_all()
 
     # Most recent sync across both providers, keyed by user (ADR 0007 read surface)
-    xert_rows = (await db.execute(
-        select(XertCredentials.user_id, func.max(XertCredentials.last_synced_at)).group_by(XertCredentials.user_id)
-    )).all()
-    garmin_rows = (await db.execute(
-        select(GarminCredentials.user_id, func.max(GarminCredentials.last_synced_at)).group_by(GarminCredentials.user_id)
-    )).all()
+    xert_rows = (
+        await db.execute(
+            select(XertCredentials.user_id, func.max(XertCredentials.last_synced_at)).group_by(XertCredentials.user_id)
+        )
+    ).all()
+    garmin_rows = (
+        await db.execute(
+            select(GarminCredentials.user_id, func.max(GarminCredentials.last_synced_at)).group_by(
+                GarminCredentials.user_id
+            )
+        )
+    ).all()
 
     last_sync: dict[int, datetime] = {}
     for user_id, ts in xert_rows:

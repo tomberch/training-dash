@@ -13,7 +13,6 @@ from trainingdash.domain.pacing_calibration import (
 )
 from trainingdash.repositories.postgres.models import Bike, PacingCoefficients
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -111,9 +110,7 @@ class TestGetAllCoefficients:
         assert data["user_default"]["grade_power_slope"] == 0.038
 
     @pytest.mark.asyncio
-    async def test_returns_bike_coefficients(
-        self, auth_client, user_coefficients, bike_coefficients, sample_bike
-    ):
+    async def test_returns_bike_coefficients(self, auth_client, user_coefficients, bike_coefficients, sample_bike):
         """Should return both user default and bike-specific coefficients."""
         response = await auth_client.get("/api/pacing-coefficients")
 
@@ -202,9 +199,7 @@ class TestGetEffectiveCoefficients:
         assert data["grade_power_intercept"] == 1.15
 
     @pytest.mark.asyncio
-    async def test_falls_back_to_user_default_for_uncalibrated_bike(
-        self, auth_client, user_coefficients, sample_bike
-    ):
+    async def test_falls_back_to_user_default_for_uncalibrated_bike(self, auth_client, user_coefficients, sample_bike):
         """Should fall back to user default when bike has no coefficients."""
         # sample_bike exists but has no coefficients (bike_coefficients not created)
         response = await auth_client.get(

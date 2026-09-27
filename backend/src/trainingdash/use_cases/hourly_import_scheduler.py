@@ -59,7 +59,7 @@ class HourlyImportScheduler:
         # range derives from last_synced_at, so data converges; this event makes
         # the loss visible to admins (ADR 0007 dead-letter/enqueue-failure feed).
         hour_bucket = datetime.now(UTC).strftime("%Y-%m-%dT%H")
-        scheduled_user_ids = [uid for uid in [*garmin_user_ids, *xert_user_ids]]
+        scheduled_user_ids = [*garmin_user_ids, *xert_user_ids]
         stale_result = await self._db.execute(
             select(GarminCredentials.user_id, GarminCredentials.last_synced_at).where(
                 GarminCredentials.user_id.in_(scheduled_user_ids)

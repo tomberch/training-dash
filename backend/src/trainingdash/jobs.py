@@ -233,7 +233,9 @@ async def enqueue_segment_process_job(activity_id: str, user_id: int) -> str | N
         return None
     queue = await get_queue()
     # Explicit timeout — SAQ default is 10s (ADR 0006, decision 4)
-    job = await _enqueue(queue, "segment_process_job", activity_id=activity_id, user_id=user_id, timeout=120, heartbeat=60)
+    job = await _enqueue(
+        queue, "segment_process_job", activity_id=activity_id, user_id=user_id, timeout=120, heartbeat=60
+    )
     return job.key if job else None
 
 

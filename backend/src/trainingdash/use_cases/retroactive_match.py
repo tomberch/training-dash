@@ -323,9 +323,7 @@ class RetroactiveMatch:
         existing_efforts = result.all()
 
         for existing_start, existing_end in existing_efforts:
-            if self._ranges_overlap_significantly(
-                start_index, end_index, existing_start, existing_end
-            ):
+            if self._ranges_overlap_significantly(start_index, end_index, existing_start, existing_end):
                 return True
         return False
 

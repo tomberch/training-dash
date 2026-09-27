@@ -14,7 +14,6 @@ from fastapi import HTTPException
 
 from trainingdash.jobs import EnqueueError
 
-
 # ---------------------------------------------------------------------------
 # Class A — user-facing API endpoints surface 503
 # ---------------------------------------------------------------------------
@@ -25,9 +24,7 @@ async def test_user_import_trigger_503_on_enqueue_error():
     from trainingdash.routers.user import trigger_xert_import
 
     creds_repo = MagicMock()
-    creds_repo.get_by_user_id = AsyncMock(
-        return_value=MagicMock(sync_enabled=True)
-    )
+    creds_repo.get_by_user_id = AsyncMock(return_value=MagicMock(sync_enabled=True))
 
     with patch(
         "trainingdash.jobs.enqueue_import_xert_job",

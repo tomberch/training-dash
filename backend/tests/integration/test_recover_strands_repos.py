@@ -6,7 +6,6 @@ app-level rows failed when their worker died mid-run.
 
 from datetime import UTC, datetime, timedelta
 
-import pytest
 from sqlalchemy import select
 
 from trainingdash.repositories.postgres.backup_repo import PostgresBackupRepo

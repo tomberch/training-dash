@@ -7,8 +7,6 @@ this tolerates climb-boundary wobble between rides: detectors may start
 or end the same climb metres apart, or extend it partway down the descent.
 """
 
-import pytest
-
 from trainingdash.domain.polyline import encode_polyline
 from trainingdash.domain.segment_matching import describes_same_road
 
@@ -21,10 +19,7 @@ def straight_climb(
     start_lat: float, start_lon: float, dlat: float, dlon: float, steps: int = 50
 ) -> list[tuple[float, float]]:
     """A polyline from (start_lat, start_lon) with per-step (dlat, dlon)."""
-    return [
-        (start_lat + dlat * i / steps, start_lon + dlon * i / steps)
-        for i in range(steps + 1)
-    ]
+    return [(start_lat + dlat * i / steps, start_lon + dlon * i / steps) for i in range(steps + 1)]
 
 
 class TestDescribesSameRoad:
@@ -83,8 +78,8 @@ class TestDescribesSameRoad:
         """Containment criterion must be direction-independent."""
         full = straight_climb(46.900, 7.400, 0.090, 0.0)
         partial = straight_climb(46.901, 7.400, 0.072, 0.0)
-        args = dict(polyline=encode(full), other_polyline=encode(partial))
-        swapped = dict(polyline=encode(partial), other_polyline=encode(full))
+        args = {"polyline": encode(full), "other_polyline": encode(partial)}
+        swapped = {"polyline": encode(partial), "other_polyline": encode(full)}
         assert describes_same_road(**args) == describes_same_road(**swapped)
 
     def test_empty_polyline_does_not_match(self):
@@ -96,10 +91,7 @@ class TestDescribesSameRoad:
         """Polylines that decode to unrealistic paths (millions of metres) are rejected."""
         pts = straight_climb(46.900, 7.400, 0.045, 0.0)
         # This decodes but produces garbage coordinates ~12,000 km apart
-        assert (
-            describes_same_road(polyline="not-a-valid-polyline!!!", other_polyline=encode(pts))
-            is False
-        )
+        assert describes_same_road(polyline="not-a-valid-polyline!!!", other_polyline=encode(pts)) is False
 
     def test_undecodable_polyline_does_not_match(self):
         """Polylines that raise exceptions during decode are rejected."""
@@ -110,20 +102,13 @@ class TestDescribesSameRoad:
 
     def test_single_point_path_does_not_match(self):
         pts = straight_climb(46.900, 7.400, 0.045, 0.0)
-        assert (
-            describes_same_road(polyline=encode([pts[0]]), other_polyline=encode(pts)) is False
-        )
+        assert describes_same_road(polyline=encode([pts[0]]), other_polyline=encode(pts)) is False
 
     def test_custom_thresholds(self):
         """Looser containment still rejects genuinely different roads."""
         a = straight_climb(46.900, 7.400, 0.045, 0.0)
         b = straight_climb(46.900, 7.402, 0.045, 0.0)  # ~150m east
-        assert (
-            describes_same_road(
-                polyline=encode(a), other_polyline=encode(b), buffer_m=200.0
-            )
-            is True
-        )
+        assert describes_same_road(polyline=encode(a), other_polyline=encode(b), buffer_m=200.0) is True
 
 
 class TestDescribesSameRoadRealWorld:
@@ -149,8 +134,5 @@ class TestDescribesSameRoadRealWorld:
         full = straight_climb(46.900, 7.400, 0.090, 0.0)  # 10km
         # Starts at the same point but peels off after ~8.2km onto a
         # parallel road: only 82% of `other` lies on `full`.
-        detour = [
-            (46.900 + (0.082 if i < 41 else 0.090 - 0.045), 7.400 if i < 41 else 7.405)
-            for i in range(51)
-        ]
+        detour = [(46.900 + (0.082 if i < 41 else 0.090 - 0.045), 7.400 if i < 41 else 7.405) for i in range(51)]
         assert describes_same_road(polyline=encode(full), other_polyline=encode(detour)) is False

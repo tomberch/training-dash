@@ -6,7 +6,7 @@ and truncated error — SAQ TTL-deletes terminal rows after 600s, so this is the
 permanent failure record.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -38,9 +38,7 @@ def capture_events(monkeypatch):
             return False
 
     monkeypatch.setattr("trainingdash.worker.worker_db_session", lambda ctx: FakeSession())
-    monkeypatch.setattr(
-        "trainingdash.repositories.postgres.event_repo.PostgresEventRepo", lambda db: repo
-    )
+    monkeypatch.setattr("trainingdash.repositories.postgres.event_repo.PostgresEventRepo", lambda db: repo)
     return repo
 
 
@@ -92,11 +90,9 @@ async def test_dead_letter_payload_carries_kwargs(capture_events):
     with pytest.raises(RuntimeError):
         await failing(_ctx(attempts=4), activity_id="a1", user_id=7)
 
-    payload = [
-        c.kwargs["payload"]
-        for c in capture_events.log.call_args_list
-        if c.kwargs.get("event_type") == "job.failed"
-    ][0]
+    payload = next(
+        c.kwargs["payload"] for c in capture_events.log.call_args_list if c.kwargs.get("event_type") == "job.failed"
+    )
     assert payload["kwargs"] == {"activity_id": "a1", "user_id": 7}
 
 

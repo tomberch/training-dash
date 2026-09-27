@@ -10,8 +10,6 @@ import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-import json
-
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
 from sqlalchemy import select, text
@@ -251,8 +249,6 @@ async def abort_job(
     await db.commit()
 
     return JobActionResponse(success=True, message=f"Abort requested for {job_key}")
-
-
 
 
 @router.post("/jobs/{job_key}/retry", response_model=JobActionResponse)

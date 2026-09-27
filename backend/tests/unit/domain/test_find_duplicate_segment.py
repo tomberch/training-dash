@@ -10,8 +10,6 @@ Two modes:
 
 from uuid import uuid4
 
-import pytest
-
 from trainingdash.domain.polyline import encode_polyline
 from trainingdash.domain.segment_geometry import SegmentGeometry
 from trainingdash.domain.segment_matching import SegmentForDedup, find_duplicate_segment
@@ -56,10 +54,7 @@ def straight_climb(
     start_lat: float, start_lon: float, dlat: float, dlon: float, steps: int = 50
 ) -> list[tuple[float, float]]:
     """A polyline from (start_lat, start_lon) with per-step (dlat, dlon)."""
-    return [
-        (start_lat + dlat * i / steps, start_lon + dlon * i / steps)
-        for i in range(steps + 1)
-    ]
+    return [(start_lat + dlat * i / steps, start_lon + dlon * i / steps) for i in range(steps + 1)]
 
 
 # Test fixtures: 1km climb near Bern
@@ -294,10 +289,7 @@ class TestFindDuplicateSegmentEdgeCases:
         candidate = make_geometry(CLIMB_A)
 
         # Create 100 non-matching segments
-        existing = [
-            make_dedup(straight_climb(46.900 + i * 0.01, 7.400, 0.045, 0.0))
-            for i in range(100)
-        ]
+        existing = [make_dedup(straight_climb(46.900 + i * 0.01, 7.400, 0.045, 0.0)) for i in range(100)]
         # Add the matching one at the end
         match_id = uuid4()
         existing.append(make_dedup(CLIMB_A, segment_id=match_id))

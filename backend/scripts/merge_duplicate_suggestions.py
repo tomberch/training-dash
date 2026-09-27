@@ -31,7 +31,7 @@ import os
 from datetime import datetime
 
 from geoalchemy2.shape import to_shape
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -75,6 +75,7 @@ async def merge(db_url: str, dry_run: bool) -> None:
                 if len(pts) >= 2:
                     paths[seg.id] = seg.polyline
             except Exception:
+                logger.warning(f"Failed to decode polyline for segment {seg.id}")
                 continue
 
         # Union-find clustering via pairwise containment within 100 m start radius
@@ -186,7 +187,7 @@ async def merge(db_url: str, dry_run: bool) -> None:
                 await session.execute(
                     Segment.__table__.update()
                     .where(Segment.id == member)
-                    .values(deleted_at=__import__("datetime").datetime.now())
+                    .values(deleted_at=datetime.now())
                 )
                 soft_deleted += 1
 

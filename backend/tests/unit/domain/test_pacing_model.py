@@ -21,7 +21,6 @@ from trainingdash.domain.pacing_model import (
     RIDE_TYPE_PRESETS,
     PacingCoefficients,
     RideTypeParams,
-    RideTypePreset,
     a_lat_from_aggressiveness,
     calculate_curvature_menger,
     calculate_intensity_factor,
@@ -34,7 +33,6 @@ from trainingdash.domain.pacing_model import (
     modulate_descent_power_multiplier,
     resolve_ride_type_params,
 )
-
 
 # =============================================================================
 # Test PacingCoefficients Dataclass
@@ -110,9 +108,7 @@ class TestRideTypeParams:
 
     def test_valid_params_with_coast_modulation(self):
         """Coast modulation parameter should be accepted."""
-        params = RideTypeParams(
-            descent_aggressiveness=85, stop_pct=3, coast_modulation=2.0
-        )
+        params = RideTypeParams(descent_aggressiveness=85, stop_pct=3, coast_modulation=2.0)
 
         assert params.coast_modulation == 2.0
 
@@ -395,9 +391,12 @@ class TestCalculateCurvatureMenger:
         """Three collinear points should have zero curvature."""
         # Three points on a straight line (same longitude, different lat)
         result = calculate_curvature_menger(
-            47.0, 8.0,  # Point 1
-            47.001, 8.0,  # Point 2
-            47.002, 8.0,  # Point 3
+            47.0,
+            8.0,  # Point 1
+            47.001,
+            8.0,  # Point 2
+            47.002,
+            8.0,  # Point 3
         )
         assert result == pytest.approx(0.0, abs=0.001)
 
@@ -405,9 +404,12 @@ class TestCalculateCurvatureMenger:
         """Three points forming a sharp turn should have high curvature."""
         # Form a right-angle turn
         result = calculate_curvature_menger(
-            47.0, 8.0,
-            47.0001, 8.0001,
-            47.0, 8.0002,
+            47.0,
+            8.0,
+            47.0001,
+            8.0001,
+            47.0,
+            8.0002,
         )
         assert result > 0
 
@@ -415,9 +417,12 @@ class TestCalculateCurvatureMenger:
         """Very tight corners should be clamped to max (0.05)."""
         # Extremely tight corner (nearly collinear with small deviation)
         result = calculate_curvature_menger(
-            47.0, 8.0,
-            47.00001, 8.00001,
-            47.0, 8.00002,
+            47.0,
+            8.0,
+            47.00001,
+            8.00001,
+            47.0,
+            8.00002,
         )
         assert result <= 0.05
 
@@ -425,9 +430,12 @@ class TestCalculateCurvatureMenger:
         """Coincident or very close points should return zero."""
         # Same point repeated
         result = calculate_curvature_menger(
-            47.0, 8.0,
-            47.0, 8.0,
-            47.0, 8.0,
+            47.0,
+            8.0,
+            47.0,
+            8.0,
+            47.0,
+            8.0,
         )
         assert result == 0.0
 
@@ -551,12 +559,14 @@ class TestCalculateNormalizedPower:
     def test_variable_power_higher_than_average(self):
         """Variable power should give NP higher than average."""
         # Alternating high/low power
-        powers = np.concatenate([
-            np.full(60, 150.0),
-            np.full(60, 250.0),
-            np.full(60, 150.0),
-            np.full(60, 250.0),
-        ])
+        powers = np.concatenate(
+            [
+                np.full(60, 150.0),
+                np.full(60, 250.0),
+                np.full(60, 150.0),
+                np.full(60, 250.0),
+            ]
+        )
         avg = np.mean(powers)  # 200
         result = calculate_normalized_power(powers)
         assert result > avg
@@ -652,8 +662,8 @@ class TestModuleConstants:
 
     def test_grade_power_constants_match_defaults(self):
         """Module constants should match default coefficients."""
-        assert GRADE_POWER_INTERCEPT == DEFAULT_COEFFICIENTS.grade_power_intercept
-        assert GRADE_POWER_SLOPE == DEFAULT_COEFFICIENTS.grade_power_slope
+        assert DEFAULT_COEFFICIENTS.grade_power_intercept == GRADE_POWER_INTERCEPT
+        assert DEFAULT_COEFFICIENTS.grade_power_slope == GRADE_POWER_SLOPE
 
     def test_descent_grade_threshold(self):
         """Descent grade threshold should be negative."""

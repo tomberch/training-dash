@@ -45,39 +45,29 @@ class TestEnsureDefaultThresholds:
         mock_threshold_repo.create.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_returns_false_when_thresholds_exist(
-        self, use_case, mock_threshold_repo
-    ):
+    async def test_returns_false_when_thresholds_exist(self, use_case, mock_threshold_repo):
         """Should return False when user already has thresholds."""
         mock_threshold_repo.has_any_threshold.return_value = True
 
-        result = await use_case.execute(
-            user_id=1, dob=date(1990, 1, 1), weight_kg=75.0
-        )
+        result = await use_case.execute(user_id=1, dob=date(1990, 1, 1), weight_kg=75.0)
 
         assert result is False
         mock_threshold_repo.has_any_threshold.assert_called_once_with(1)
         mock_threshold_repo.create.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_creates_defaults_when_no_thresholds(
-        self, use_case, mock_db_session, mock_threshold_repo
-    ):
+    async def test_creates_defaults_when_no_thresholds(self, use_case, mock_db_session, mock_threshold_repo):
         """Should create default thresholds when none exist."""
         mock_threshold_repo.has_any_threshold.return_value = False
 
-        result = await use_case.execute(
-            user_id=1, dob=date(1990, 1, 1), weight_kg=75.0
-        )
+        result = await use_case.execute(user_id=1, dob=date(1990, 1, 1), weight_kg=75.0)
 
         assert result is True
         mock_threshold_repo.create.assert_called_once()
         mock_db_session.commit.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_creates_defaults_with_correct_source(
-        self, use_case, mock_threshold_repo
-    ):
+    async def test_creates_defaults_with_correct_source(self, use_case, mock_threshold_repo):
         """Should create thresholds with 'calculated' source."""
         mock_threshold_repo.has_any_threshold.return_value = False
 
@@ -89,15 +79,11 @@ class TestEnsureDefaultThresholds:
         assert call_kwargs["source_detail"] == "default_from_age_weight"
 
     @pytest.mark.asyncio
-    async def test_uses_computed_threshold_values(
-        self, use_case, mock_threshold_repo
-    ):
+    async def test_uses_computed_threshold_values(self, use_case, mock_threshold_repo):
         """Should use values from compute_default_thresholds."""
         mock_threshold_repo.has_any_threshold.return_value = False
 
-        with mock.patch(
-            "trainingdash.use_cases.ensure_default_thresholds.compute_default_thresholds"
-        ) as mock_compute:
+        with mock.patch("trainingdash.use_cases.ensure_default_thresholds.compute_default_thresholds") as mock_compute:
             mock_compute.return_value = {
                 "ftp_watts": 200,
                 "lthr_bpm": 165,
@@ -113,9 +99,7 @@ class TestEnsureDefaultThresholds:
             assert call_kwargs["hrmax_bpm"] == 185
 
     @pytest.mark.asyncio
-    async def test_creates_thresholds_with_today_date(
-        self, use_case, mock_threshold_repo
-    ):
+    async def test_creates_thresholds_with_today_date(self, use_case, mock_threshold_repo):
         """Should create threshold entry dated today."""
         mock_threshold_repo.has_any_threshold.return_value = False
 
@@ -130,9 +114,7 @@ class TestEnsureDefaultThresholds:
         """Should create defaults even when weight is None."""
         mock_threshold_repo.has_any_threshold.return_value = False
 
-        result = await use_case.execute(
-            user_id=1, dob=date(1990, 1, 1), weight_kg=None
-        )
+        result = await use_case.execute(user_id=1, dob=date(1990, 1, 1), weight_kg=None)
 
         assert result is True
         mock_threshold_repo.create.assert_called_once()
@@ -164,13 +146,9 @@ class TestEnsureDefaultThresholdsIdempotency:
         use_case._repo = mock_repo
 
         # First call creates
-        result1 = await use_case.execute(
-            user_id=1, dob=date(1990, 1, 1), weight_kg=75.0
-        )
+        result1 = await use_case.execute(user_id=1, dob=date(1990, 1, 1), weight_kg=75.0)
         # Second call finds existing
-        result2 = await use_case.execute(
-            user_id=1, dob=date(1990, 1, 1), weight_kg=75.0
-        )
+        result2 = await use_case.execute(user_id=1, dob=date(1990, 1, 1), weight_kg=75.0)
 
         assert result1 is True
         assert result2 is False

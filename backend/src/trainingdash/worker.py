@@ -124,11 +124,7 @@ def tracked_job(job_name: str) -> Callable:
                 saq_job = ctx.get("job")
                 attempts = getattr(saq_job, "attempts", None)
                 retries = getattr(saq_job, "retries", None)
-                is_dead_letter = (
-                    attempts is not None
-                    and retries is not None
-                    and attempts >= retries
-                )
+                is_dead_letter = attempts is not None and retries is not None and attempts >= retries
 
                 # Emit job.failed event
                 try:

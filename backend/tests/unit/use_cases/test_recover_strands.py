@@ -7,8 +7,6 @@ BackupHistory rows stuck in 'running'. Repos expose recover_stranded_running().
 
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
-
 from trainingdash.use_cases.recover_strands import RecoverStrands
 
 
@@ -50,9 +48,7 @@ async def test_events_written_for_recovered_strands():
     recalc_repo = _repo([{"user_id": 7, "table": "recalculation_jobs"}])
     backup_repo = _repo([])
 
-    await RecoverStrands(
-        recalculation_job_repo=recalc_repo, backup_repo=backup_repo, event_repo=event_repo
-    ).execute()
+    await RecoverStrands(recalculation_job_repo=recalc_repo, backup_repo=backup_repo, event_repo=event_repo).execute()
 
     calls = event_repo.log.call_args_list
     assert len(calls) == 1

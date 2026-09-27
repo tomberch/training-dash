@@ -48,6 +48,8 @@ async def _enqueue_recalc_or_fail(user_id: int, recalc_repo, enqueue, db=None) -
         if db is not None:
             await db.commit()
         return None
+
+
 from trainingdash.repositories.postgres.models import (
     Notification,
 )
@@ -1056,8 +1058,6 @@ class _RecalcUpsertFailedAdapter:
         # see why the job is failed rather than a silent spinner reset).
         job = await self._repo.get_by_user_id(user_id)
         if job is not None and not job.error_message:
-            from trainingdash.repositories.postgres.models import RecalculationJob as _RJ
-
             # Direct update keeps the adapter protocol-free
             job.error_message = error_message
 

@@ -30,9 +30,7 @@ from trainingdash.jobs import EnqueueError, _enqueue
 def _test_queue() -> PostgresQueue:
     import os
 
-    url = os.environ.get("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5433/test").replace(
-        "+asyncpg", ""
-    )
+    url = os.environ.get("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5433/test").replace("+asyncpg", "")
     return PostgresQueue.from_url(url, name="default", min_size=1, max_size=2)
 
 
@@ -40,11 +38,7 @@ async def _flush_jobs(queue: PostgresQueue):
     """Best-effort cleanup: delete rows our tests created."""
     try:
         async with queue.pool.connection() as conn, conn.cursor() as cursor:
-            await cursor.execute(
-                __import__("psycopg").sql.SQL(
-                    "DELETE FROM saq_jobs WHERE key LIKE 'resil-%'"
-                )
-            )
+            await cursor.execute(__import__("psycopg").sql.SQL("DELETE FROM saq_jobs WHERE key LIKE 'resil-%'"))
     except Exception:
         pass
 
@@ -66,9 +60,7 @@ async def test_retry_on_failure_then_dead_letter_event(auth_client, db_session, 
         # retries=2 → 2 total attempts; clean any leftover row first
         async with queue.pool.connection() as conn, conn.cursor() as cursor:
             await cursor.execute("DELETE FROM saq_jobs WHERE key = 'resil-retry-1'")
-        job = await queue.enqueue(
-            "flaky_resil_test", retries=2, retry_delay=0, heartbeat=30, key="resil-retry-1"
-        )
+        job = await queue.enqueue("flaky_resil_test", retries=2, retry_delay=0, heartbeat=30, key="resil-retry-1")
         assert job is not None
         # Simulate the worker's failure bookkeeping: attempt 1 fails →
         # retryable → queued with a future scheduled timestamp
@@ -142,9 +134,7 @@ async def test_sweeper_recovers_orphaned_active_job():
         # row whose abort path still references it would break this run's sweep
         async with queue.pool.connection() as conn, conn.cursor() as cursor:
             await cursor.execute(
-                psycopg.sql.SQL(
-                    "DELETE FROM saq_jobs WHERE convert_from(job, 'utf8') LIKE '%swept_resil_test%'"
-                )
+                psycopg.sql.SQL("DELETE FROM saq_jobs WHERE convert_from(job, 'utf8') LIKE '%swept_resil_test%'")
             )
 
         job_dict = {

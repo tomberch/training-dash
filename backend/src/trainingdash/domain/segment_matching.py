@@ -17,6 +17,7 @@ sub-second matching for segments with 5000 points against activities with 20000 
 import math
 from collections.abc import Iterable
 from dataclasses import dataclass
+from itertools import pairwise
 from typing import TYPE_CHECKING, Literal
 from uuid import UUID
 
@@ -543,9 +544,7 @@ def is_same_segment(
     return overlap >= min_overlap_pct
 
 
-def _resample_path(
-    points: list[tuple[float, float]], spacing_m: float
-) -> list[tuple[float, float]]:
+def _resample_path(points: list[tuple[float, float]], spacing_m: float) -> list[tuple[float, float]]:
     """Resample a path to roughly fixed spacing (keeps endpoints).
 
     Thins dense GPS captures by keeping the first point at least spacing_m
@@ -597,7 +596,7 @@ def _path_containment_pct(
     roads, which breaks the containment test.
     """
     covered = 0
-    segments = list(zip(longer, longer[1:]))
+    segments = list(pairwise(longer))
     for lat, lon in shorter:
         for (s_lat, s_lon), (e_lat, e_lon) in segments:
             d = point_to_segment_distance(lat, lon, s_lat, s_lon, e_lat, e_lon)

@@ -31,7 +31,6 @@ from trainingdash.domain.pacing_calibration import (
     pedaling_average_power,
 )
 
-
 # =============================================================================
 # Test Fixtures
 # =============================================================================
@@ -331,9 +330,7 @@ class TestExtractClimbSamples:
         records = make_climb_records(grade_pct=8.0, duration_s=120)
         avg_power = pedaling_average_power(records) or 200.0
 
-        samples = extract_climb_samples(
-            records, avg_power, min_grade=5.0, max_grade=10.0
-        )
+        samples = extract_climb_samples(records, avg_power, min_grade=5.0, max_grade=10.0)
 
         assert len(samples) > 0
         for s in samples:
@@ -394,9 +391,7 @@ class TestExtractDescentSamples:
     def test_calculates_curvature(self):
         """Curvature should be calculated from GPS coordinates."""
         # Create records with more pronounced turns
-        records = make_descent_records(
-            grade_pct=-6.0, duration_s=200, start_lat=47.0, start_lon=8.0
-        )
+        records = make_descent_records(grade_pct=-6.0, duration_s=200, start_lat=47.0, start_lon=8.0)
         avg_power = 200.0
 
         samples = extract_descent_samples(records, avg_power)
@@ -461,10 +456,7 @@ class TestFitClimbCoefficients:
     def test_coefficients_clamped_to_bounds(self):
         """Fitted coefficients should be clamped to reasonable bounds."""
         # Create outlier samples that would produce extreme coefficients
-        samples = [
-            GradePowerSample(grade_pct=1.0, power_mult=0.5, time_weight=1.0)
-            for _ in range(MIN_CLIMB_SAMPLES)
-        ]
+        samples = [GradePowerSample(grade_pct=1.0, power_mult=0.5, time_weight=1.0) for _ in range(MIN_CLIMB_SAMPLES)]
 
         intercept, slope, _ = fit_climb_coefficients(samples)
 
@@ -478,14 +470,10 @@ class TestFitClimbCoefficients:
         samples = []
         # Low-grade samples with low weight
         for _ in range(MIN_CLIMB_SAMPLES // 2):
-            samples.append(
-                GradePowerSample(grade_pct=2.0, power_mult=1.0, time_weight=1.0)
-            )
+            samples.append(GradePowerSample(grade_pct=2.0, power_mult=1.0, time_weight=1.0))
         # High-grade samples with high weight
         for _ in range(MIN_CLIMB_SAMPLES // 2):
-            samples.append(
-                GradePowerSample(grade_pct=10.0, power_mult=1.5, time_weight=10.0)
-            )
+            samples.append(GradePowerSample(grade_pct=10.0, power_mult=1.5, time_weight=10.0))
 
         intercept, slope, r_squared = fit_climb_coefficients(samples)
 
@@ -515,9 +503,7 @@ class TestFitDescentCoefficients:
             for _ in range(100)  # Less than MIN_DESCENT_SAMPLES
         ]
 
-        max_speed, power_mult, curv_coef, confidence = fit_descent_coefficients(
-            samples
-        )
+        max_speed, power_mult, curv_coef, confidence = fit_descent_coefficients(samples)
 
         assert max_speed == DEFAULT_MAX_DESCENT_SPEED_MPS
         assert power_mult == DEFAULT_DESCENT_POWER_MULTIPLIER
@@ -646,10 +632,7 @@ class TestCalibrateCoefficients:
 
     def test_returns_none_with_insufficient_samples(self):
         """Should return None when both climb and descent samples insufficient."""
-        climb_samples = [
-            GradePowerSample(grade_pct=5.0, power_mult=1.2, time_weight=1.0)
-            for _ in range(100)
-        ]
+        climb_samples = [GradePowerSample(grade_pct=5.0, power_mult=1.2, time_weight=1.0) for _ in range(100)]
         descent_samples = [
             DescentSample(
                 grade_pct=-5.0,
@@ -667,8 +650,7 @@ class TestCalibrateCoefficients:
     def test_returns_none_with_insufficient_activities(self):
         """Should return None when activity_count below threshold."""
         climb_samples = [
-            GradePowerSample(grade_pct=5.0, power_mult=1.2, time_weight=1.0)
-            for _ in range(MIN_CLIMB_SAMPLES)
+            GradePowerSample(grade_pct=5.0, power_mult=1.2, time_weight=1.0) for _ in range(MIN_CLIMB_SAMPLES)
         ]
         descent_samples = [
             DescentSample(
@@ -681,9 +663,7 @@ class TestCalibrateCoefficients:
             for _ in range(MIN_DESCENT_SAMPLES)
         ]
 
-        result = calibrate_coefficients(
-            climb_samples, descent_samples, activity_count=MIN_ACTIVITIES - 1
-        )
+        result = calibrate_coefficients(climb_samples, descent_samples, activity_count=MIN_ACTIVITIES - 1)
         assert result is None
 
     def test_returns_none_when_r_squared_too_low(self):
@@ -711,9 +691,7 @@ class TestCalibrateCoefficients:
             for _ in range(MIN_DESCENT_SAMPLES)
         ]
 
-        result = calibrate_coefficients(
-            climb_samples, descent_samples, activity_count=MIN_ACTIVITIES
-        )
+        result = calibrate_coefficients(climb_samples, descent_samples, activity_count=MIN_ACTIVITIES)
 
         # With random noise, R² should be very low
         assert result is None
@@ -747,9 +725,7 @@ class TestCalibrateCoefficients:
             for _ in range(MIN_DESCENT_SAMPLES)
         ]
 
-        result = calibrate_coefficients(
-            climb_samples, descent_samples, activity_count=MIN_ACTIVITIES
-        )
+        result = calibrate_coefficients(climb_samples, descent_samples, activity_count=MIN_ACTIVITIES)
 
         if result is not None:  # May still fail R² gate with our sample data
             assert isinstance(result, CalibrationResult)
@@ -783,11 +759,8 @@ class TestModuleConstants:
 
         defaults = PacingCoefficients.defaults()
 
-        assert DEFAULT_GRADE_POWER_INTERCEPT == defaults.grade_power_intercept
-        assert DEFAULT_GRADE_POWER_SLOPE == defaults.grade_power_slope
-        assert DEFAULT_MAX_DESCENT_SPEED_MPS == defaults.max_descent_speed_mps
-        assert DEFAULT_DESCENT_POWER_MULTIPLIER == defaults.descent_power_multiplier
-        assert (
-            DEFAULT_CURVATURE_SPEED_COEFFICIENT
-            == defaults.curvature_speed_coefficient
-        )
+        assert defaults.grade_power_intercept == DEFAULT_GRADE_POWER_INTERCEPT
+        assert defaults.grade_power_slope == DEFAULT_GRADE_POWER_SLOPE
+        assert defaults.max_descent_speed_mps == DEFAULT_MAX_DESCENT_SPEED_MPS
+        assert defaults.descent_power_multiplier == DEFAULT_DESCENT_POWER_MULTIPLIER
+        assert defaults.curvature_speed_coefficient == DEFAULT_CURVATURE_SPEED_COEFFICIENT

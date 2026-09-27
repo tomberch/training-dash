@@ -27,12 +27,8 @@ class TestRecalcAfterDelete:
     async def test_executes_fitness_model_updater(self, use_case, mock_db_session):
         """Should execute FitnessModelUpdater."""
         with (
-            mock.patch(
-                "trainingdash.use_cases.recalc_after_delete.FitnessModelUpdater"
-            ) as MockFMU,
-            mock.patch(
-                "trainingdash.use_cases.recalc_after_delete.BreakthroughEvaluator"
-            ) as MockBE,
+            mock.patch("trainingdash.use_cases.recalc_after_delete.FitnessModelUpdater") as MockFMU,
+            mock.patch("trainingdash.use_cases.recalc_after_delete.BreakthroughEvaluator") as MockBE,
         ):
             MockFMU.return_value.execute = mock.AsyncMock()
             MockBE.return_value.execute = mock.AsyncMock()
@@ -46,12 +42,8 @@ class TestRecalcAfterDelete:
     async def test_executes_breakthrough_evaluator(self, use_case, mock_db_session):
         """Should execute BreakthroughEvaluator."""
         with (
-            mock.patch(
-                "trainingdash.use_cases.recalc_after_delete.FitnessModelUpdater"
-            ) as MockFMU,
-            mock.patch(
-                "trainingdash.use_cases.recalc_after_delete.BreakthroughEvaluator"
-            ) as MockBE,
+            mock.patch("trainingdash.use_cases.recalc_after_delete.FitnessModelUpdater") as MockFMU,
+            mock.patch("trainingdash.use_cases.recalc_after_delete.BreakthroughEvaluator") as MockBE,
         ):
             MockFMU.return_value.execute = mock.AsyncMock()
             MockBE.return_value.execute = mock.AsyncMock()
@@ -65,12 +57,8 @@ class TestRecalcAfterDelete:
     async def test_commits_after_each_step(self, use_case, mock_db_session):
         """Should commit after each step."""
         with (
-            mock.patch(
-                "trainingdash.use_cases.recalc_after_delete.FitnessModelUpdater"
-            ) as MockFMU,
-            mock.patch(
-                "trainingdash.use_cases.recalc_after_delete.BreakthroughEvaluator"
-            ) as MockBE,
+            mock.patch("trainingdash.use_cases.recalc_after_delete.FitnessModelUpdater") as MockFMU,
+            mock.patch("trainingdash.use_cases.recalc_after_delete.BreakthroughEvaluator") as MockBE,
         ):
             MockFMU.return_value.execute = mock.AsyncMock()
             MockBE.return_value.execute = mock.AsyncMock()
@@ -84,12 +72,8 @@ class TestRecalcAfterDelete:
     async def test_returns_success_dict(self, use_case, mock_db_session):
         """Should return success dict with user_id."""
         with (
-            mock.patch(
-                "trainingdash.use_cases.recalc_after_delete.FitnessModelUpdater"
-            ) as MockFMU,
-            mock.patch(
-                "trainingdash.use_cases.recalc_after_delete.BreakthroughEvaluator"
-            ) as MockBE,
+            mock.patch("trainingdash.use_cases.recalc_after_delete.FitnessModelUpdater") as MockFMU,
+            mock.patch("trainingdash.use_cases.recalc_after_delete.BreakthroughEvaluator") as MockBE,
         ):
             MockFMU.return_value.execute = mock.AsyncMock()
             MockBE.return_value.execute = mock.AsyncMock()
@@ -102,16 +86,10 @@ class TestRecalcAfterDelete:
     async def test_continues_on_fitness_model_failure(self, use_case, mock_db_session):
         """Should continue to breakthrough evaluator even if fitness model fails."""
         with (
-            mock.patch(
-                "trainingdash.use_cases.recalc_after_delete.FitnessModelUpdater"
-            ) as MockFMU,
-            mock.patch(
-                "trainingdash.use_cases.recalc_after_delete.BreakthroughEvaluator"
-            ) as MockBE,
+            mock.patch("trainingdash.use_cases.recalc_after_delete.FitnessModelUpdater") as MockFMU,
+            mock.patch("trainingdash.use_cases.recalc_after_delete.BreakthroughEvaluator") as MockBE,
         ):
-            MockFMU.return_value.execute = mock.AsyncMock(
-                side_effect=Exception("FMU error")
-            )
+            MockFMU.return_value.execute = mock.AsyncMock(side_effect=Exception("FMU error"))
             MockBE.return_value.execute = mock.AsyncMock()
 
             result = await use_case.execute(user_id=1)
@@ -121,22 +99,14 @@ class TestRecalcAfterDelete:
             assert result["success"] is True
 
     @pytest.mark.asyncio
-    async def test_continues_on_breakthrough_evaluator_failure(
-        self, use_case, mock_db_session
-    ):
+    async def test_continues_on_breakthrough_evaluator_failure(self, use_case, mock_db_session):
         """Should return success even if breakthrough evaluator fails."""
         with (
-            mock.patch(
-                "trainingdash.use_cases.recalc_after_delete.FitnessModelUpdater"
-            ) as MockFMU,
-            mock.patch(
-                "trainingdash.use_cases.recalc_after_delete.BreakthroughEvaluator"
-            ) as MockBE,
+            mock.patch("trainingdash.use_cases.recalc_after_delete.FitnessModelUpdater") as MockFMU,
+            mock.patch("trainingdash.use_cases.recalc_after_delete.BreakthroughEvaluator") as MockBE,
         ):
             MockFMU.return_value.execute = mock.AsyncMock()
-            MockBE.return_value.execute = mock.AsyncMock(
-                side_effect=Exception("BE error")
-            )
+            MockBE.return_value.execute = mock.AsyncMock(side_effect=Exception("BE error"))
 
             result = await use_case.execute(user_id=1)
 
@@ -144,24 +114,14 @@ class TestRecalcAfterDelete:
             assert result["success"] is True
 
     @pytest.mark.asyncio
-    async def test_both_steps_fail_still_returns_success(
-        self, use_case, mock_db_session
-    ):
+    async def test_both_steps_fail_still_returns_success(self, use_case, mock_db_session):
         """Should return success even if both steps fail (idempotent)."""
         with (
-            mock.patch(
-                "trainingdash.use_cases.recalc_after_delete.FitnessModelUpdater"
-            ) as MockFMU,
-            mock.patch(
-                "trainingdash.use_cases.recalc_after_delete.BreakthroughEvaluator"
-            ) as MockBE,
+            mock.patch("trainingdash.use_cases.recalc_after_delete.FitnessModelUpdater") as MockFMU,
+            mock.patch("trainingdash.use_cases.recalc_after_delete.BreakthroughEvaluator") as MockBE,
         ):
-            MockFMU.return_value.execute = mock.AsyncMock(
-                side_effect=Exception("FMU error")
-            )
-            MockBE.return_value.execute = mock.AsyncMock(
-                side_effect=Exception("BE error")
-            )
+            MockFMU.return_value.execute = mock.AsyncMock(side_effect=Exception("FMU error"))
+            MockBE.return_value.execute = mock.AsyncMock(side_effect=Exception("BE error"))
 
             result = await use_case.execute(user_id=1)
 

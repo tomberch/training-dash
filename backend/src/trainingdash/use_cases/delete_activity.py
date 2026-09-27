@@ -34,7 +34,9 @@ class DeleteActivity:
             raise NotFoundError()
     """
 
-    def __init__(self, activity_repo: ActivityRepo, db: AsyncSession | None = None, segment_repo=None, event_repo=None) -> None:
+    def __init__(
+        self, activity_repo: ActivityRepo, db: AsyncSession | None = None, segment_repo=None, event_repo=None
+    ) -> None:
         """
         Initialize the use case with dependencies.
 

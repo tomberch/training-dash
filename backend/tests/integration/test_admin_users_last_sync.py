@@ -4,7 +4,6 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import text
 
-from trainingdash.crypto import encrypt
 from trainingdash.repositories.postgres.models import User
 
 
@@ -27,9 +26,11 @@ async def test_admin_users_includes_last_synced_at(auth_client, db_session, seed
     me = next(u for u in users if u["id"] == seed_user.id)
     assert me["last_synced_at"] is not None
     # other users (no credentials) report null
-    other = next(u for u in users if u["email"] == "user2@example.com") if any(
-        u["email"] == "user2@example.com" for u in users
-    ) else None
+    other = (
+        next(u for u in users if u["email"] == "user2@example.com")
+        if any(u["email"] == "user2@example.com" for u in users)
+        else None
+    )
     if other:
         assert other["last_synced_at"] is None
 

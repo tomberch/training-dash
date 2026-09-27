@@ -9,7 +9,6 @@ from geoalchemy2 import WKTElement
 from tests.integration.fixtures import CACHED_HASH_TESTPASS
 from trainingdash.repositories.postgres.models import Activity, Segment, SegmentEffort, User
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -195,7 +194,10 @@ class TestListSegments:
                 polyline=f"polyline_{i}",
                 start_point=WKTElement(f"POINT({8.0 + i * 0.1} 47.0)", srid=4326),
                 end_point=WKTElement(f"POINT({8.1 + i * 0.1} 47.1)", srid=4326),
-                bounds=WKTElement(f"POLYGON(({7.9 + i * 0.1} 46.9, {8.2 + i * 0.1} 46.9, {8.2 + i * 0.1} 47.2, {7.9 + i * 0.1} 47.2, {7.9 + i * 0.1} 46.9))", srid=4326),
+                bounds=WKTElement(
+                    f"POLYGON(({7.9 + i * 0.1} 46.9, {8.2 + i * 0.1} 46.9, {8.2 + i * 0.1} 47.2, {7.9 + i * 0.1} 47.2, {7.9 + i * 0.1} 46.9))",
+                    srid=4326,
+                ),
                 distance_m=1000.0,
                 elevation_gain_m=50.0,
                 avg_grade_pct=5.0,
@@ -250,9 +252,7 @@ class TestGetSegment:
         assert "elevation_profile" in data
 
     @pytest.mark.asyncio
-    async def test_get_includes_my_stats_when_efforts_exist(
-        self, auth_client, sample_segment, sample_efforts
-    ):
+    async def test_get_includes_my_stats_when_efforts_exist(self, auth_client, sample_segment, sample_efforts):
         """Should include user's stats when they have efforts."""
         response = await auth_client.get(f"/api/segments/{sample_segment.id}")
 
@@ -427,9 +427,7 @@ class TestListSegmentEfforts:
         assert len(data["efforts"]) == 3
 
     @pytest.mark.asyncio
-    async def test_list_efforts_includes_fields(
-        self, auth_client, sample_segment, sample_efforts
-    ):
+    async def test_list_efforts_includes_fields(self, auth_client, sample_segment, sample_efforts):
         """Should include all effort fields."""
         response = await auth_client.get(f"/api/segments/{sample_segment.id}/efforts")
 
