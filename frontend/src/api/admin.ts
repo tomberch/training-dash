@@ -11,6 +11,7 @@ export interface AdminUser {
   is_admin: boolean;
   is_approved: boolean;
   created_at: string;
+  last_synced_at?: string | null;
 }
 
 export interface AdminSettings {
@@ -133,10 +134,12 @@ export interface ActiveJob {
   scheduled: string | null;
   started: string | null;
   kwargs: Record<string, unknown> | null;
+  attempts: number;
 }
 
 export interface ActiveJobsResponse {
   jobs: ActiveJob[];
+  workers_alive: number;
 }
 
 export interface CacheTypeStats {
@@ -177,6 +180,15 @@ export async function fetchSystemEvents(filters?: SystemEventsFilters): Promise<
 
 export async function fetchActiveJobs(): Promise<ActiveJobsResponse> {
   return apiGet<ActiveJobsResponse>("/admin/system/jobs");
+}
+
+// Job operations (ADR 0007): retry from dead-letter, abort stuck job
+export async function abortJob(jobKey: string): Promise<void> {
+  await apiPost(`/admin/system/jobs/${encodeURIComponent(jobKey)}/abort`, {});
+}
+
+export async function retryJob(jobKey: string): Promise<void> {
+  await apiPost(`/admin/system/jobs/${encodeURIComponent(jobKey)}/retry`, {});
 }
 
 export async function fetchCacheStats(days?: number): Promise<CacheStatsResponse> {

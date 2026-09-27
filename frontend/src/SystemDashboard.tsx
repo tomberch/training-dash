@@ -8,6 +8,8 @@ import {
   fetchSystemEvents,
   fetchActiveJobs,
   fetchCacheStats,
+  abortJob,
+  retryJob,
   type SystemEvent,
   type ActiveJob,
   type CacheStatsResponse,
@@ -20,7 +22,7 @@ import {
 
 const EVENT_TYPE_OPTIONS = [
   { group: "Activity", options: ["activity.ingested", "activity.deleted"] },
-  { group: "Sync", options: ["sync.started", "sync.completed"] },
+  { group: "Sync", options: ["sync.started", "sync.completed", "sync.lost_tick"] },
   { group: "Route", options: ["route.matched"] },
   { group: "Threshold", options: ["threshold.updated"] },
   { group: "Recalculation", options: ["recalculation.started", "recalculation.completed"] },
@@ -29,7 +31,10 @@ const EVENT_TYPE_OPTIONS = [
     options: ["credentials.saved", "credentials.removed", "credentials.validation_failed"],
   },
   { group: "Breakthrough", options: ["breakthrough.detected"] },
-  { group: "Job", options: ["job.completed", "job.failed"] },
+  {
+    group: "Job",
+    options: ["job.completed", "job.failed", "job.enqueue_failed", "job.stuck"],
+  },
   {
     group: "Admin",
     options: ["admin.nuke_activities", "admin.nuke_integrations", "admin.nuke_account"],
@@ -96,6 +101,9 @@ export function SystemDashboard({ onBack }: { onBack: () => void }) {
   // Data state
   const [cacheStats, setCacheStats] = useState<CacheStatsResponse | null>(null);
   const [activeJobs, setActiveJobs] = useState<ActiveJob[]>([]);
+  const [workersAlive, setWorkersAlive] = useState(0);
+  const [jobStatusFilter, setJobStatusFilter] = useState<string>("all");
+  const [busyJobKey, setBusyJobKey] = useState<string | null>(null);
   const [events, setEvents] = useState<SystemEvent[]>([]);
   const [totalEvents, setTotalEvents] = useState(0);
 
@@ -152,12 +160,52 @@ export function SystemDashboard({ onBack }: { onBack: () => void }) {
   async function loadJobs() {
     setLoadingJobs(true);
     try {
-      const { jobs } = await fetchActiveJobs();
+      const { jobs, workers_alive } = await fetchActiveJobs();
       setActiveJobs(jobs);
+      setWorkersAlive(workers_alive ?? 0);
     } catch (e) {
       console.error("Failed to load jobs:", e);
     } finally {
       setLoadingJobs(false);
+    }
+  }
+
+  const filteredJobs =
+    jobStatusFilter === "all" ? activeJobs : activeJobs.filter((j) => j.status === jobStatusFilter);
+
+  const jobStatusBadge = (status: string) =>
+    cn(
+      "px-2 py-0.5 text-xs font-medium rounded-full",
+      status === "active" && "bg-warning/20 text-warning",
+      (status === "failed" || status === "aborted") && "bg-destructive/20 text-destructive",
+      status === "queued" && "bg-muted text-muted-foreground",
+      status === "processing" && "bg-muted text-muted-foreground",
+      status === "complete" && "bg-success/20 text-success",
+      !["active", "failed", "aborted", "queued", "processing", "complete"].includes(status) &&
+        "bg-muted text-muted-foreground"
+    );
+
+  async function handleJobAction(job: ActiveJob, action: "abort" | "retry") {
+    // ADR 0007: one confirmation — aborting an ACTIVE job may cancel mid-run work.
+    if (action === "abort" && (job.status === "active" || job.status === "processing")) {
+      const confirmed = window.confirm(
+        "This will cancel a running job; data may be partially written. The job will be marked aborted and retried per policy. Continue?"
+      );
+      if (!confirmed) return;
+    }
+    setBusyJobKey(job.key);
+    try {
+      if (action === "abort") {
+        await abortJob(job.key);
+      } else {
+        await retryJob(job.key);
+      }
+      await loadJobs();
+    } catch (e) {
+      console.error(`Failed to ${action} job:`, e);
+      window.alert(`Failed to ${action} job: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusyJobKey(null);
     }
   }
 
@@ -243,21 +291,25 @@ export function SystemDashboard({ onBack }: { onBack: () => void }) {
               <>
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-label">Active Jobs</p>
+                    <p className="text-label">Jobs</p>
                     <p className="text-metric">{activeJobs.length}</p>
                   </div>
                   <div
                     className={cn(
                       "w-3 h-3 rounded-full",
-                      activeJobs.length > 0 ? "bg-warning animate-pulse" : "bg-success"
+                      activeJobs.some((j) => j.status === "failed" || j.status === "aborted")
+                        ? "bg-destructive"
+                        : activeJobs.length > 0
+                          ? "bg-warning animate-pulse"
+                          : "bg-success"
                     )}
                   />
                 </div>
-                {activeJobs.length > 0 && (
-                  <p className="text-caption mt-2">
-                    {activeJobs[0].function.replace(/_/g, " ")}
-                  </p>
-                )}
+                <p className="text-caption mt-2">
+                  {workersAlive > 0
+                    ? `${workersAlive} worker${workersAlive === 1 ? "" : "s"} alive`
+                    : "no live workers"}
+                </p>
               </>
             )}
           </CardContent>
@@ -304,50 +356,88 @@ export function SystemDashboard({ onBack }: { onBack: () => void }) {
         </Card>
       </div>
 
-      {/* ===== ACTIVE JOBS SECTION ===== */}
-      {!loadingJobs && activeJobs.length > 0 && (
+      {/* ===== JOBS SECTION ===== */}
+      {!loadingJobs && (
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>Active Jobs ({activeJobs.length})</CardTitle>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <CardTitle>Jobs ({filteredJobs.length})</CardTitle>
+              {/* Status filter (ADR 0007): failed/stuck rows are the recent SAQ tail */}
+              <select
+                className="px-3 py-2 text-sm border border-input rounded-lg bg-background text-foreground"
+                value={jobStatusFilter}
+                onChange={(e) => setJobStatusFilter(e.target.value)}
+              >
+                <option value="all">All statuses</option>
+                <option value="active">Active</option>
+                <option value="queued">Queued</option>
+                <option value="failed">Failed</option>
+                <option value="aborted">Aborted</option>
+              </select>
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="py-2 px-3 text-left text-section-heading">Job</th>
-                    <th className="py-2 px-3 text-left text-section-heading">Status</th>
-                    <th className="py-2 px-3 text-left text-section-heading">Started</th>
-                    <th className="py-2 px-3 text-left text-section-heading">Key</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {activeJobs.map((job) => (
-                    <tr key={job.key} className="border-b border-border last:border-0">
-                      <td className="py-2 px-3 text-sm font-medium text-foreground">
-                        {job.function.replace(/_/g, " ")}
-                      </td>
-                      <td className="py-2 px-3">
-                        <span
-                          className={cn(
-                            "px-2 py-0.5 text-xs font-medium rounded-full",
-                            job.status === "active"
-                              ? "bg-warning/20 text-warning"
-                              : "bg-muted text-muted-foreground"
-                          )}
-                        >
-                          {job.status}
-                        </span>
-                      </td>
-                      <td className="py-2 px-3 text-caption">
-                        {job.started ? new Date(job.started).toLocaleTimeString() : "—"}
-                      </td>
-                      <td className="py-2 px-3 text-caption font-mono">{job.key.slice(0, 8)}...</td>
+            {filteredJobs.length === 0 ? (
+              <p className="text-caption py-4">No jobs with this status in SAQ retention (~10 min tail).</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="py-2 px-3 text-left text-section-heading">Job</th>
+                      <th className="py-2 px-3 text-left text-section-heading">Status</th>
+                      <th className="py-2 px-3 text-left text-section-heading">Attempts</th>
+                      <th className="py-2 px-3 text-left text-section-heading">Started</th>
+                      <th className="py-2 px-3 text-left text-section-heading">Key</th>
+                      <th className="py-2 px-3 text-left text-section-heading">Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {filteredJobs.map((job) => (
+                      <tr key={job.key} className="border-b border-border last:border-0">
+                        <td className="py-2 px-3 text-sm font-medium text-foreground">
+                          {job.function.replace(/_/g, " ")}
+                        </td>
+                        <td className="py-2 px-3">
+                          <span className={jobStatusBadge(job.status)}>{job.status}</span>
+                        </td>
+                        <td className="py-2 px-3 text-caption">{job.attempts}</td>
+                        <td className="py-2 px-3 text-caption">
+                          {job.started ? new Date(job.started).toLocaleTimeString() : "—"}
+                        </td>
+                        <td className="py-2 px-3 text-caption font-mono">{job.key.slice(0, 8)}...</td>
+                        <td className="py-2 px-3">
+                          <div className="flex gap-2">
+                            {(job.status === "failed" || job.status === "aborted") && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={busyJobKey === job.key}
+                                onClick={() => handleJobAction(job, "retry")}
+                              >
+                                Retry
+                              </Button>
+                            )}
+                            {(job.status === "active" ||
+                              job.status === "processing" ||
+                              job.status === "queued") && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={busyJobKey === job.key}
+                                onClick={() => handleJobAction(job, "abort")}
+                              >
+                                Abort
+                              </Button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

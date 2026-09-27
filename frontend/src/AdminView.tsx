@@ -396,6 +396,9 @@ export function AdminView({ onBack, onSystemDashboard, onBackupSettings }: { onB
                       Created
                     </th>
                     <th className="py-3 px-4 text-left text-section-heading">
+                      Last Sync
+                    </th>
+                    <th className="py-3 px-4 text-left text-section-heading">
                       Actions
                     </th>
                   </tr>
@@ -438,6 +441,11 @@ export function AdminView({ onBack, onSystemDashboard, onBackupSettings }: { onB
                       </td>
                       <td className="py-3 px-4 text-body-secondary">
                         {new Date(user.created_at).toLocaleDateString()}
+                      </td>
+                      <td className="py-3 px-4 text-body-secondary" title="Most recent import across integrations">
+                        {user.last_synced_at
+                          ? new Date(user.last_synced_at).toLocaleString()
+                          : "—"}
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex flex-wrap gap-2">

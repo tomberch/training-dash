@@ -200,6 +200,8 @@ export {
   triggerBackup,
   fetchWeatherBackfillStatus,
   triggerWeatherBackfill,
+  abortJob,
+  retryJob,
 } from "./admin";
 
 // Query DSL API
