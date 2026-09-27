@@ -93,11 +93,20 @@ class TestDescribesSameRoad:
         assert describes_same_road(polyline=encode(pts), other_polyline="") is False
 
     def test_corrupt_polyline_does_not_match(self):
+        """Polylines that decode to unrealistic paths (millions of metres) are rejected."""
         pts = straight_climb(46.900, 7.400, 0.045, 0.0)
+        # This decodes but produces garbage coordinates ~12,000 km apart
         assert (
             describes_same_road(polyline="not-a-valid-polyline!!!", other_polyline=encode(pts))
             is False
         )
+
+    def test_undecodable_polyline_does_not_match(self):
+        """Polylines that raise exceptions during decode are rejected."""
+        pts = straight_climb(46.900, 7.400, 0.045, 0.0)
+        # These cause IndexError in decode_polyline (incomplete byte sequences)
+        assert describes_same_road(polyline="x", other_polyline=encode(pts)) is False
+        assert describes_same_road(polyline="@@@", other_polyline=encode(pts)) is False
 
     def test_single_point_path_does_not_match(self):
         pts = straight_climb(46.900, 7.400, 0.045, 0.0)

@@ -386,6 +386,8 @@ SAME_SEGMENT_MIN_OVERLAP_PCT = 95.0
 SAME_ROAD_MIN_CONTAINMENT_PCT = 90.0
 SAME_ROAD_BUFFER_M = 35.0
 SAME_ROAD_RESAMPLE_SPACING_M = 15.0
+# Sanity check: reject paths longer than 500km as corrupt (no cycling segment is this long)
+SAME_ROAD_MAX_PATH_LENGTH_M = 500_000.0
 
 # Suggestion visibility: climbs are proposed after 3+ repeat rides
 # (CONTEXT.md — Segment Suggestion lifecycle)
@@ -524,6 +526,14 @@ def _path_containment_pct(
     return (covered / len(shorter)) * 100
 
 
+def _path_length_m(points: list[tuple[float, float]]) -> float:
+    """Compute total path length in metres."""
+    total = 0.0
+    for i in range(1, len(points)):
+        total += haversine_distance(points[i - 1][0], points[i - 1][1], points[i][0], points[i][1])
+    return total
+
+
 def describes_same_road(
     polyline: str,
     other_polyline: str,
@@ -553,6 +563,14 @@ def describes_same_road(
     except Exception:
         return False
     if len(points) < 2 or len(other_points) < 2:
+        return False
+
+    # Reject paths with unrealistic lengths (corrupt polylines often decode
+    # to coordinates millions of metres apart, causing O(n²) explosion in
+    # _path_containment_pct after resampling)
+    if _path_length_m(points) > SAME_ROAD_MAX_PATH_LENGTH_M:
+        return False
+    if _path_length_m(other_points) > SAME_ROAD_MAX_PATH_LENGTH_M:
         return False
 
     points = _resample_path(points, SAME_ROAD_RESAMPLE_SPACING_M)
