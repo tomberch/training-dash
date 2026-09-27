@@ -103,7 +103,7 @@ async def get_all_coefficients(
     all_coefs = await pacing_repo.list_for_user(current_user.id)
 
     # Get bike names
-    bikes = await bike_repo.list_for_user(current_user.id)
+    bikes = await bike_repo.get_by_user(current_user.id)
     bike_names = {b.id: b.name for b in bikes}
 
     user_default = None
@@ -157,7 +157,7 @@ async def get_effective_coefficients(
         )
 
     # Get bike names for display
-    bikes = await bike_repo.list_for_user(current_user.id)
+    bikes = await bike_repo.get_by_user(current_user.id)
     bike_names = {b.id: b.name for b in bikes}
 
     return _build_coefficients_response(coef, bike_names)

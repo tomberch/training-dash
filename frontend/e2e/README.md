@@ -47,7 +47,10 @@ e2e/
 │   ├── records.spec.ts
 │   ├── settings.spec.ts
 │   ├── upload.spec.ts
-│   └── admin.spec.ts
+│   ├── admin.spec.ts
+│   ├── gear.spec.ts
+│   ├── segments.spec.ts
+│   └── suggestions.spec.ts
 ├── api/                # Backend verification
 │   ├── pagination.spec.ts
 │   └── fitness-calculations.spec.ts
