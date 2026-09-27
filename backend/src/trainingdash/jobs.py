@@ -9,8 +9,40 @@ base64-encoded before enqueueing.
 """
 
 import base64
+import logging
 
 from trainingdash.queue import get_queue, queue_available
+
+logger = logging.getLogger(__name__)
+
+
+class EnqueueError(Exception):
+    """Raised when enqueueing a job fails for a real reason (queue unreachable, serialization).
+
+    Distinct from the ``None`` return, which is the dev/no-queue signal
+    (``queue_available()`` false — never fires in production).
+    See ADR 0006 (decision 3) for the call-site policy.
+    """
+
+
+# Default retry policy for regular jobs (ADR 0006, decision 1).
+DEFAULT_RETRIES = 3
+DEFAULT_RETRY_DELAY = 30
+DEFAULT_RETRY_BACKOFF = 300
+
+
+async def _enqueue(queue, function: str, **kwargs):
+    """Enqueue with the default retry policy; wrap failures in EnqueueError.
+
+    Awaits SAQ's async enqueue. Returns the SAQ job or raises EnqueueError.
+    """
+    kwargs.setdefault("retries", DEFAULT_RETRIES)
+    kwargs.setdefault("retry_delay", DEFAULT_RETRY_DELAY)
+    kwargs.setdefault("retry_backoff", DEFAULT_RETRY_BACKOFF)
+    try:
+        return await queue.enqueue(function, **kwargs)
+    except Exception as exc:
+        raise EnqueueError(f"Failed to enqueue {function}: {exc}") from exc
 
 
 async def enqueue_ingest_job(user_id: int, fit_bytes: bytes, source: str, source_ref: str) -> str | None:
@@ -20,10 +52,15 @@ async def enqueue_ingest_job(user_id: int, fit_bytes: bytes, source: str, source
     queue = await get_queue()
     # Base64 encode bytes for JSON serialization
     fit_bytes_b64 = base64.b64encode(fit_bytes).decode("ascii")
-    # Ingest needs longer timeout than SAQ default (10s) due to geocoding rate limits
-    # (1 req/sec) and potential network latency
-    job = await queue.enqueue(
-        "ingest_job", user_id=user_id, fit_bytes_b64=fit_bytes_b64, source=source, source_ref=source_ref, timeout=60
+    # Large FIT files + 1 req/s geocoding rate limits (ADR 0006, decision 4)
+    job = await _enqueue(
+        queue,
+        "ingest_job",
+        user_id=user_id,
+        fit_bytes_b64=fit_bytes_b64,
+        source=source,
+        source_ref=source_ref,
+        timeout=300,
     )
     return job.key if job else None
 
@@ -57,7 +94,7 @@ async def get_job_status(job_key: str) -> dict:
     }
 
 
-async def enqueue_import_xert_job(user_id: int, scheduled: float | None = None) -> str | None:
+async def enqueue_import_xert_job(user_id: int, scheduled: float | None = None, key: str | None = None) -> str | None:
     """Enqueue a Xert import job for a user. Returns job key or None if queue not available.
 
     Pass ``scheduled`` (unix seconds) to defer the job.
@@ -70,11 +107,13 @@ async def enqueue_import_xert_job(user_id: int, scheduled: float | None = None) 
     kwargs = {"user_id": user_id, "timeout": 300}
     if scheduled is not None:
         kwargs["scheduled"] = scheduled
-    job = await queue.enqueue("import_xert_job", **kwargs)
+    if key is not None:
+        kwargs["key"] = key
+    job = await _enqueue(queue, "import_xert_job", **kwargs)
     return job.key if job else None
 
 
-async def enqueue_import_garmin_job(user_id: int, scheduled: float | None = None) -> str | None:
+async def enqueue_import_garmin_job(user_id: int, scheduled: float | None = None, key: str | None = None) -> str | None:
     """Enqueue a Garmin import job for a user. Returns job key or None if queue not available.
 
     Pass ``scheduled`` (unix seconds) to defer the job.
@@ -87,7 +126,9 @@ async def enqueue_import_garmin_job(user_id: int, scheduled: float | None = None
     kwargs = {"user_id": user_id, "timeout": 300}
     if scheduled is not None:
         kwargs["scheduled"] = scheduled
-    job = await queue.enqueue("import_garmin_job", **kwargs)
+    if key is not None:
+        kwargs["key"] = key
+    job = await _enqueue(queue, "import_garmin_job", **kwargs)
     return job.key if job else None
 
 
@@ -101,7 +142,7 @@ async def enqueue_recalculate_after_delete_job(user_id: int) -> str | None:
     if not queue_available():
         return None
     queue = await get_queue()
-    job = await queue.enqueue("recalculate_after_delete_job", user_id=user_id)
+    job = await _enqueue(queue, "recalculate_after_delete_job", user_id=user_id)
     return job.key if job else None
 
 
@@ -118,7 +159,7 @@ async def enqueue_recalculate_metrics_job(user_id: int) -> str | None:
         return None
     queue = await get_queue()
     # Recalculation may process many activities; give it longer timeout
-    job = await queue.enqueue("recalculate_metrics_job", user_id=user_id, timeout=300)
+    job = await _enqueue(queue, "recalculate_metrics_job", user_id=user_id, timeout=300)
     return job.key if job else None
 
 
@@ -127,7 +168,8 @@ async def enqueue_match_route_job(activity_id: str, user_id: int) -> str | None:
     if not queue_available():
         return None
     queue = await get_queue()
-    job = await queue.enqueue("match_route_job", activity_id=activity_id, user_id=user_id)
+    # Explicit timeout — SAQ default is 10s, too tight for Hausdorff clustering
+    job = await _enqueue(queue, "match_route_job", activity_id=activity_id, user_id=user_id, timeout=120)
     return job.key if job else None
 
 
@@ -143,7 +185,8 @@ async def enqueue_segment_process_job(activity_id: str, user_id: int) -> str | N
     if not queue_available():
         return None
     queue = await get_queue()
-    job = await queue.enqueue("segment_process_job", activity_id=activity_id, user_id=user_id)
+    # Explicit timeout — SAQ default is 10s (ADR 0006, decision 4)
+    job = await _enqueue(queue, "segment_process_job", activity_id=activity_id, user_id=user_id, timeout=120)
     return job.key if job else None
 
 
@@ -160,26 +203,10 @@ async def enqueue_retroactive_match_job(segment_id: str) -> str | None:
         return None
     queue = await get_queue()
     # Retroactive matching can process many activities; give it longer timeout
-    job = await queue.enqueue("retroactive_match_job", segment_id=segment_id, timeout=600)
-    return job.key if job else None
-
-
-async def enqueue_fetch_weather_job(user_id: int, activity_id: str | None = None) -> str | None:
-    """
-    Enqueue a weather fetch job for activities pending weather data.
-
-    If activity_id is provided, fetches weather for that single activity.
-    Otherwise, processes pending activities for the user.
-
-    Returns job key or None if queue is not available.
-    """
-    if not queue_available():
-        return None
-    queue = await get_queue()
-    kwargs = {"user_id": user_id, "timeout": 120}
-    if activity_id:
-        kwargs["activity_id"] = activity_id
-    job = await queue.enqueue("fetch_weather_job", **kwargs)
+    # group_key cap: at most one retroactive match active (ADR 0006, decision 4)
+    job = await _enqueue(
+        queue, "retroactive_match_job", segment_id=segment_id, timeout=600, group_key="retroactive_match"
+    )
     return job.key if job else None
 
 
@@ -202,11 +229,14 @@ async def enqueue_batch_weather_job(user_id: int, throttle_seconds: float = 1.0)
     queue = await get_queue()
     # Batch weather can take a long time for many activities
     # 1000 activities × 3 hours avg × 1s throttle = ~50 minutes
-    job = await queue.enqueue(
+    # group_key cap: at most one batch weather active (ADR 0006, decision 4)
+    job = await _enqueue(
+        queue,
         "batch_weather_job",
         user_id=user_id,
         throttle_seconds=throttle_seconds,
         timeout=7200,  # 2 hour timeout
+        group_key="batch_weather",
     )
     return job.key if job else None
 
@@ -225,5 +255,6 @@ async def enqueue_backup_job() -> str | None:
         return None
     queue = await get_queue()
     # Backups can be slow depending on data size; give generous timeout
-    job = await queue.enqueue("backup_job", timeout=1800)
+    # group_key cap + retries=1: a swept backup is never auto-retried (ADR 0006, decisions 2+4)
+    job = await _enqueue(queue, "backup_job", timeout=1800, group_key="backup", retries=1)
     return job.key if job else None

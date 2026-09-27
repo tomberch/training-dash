@@ -234,6 +234,10 @@ class TestEnqueueFunctions:
             "segment_process_job",
             activity_id=activity_id,
             user_id=user_id,
+            timeout=120,
+            retries=3,
+            retry_delay=30,
+            retry_backoff=300,
         )
         assert result == "job-key-abc"
 
@@ -267,6 +271,10 @@ class TestEnqueueFunctions:
             "retroactive_match_job",
             segment_id=segment_id,
             timeout=600,
+            group_key="retroactive_match",
+            retries=3,
+            retry_delay=30,
+            retry_backoff=300,
         )
         assert result == "job-key-xyz"
 
