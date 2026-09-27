@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy import delete, func, select, text, update
 
 from trainingdash.auth import AdminUser, DbSession, hash_password
+from trainingdash.routers.datetime_utils import utc_str
 from trainingdash.crypto import EncryptionError, encrypt
 from trainingdash.dependencies import (
     EventRepoD,
@@ -47,10 +48,39 @@ async def _get_user_or_404(user_repo: UserRepoD, user_id: int) -> User:
 
 
 @router.get("/users")
-async def admin_list_users(user_repo: UserRepoD, admin: AdminUser):
-    """List all users (admin only)."""
+async def admin_list_users(user_repo: UserRepoD, admin: AdminUser, db: DbSession):
+    """List all users (admin only), with per-user last-sync status (ADR 0007)."""
+    from datetime import datetime
+
+    from sqlalchemy import func, select
+
+    from trainingdash.repositories.postgres.models import GarminCredentials, XertCredentials
+
     users = await user_repo.list_all()
-    return [user_summary(u) for u in users]
+
+    # Most recent sync across both providers, keyed by user (ADR 0007 read surface)
+    xert_rows = (await db.execute(
+        select(XertCredentials.user_id, func.max(XertCredentials.last_synced_at)).group_by(XertCredentials.user_id)
+    )).all()
+    garmin_rows = (await db.execute(
+        select(GarminCredentials.user_id, func.max(GarminCredentials.last_synced_at)).group_by(GarminCredentials.user_id)
+    )).all()
+
+    last_sync: dict[int, datetime] = {}
+    for user_id, ts in xert_rows:
+        if ts:
+            last_sync[user_id] = ts
+    for user_id, ts in garmin_rows:
+        if ts and (last_sync.get(user_id) is None or ts > last_sync[user_id]):
+            last_sync[user_id] = ts
+
+    return [
+        {
+            **user_summary(u),
+            "last_synced_at": utc_str(last_sync.get(u.id)) if last_sync.get(u.id) else None,
+        }
+        for u in users
+    ]
 
 
 class CreateUserRequest(BaseModel):
