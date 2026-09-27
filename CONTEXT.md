@@ -1,5 +1,45 @@
 # TrainingDash — Domain Glossary
 
+## Swept Job
+
+A job that SAQ's built-in sweeper killed and recovered after its worker became unresponsive (crash or hang) — detected via stale `timeout` or `heartbeat`. Swept jobs are retried automatically if attempts remain, except backups. The retry row's error reads `swept`.
+_Avoid_: orphaned job, zombie job
+
+## Stuck Job
+
+A job whose execution has stopped making progress: past its `timeout`, or past its `heartbeat` without a refresh. Detected by SAQ's sweeper; distinct from a *failed* job (which raised an error on its own).
+_Avoid_: hung job, dead job
+
+## Heartbeat
+
+The freshness signal a long-running job must renew (`job.update()`) to prove it is alive. Long jobs carry one; a stale heartbeat marks the job stuck.
+_Avoid_: liveness ping, healthcheck (container-level liveness uses `saq --check`)
+
+## Dead Letter
+
+The durable event written when a job exhausts its attempts. SAQ TTL-deletes terminal job rows, so the `job.failed` event (with name, key, args, attempts, error) is the permanent failure record.
+_Avoid_: dead-letter queue (we keep no separate queue)
+
+## Strand
+
+An app-level status row left in a non-terminal state (`running`/`pending`) because its worker died — e.g. a `RecalculationJob` or `BackupHistory` row. Fixed by the strand-recovery cron, not by SAQ.
+_Avoid_: orphan, stuck row
+
+## EnqueueError
+
+The single typed error raised by every `enqueue_*` helper when enqueueing actually fails (queue unreachable, serialization). Callers handle it per the three-class policy: 503 (API), event + notification (internal chains), or `mark_failed` (recalculation paths). `None` from a helper is not an error — it is the dev/no-queue signal.
+_Avoid_: queue error, job error
+
+## Hour-Bucketed Key
+
+The SAQ idempotency key given to scheduler-enqueued import/backup jobs (`import:xert:{user_id}:{YYYY-MM-DDTHH}`), making a retried scheduler tick dedupe at enqueue time. Manual triggers deliberately omit the key so "sync now" always fires.
+_Avoid_: dedupe key (SAQ-level uniqueness, but the hour bucket is our convention)
+
+## Watermark
+
+The `last_synced_at` timestamp on integration credentials from which each import derives its date range. It makes missed cron ticks self-healing: the next healthy tick imports the missed window automatically.
+_Avoid_: checkpoint (that word is reserved for retroactive segment matching)
+
 ## Nuke
 
 An admin-only destructive action that permanently deletes a user's data. Three variants exist:
@@ -57,7 +97,7 @@ A single data point within an Activity — one row per timestamp with lat/lon, H
 
 A background job that recomputes training metrics (NP, IF, TSS, W'bal, zone times) for all of a user's activities that have power data. One row per user — upserted on each run. Triggered automatically when a user saves a new Threshold, and manually via Settings → Thresholds → Recalculate.
 
-Statuses: **pending** (enqueued, not yet started) → **running** (in progress) → **completed** (finished, `activities_updated` count recorded) | **failed** (`error_message` recorded).
+Statuses: **pending** (enqueued, not yet started) → **running** (in progress) → **completed** (finished, `activities_updated` count recorded) | **failed** (`error_message` recorded). A row stuck in `running` or `pending` is a **Strand**; the strand-recovery cron marks it failed. Enqueue failure is marked failed immediately (per ADR 0006).
 
 ## Route
 
