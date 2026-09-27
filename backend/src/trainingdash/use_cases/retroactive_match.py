@@ -80,6 +80,7 @@ class RetroactiveMatch:
         db: AsyncSession,
         segment_repo: SegmentRepo,
         effort_repo: SegmentEffortRepo,
+        heartbeat=None,
     ) -> None:
         """
         Initialize the use case with dependencies.
@@ -88,10 +89,13 @@ class RetroactiveMatch:
             db: Database session for queries and batched commits
             segment_repo: Repository for segment operations
             effort_repo: Repository for effort operations
+            heartbeat: Optional SAQ job object whose update() refreshes the
+                job's heartbeat between batches (ADR 0006, decision 2)
         """
         self._db = db
         self._segment_repo = segment_repo
         self._effort_repo = effort_repo
+        self._heartbeat_job = heartbeat
 
     async def execute(self, segment_id: UUID, batch_size: int = DEFAULT_BATCH_SIZE) -> RetroactiveMatchResult:
         """
@@ -170,7 +174,9 @@ class RetroactiveMatch:
 
                     for match in matches:
                         # Check if we already have an effort for this activity/segment
-                        existing = await self._check_existing_effort(segment_id, activity.id, match.start_index)
+                        existing = await self._check_existing_effort(
+                            segment_id, activity.id, match.start_index, match.end_index
+                        )
                         if existing:
                             continue  # Don't create duplicates
 
@@ -191,6 +197,13 @@ class RetroactiveMatch:
                 await self._db.commit()
                 await self._set_checkpoint(segment_id, after_id)
                 logger.debug(f"Processed batch: {len(activities)} activities, {batch_efforts} efforts created")
+
+                # Refresh the job heartbeat between batches so the sweeper
+                # doesn't sweep a live multi-minute scan (ADR 0006, decision 2)
+                if self._heartbeat_job is not None:
+                    from trainingdash.jobs import touch_heartbeat
+
+                    await touch_heartbeat({"job": self._heartbeat_job})
 
             # Step 4: Update denormalized counts
             await self._update_segment_counts(segment_id)
@@ -292,18 +305,46 @@ class RetroactiveMatch:
             distance_m=segment.distance_m,
         )
 
-    async def _check_existing_effort(self, segment_id: UUID, activity_id: UUID, start_index: int) -> bool:
-        """Check if an effort already exists for this segment/activity/start_index."""
+    async def _check_existing_effort(
+        self, segment_id: UUID, activity_id: UUID, start_index: int, end_index: int
+    ) -> bool:
+        """Check if an overlapping effort already exists for this segment/activity.
+
+        Two efforts overlap significantly if their index ranges share more than 50%
+        of the smaller range. This prevents duplicate efforts being created when
+        the matching algorithm finds slightly different start points on re-runs.
+        """
         result = await self._db.execute(
-            select(SegmentEffort.id)
-            .where(
+            select(SegmentEffort.start_index, SegmentEffort.end_index).where(
                 SegmentEffort.segment_id == segment_id,
                 SegmentEffort.activity_id == activity_id,
-                SegmentEffort.start_index == start_index,
             )
-            .limit(1)
         )
-        return result.scalar_one_or_none() is not None
+        existing_efforts = result.all()
+
+        for existing_start, existing_end in existing_efforts:
+            if self._ranges_overlap_significantly(
+                start_index, end_index, existing_start, existing_end
+            ):
+                return True
+        return False
+
+    def _ranges_overlap_significantly(
+        self, start1: int, end1: int, start2: int, end2: int, threshold: float = 0.5
+    ) -> bool:
+        """Check if two index ranges overlap by more than threshold of the smaller range."""
+        overlap_start = max(start1, start2)
+        overlap_end = min(end1, end2)
+
+        if overlap_start > overlap_end:
+            return False
+
+        overlap_size = overlap_end - overlap_start + 1
+        size1 = end1 - start1 + 1
+        size2 = end2 - start2 + 1
+        smaller_size = min(size1, size2)
+
+        return (overlap_size / smaller_size) >= threshold
 
     async def _create_effort(
         self,

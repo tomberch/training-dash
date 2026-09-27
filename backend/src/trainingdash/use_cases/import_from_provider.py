@@ -59,14 +59,19 @@ class ImportFromProvider:
         result = await use_case.execute(user_id=1, provider=XertImportProvider())
     """
 
-    def __init__(self, db: AsyncSession) -> None:
+    def __init__(self, db: AsyncSession, heartbeat=None) -> None:
         """
         Initialize the use case with dependencies.
 
         Args:
             db: Database session for persistence
+            heartbeat: Optional SAQ job object whose ``update()`` refreshes
+                the job's heartbeat. Touched once per ingested activity so
+                the sweeper can tell a live long import from a crashed one
+                (ADR 0006, decision 2).
         """
         self._db = db
+        self._heartbeat_job = heartbeat
         self._event_repo = PostgresEventRepo(db)
 
     async def execute(
@@ -247,6 +252,12 @@ class ImportFromProvider:
 
                     if result is not None:
                         imported += 1
+                        # Refresh the job heartbeat between activities so the
+                        # sweeper doesn't sweep a live long import (ADR 0006, decision 2)
+                        if self._heartbeat_job is not None:
+                            from trainingdash.jobs import touch_heartbeat
+
+                            await touch_heartbeat({"job": self._heartbeat_job})
                         logger.info(
                             "%s: Created activity %s from %s for user %s",
                             log_prefix,

@@ -65,8 +65,11 @@ class FetchActivityWeather:
         result = await use_case.execute_single(activity_id=uuid)
     """
 
-    def __init__(self, db: AsyncSession) -> None:
+    def __init__(self, db: AsyncSession, heartbeat=None) -> None:
         self._db = db
+        # Optional SAQ job whose update() refreshes the heartbeat between
+        # activities (ADR 0006, decision 2) — batch runs can last hours.
+        self._heartbeat_job = heartbeat
 
     async def execute(self, user_id: int, limit: int = 10) -> FetchWeatherResult:
         """
@@ -171,6 +174,13 @@ class FetchActivityWeather:
                     result.weather_fetched += 1
                     if await self._run_aero_estimation(activity):
                         result.aero_estimated += 1
+
+                # Refresh the job heartbeat between activities so the sweeper
+                # doesn't sweep a live multi-hour batch (ADR 0006, decision 2)
+                if self._heartbeat_job is not None:
+                    from trainingdash.jobs import touch_heartbeat
+
+                    await touch_heartbeat({"job": self._heartbeat_job})
 
                 # Commit periodically to avoid long transactions
                 if (i + 1) % 10 == 0:

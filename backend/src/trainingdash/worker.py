@@ -279,7 +279,7 @@ async def retroactive_match_job(ctx: dict, *, segment_id: str) -> dict:
         segment_repo = PostgresSegmentRepo(db)
         effort_repo = PostgresSegmentEffortRepo(db)
 
-        use_case = RetroactiveMatch(db, segment_repo, effort_repo)
+        use_case = RetroactiveMatch(db, segment_repo, effort_repo, heartbeat=ctx.get("job"))
         result = await use_case.execute(UUID(segment_id))
 
         return {
@@ -298,13 +298,17 @@ async def import_xert_job(ctx: dict, *, user_id: int):
     Uses the ImportFromProvider use case with XertImportProvider.
     Activities are ingested via session_data (not FIT files) and
     routed through the full metric pipeline.
+
+    The heartbeat is refreshed by the use case's activity loop
+    (via the ctx["job"] heartbeat toucher) so the sweeper can tell
+    a live long import from a crashed one (ADR 0006, decision 2).
     """
     from trainingdash.import_providers import XertImportProvider
     from trainingdash.use_cases import ImportFromProvider
 
     async with worker_db_session(ctx) as db:
         provider = XertImportProvider()
-        use_case = ImportFromProvider(db)
+        use_case = ImportFromProvider(db, heartbeat=ctx.get("job"))
         result = await use_case.execute(user_id, provider)
 
         return {
@@ -403,7 +407,7 @@ async def batch_weather_job(ctx: dict, *, user_id: int, throttle_seconds: float 
     from trainingdash.use_cases.fetch_activity_weather import FetchActivityWeather
 
     async with worker_db_session(ctx) as db:
-        use_case = FetchActivityWeather(db)
+        use_case = FetchActivityWeather(db, heartbeat=ctx.get("job"))
         result = await use_case.execute_batch(user_id, throttle_seconds=throttle_seconds)
 
         return {
@@ -624,6 +628,7 @@ async def backup_job(ctx: dict, trigger_type: str = "manual") -> dict:
         use_case = CreateBackup(
             backup_repo=repo,
             database_url=database_url,
+            heartbeat=ctx.get("job"),
         )
         result = await use_case.execute(trigger_type=trigger_type)
 

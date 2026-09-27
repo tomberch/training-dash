@@ -91,6 +91,7 @@ class CreateBackup:
         backup_repo: BackupRepo,
         database_url: str,
         uploads_dir: Path | None = None,
+        heartbeat=None,
     ) -> None:
         """
         Initialize the use case with dependencies.
@@ -99,10 +100,24 @@ class CreateBackup:
             backup_repo: Repository for backup config and history
             database_url: PostgreSQL connection URL
             uploads_dir: Path to uploads directory (defaults to TRAININGDASH_UPLOADS_DIR)
+            heartbeat: Optional SAQ job object whose update() refreshes the job's
+                heartbeat between backup phases (ADR 0006, decision 2)
         """
         self._backup_repo = backup_repo
         self._database_url = database_url
         self._uploads_dir = uploads_dir or Path(os.environ.get("TRAININGDASH_UPLOADS_DIR", "/app/uploads"))
+        self._heartbeat_job = heartbeat
+
+    async def _touch(self) -> None:
+        """Refresh the job heartbeat between backup phases (ADR 0006, decision 2)."""
+        if self._heartbeat_job is None:
+            return
+        try:
+            from trainingdash.jobs import touch_heartbeat
+
+            await touch_heartbeat({"job": self._heartbeat_job})
+        except Exception:
+            logger.exception("Heartbeat touch failed during backup")
 
     async def execute(
         self,
@@ -169,6 +184,7 @@ class CreateBackup:
             # Backup database
             db_result = await self._backup_database(config.repository_path, password)
             logger.info("Database backup completed: snapshot=%s", db_result.get("snapshot_id"))
+            await self._touch()
 
             # Create and backup metadata JSON
             metadata_result = await self._backup_metadata(
@@ -184,6 +200,7 @@ class CreateBackup:
             if self._uploads_dir.exists():
                 uploads_result = await self._backup_uploads(config.repository_path, password)
                 logger.info("Uploads backup completed: snapshot=%s", uploads_result.get("snapshot_id"))
+                await self._touch()
 
                 # Use uploads result for stats (it's the larger backup usually)
                 snapshot_id = uploads_result.get("snapshot_id")

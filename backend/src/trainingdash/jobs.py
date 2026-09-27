@@ -45,6 +45,25 @@ async def _enqueue(queue, function: str, **kwargs):
         raise EnqueueError(f"Failed to enqueue {function}: {exc}") from exc
 
 
+async def touch_heartbeat(ctx: dict) -> None:
+    """Refresh the current job's heartbeat (ADR 0006, decision 2).
+
+    Long jobs call this between steps so SAQ's sweeper can tell a live job
+    from a crashed one. Never raises: a heartbeat refresh failure must not
+    kill a running job.
+    """
+    job = ctx.get("job") if isinstance(ctx, dict) else None
+    if job is None:
+        return
+    update = getattr(job, "update", None)
+    if update is None:
+        return
+    try:
+        await update()
+    except Exception:
+        logger.exception("Heartbeat refresh failed for job %s", getattr(job, "key", "?"))
+
+
 async def enqueue_ingest_job(user_id: int, fit_bytes: bytes, source: str, source_ref: str) -> str | None:
     """Enqueue an ingest job if queue is available. Returns job key or None if sync fallback needed."""
     if not queue_available():
@@ -61,6 +80,7 @@ async def enqueue_ingest_job(user_id: int, fit_bytes: bytes, source: str, source
         source=source,
         source_ref=source_ref,
         timeout=300,
+        heartbeat=120,
     )
     return job.key if job else None
 
@@ -109,6 +129,7 @@ async def enqueue_import_xert_job(user_id: int, scheduled: float | None = None, 
         kwargs["scheduled"] = scheduled
     if key is not None:
         kwargs["key"] = key
+    kwargs.setdefault("heartbeat", 120)
     job = await _enqueue(queue, "import_xert_job", **kwargs)
     return job.key if job else None
 
@@ -128,6 +149,7 @@ async def enqueue_import_garmin_job(user_id: int, scheduled: float | None = None
         kwargs["scheduled"] = scheduled
     if key is not None:
         kwargs["key"] = key
+    kwargs.setdefault("heartbeat", 120)
     job = await _enqueue(queue, "import_garmin_job", **kwargs)
     return job.key if job else None
 
@@ -169,7 +191,7 @@ async def enqueue_match_route_job(activity_id: str, user_id: int) -> str | None:
         return None
     queue = await get_queue()
     # Explicit timeout — SAQ default is 10s, too tight for Hausdorff clustering
-    job = await _enqueue(queue, "match_route_job", activity_id=activity_id, user_id=user_id, timeout=120)
+    job = await _enqueue(queue, "match_route_job", activity_id=activity_id, user_id=user_id, timeout=120, heartbeat=60)
     return job.key if job else None
 
 
@@ -186,7 +208,7 @@ async def enqueue_segment_process_job(activity_id: str, user_id: int) -> str | N
         return None
     queue = await get_queue()
     # Explicit timeout — SAQ default is 10s (ADR 0006, decision 4)
-    job = await _enqueue(queue, "segment_process_job", activity_id=activity_id, user_id=user_id, timeout=120)
+    job = await _enqueue(queue, "segment_process_job", activity_id=activity_id, user_id=user_id, timeout=120, heartbeat=60)
     return job.key if job else None
 
 
@@ -205,7 +227,12 @@ async def enqueue_retroactive_match_job(segment_id: str) -> str | None:
     # Retroactive matching can process many activities; give it longer timeout
     # group_key cap: at most one retroactive match active (ADR 0006, decision 4)
     job = await _enqueue(
-        queue, "retroactive_match_job", segment_id=segment_id, timeout=600, group_key="retroactive_match"
+        queue,
+        "retroactive_match_job",
+        segment_id=segment_id,
+        timeout=600,
+        group_key="retroactive_match",
+        heartbeat=120,
     )
     return job.key if job else None
 
@@ -237,6 +264,7 @@ async def enqueue_batch_weather_job(user_id: int, throttle_seconds: float = 1.0)
         throttle_seconds=throttle_seconds,
         timeout=7200,  # 2 hour timeout
         group_key="batch_weather",
+        heartbeat=120,
     )
     return job.key if job else None
 
@@ -256,5 +284,5 @@ async def enqueue_backup_job() -> str | None:
     queue = await get_queue()
     # Backups can be slow depending on data size; give generous timeout
     # group_key cap + retries=1: a swept backup is never auto-retried (ADR 0006, decisions 2+4)
-    job = await _enqueue(queue, "backup_job", timeout=1800, group_key="backup", retries=1)
+    job = await _enqueue(queue, "backup_job", timeout=1800, group_key="backup", retries=1, heartbeat=60)
     return job.key if job else None
