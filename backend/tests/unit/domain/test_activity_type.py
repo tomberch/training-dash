@@ -6,7 +6,6 @@ from trainingdash.domain.activity_type import (
     ACTIVITY_TYPES,
     CALIBRATION_ELIGIBLE_TYPES,
     detect_activity_type,
-    is_calibration_eligible,
     validate_activity_type,
 )
 
@@ -90,35 +89,6 @@ class TestDetectActivityType:
     def test_whitespace_handling(self):
         """Detection handles whitespace in values."""
         assert detect_activity_type(" cycling ", " virtual_activity ") == "virtual"
-
-
-class TestIsCalibrationEligible:
-    """Tests for is_calibration_eligible function."""
-
-    def test_outdoor_types_eligible(self):
-        """Outdoor activity types are eligible."""
-        assert is_calibration_eligible("road") is True
-        assert is_calibration_eligible("gravel") is True
-        assert is_calibration_eligible("mtb") is True
-        assert is_calibration_eligible("commute") is True
-
-    def test_indoor_types_not_eligible(self):
-        """Indoor activity types are not eligible."""
-        assert is_calibration_eligible("virtual") is False
-        assert is_calibration_eligible("indoor") is False
-
-    def test_other_not_eligible(self):
-        """Other/unknown types are not eligible."""
-        assert is_calibration_eligible("other") is False
-
-    def test_null_not_eligible(self):
-        """Null (unclassified) is not eligible."""
-        assert is_calibration_eligible(None) is False
-
-    def test_invalid_type_not_eligible(self):
-        """Invalid types are not eligible."""
-        assert is_calibration_eligible("invalid") is False
-        assert is_calibration_eligible("") is False
 
 
 class TestActivityTypeConstants:

@@ -69,23 +69,6 @@ def detect_activity_type(sport: str | None, sub_sport: str | None) -> str:
     return "road"
 
 
-def is_calibration_eligible(activity_type: str | None) -> bool:
-    """Check if an activity type is eligible for CdA/Crr calibration.
-
-    Only explicitly outdoor types are eligible. Null/unknown types are
-    excluded to avoid corrupting calibration data with indoor rides.
-
-    Args:
-        activity_type: The activity type, or None for unclassified.
-
-    Returns:
-        True if the activity type is eligible for calibration.
-    """
-    if activity_type is None:
-        return False
-    return activity_type in CALIBRATION_ELIGIBLE_TYPES
-
-
 def validate_activity_type(activity_type: str) -> str | None:
     """Validate and normalize an activity type value.
 
