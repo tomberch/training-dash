@@ -11,12 +11,13 @@ from uuid import UUID
 from geoalchemy2 import WKTElement
 
 from trainingdash.domain.climb_detection import categorize_climb
-from trainingdash.domain.segment_geometry import (
-    compute_segment_geometry,
-    haversine_distance,
-)
-from trainingdash.domain.segment_matching import compute_path_overlap
+from trainingdash.domain.segment_geometry import compute_segment_geometry
+from trainingdash.domain.segment_matching import find_duplicate_segment
 from trainingdash.repositories.postgres.models import Segment
+from trainingdash.repositories.postgres.segment_repo import (
+    segment_to_dedup,
+    segment_to_geometry,
+)
 from trainingdash.repositories.protocols import (
     ActivityRepo,
     RecordRepo,
@@ -54,28 +55,6 @@ def classify_segment(distance_m: float, avg_grade_pct: float) -> tuple[str, str 
     return ("custom", None)
 
 
-def _extract_point_coords(point) -> tuple[float, float]:
-    """
-    Extract lat/lon from a geometry point.
-
-    Handles both:
-    - GeoAlchemy2 WKBElement (requires to_shape)
-    - Fake geometry objects with .x/.y attributes (for testing)
-
-    Returns:
-        Tuple of (latitude, longitude)
-    """
-    # Check if it's a fake geometry with direct x/y attributes
-    if hasattr(point, "x") and hasattr(point, "y") and not hasattr(point, "data"):
-        return (point.y, point.x)
-
-    # Real PostGIS geometry - use to_shape
-    from geoalchemy2.shape import to_shape
-
-    shape = to_shape(point)
-    return (shape.y, shape.x)
-
-
 @dataclass
 class ApproveResult:
     """Result of an approve suggestion operation."""
@@ -99,11 +78,6 @@ class ApproveSuggestion:
     6. Delete the suggestion row
     7. Return approved segment (caller enqueues retroactive_match_job)
     """
-
-    # Duplicate detection thresholds (from ticket #499 / #473)
-    START_TOLERANCE_M = 25.0
-    END_TOLERANCE_M = 25.0
-    MIN_OVERLAP_PCT = 95.0
 
     def __init__(
         self,
@@ -344,10 +318,7 @@ class ApproveSuggestion:
         """
         Check if an approved segment duplicates the given segment.
 
-        Duplicate criteria (from ticket #473):
-        - Start point within 25m
-        - End point within 25m
-        - 95% path overlap
+        Uses find_duplicate_segment with mode='strict' (25m endpoints + 95% overlap).
 
         Args:
             segment: The segment to check for duplicates
@@ -358,59 +329,22 @@ class ApproveSuggestion:
         # Get all approved segments (in production, this would use spatial queries)
         approved = await self._segment_repo.list_approved(limit=1000)
 
-        # Extract segment start/end coordinates
-        seg_start_lat, seg_start_lon = _extract_point_coords(segment.start_point)
-        seg_end_lat, seg_end_lon = _extract_point_coords(segment.end_point)
+        # Filter out the segment itself (shouldn't happen, but be safe)
+        approved = [c for c in approved if c.id != segment.id]
 
-        for candidate in approved:
-            # Skip same segment (shouldn't happen, but be safe)
-            if candidate.id == segment.id:
-                continue
+        if not approved:
+            return None
 
-            # Extract candidate coordinates
-            cand_start_lat, cand_start_lon = _extract_point_coords(candidate.start_point)
-            cand_end_lat, cand_end_lon = _extract_point_coords(candidate.end_point)
+        # Convert the segment being approved to a SegmentGeometry
+        candidate_geometry = segment_to_geometry(segment)
 
-            # Check start distance
-            start_dist = haversine_distance(
-                seg_start_lat,
-                seg_start_lon,
-                cand_start_lat,
-                cand_start_lon,
-            )
-            if start_dist > self.START_TOLERANCE_M:
-                continue
+        # Convert approved segments to dedup format
+        existing_for_dedup = [segment_to_dedup(c) for c in approved]
 
-            # Check end distance
-            end_dist = haversine_distance(
-                seg_end_lat,
-                seg_end_lon,
-                cand_end_lat,
-                cand_end_lon,
-            )
-            if end_dist > self.END_TOLERANCE_M:
-                continue
+        # Use domain function for duplicate detection
+        match = find_duplicate_segment(candidate_geometry, existing_for_dedup, mode="strict")
+        if match is None:
+            return None
 
-            # Check path overlap
-            # We need to convert segment polyline to fake "activity records" for overlap check
-            from trainingdash.domain.polyline import decode_polyline
-
-            segment_points = decode_polyline(segment.polyline)
-            if not segment_points:
-                continue
-
-            # Build fake records from segment points
-            fake_records = [{"lat": lat, "lon": lon} for lat, lon in segment_points]
-
-            overlap = compute_path_overlap(
-                activity_records=fake_records,
-                start_index=0,
-                end_index=len(fake_records) - 1,
-                segment_polyline=candidate.polyline,
-                buffer_m=35,  # Standard buffer for matching
-            )
-
-            if overlap >= self.MIN_OVERLAP_PCT:
-                return candidate
-
-        return None
+        # Return the full Segment ORM model
+        return next((c for c in approved if c.id == match.id), None)

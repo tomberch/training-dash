@@ -15,7 +15,9 @@ sub-second matching for segments with 5000 points against activities with 20000 
 """
 
 import math
+from collections.abc import Iterable
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Literal
 from uuid import UUID
 
 import numpy as np
@@ -24,15 +26,20 @@ from shapely import LineString, contains_xy, prepare
 from trainingdash.domain.polyline import decode_polyline
 from trainingdash.domain.segment_geometry import compute_bearing, haversine_distance
 
+if TYPE_CHECKING:
+    from trainingdash.domain.segment_geometry import SegmentGeometry
+
 __all__ = [
     "SAME_SEGMENT_ENDPOINT_TOLERANCE_M",
     "SAME_SEGMENT_MIN_OVERLAP_PCT",
     "SUGGESTION_VISIBILITY_THRESHOLD",
     "SegmentCandidate",
+    "SegmentForDedup",
     "SegmentMatch",
     "bearings_match",
     "compute_path_overlap",
     "describes_same_road",
+    "find_duplicate_segment",
     "is_same_segment",
     "is_suggestion_visible",
     "match_activity_to_segments",
@@ -80,6 +87,30 @@ class SegmentCandidate:
     end_lon: float
     direction_bearing: float
     distance_m: float
+
+
+@dataclass
+class SegmentForDedup:
+    """Minimal segment data needed for duplicate detection.
+
+    Used by find_duplicate_segment() to check a candidate geometry against
+    existing segments without requiring ORM model dependencies.
+
+    Attributes:
+        id: Segment UUID (returned if this segment is the duplicate)
+        start_lat: Latitude of segment start
+        start_lon: Longitude of segment start
+        end_lat: Latitude of segment end
+        end_lon: Longitude of segment end
+        polyline: Google-encoded polyline of segment path
+    """
+
+    id: UUID
+    start_lat: float
+    start_lon: float
+    end_lat: float
+    end_lon: float
+    polyline: str
 
 
 def bearings_match(bearing1: float, bearing2: float, tolerance: float = 30) -> bool:
@@ -392,6 +423,56 @@ SAME_ROAD_MAX_PATH_LENGTH_M = 500_000.0
 # Suggestion visibility: climbs are proposed after 3+ repeat rides
 # (CONTEXT.md — Segment Suggestion lifecycle)
 SUGGESTION_VISIBILITY_THRESHOLD = 3
+
+
+def find_duplicate_segment(
+    candidate: "SegmentGeometry",
+    existing: Iterable[SegmentForDedup],
+    mode: Literal["strict", "same_road"],
+) -> SegmentForDedup | None:
+    """
+    Find an existing segment that duplicates the candidate geometry.
+
+    This is the single entry point for all segment duplicate detection,
+    consolidating logic that was previously scattered across use cases
+    and repositories.
+
+    Args:
+        candidate: The geometry of the segment being created or approved.
+        existing: Iterable of existing segments to check against.
+        mode: Detection mode:
+            - "strict": Endpoints within 25m AND 95% path overlap.
+              Used for approval and manual creation (exact duplicate gate).
+            - "same_road": 90% containment of shorter path within 35m of longer.
+              Used for suggestion merging (tolerates boundary wobble).
+
+    Returns:
+        The first matching SegmentForDedup if a duplicate is found, None otherwise.
+    """
+    for segment in existing:
+        if mode == "strict":
+            is_dup = is_same_segment(
+                start_lat=candidate.start_lat,
+                start_lon=candidate.start_lon,
+                end_lat=candidate.end_lat,
+                end_lon=candidate.end_lon,
+                polyline=candidate.polyline,
+                other_start_lat=segment.start_lat,
+                other_start_lon=segment.start_lon,
+                other_end_lat=segment.end_lat,
+                other_end_lon=segment.end_lon,
+                other_polyline=segment.polyline,
+            )
+        else:  # mode == "same_road"
+            is_dup = describes_same_road(
+                polyline=candidate.polyline,
+                other_polyline=segment.polyline,
+            )
+
+        if is_dup:
+            return segment
+
+    return None
 
 
 def is_suggestion_visible(repetition_count: int, expires_at, now) -> bool:

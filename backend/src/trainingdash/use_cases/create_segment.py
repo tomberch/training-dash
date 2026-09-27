@@ -17,13 +17,11 @@ from uuid import UUID
 from geoalchemy2 import WKTElement
 
 from trainingdash.domain.climb_detection import categorize_climb
-from trainingdash.domain.segment_geometry import (
-    compute_segment_geometry,
-    haversine_distance,
-)
-from trainingdash.domain.segment_matching import compute_path_overlap
+from trainingdash.domain.segment_geometry import compute_segment_geometry
+from trainingdash.domain.segment_matching import find_duplicate_segment
 from trainingdash.jobs import enqueue_retroactive_match_job
 from trainingdash.repositories.postgres.models import Segment
+from trainingdash.repositories.postgres.segment_repo import segment_to_dedup
 from trainingdash.repositories.protocols import ActivityRepo, RecordRepo, SegmentRepo
 
 logger = logging.getLogger(__name__)
@@ -40,10 +38,6 @@ SPRINT_MIN_LENGTH_M = 150.0
 SPRINT_MAX_LENGTH_M = 600.0
 SPRINT_MAX_GRADE_PCT = 3.0
 SPRINT_MIN_GRADE_PCT = -3.0
-
-# Duplicate detection thresholds
-DUPLICATE_POINT_TOLERANCE_M = 25.0
-DUPLICATE_OVERLAP_PCT = 95.0
 
 
 @dataclass
@@ -197,14 +191,10 @@ class CreateSegment:
             avg_grade_pct=geometry.avg_grade_pct,
         )
 
-        # Check for duplicates
-        duplicate = await self._find_duplicate(
-            start_lat=geometry.start_lat,
-            start_lon=geometry.start_lon,
-            end_lat=geometry.end_lat,
-            end_lon=geometry.end_lon,
-            polyline=geometry.polyline,
-        )
+        # Check for duplicates against approved segments
+        approved_segments = await self._segment_repo.list_approved(limit=1000)
+        existing_for_dedup = [segment_to_dedup(s) for s in approved_segments]
+        duplicate = find_duplicate_segment(geometry, existing_for_dedup, mode="strict")
         if duplicate is not None:
             return CreateSegmentResult(
                 success=False,
@@ -283,105 +273,3 @@ class CreateSegment:
 
         # Default to custom
         return ("custom", None)
-
-    async def _find_duplicate(
-        self,
-        start_lat: float,
-        start_lon: float,
-        end_lat: float,
-        end_lon: float,
-        polyline: str,
-    ) -> Segment | None:
-        """
-        Check for existing segment that is a duplicate.
-
-        A segment is a duplicate if:
-        - Start point within 25m
-        - End point within 25m
-        - 95% path overlap
-
-        Returns:
-            The duplicate Segment if found, None otherwise.
-        """
-        # Get all approved segments (could optimize with spatial query)
-        candidates = await self._segment_repo.list_approved(limit=1000)
-
-        for candidate in candidates:
-            # Check start point distance
-            # Extract lat/lon from PostGIS Point (WKBElement)
-            # For fake repos, these might be simple tuples; for real repos, need extraction
-            candidate_start_lat, candidate_start_lon = self._extract_point_coords(candidate.start_point)
-            candidate_end_lat, candidate_end_lon = self._extract_point_coords(candidate.end_point)
-
-            if candidate_start_lat is None or candidate_end_lat is None:
-                continue
-
-            start_dist = haversine_distance(start_lat, start_lon, candidate_start_lat, candidate_start_lon)
-            if start_dist > DUPLICATE_POINT_TOLERANCE_M:
-                continue
-
-            # Check end point distance
-            end_dist = haversine_distance(end_lat, end_lon, candidate_end_lat, candidate_end_lon)
-            if end_dist > DUPLICATE_POINT_TOLERANCE_M:
-                continue
-
-            # Check path overlap
-            # Create synthetic activity records from candidate polyline for overlap calc
-            from trainingdash.domain.polyline import decode_polyline
-
-            candidate_points = decode_polyline(candidate.polyline)
-            if len(candidate_points) < 2:
-                continue
-
-            # Build fake records for the new segment
-            new_points = decode_polyline(polyline)
-            if len(new_points) < 2:
-                continue
-
-            fake_records = [{"lat": lat, "lon": lon} for lat, lon in new_points]
-
-            overlap = compute_path_overlap(
-                fake_records,
-                0,
-                len(fake_records) - 1,
-                candidate.polyline,
-                buffer_m=35,
-            )
-
-            if overlap >= DUPLICATE_OVERLAP_PCT:
-                return candidate
-
-        return None
-
-    def _extract_point_coords(self, point: object) -> tuple[float | None, float | None]:
-        """
-        Extract lat/lon from a PostGIS Point or simple tuple.
-
-        Handles both real WKBElement from Postgres and simple tuples from fakes.
-        """
-        if point is None:
-            return (None, None)
-
-        # For fake repos using tuples
-        if isinstance(point, tuple) and len(point) == 2:
-            return point
-
-        # For WKTElement used in tests
-        if hasattr(point, "data"):
-            # Parse "POINT(lon lat)" format
-            data = str(point.data)
-            if data.startswith("POINT("):
-                coords = data[6:-1].split()
-                if len(coords) == 2:
-                    return (float(coords[1]), float(coords[0]))  # lat, lon
-
-        # For real WKBElement from PostGIS
-        try:
-            from geoalchemy2.shape import to_shape
-
-            shape = to_shape(point)
-            return (shape.y, shape.x)  # lat, lon
-        except Exception:
-            logger.exception("Failed to extract lat/lon from point geometry")
-
-        return (None, None)

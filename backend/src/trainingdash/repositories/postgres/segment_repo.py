@@ -4,7 +4,9 @@ PostgreSQL implementations of Segment repositories.
 Uses SQLAlchemy async session and PostGIS for spatial queries.
 """
 
+import logging
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from geoalchemy2 import WKTElement
@@ -17,15 +19,154 @@ from geoalchemy2.functions import (
 from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from trainingdash.domain.segment_geometry import SegmentGeometry
 from trainingdash.domain.segment_matching import (
     SUGGESTION_VISIBILITY_THRESHOLD,
-    describes_same_road,
+    SegmentForDedup,
+    find_duplicate_segment,
 )
 from trainingdash.repositories.postgres.models import (
     Segment,
     SegmentEffort,
     SegmentSuggestion,
 )
+
+logger = logging.getLogger(__name__)
+
+
+def extract_point_coords(point: Any) -> tuple[float, float]:
+    """
+    Extract (lat, lon) from a PostGIS geometry or test fake.
+
+    Handles:
+    - GeoAlchemy2 WKBElement (real Postgres) — uses to_shape
+    - WKTElement (used in test fixtures) — parses "POINT(lon lat)"
+    - Objects with .x/.y attributes (test fakes)
+    - Tuples (lat, lon) — returned as-is
+
+    Args:
+        point: A geometry object from PostGIS or a test fake.
+
+    Returns:
+        Tuple of (latitude, longitude).
+
+    Raises:
+        ValueError: If coordinates cannot be extracted.
+    """
+    if point is None:
+        raise ValueError("Cannot extract coordinates from None")
+
+    # Tuples (lat, lon) from test fixtures
+    if isinstance(point, tuple) and len(point) == 2:
+        return point
+
+    # Test fakes with .x/.y but no .data (not WKTElement)
+    if hasattr(point, "x") and hasattr(point, "y") and not hasattr(point, "data"):
+        return (point.y, point.x)
+
+    # WKTElement: parse "POINT(lon lat)" format
+    if hasattr(point, "data"):
+        data = str(point.data)
+        if data.startswith("POINT("):
+            coords = data[6:-1].split()
+            if len(coords) == 2:
+                return (float(coords[1]), float(coords[0]))  # lat, lon
+
+    # Real WKBElement from PostGIS
+    try:
+        from geoalchemy2.shape import to_shape
+
+        shape = to_shape(point)
+        return (shape.y, shape.x)  # lat, lon
+    except Exception as e:
+        logger.debug(f"Failed to extract coordinates via to_shape: {e}")
+
+    raise ValueError(f"Cannot extract coordinates from {type(point)}")
+
+
+def segment_to_dedup(segment: Segment) -> SegmentForDedup:
+    """
+    Convert a Segment ORM model to a SegmentForDedup for domain functions.
+
+    Args:
+        segment: A Segment ORM model with PostGIS geometry fields.
+
+    Returns:
+        A SegmentForDedup with extracted coordinates.
+    """
+    start_lat, start_lon = extract_point_coords(segment.start_point)
+    end_lat, end_lon = extract_point_coords(segment.end_point)
+    return SegmentForDedup(
+        id=segment.id,
+        start_lat=start_lat,
+        start_lon=start_lon,
+        end_lat=end_lat,
+        end_lon=end_lon,
+        polyline=segment.polyline,
+    )
+
+
+def segment_to_geometry(segment: Segment) -> SegmentGeometry:
+    """
+    Convert a Segment ORM model to a SegmentGeometry for domain functions.
+
+    Used when a Segment's geometry needs to be passed to domain functions
+    that expect SegmentGeometry (e.g., find_duplicate_segment for a
+    suggestion being approved with adjusted endpoints).
+
+    Args:
+        segment: A Segment ORM model.
+
+    Returns:
+        A SegmentGeometry populated from the model's fields.
+    """
+    from trainingdash.domain.segment_geometry import ElevationPoint
+
+    start_lat, start_lon = extract_point_coords(segment.start_point)
+    end_lat, end_lon = extract_point_coords(segment.end_point)
+
+    # Convert elevation_profile JSON back to ElevationPoint objects
+    elevation_profile = []
+    if segment.elevation_profile:
+        for ep in segment.elevation_profile:
+            elevation_profile.append(
+                ElevationPoint(
+                    distance_m=ep.get("distance_m", 0.0),
+                    elevation_m=ep.get("elevation_m", 0.0),
+                    grade_pct=ep.get("grade_pct", 0.0),
+                )
+            )
+
+    # Extract bounds from PostGIS polygon or use defaults
+    try:
+        from geoalchemy2.shape import to_shape
+
+        bounds_shape = to_shape(segment.bounds)
+        min_lon, min_lat, max_lon, max_lat = bounds_shape.bounds
+        bounds = (min_lat, min_lon, max_lat, max_lon)
+    except Exception:
+        # Fallback: derive bounds from start/end points
+        bounds = (
+            min(start_lat, end_lat),
+            min(start_lon, end_lon),
+            max(start_lat, end_lat),
+            max(start_lon, end_lon),
+        )
+
+    return SegmentGeometry(
+        polyline=segment.polyline,
+        start_lat=start_lat,
+        start_lon=start_lon,
+        end_lat=end_lat,
+        end_lon=end_lon,
+        bounds=bounds,
+        direction_bearing=segment.direction_bearing or 0.0,
+        distance_m=segment.distance_m or 0.0,
+        elevation_gain_m=segment.elevation_gain_m or 0.0,
+        avg_grade_pct=segment.avg_grade_pct or 0.0,
+        max_grade_pct=segment.max_grade_pct or 0.0,
+        elevation_profile=elevation_profile,
+    )
 
 
 class PostgresSegmentRepo:
@@ -251,7 +392,7 @@ class PostgresSegmentRepo:
 
         Prefilters with a spatial query — suggested segments whose bounds
         come within 100m of the candidate start point — then applies the
-        same-road containment criterion (describes_same_road) in Python.
+        same-road containment criterion via find_duplicate_segment in Python.
         Containment is used instead of the strict is_same_segment gate
         because detected climb boundaries wobble between rides: repeat
         detections of one climb must merge so suggestion repetition
@@ -280,11 +421,36 @@ class PostgresSegmentRepo:
             .all()
         )
 
-        for candidate in candidates:
-            if describes_same_road(polyline=polyline, other_polyline=candidate.polyline):
-                return candidate
+        if not candidates:
+            return None
 
-        return None
+        # Build a minimal SegmentGeometry for the domain function.
+        # Only start/end coords and polyline are needed for same_road mode.
+        candidate_geometry = SegmentGeometry(
+            polyline=polyline,
+            start_lat=start_lat,
+            start_lon=start_lon,
+            end_lat=end_lat,
+            end_lon=end_lon,
+            bounds=(0, 0, 0, 0),  # Not used in same_road mode
+            direction_bearing=0.0,
+            distance_m=0.0,
+            elevation_gain_m=0.0,
+            avg_grade_pct=0.0,
+            max_grade_pct=0.0,
+            elevation_profile=[],
+        )
+
+        # Convert ORM candidates to domain types
+        existing = [segment_to_dedup(c) for c in candidates]
+
+        # Use domain function for duplicate detection
+        match = find_duplicate_segment(candidate_geometry, existing, mode="same_road")
+        if match is None:
+            return None
+
+        # Return the full Segment ORM model
+        return next((c for c in candidates if c.id == match.id), None)
 
 
 class PostgresSegmentEffortRepo:
