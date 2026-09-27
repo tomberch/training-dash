@@ -105,9 +105,7 @@ async def merge(db_url: str, dry_run: bool) -> None:
                 pa, pb = start_points[id_a], start_points[id_b]
                 if _haversine(pa, pb) > 100.0:
                     continue
-                if describes_same_road(
-                    polyline=paths[id_a], other_polyline=paths[id_b]
-                ):
+                if describes_same_road(polyline=paths[id_a], other_polyline=paths[id_b]):
                     union(id_a, id_b)
 
         clusters: dict[object, list] = {}
@@ -158,15 +156,13 @@ async def merge(db_url: str, dry_run: bool) -> None:
                     session.add(keeper_sugg)
                 else:
                     keeper_sugg.repetition_count = total
-                    keeper_sugg.first_ridden_at = min(
-                        s.first_ridden_at for s in user_suggs
+                    keeper_sugg.first_ridden_at = min(s.first_ridden_at for s in user_suggs)
+                    keeper_sugg.last_ridden_at = max(s.last_ridden_at for s in user_suggs)
+                    keeper_sugg.expires_at = (
+                        max(s.expires_at for s in user_suggs if s.expires_at is not None)
+                        if any(s.expires_at is not None for s in user_suggs)
+                        else None
                     )
-                    keeper_sugg.last_ridden_at = max(
-                        s.last_ridden_at for s in user_suggs
-                    )
-                    keeper_sugg.expires_at = max(
-                        s.expires_at for s in user_suggs if s.expires_at is not None
-                    ) if any(s.expires_at is not None for s in user_suggs) else None
 
                 for dup in dup_suggs:
                     await session.delete(dup)
@@ -180,14 +176,10 @@ async def merge(db_url: str, dry_run: bool) -> None:
                 if member == keeper:
                     continue
                 await session.execute(
-                    SegmentEffort.__table__.update()
-                    .where(SegmentEffort.segment_id == member)
-                    .values(segment_id=keeper)
+                    SegmentEffort.__table__.update().where(SegmentEffort.segment_id == member).values(segment_id=keeper)
                 )
                 await session.execute(
-                    Segment.__table__.update()
-                    .where(Segment.id == member)
-                    .values(deleted_at=datetime.now())
+                    Segment.__table__.update().where(Segment.id == member).values(deleted_at=datetime.now())
                 )
                 soft_deleted += 1
 
