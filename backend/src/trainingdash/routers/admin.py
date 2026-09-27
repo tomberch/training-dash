@@ -714,6 +714,22 @@ async def admin_trigger_weather_backfill(
     )
     await db.commit()
 
+    # group_key cap is user-visible (ADR 0006, decision 4): a second backfill
+    # while one is active is rejected rather than silently queued behind it.
+    active_result = await db.execute(
+        text("""
+            SELECT 1 FROM saq_jobs
+            WHERE convert_from(job, 'utf8') LIKE '%batch_weather_job%'
+              AND status IN ('active', 'queued', 'new')
+            LIMIT 1
+        """)
+    )
+    if active_result.first():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="A backfill job is already running. Wait for it to finish or check the status endpoint.",
+        )
+
     # Queue a single batch weather job with throttling
     job_id = await enqueue_batch_weather_job(user_id)
     job_ids = [job_id] if job_id else []

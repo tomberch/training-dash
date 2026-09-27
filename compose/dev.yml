@@ -64,6 +64,15 @@ services:
       db:
         condition: service_healthy
     command: saq trainingdash.worker.settings
+    restart: unless-stopped
+    healthcheck:
+      # SAQ built-in liveness: exits nonzero when no live worker is registered
+      # in saq_stats (ADR 0006, decision 2 — worker process recovery).
+      test: ["CMD", "saq", "--check", "--quiet", "trainingdash.worker.settings"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
 volumes:
   pgdata:
