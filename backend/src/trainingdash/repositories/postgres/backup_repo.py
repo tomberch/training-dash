@@ -1,6 +1,6 @@
 """PostgreSQL implementation of BackupRepo."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -179,3 +179,27 @@ class PostgresBackupRepo:
         result = await self._db.execute(text("SELECT version_num FROM alembic_version LIMIT 1"))
         row = result.scalar_one_or_none()
         return row
+
+    async def recover_stranded_running(self, grace_seconds: int, error_message: str) -> list[dict]:
+        """Mark history rows stuck in 'running' past the grace period failed (ADR 0006, decision 2).
+
+        A stranded 'running' backup blocks all future scheduled backups via
+        is_backup_running(). Called by the strand-recovery cron after a worker
+        death. Returns [{history_id, table}] for the recovered rows.
+        """
+        cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(seconds=grace_seconds)
+        result = await self._db.execute(
+            select(BackupHistory).where(
+                BackupHistory.status == "running",
+                BackupHistory.started_at < cutoff,
+            )
+        )
+        stranded = result.scalars().all()
+        now = datetime.now(UTC).replace(tzinfo=None)
+        for row in stranded:
+            row.status = "failed"
+            row.error_message = error_message
+            row.completed_at = now
+        if stranded:
+            await self._db.flush()
+        return [{"history_id": row.id, "table": "backup_history", "user_id": None} for row in stranded]

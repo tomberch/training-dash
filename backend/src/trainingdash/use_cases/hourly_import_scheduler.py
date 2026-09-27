@@ -7,7 +7,7 @@ imports are deferred by 15 minutes to stagger API calls.
 
 import logging
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -53,15 +53,31 @@ class HourlyImportScheduler:
             logger.info(f"HourlyImportScheduler: no users scheduled for hour {current_hour}")
             return {"success": True, "garmin_queued": 0, "xert_queued": 0}
 
-        # Enqueue Garmin imports immediately
+        # Lost-tick safeguard (ADR 0006, decision 3): a scheduled user whose
+        # last_synced_at is >25h stale likely missed ticks while the worker was
+        # down — SAQ cron never back-runs them. The next healthy tick's import
+        # range derives from last_synced_at, so data converges; this event makes
+        # the loss visible to admins (ADR 0007 dead-letter/enqueue-failure feed).
+        hour_bucket = datetime.now(UTC).strftime("%Y-%m-%dT%H")
+        scheduled_user_ids = [uid for uid in [*garmin_user_ids, *xert_user_ids]]
+        stale_result = await self._db.execute(
+            select(GarminCredentials.user_id, GarminCredentials.last_synced_at).where(
+                GarminCredentials.user_id.in_(scheduled_user_ids)
+            )
+        )
+        await self._log_lost_ticks(stale_result)
+
+        # Enqueue Garmin imports immediately — hour-bucketed key dedupes a
+        # retried scheduler tick at enqueue time (ADR 0006, decision 1)
         for user_id in garmin_user_ids:
-            await enqueue_import_garmin_job(user_id)
+            await enqueue_import_garmin_job(user_id, key=f"import:garmin:{user_id}:{hour_bucket}")
             logger.info(f"HourlyImportScheduler: enqueued Garmin import for user {user_id}")
 
-        # Enqueue Xert imports with 15 minute delay to stagger
+        # Enqueue Xert imports with 15 minute delay to stagger API calls —
+        # hour-bucketed key dedupes a retried scheduler tick (ADR 0006, decision 1)
         defer_until = time.time() + (15 * 60)
         for user_id in xert_user_ids:
-            await enqueue_import_xert_job(user_id, scheduled=defer_until)
+            await enqueue_import_xert_job(user_id, scheduled=defer_until, key=f"import:xert:{user_id}:{hour_bucket}")
             logger.info(f"HourlyImportScheduler: enqueued Xert import for user {user_id} (deferred 15min)")
 
         logger.info(f"HourlyImportScheduler: queued {len(garmin_user_ids)} Garmin, {len(xert_user_ids)} Xert imports")
@@ -80,3 +96,22 @@ class HourlyImportScheduler:
         await self._db.commit()
 
         return {"success": True, "garmin_queued": len(garmin_user_ids), "xert_queued": len(xert_user_ids)}
+
+    async def _log_lost_ticks(self, garmin_stale_result) -> None:
+        """Write sync.lost_tick events for scheduled users whose Garmin last_synced_at is >25h stale."""
+        stale_threshold = datetime.now(UTC) - timedelta(hours=25)
+        rows = garmin_stale_result.all()
+        for user_id, last_synced_at in rows:
+            if last_synced_at is None or last_synced_at.replace(tzinfo=UTC) < stale_threshold:
+                try:
+                    await self._event_repo.log(
+                        event_type=EventType.SYNC_LOST_TICK.value,
+                        outcome=EventOutcome.FAILURE.value,
+                        user_id=user_id,
+                        payload={
+                            "last_synced_at": last_synced_at.isoformat() if last_synced_at else None,
+                            "reason": "scheduled user missed ticks (worker down or enqueue lost)",
+                        },
+                    )
+                except Exception:
+                    logger.exception("Failed to log sync.lost_tick event for user %s", user_id)

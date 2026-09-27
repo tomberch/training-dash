@@ -1,6 +1,6 @@
 """PostgreSQL implementation of RecalculationJobRepo."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -112,3 +112,26 @@ class PostgresRecalculationJobRepo:
                 },
             )
         )
+
+    async def recover_stranded_running(self, grace_seconds: int, error_message: str) -> list[dict]:
+        """Mark rows stuck in 'running' past the grace period failed (ADR 0006, decision 2).
+
+        Called by the strand-recovery cron after a worker death. Returns
+        [{user_id, table}] for the recovered rows (for job.stuck events).
+        """
+        cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(seconds=grace_seconds)
+        result = await self._db.execute(
+            select(RecalculationJob).where(
+                RecalculationJob.status == "running",
+                RecalculationJob.started_at < cutoff,
+            )
+        )
+        stranded = result.scalars().all()
+        now = datetime.now(UTC).replace(tzinfo=None)
+        for row in stranded:
+            row.status = "failed"
+            row.error_message = error_message
+            row.completed_at = now
+        if stranded:
+            await self._db.flush()
+        return [{"user_id": row.user_id, "table": "recalculation_jobs"} for row in stranded]

@@ -68,6 +68,8 @@ class EventType(StrEnum):
     # Job outcomes (SAQ)
     JOB_COMPLETED = "job.completed"
     JOB_FAILED = "job.failed"
+    JOB_ENQUEUE_FAILED = "job.enqueue_failed"
+    JOB_STUCK = "job.stuck"
 
     # Admin actions
     ADMIN_NUKE_ACTIVITIES = "admin.nuke_activities"
@@ -77,6 +79,7 @@ class EventType(StrEnum):
 
     # Scheduler
     SCHEDULER_TRIGGERED = "scheduler.triggered"
+    SYNC_LOST_TICK = "sync.lost_tick"
 
     # Cache maintenance
     CACHE_PRUNED = "cache.pruned"
@@ -119,6 +122,8 @@ EVENT_VALID_OUTCOMES: dict[EventType, set[EventOutcome]] = {
     # Job outcomes
     EventType.JOB_COMPLETED: {EventOutcome.SUCCESS},
     EventType.JOB_FAILED: {EventOutcome.FAILURE},
+    EventType.JOB_ENQUEUE_FAILED: {EventOutcome.FAILURE},
+    EventType.JOB_STUCK: {EventOutcome.INFO},
     # Admin actions
     EventType.ADMIN_NUKE_ACTIVITIES: {EventOutcome.INFO},
     EventType.ADMIN_NUKE_INTEGRATIONS: {EventOutcome.INFO},
@@ -126,6 +131,7 @@ EVENT_VALID_OUTCOMES: dict[EventType, set[EventOutcome]] = {
     EventType.ADMIN_WEATHER_BACKFILL: {EventOutcome.INFO, EventOutcome.SUCCESS, EventOutcome.FAILURE},
     # Scheduler
     EventType.SCHEDULER_TRIGGERED: {EventOutcome.INFO},
+    EventType.SYNC_LOST_TICK: {EventOutcome.FAILURE},
     # Cache
     EventType.CACHE_PRUNED: {EventOutcome.INFO},
 }
