@@ -102,19 +102,7 @@ class TestJobsEndpoint:
     @pytest.mark.asyncio
     async def test_jobs_returns_empty_list(self, auth_client, db_session):
         """Jobs endpoint returns empty list when no active jobs."""
-        # Create the saq_jobs table if it doesn't exist (SAQ creates it on first connect)
-        await db_session.execute(
-            text("""
-            CREATE TABLE IF NOT EXISTS saq_jobs (
-                key VARCHAR PRIMARY KEY,
-                queue VARCHAR NOT NULL DEFAULT 'default',
-                status VARCHAR NOT NULL,
-                job JSONB NOT NULL,
-                scheduled TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            )
-        """)
-        )
-        await db_session.commit()
+        # The real SAQ schema (created by the worker/queue) is used; see ADR 0007 tests.
 
         response = await auth_client.get("/api/admin/system/jobs")
         assert response.status_code == 200
@@ -125,22 +113,13 @@ class TestJobsEndpoint:
     @pytest.mark.asyncio
     async def test_jobs_returns_active_jobs(self, auth_client, db_session):
         """Jobs endpoint returns active and queued jobs."""
-        # Create table and insert test job
-        await db_session.execute(
-            text("""
-            CREATE TABLE IF NOT EXISTS saq_jobs (
-                key VARCHAR PRIMARY KEY,
-                queue VARCHAR NOT NULL DEFAULT 'default',
-                status VARCHAR NOT NULL,
-                job JSONB NOT NULL,
-                scheduled TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            )
-        """)
-        )
+        # Insert into the real SAQ-shaped table (SAQ's bytea job column).
         await db_session.execute(
             text("""
             INSERT INTO saq_jobs (key, queue, status, job, scheduled)
-            VALUES ('test-job-1', 'default', 'active', '{"function": "import_xert_job", "kwargs": {"user_id": 1}}', NOW())
+            VALUES ('test-job-1', 'default', 'active',
+                    CAST('{"function": "import_xert_job", "kwargs": {"user_id": 1}}' AS bytea),
+                    EXTRACT(epoch FROM NOW())::bigint)
             ON CONFLICT (key) DO UPDATE SET status = 'active'
         """)
         )

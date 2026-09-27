@@ -10,6 +10,8 @@ import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import json
+
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
 from sqlalchemy import select, text
@@ -119,12 +121,14 @@ class JobResponse(BaseModel):
     scheduled: datetime | None
     started: datetime | None
     kwargs: dict | None
+    attempts: int = 0
 
 
 class JobsListResponse(BaseModel):
     """Response for jobs list endpoint."""
 
     jobs: list[JobResponse]
+    workers_alive: int = 0
 
 
 @router.get("/jobs", response_model=JobsListResponse)
@@ -133,45 +137,188 @@ async def get_active_jobs(
     db: DbSession,
 ):
     """
-    Get active and queued background jobs from SAQ.
+    Get recent background jobs from SAQ (ADR 0007).
 
-    Queries the saq_jobs table for jobs with status 'active' or 'queued'.
+    Includes non-terminal (active/queued) and terminal (failed/aborted) rows —
+    SAQ retains terminal rows ~600s, so failed jobs show as a recent tail —
+    with per-job attempt counts and live-worker liveness for the dashboard.
     """
-    # Query SAQ's jobs table directly
-    # SAQ stores jobs in saq_jobs with columns: key, job (JSONB), queue, status, scheduled
-    result = await db.execute(
-        text("""
-            SELECT 
-                key,
-                job->>'function' as function,
-                status,
-                scheduled,
-                (job->>'started')::timestamptz as started,
-                job->'kwargs' as kwargs
-            FROM saq_jobs
-            WHERE status IN ('active', 'queued')
-            ORDER BY scheduled DESC
-            LIMIT 100
-        """)
+    jobs = []
+    try:
+        result = await db.execute(
+            text("""
+                SELECT
+                    key,
+                    convert_from(job, 'utf8')::jsonb->>'function' as function,
+                    status,
+                    to_timestamp(scheduled::double precision) as scheduled,
+                    to_timestamp(NULLIF(convert_from(job, 'utf8')::jsonb->>'started', '')::double precision) as started,
+                    convert_from(job, 'utf8')::jsonb->'kwargs' as kwargs,
+                    COALESCE(convert_from(job, 'utf8')::jsonb->>'attempts', '0') as attempts
+                FROM saq_jobs
+                WHERE status IN ('active', 'queued', 'failed', 'aborted', 'aborting')
+                ORDER BY scheduled DESC
+                LIMIT 100
+            """)
+        )
+        for row in result.fetchall():
+            jobs.append(
+                JobResponse(
+                    key=row.key,
+                    function=row.function or "unknown",
+                    status=row.status,
+                    scheduled=row.scheduled,
+                    started=row.started,
+                    kwargs=row.kwargs,
+                    attempts=int(row.attempts or 0),
+                )
+            )
+    except Exception:
+        # saq_jobs missing/mismatched schema (worker never ran) — empty list.
+        jobs = []
+
+    # Worker liveness (ADR 0007): saq_stats rows are TTL-filtered by SAQ (60s).
+    workers_alive = 0
+    try:
+        stats = await db.execute(
+            text("""
+                SELECT count(*) FROM saq_stats
+                WHERE expire_at >= EXTRACT(EPOCH FROM NOW())
+            """)
+        )
+        workers_alive = int(stats.scalar() or 0)
+    except Exception:
+        workers_alive = 0
+
+    return JobsListResponse(jobs=jobs, workers_alive=workers_alive)
+
+
+# --- Job action endpoints (ADR 0007) ---
+
+
+class JobActionResponse(BaseModel):
+    """Result of a job operation (abort/retry)."""
+
+    success: bool
+    message: str | None = None
+
+
+def _audit_log(db, admin, action: str, target_user_id: int | None, summary: str) -> None:
+    """Record a job operation in the Audit Log (ADR 0007: all job ops audited)."""
+    from trainingdash.repositories.postgres.models import AuditLog
+
+    db.add(
+        AuditLog(
+            admin_id=admin.id,
+            action=action,
+            target_user_id=target_user_id,
+            target_user_email=getattr(admin, "email", "") or "",
+            summary=summary,
+        )
     )
 
-    jobs = []
-    for row in result.fetchall():
-        jobs.append(
-            JobResponse(
-                key=row.key,
-                function=row.function or "unknown",
-                status=row.status,
-                scheduled=row.scheduled,
-                started=row.started,
-                kwargs=row.kwargs,
-            )
-        )
 
-    return JobsListResponse(jobs=jobs)
+@router.post("/jobs/{job_key}/abort", response_model=JobActionResponse)
+async def abort_job(
+    job_key: str,
+    admin: AdminUser,
+    db: DbSession,
+):
+    """Abort a stuck or queued job (ADR 0007).
+
+    SAQ delivers the abort cross-process within ~1s (two-phase: aborting →
+    aborted). Aborting a mid-run backup is allowed (escape hatch) and audited;
+    the strand-recovery cron marks its history row failed (ADR 0006).
+    """
+    from trainingdash.queue import get_queue
+
+    queue = await get_queue()
+    try:
+        job = await queue.job(job_key)
+        if job is None:
+            from fastapi import HTTPException
+
+            raise HTTPException(status_code=404, detail=f"Job {job_key} not found")
+        await queue.abort(job, error="aborted by admin")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=503, detail="Job queue not available") from exc
+
+    _audit_log(db, admin, "job.abort", None, f"Aborted job {job_key}")
+    await db.commit()
+
+    return JobActionResponse(success=True, message=f"Abort requested for {job_key}")
 
 
-# --- Cache Stats endpoint ---
+
+
+@router.post("/jobs/{job_key}/retry", response_model=JobActionResponse)
+async def retry_failed_job(
+    job_key: str,
+    admin: AdminUser,
+    db: DbSession,
+    event_repo: EventRepoD,
+):
+    """Re-enqueue a failed job from its dead-letter event (ADR 0007).
+
+    The dead-letter ``job.failed`` event carries the original kwargs; the retry
+    runs under a fresh SAQ key so it always fires (manual-trigger semantics).
+    """
+    from trainingdash.jobs import EnqueueError, get_retry_enqueue
+
+    # Find the most recent dead-letter event for this job key
+    result = await db.execute(
+        text("""
+            SELECT payload FROM events
+            WHERE event_type = 'job.failed'
+              AND payload->>'dead_letter' = 'true'
+              AND payload->>'job_key' = :job_key
+            ORDER BY created_at DESC
+            LIMIT 1
+        """).bindparams(job_key=job_key)
+    )
+    row = result.first()
+    if row is None:
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=404, detail="No dead-letter event found for this job key")
+
+    payload = row[0]
+    job_name = payload.get("job_name")
+    kwargs = payload.get("kwargs") or {}
+
+    enqueue_fn = get_retry_enqueue(job_name)
+    if enqueue_fn is None:
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=400, detail=f"Job {job_name} is not retryable via the admin surface")
+
+    # The dead-letter payload stores SAQ-serialized kwargs (fit_bytes_b64 etc.);
+    # the helper expects the pre-encoding form (fit_bytes) — decode it back.
+    if "fit_bytes_b64" in kwargs and job_name == "ingest":
+        import base64
+
+        kwargs = dict(kwargs)
+        kwargs["fit_bytes"] = base64.b64decode(kwargs.pop("fit_bytes_b64"))
+
+    try:
+        await enqueue_fn(**kwargs)
+    except EnqueueError as exc:
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=503, detail="Job queue not available") from exc
+    except TypeError as exc:
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=400, detail=f"Stored kwargs no longer match the job signature: {exc}") from exc
+
+    _audit_log(db, admin, "job.retry", None, f"Retried job {job_name} (dead-letter {job_key})")
+    await db.commit()
+
+    return JobActionResponse(success=True, message=f"Retry enqueued for {job_name}")
 
 
 class CacheTypeStats(BaseModel):

@@ -467,6 +467,15 @@ class TestThresholdHistory:
 class TestRecalculateMetrics:
     """Tests for POST/GET /me/recalculate-metrics."""
 
+    @pytest.fixture(autouse=True)
+    def _mock_enqueue(self):
+        """Happy-path enqueue: without this, the queue is unavailable in tests and
+        the ADR 0006 D3 policy marks the row failed (see
+        test_post_recalculate_marks_failed_when_queue_unavailable)."""
+        with patch("trainingdash.routers.user.enqueue_recalculate_metrics_job", new_callable=AsyncMock) as m:
+            m.return_value = "test-job-key"
+            yield m
+
     @pytest.mark.asyncio
     async def test_get_recalculate_metrics_returns_null_when_never_run(self, auth_client):
         """GET /me/recalculate-metrics returns null when no job has been triggered."""
@@ -513,6 +522,17 @@ class TestRecalculateMetrics:
         """Recalculate metrics endpoints require authentication."""
         assert (await app_client.get("/api/me/recalculate-metrics")).status_code == 401
         assert (await app_client.post("/api/me/recalculate-metrics")).status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_post_recalculate_marks_failed_when_queue_unavailable(self, auth_client):
+        """ADR 0006 D3: enqueue failure (None) marks the row failed, never stranded pending."""
+        with patch("trainingdash.routers.user.enqueue_recalculate_metrics_job", new_callable=AsyncMock) as m:
+            m.return_value = None  # queue unavailable
+            response = await auth_client.post("/api/me/recalculate-metrics")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "failed"
+        assert "enqueue" in (data["error_message"] or "").lower()
 
 
 class TestZones:

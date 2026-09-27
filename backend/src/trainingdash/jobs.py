@@ -30,6 +30,31 @@ DEFAULT_RETRIES = 3
 DEFAULT_RETRY_DELAY = 30
 DEFAULT_RETRY_BACKOFF = 300
 
+# Dead-letter job_name → enqueue helper, for the admin Retry action (ADR 0007).
+# The helper receives the dead-letter event's stored kwargs; helpers accepting
+# extra params (key/scheduled) tolerate their absence.
+_RETRY_REGISTRY: dict[str, str] = {
+    "ingest": "enqueue_ingest_job",
+    "import_xert": "enqueue_import_xert_job",
+    "import_garmin": "enqueue_import_garmin_job",
+    "match_route": "enqueue_match_route_job",
+    "segment_process": "enqueue_segment_process_job",
+    "retroactive_match": "enqueue_retroactive_match_job",
+    "recalculate_metrics": "enqueue_recalculate_metrics_job",
+    "recalculate_after_delete": "enqueue_recalculate_after_delete_job",
+    "fetch_weather": "enqueue_fetch_weather_job",
+    "batch_weather": "enqueue_batch_weather_job",
+    "backup": "enqueue_backup_job",
+}
+
+
+def get_retry_enqueue(job_name: str):
+    """Resolve a tracked_job name to its enqueue helper (None if unknown/not retryable)."""
+    attr = _RETRY_REGISTRY.get(job_name)
+    if attr is None:
+        return None
+    return globals().get(attr)
+
 
 async def _enqueue(queue, function: str, **kwargs):
     """Enqueue with the default retry policy; wrap failures in EnqueueError.

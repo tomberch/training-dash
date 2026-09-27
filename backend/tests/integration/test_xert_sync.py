@@ -617,14 +617,14 @@ class TestHourlyImportScheduler:
         mock_worker_db_session, _ = _make_worker_db_session_ctx(db_engine)
 
         # Mock the jobs.py enqueue wrappers to capture enqueued jobs
-        async def _fake_enqueue_xert(user_id, scheduled=None):
-            _fake_enqueue_xert.calls.append((user_id, scheduled))
+        async def _fake_enqueue_xert(user_id, scheduled=None, key=None):
+            _fake_enqueue_xert.calls.append((user_id, scheduled, key))
             return "test-job-key"
 
         _fake_enqueue_xert.calls = []
 
-        async def _fake_enqueue_garmin(user_id, scheduled=None):
-            _fake_enqueue_garmin.calls.append((user_id, scheduled))
+        async def _fake_enqueue_garmin(user_id, scheduled=None, key=None):
+            _fake_enqueue_garmin.calls.append((user_id, scheduled, key))
             return "test-job-key"
 
         _fake_enqueue_garmin.calls = []
@@ -643,7 +643,7 @@ class TestHourlyImportScheduler:
         assert result["success"] is True
         assert result["xert_queued"] == 2
 
-        enqueued_user_ids = {user_id for user_id, _ in _fake_enqueue_xert.calls}
+        enqueued_user_ids = {c[0] for c in _fake_enqueue_xert.calls}
         assert user1.id in enqueued_user_ids
         assert user2.id in enqueued_user_ids
         assert user3.id not in enqueued_user_ids
@@ -709,7 +709,7 @@ class TestHourlyImportScheduler:
 
         mock_worker_db_session, _ = _make_worker_db_session_ctx(db_engine)
 
-        async def _fake_enqueue_xert(user_id, scheduled=None):
+        async def _fake_enqueue_xert(user_id, scheduled=None, key=None):
             _fake_enqueue_xert.calls.append((user_id, scheduled))
             return "test-job-key"
 
@@ -732,7 +732,7 @@ class TestHourlyImportScheduler:
         assert result["success"] is True
         assert result["xert_queued"] == 1  # Only user1 with sync_enabled=True
 
-        enqueued_user_ids = {user_id for user_id, _ in _fake_enqueue_xert.calls}
+        enqueued_user_ids = {c[0] for c in _fake_enqueue_xert.calls}
         assert user1.id in enqueued_user_ids
         assert user2.id not in enqueued_user_ids  # Skipped due to sync_enabled=False
 

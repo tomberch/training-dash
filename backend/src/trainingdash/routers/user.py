@@ -1052,6 +1052,14 @@ class _RecalcUpsertFailedAdapter:
 
     async def mark_failed(self, user_id: int, error_message: str) -> None:
         await self._repo.upsert_failed(user_id)
+        # upsert_failed sets no message; persist it (ADR 0006 D3: the user must
+        # see why the job is failed rather than a silent spinner reset).
+        job = await self._repo.get_by_user_id(user_id)
+        if job is not None and not job.error_message:
+            from trainingdash.repositories.postgres.models import RecalculationJob as _RJ
+
+            # Direct update keeps the adapter protocol-free
+            job.error_message = error_message
 
 
 @router.post("/me/recalculate-metrics")
