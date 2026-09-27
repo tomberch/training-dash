@@ -31,6 +31,7 @@ import { deleteActivity, fetchMyXertCredentials, fetchMyGarminCredentials, updat
 import type { ActivityType, Bike } from "./api";
 import { ApiError } from "./api";
 import { fetchBikes } from "./api/bikes";
+import { fetchActivitySegments, type ActivitySegments } from "./api/segments";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
@@ -43,6 +44,7 @@ import {
   ActivityDetailSkeleton, MetricGroupCard, MetricEntry,
   SectionHeader, ChartCard, ZoneChart, WbalChart, AeroEstimateCard,
 } from "./components/activity";
+import { ActivitySegmentsSection } from "./components/activity/ActivitySegments";
 
 interface ChartConfig {
   key: string;
@@ -137,6 +139,10 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
   const [isUpdatingType, setIsUpdatingType] = React.useState(false);
   const [defaultBike, setDefaultBike] = React.useState<Bike | null>(null);
 
+  // Segments state
+  const [segmentsData, setSegmentsData] = React.useState<ActivitySegments | null>(null);
+  const [segmentsLoading, setSegmentsLoading] = React.useState(true);
+
   // Sync activity type state when activity loads
   React.useEffect(() => {
     if (activity) {
@@ -157,6 +163,23 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
     }
     loadDefaultBike();
   }, []);
+
+  // Fetch activity segments
+  React.useEffect(() => {
+    async function loadSegments() {
+      setSegmentsLoading(true);
+      try {
+        const data = await fetchActivitySegments(activityId);
+        setSegmentsData(data);
+      } catch {
+        // Silently fail - segments are not critical
+        setSegmentsData(null);
+      } finally {
+        setSegmentsLoading(false);
+      }
+    }
+    loadSegments();
+  }, [activityId]);
 
   React.useEffect(() => {
     async function checkProviders() {
@@ -510,6 +533,11 @@ export function ActivityDetail({ activityId, onBack, unitSystem = "metric" }: Pr
             weatherStatus={activity.weather_status}
           />
         )}
+      </div>
+
+      {/* Segments */}
+      <div className="mb-8">
+        <ActivitySegmentsSection data={segmentsData} loading={segmentsLoading} />
       </div>
 
 
