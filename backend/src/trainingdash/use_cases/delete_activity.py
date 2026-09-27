@@ -34,16 +34,19 @@ class DeleteActivity:
             raise NotFoundError()
     """
 
-    def __init__(self, activity_repo: ActivityRepo, db: AsyncSession) -> None:
+    def __init__(self, activity_repo: ActivityRepo, db: AsyncSession | None = None, segment_repo=None, event_repo=None) -> None:
         """
         Initialize the use case with dependencies.
 
         Args:
             activity_repo: Repository for activity persistence
             db: Database session for event logging
+            segment_repo: Optional (unused here; kept for DI symmetry)
+            event_repo: Optional event repo override (defaults to Postgres on db)
         """
         self._activity_repo = activity_repo
-        self._event_repo = PostgresEventRepo(db)
+        self._db = db
+        self._event_repo = event_repo or PostgresEventRepo(db)
 
     async def execute(self, user_id: int, activity_id: UUID) -> bool:
         """
@@ -74,17 +77,60 @@ class DeleteActivity:
             payload={"activity_id": str(activity_id)},
         )
 
-        # Step 2: Enqueue fitness recalculation
+        # Step 2: Enqueue fitness recalculation (Class B policy, ADR 0006 decision 3):
+        # the deletion succeeded, so a lost follow-up must never fail the endpoint —
+        # record job.enqueue_failed (with the affected user) and move on.
         from trainingdash.jobs import enqueue_recalculate_after_delete_job
 
         try:
-            await enqueue_recalculate_after_delete_job(user_id)
-        except Exception:
-            # Log but don't fail - deletion succeeded, recalc can be retried
+            job_key = await enqueue_recalculate_after_delete_job(user_id)
+            if job_key is None:
+                await self._log_enqueue_failed(user_id, activity_id, reason="queue unavailable (dev mode)")
+        except Exception as exc:
+            # Class B (ADR 0006, decision 3): deletion succeeded; a lost
+            # follow-up is recorded (event + user notification), never raised.
             logger.exception(
                 "Failed to enqueue recalculation after deleting activity %s for user %s",
                 activity_id,
                 user_id,
             )
+            await self._log_enqueue_failed(user_id, activity_id, reason=str(exc))
 
         return True
+
+    async def _log_enqueue_failed(self, user_id: int, activity_id: UUID, reason: str) -> None:
+        """Record the lost recalc-after-delete follow-up for the admin surface."""
+        try:
+            await self._event_repo.log(
+                event_type="job.enqueue_failed",
+                outcome="failure",
+                user_id=user_id,
+                payload={
+                    "job": "recalculate_after_delete_job",
+                    "reason": reason,
+                    "activity_id": str(activity_id),
+                },
+            )
+            await self._notify_user(user_id, "recalculate_after_delete_job", reason)
+        except Exception:
+            logger.exception("Failed to record job.enqueue_failed event for user %s", user_id)
+
+    async def _notify_user(self, user_id: int, job: str, reason: str) -> None:
+        """Notify the affected user that a follow-up job was lost (ADR 0006, decision 3)."""
+        try:
+            import json
+
+            from trainingdash.repositories.postgres.models import Notification
+
+            notification = Notification(
+                user_id=user_id,
+                type="job_lost",
+                message="A background update (fitness recalculation) could not be scheduled. "
+                "It will retry automatically; your data is safe.",
+                payload=json.dumps({"job": job, "reason": reason}),
+                status="pending",
+            )
+            self._db.add(notification)
+            await self._db.flush()
+        except Exception:
+            logger.exception("Failed to notify user %s about lost job", user_id)

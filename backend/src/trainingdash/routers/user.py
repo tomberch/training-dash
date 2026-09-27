@@ -23,7 +23,31 @@ from trainingdash.dependencies import (
 from trainingdash.domain.zones import compute_hr_zones, compute_power_zones
 from trainingdash.integrations.garmin import GarminAPIError, GarminMFARequired, get_garmin_client
 from trainingdash.integrations.xert import XertAPIError, get_xert_client
-from trainingdash.jobs import enqueue_recalculate_metrics_job
+from trainingdash.jobs import EnqueueError, enqueue_recalculate_metrics_job
+
+
+async def _enqueue_recalc_or_fail(user_id: int, recalc_repo, enqueue, db=None) -> str | None:
+    """Enqueue the recalculation job, marking the row failed on any failure (ADR 0006, decision 3).
+
+    Class C policy: both ``None`` (dev no-queue) and :class:`EnqueueError` would
+    previously strand the ``recalculation_jobs`` row in ``pending`` — the user's UI
+    would show "processing" forever. Both paths now mark the row failed so the
+    status endpoint reports the truth and the user can retry.
+    """
+    try:
+        job_key = await enqueue(user_id)
+        if job_key is None:
+            await recalc_repo.mark_failed(user_id, "Failed to enqueue job. Please try again.")
+            if db is not None:
+                await db.commit()
+            return None
+        return job_key
+    except EnqueueError:
+        logger.exception("Failed to enqueue metric recalculation for user %s", user_id)
+        await recalc_repo.mark_failed(user_id, "Failed to enqueue job. Please try again.")
+        if db is not None:
+            await db.commit()
+        return None
 from trainingdash.repositories.postgres.models import (
     Notification,
 )
@@ -491,16 +515,9 @@ async def create_threshold(
     await recalculation_job_repo.upsert_pending(user.id)
     await db.commit()
 
-    try:
-        await enqueue_recalculate_metrics_job(user.id)
-    except Exception:
-        logger.exception(
-            "Failed to enqueue metric recalculation for user %s after threshold save",
-            user.id,
-        )
-        # Mark job as failed so user sees accurate state
-        await recalculation_job_repo.mark_failed(user.id, "Failed to enqueue job. Please try again.")
-        await db.commit()
+    await _enqueue_recalc_or_fail(
+        user_id=user.id, recalc_repo=recalculation_job_repo, enqueue=enqueue_recalculate_metrics_job, db=db
+    )
 
     # Return the new thresholds for this date
     return {
@@ -847,7 +864,7 @@ async def delete_avatar(db: DbSession, user: CurrentUser):
 @router.post("/me/import/garmin")
 async def trigger_garmin_import(garmin_repo: GarminCredentialsRepoD, user: CurrentUser):
     """Trigger a Garmin import for the current user. Requires sync_enabled=true."""
-    from trainingdash.jobs import enqueue_import_garmin_job
+    from trainingdash.jobs import EnqueueError, enqueue_import_garmin_job
 
     creds = await garmin_repo.get_by_user_id(user.id)
     if creds is None:
@@ -855,7 +872,11 @@ async def trigger_garmin_import(garmin_repo: GarminCredentialsRepoD, user: Curre
     if not creds.sync_enabled:
         raise HTTPException(status_code=400, detail="Garmin import is disabled")
 
-    job_id = await enqueue_import_garmin_job(user.id)
+    try:
+        job_id = await enqueue_import_garmin_job(user.id)
+    except EnqueueError as exc:
+        logger.exception("Garmin import enqueue failed for user %s", user.id)
+        raise HTTPException(status_code=503, detail="Job queue not available") from exc
     if job_id is None:
         raise HTTPException(status_code=503, detail="Job queue not available")
     return {"success": True, "job_id": job_id}
@@ -864,7 +885,7 @@ async def trigger_garmin_import(garmin_repo: GarminCredentialsRepoD, user: Curre
 @router.post("/me/import/xert")
 async def trigger_xert_import(xert_repo: XertCredentialsRepoD, user: CurrentUser):
     """Trigger a Xert import for the current user. Requires sync_enabled=true."""
-    from trainingdash.jobs import enqueue_import_xert_job
+    from trainingdash.jobs import EnqueueError, enqueue_import_xert_job
 
     creds = await xert_repo.get_by_user_id(user.id)
     if creds is None:
@@ -872,7 +893,11 @@ async def trigger_xert_import(xert_repo: XertCredentialsRepoD, user: CurrentUser
     if not creds.sync_enabled:
         raise HTTPException(status_code=400, detail="Xert import is disabled")
 
-    job_id = await enqueue_import_xert_job(user.id)
+    try:
+        job_id = await enqueue_import_xert_job(user.id)
+    except EnqueueError as exc:
+        logger.exception("Xert import enqueue failed for user %s", user.id)
+        raise HTTPException(status_code=503, detail="Job queue not available") from exc
     if job_id is None:
         raise HTTPException(status_code=503, detail="Job queue not available")
     return {"success": True, "job_id": job_id}
@@ -1019,6 +1044,16 @@ async def has_password(user: CurrentUser) -> dict:
 # --- Metric recalculation ---
 
 
+class _RecalcUpsertFailedAdapter:
+    """Adapts a RecalculationJobRepo with upsert_failed() to the mark_failed() seam."""
+
+    def __init__(self, repo):
+        self._repo = repo
+
+    async def mark_failed(self, user_id: int, error_message: str) -> None:
+        await self._repo.upsert_failed(user_id)
+
+
 @router.post("/me/recalculate-metrics")
 async def trigger_recalculate_metrics(db: DbSession, recalc_repo: RecalculationJobRepoD, user: CurrentUser):
     """Enqueue an async job to recompute training metrics for all activities.
@@ -1030,13 +1065,12 @@ async def trigger_recalculate_metrics(db: DbSession, recalc_repo: RecalculationJ
     await recalc_repo.upsert_pending(user.id)
     await db.commit()
 
-    try:
-        await enqueue_recalculate_metrics_job(user.id)
-    except Exception:
-        logger.exception("Failed to enqueue metric recalculation for user %s", user.id)
-        # Mark job as failed so user sees accurate state
-        await recalc_repo.upsert_failed(user.id)
-        await db.commit()
+    await _enqueue_recalc_or_fail(
+        user_id=user.id,
+        recalc_repo=_RecalcUpsertFailedAdapter(recalc_repo),
+        enqueue=enqueue_recalculate_metrics_job,
+        db=db,
+    )
 
     job = await recalc_repo.get_by_user_id(user.id)
     return recalculation_job_response(job)

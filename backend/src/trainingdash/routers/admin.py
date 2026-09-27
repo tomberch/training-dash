@@ -101,29 +101,34 @@ async def admin_trigger_import(
     """Trigger import for a user (admin only). Only imports from providers with sync_enabled=true."""
     await _get_user_or_404(user_repo, user_id)
 
-    from trainingdash.jobs import enqueue_import_garmin_job, enqueue_import_xert_job
+    from trainingdash.jobs import EnqueueError, enqueue_import_garmin_job, enqueue_import_xert_job
 
     job_ids = {}
 
-    # Check if user has Xert credentials with import enabled
-    xert_creds = await xert_repo.get_by_user_id(user_id)
-    if xert_creds and xert_creds.sync_enabled:
-        job_id = await enqueue_import_xert_job(user_id)
-        if job_id:
-            job_ids["xert"] = job_id
+    try:
+        # Check if user has Xert credentials with import enabled
+        xert_creds = await xert_repo.get_by_user_id(user_id)
+        if xert_creds and xert_creds.sync_enabled:
+            job_id = await enqueue_import_xert_job(user_id)
+            if job_id:
+                job_ids["xert"] = job_id
 
-    # Check if user has Garmin credentials with import enabled
-    garmin_creds = await garmin_repo.get_by_user_id(user_id)
-    if garmin_creds and garmin_creds.sync_enabled:
-        job_id = await enqueue_import_garmin_job(user_id)
-        if job_id:
-            job_ids["garmin"] = job_id
+        # Check if user has Garmin credentials with import enabled
+        garmin_creds = await garmin_repo.get_by_user_id(user_id)
+        if garmin_creds and garmin_creds.sync_enabled:
+            job_id = await enqueue_import_garmin_job(user_id)
+            if job_id:
+                job_ids["garmin"] = job_id
+    except EnqueueError as exc:
+        # Class A (ADR 0006, decision 3): no false success — surface the failure.
+        logger.exception("Admin trigger-import enqueue failed for user %s", user_id)
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Job queue not available") from exc
 
     if not job_ids:
         return {
             "success": True,
             "job_ids": None,
-            "message": "No integrations with import enabled or Redis not available",
+            "message": "No integrations with import enabled",
         }
     return {"success": True, "job_ids": job_ids}
 
