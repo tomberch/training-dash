@@ -2,9 +2,9 @@
 
 The unit fakes full-scan suggested segments and derive endpoints from the
 polyline; these tests lock in that the Postgres implementation's spatial
-prefilter (ST_DWithin on start_point) + precise is_same_segment check
-finds the same duplicates the fake does — no false negatives, no false
-positives.
+prefilter (ST_DWithin on start_point) + same-road containment check
+(describes_same_road) finds the duplicates the fake does — no false
+negatives, no false positives.
 """
 
 from uuid import uuid4
@@ -140,8 +140,8 @@ class TestFindSimilarSuggested:
         await db_session.commit()
 
         # ~80m north of the existing start (0.00072 deg ≈ 80m lat) — inside
-        # the 0.001-degree prefilter, endpoints within 25m? No: 80m > 25m, so
-        # the PRECISE check must reject it (different start point).
+        # the 0.001-degree prefilter. The same-road containment check sees a
+        # fully-overlapping path and still merges it (boundary wobble).
         found = await repo.find_similar_suggested(
             start_lat=46.90072,
             start_lon=7.4,
@@ -149,4 +149,23 @@ class TestFindSimilarSuggested:
             end_lon=7.4,
             polyline=encode_polyline([(46.90072, 7.4), (46.91072, 7.4)]),
         )
-        assert found is None  # Precise criteria reject the shifted climb
+        assert found is not None  # Containment criteria accept the shifted climb
+        assert found.id == existing.id
+
+    @pytest.mark.asyncio
+    async def test_prefilter_rejects_far_away_candidate(self, db_session, repo, seed_user):
+        """A candidate whose start is outside the prefilter radius is not found,
+        regardless of path similarity (spatial gate is authoritative)."""
+        existing = make_segment_row(start_lat=46.9, start_lon=7.4, end_lat=46.91, end_lon=7.4)
+        db_session.add(existing)
+        await db_session.commit()
+
+        # ~200m north — outside the 0.001-degree prefilter
+        found = await repo.find_similar_suggested(
+            start_lat=46.9018,
+            start_lon=7.4,
+            end_lat=46.9118,
+            end_lon=7.4,
+            polyline=encode_polyline([(46.9018, 7.4), (46.9118, 7.4)]),
+        )
+        assert found is None

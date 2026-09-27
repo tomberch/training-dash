@@ -14,13 +14,12 @@ from geoalchemy2.functions import (
     ST_Intersects,
     ST_MakeEnvelope,
 )
-from geoalchemy2.shape import to_shape
 from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from trainingdash.domain.segment_matching import (
     SUGGESTION_VISIBILITY_THRESHOLD,
-    is_same_segment,
+    describes_same_road,
 )
 from trainingdash.repositories.postgres.models import (
     Segment,
@@ -252,7 +251,11 @@ class PostgresSegmentRepo:
 
         Prefilters with a spatial query — suggested segments whose bounds
         come within 100m of the candidate start point — then applies the
-        precise duplicate criteria (is_same_segment) in Python.
+        same-road containment criterion (describes_same_road) in Python.
+        Containment is used instead of the strict is_same_segment gate
+        because detected climb boundaries wobble between rides: repeat
+        detections of one climb must merge so suggestion repetition
+        counts reach the visibility threshold.
 
         Returns the matching Segment, or None.
         """
@@ -278,20 +281,7 @@ class PostgresSegmentRepo:
         )
 
         for candidate in candidates:
-            cand_start = to_shape(candidate.start_point)
-            cand_end = to_shape(candidate.end_point)
-            if is_same_segment(
-                start_lat=start_lat,
-                start_lon=start_lon,
-                end_lat=end_lat,
-                end_lon=end_lon,
-                polyline=polyline,
-                other_start_lat=cand_start.y,
-                other_start_lon=cand_start.x,
-                other_end_lat=cand_end.y,
-                other_end_lon=cand_end.x,
-                other_polyline=candidate.polyline,
-            ):
+            if describes_same_road(polyline=polyline, other_polyline=candidate.polyline):
                 return candidate
 
         return None

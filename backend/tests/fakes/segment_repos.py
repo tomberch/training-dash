@@ -127,33 +127,17 @@ class FakeSegmentRepo:
         end_lon: float,
         polyline: str,
     ) -> Segment | None:
-        """Precise comparison against every suggested segment.
+        """Same-road comparison against every suggested segment.
 
-        The fake decodes each candidate's polyline to recover its start/end
-        points, so it exercises the same is_same_segment criteria as the
-        PostGIS implementation without spatial types.
+        The fake exercises the same describes_same_road containment
+        criteria as the PostGIS implementation without spatial types.
         """
-        from trainingdash.domain.polyline import decode_polyline
-        from trainingdash.domain.segment_matching import is_same_segment
+        from trainingdash.domain.segment_matching import describes_same_road
 
         for segment in self._segments.values():
             if segment.status != "suggested" or segment.deleted_at is not None:
                 continue
-            points = decode_polyline(segment.polyline)
-            if not points:
-                continue
-            if is_same_segment(
-                start_lat=start_lat,
-                start_lon=start_lon,
-                end_lat=end_lat,
-                end_lon=end_lon,
-                polyline=polyline,
-                other_start_lat=points[0][0],
-                other_start_lon=points[0][1],
-                other_end_lat=points[-1][0],
-                other_end_lon=points[-1][1],
-                other_polyline=segment.polyline,
-            ):
+            if describes_same_road(polyline=polyline, other_polyline=segment.polyline):
                 return segment
         return None
 
