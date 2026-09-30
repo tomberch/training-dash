@@ -20,8 +20,8 @@ test.describe('Suggestions Page', () => {
     await loginViaApi(page, testUser);
     await page.goto('/suggestions');
 
-    // Should show Suggestions heading
-    await expect(page.getByRole('heading', { name: /suggestions/i })).toBeVisible();
+    // Should show Suggestions heading (level 1 is the page title)
+    await expect(page.getByRole('heading', { level: 1, name: /suggestions/i })).toBeVisible();
   });
 
   test('shows empty state for new user with no activities', async ({ page }) => {

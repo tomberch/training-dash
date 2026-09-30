@@ -19,12 +19,13 @@ test.describe('Gear Page', () => {
     await loginViaApi(page, testUser);
     await page.goto('/gear');
 
-    // Should show Gear heading
-    await expect(page.getByRole('heading', { name: 'Gear' })).toBeVisible();
+    // Should show Gear heading (level 1 is the page title)
+    await expect(page.getByRole('heading', { level: 1, name: 'Gear' })).toBeVisible();
 
     // Should show empty state or "Add Bike" button
     // (New users have no bikes, so either empty state or just the add button)
-    const addButton = page.getByRole('button', { name: /add bike/i });
+    // Use first() since there may be multiple Add Bike buttons (header and empty state)
+    const addButton = page.getByRole('button', { name: /add bike/i }).first();
     await expect(addButton).toBeVisible();
   });
 
@@ -32,8 +33,8 @@ test.describe('Gear Page', () => {
     await loginViaApi(page, testUser);
     await page.goto('/gear');
 
-    // Click add bike button
-    await page.getByRole('button', { name: /add bike/i }).click();
+    // Click add bike button (use first() since there may be multiple)
+    await page.getByRole('button', { name: /add bike/i }).first().click();
 
     // Form should appear
     await expect(page.getByRole('dialog')).toBeVisible();
@@ -42,9 +43,8 @@ test.describe('Gear Page', () => {
     // Fill in bike details
     await page.getByLabel(/name/i).fill('Canyon Aeroad');
 
-    // Select bike type (road)
-    await page.getByLabel(/type/i).click();
-    await page.getByRole('option', { name: /road/i }).click();
+    // Select bike type (road) - use selectOption for native <select> elements
+    await page.getByLabel(/type/i).selectOption('road');
 
     // Optionally fill in weight
     const weightInput = page.getByLabel(/weight/i);
@@ -63,7 +63,12 @@ test.describe('Gear Page', () => {
     await loginViaApi(page, testUser);
     await page.goto('/gear');
 
-    // Wait for bikes to load
+    // Create a bike first (each test gets its own page, so state does not
+    // carry over — do not rely on the create test having run).
+    await page.getByRole('button', { name: /add bike/i }).first().click();
+    await page.getByLabel(/name/i).fill('Canyon Aeroad');
+    await page.getByLabel(/type/i).selectOption('road');
+    await page.getByRole('button', { name: /save/i }).click();
     await expect(page.getByText('Canyon Aeroad')).toBeVisible({ timeout: 5000 });
 
     // Find the bike card and click the default button/menu option
@@ -85,11 +90,17 @@ test.describe('Gear Page', () => {
     await loginViaApi(page, testUser);
     await page.goto('/gear');
 
-    // Wait for bikes to load
-    await expect(page.getByText('Canyon Aeroad')).toBeVisible({ timeout: 5000 });
+    // Create a bike first (each test gets its own page, so state does not
+    // carry over — do not rely on the create test having run). Unique name:
+    // the parallel create test also adds a bike for this user.
+    await page.getByRole('button', { name: /add bike/i }).first().click();
+    await page.getByLabel(/name/i).fill('Edit Target Bike');
+    await page.getByLabel(/type/i).selectOption('road');
+    await page.getByRole('button', { name: /save/i }).click();
+    await expect(page.getByText('Edit Target Bike')).toBeVisible({ timeout: 5000 });
 
     // Find the bike card and click edit
-    const bikeCard = page.locator('[data-testid="bike-card"]').filter({ hasText: 'Canyon Aeroad' });
+    const bikeCard = page.locator('[data-testid="bike-card"]').filter({ hasText: 'Edit Target Bike' });
     
     if (await bikeCard.count() > 0) {
       // Look for edit button or menu
@@ -101,11 +112,11 @@ test.describe('Gear Page', () => {
         await expect(page.getByRole('dialog')).toBeVisible();
 
         // Update the name
-        await page.getByLabel(/name/i).fill('Canyon Aeroad CF SLX');
+        await page.getByLabel(/name/i).fill('Edit Target Bike CF SLX');
         await page.getByRole('button', { name: /save/i }).click();
 
         // Should show updated name
-        await expect(page.getByText('Canyon Aeroad CF SLX')).toBeVisible({ timeout: 5000 });
+        await expect(page.getByText('Edit Target Bike CF SLX')).toBeVisible({ timeout: 5000 });
       }
     }
   });
@@ -114,11 +125,10 @@ test.describe('Gear Page', () => {
     await loginViaApi(page, testUser);
     await page.goto('/gear');
 
-    // First create a bike to retire
-    await page.getByRole('button', { name: /add bike/i }).click();
+    // First create a bike to retire (use first() since there may be multiple Add Bike buttons)
+    await page.getByRole('button', { name: /add bike/i }).first().click();
     await page.getByLabel(/name/i).fill('Old Bike To Retire');
-    await page.getByLabel(/type/i).click();
-    await page.getByRole('option', { name: /road/i }).click();
+    await page.getByLabel(/type/i).selectOption('road');
     await page.getByRole('button', { name: /save/i }).click();
 
     // Wait for bike to appear

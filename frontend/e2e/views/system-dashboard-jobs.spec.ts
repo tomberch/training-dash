@@ -49,7 +49,7 @@ test.describe('System Dashboard — job operations', () => {
 
     const statusFilter = page
       .locator('select')
-      .filter({ has: page.locator('option', { value: 'failed' }) });
+      .filter({ has: page.locator('option[value="failed"]') });
     await expect(statusFilter).toHaveCount(1);
     const options = await statusFilter.locator('option').allTextContents();
     expect(options).toContain('Failed');
