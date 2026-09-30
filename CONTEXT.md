@@ -103,6 +103,41 @@ Statuses: **pending** (enqueued, not yet started) → **running** (in progress) 
 
 A cluster of Activities that follow the same geographic path, identified via Hausdorff distance on simplified polylines. Used for per-route PRs and ride comparison.
 
+## Athlete Snapshot
+
+The structured, canonical view of one athlete that is fed to the LLM (plan generation; weekly adaptation in v2). Assembled by a deterministic collector: fitness (FTP/wCP, 42-day CTL/ATL/TSB trend, ramp rate), load distribution, weight trend, wellness states, nutrition compliance, goals & constraints, session context. Raw daily wellness values never enter the Snapshot — only baseline-classified rolling states (normal/elevated/depressed) over rolling averages.
+_Avoid_: athlete profile, dashboard payload
+
+## Training Calendar
+
+The availability model on which generated plans are placed. Combines a weekly Availability Template with rare per-date Overrides, merged into effective availability for the planning horizon. Weeks are Monday-start.
+_Avoid_: schedule, plan grid
+
+## Availability Template
+
+The weekly recurring availability grid on the User: per weekday, either Rest or Available with hours (e.g. Mon 1h, Tue 0h, Wed 2h). Lives on the User like Preferences.
+_Avoid_: default week, calendar settings
+
+## Availability Override
+
+A per-date exception to the Availability Template (travel, race day, holiday). Merged over the template. Rare by design.
+_Avoid_: exception day, calendar edit
+
+## Check-In
+
+The minimal daily self-report: fatigue feel (1-5) plus an optional free-text note that flows into the Athlete Snapshot's session context verbatim. Session outcome (planned vs actual) is automatic from activity data; soreness flags are deliberately dropped as noisy. Stored as MetricEntry rows (category: recovery), riding the existing /me/metrics plumbing.
+_Avoid_: wellness survey, morning readiness
+
+## Movability Flag
+
+Per-workout attribute set at plan-generation time: `pinned` (hard sessions with built-in recovery) or `swappable` (easy/endurance). Consumed by the v2 daily swap layer — when this morning's wellness states go red, today's `swappable` hard session is deterministically moved out and an endurance session pulled in (no LLM call).
+_Avoid_: flexibility, lock flag
+
+## Fitness-Floor Rule
+
+Plan validity constraint: no high-intensity session on consecutive days without a recovery day between, max one high-intensity session per available day, and no violation of the nutrition engine's deterministic bounds. Shape validated by schema, content by the deterministic engine. A plan violating the Fitness-Floor Rule is invalid regardless of LLM intent.
+_Avoid_: safety check, guardrail
+
 ## Segment
 
 A defined section of road or trail used for performance tracking. Segments are global (shared across all users) and direction-sensitive (a climb ridden in reverse is a different segment). Three types exist:
