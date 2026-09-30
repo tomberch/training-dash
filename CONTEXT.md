@@ -103,6 +103,26 @@ Statuses: **pending** (enqueued, not yet started) → **running** (in progress) 
 
 A cluster of Activities that follow the same geographic path, identified via Hausdorff distance on simplified polylines. Used for per-route PRs and ride comparison.
 
+## Daily Targets
+
+The per-day kcal + macro goals the deterministic nutrition engine derives nightly (formula set per ADR-worthy research: Mifflin-St Jeor / Katch-McArdle TDEE, EA floor, macro ordering). Yesterday's finalized set is what the UI shows; there are no intraday recalibrations. The LLM never sets Daily Targets directly — it may propose deficit/split adjustments weekly, within bounds, floors never move.
+_Avoid_: calorie budget, macro prescription
+
+## Meal Entry
+
+A confirmed, itemized food record for one calendar day (user-local date, no cross-midnight split), with optional photo (retained) and per-item provenance distinguishing VLM estimate, user correction, and later edit. kcal/macros are computed deterministically from the food DB; VLM calorie numbers are never stored.
+_Avoid_: food log entry, diary row
+
+## Draft Meal
+
+An unconfirmed photo-derived meal. Visible as a pending kcal preview but excluded from all compliance math until confirmed.
+_Avoid_: pending entry, unlogged meal
+
+## Compliance Digest
+
+The 7-day averages of confirmed intake (kcal, protein, etc.) that feed the Athlete Snapshot's nutrition-compliance block and the weekly adaptation. Single bad days cannot whipsaw targets because the engine only consumes the Digest.
+_Avoid_: weekly summary, streak
+
 ## Athlete Snapshot
 
 The structured, canonical view of one athlete that is fed to the LLM (plan generation; weekly adaptation in v2). Assembled by a deterministic collector: fitness (FTP/wCP, 42-day CTL/ATL/TSB trend, ramp rate), load distribution, weight trend, wellness states, nutrition compliance, goals & constraints, session context. Raw daily wellness values never enter the Snapshot — only baseline-classified rolling states (normal/elevated/depressed) over rolling averages.
