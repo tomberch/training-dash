@@ -123,6 +123,36 @@ _Avoid_: pending entry, unlogged meal
 The 7-day averages of confirmed intake (kcal, protein, etc.) that feed the Athlete Snapshot's nutrition-compliance block and the weekly adaptation. Single bad days cannot whipsaw targets because the engine only consumes the Digest.
 _Avoid_: weekly summary, streak
 
+## Goal Focus
+
+The primary emphasis of a Plan: threshold, endurance, climbing, sprint_anaerobic, or event_prep (MVP enum). One primary per Plan; weight goals ride as subordinate compliance goals. Maps deterministically to an Emphasis Vector. FTP is one focus among five, not the singular goal.
+_Avoid_: goal type, rider type
+
+## Emphasis Vector
+
+The deterministic per-zone emphasis over the seven power zones derived from a Goal Focus (e.g. threshold focuses Threshold + Sweet Spot). Generated plans are validated against it: a plan whose zone mix contradicts it is invalid. Approximated for MVP from time-in-zone trends and power-duration bests.
+_Avoid_: progression level (TrainerRoad's per-zone progression system — approximated, not built), zone bias
+
+## Plan
+
+A dated multi-week schedule of Workout Days addressing one primary Goal Focus. At most one active Plan per user. States: draft, active, archived. Generated week-by-week from the Athlete Snapshot.
+_Avoid_: training program, block (a Plan may contain sequencing of blocks per goal-compatibility rules)
+
+## Plan Version
+
+An immutable full copy of a Plan created on any change (regeneration, adaptation, user move, daily swap). Chained to the version it supersedes (chain, not tree) and carrying Attribution. Never mutated in place.
+_Avoid_: plan edit, revision
+
+## Workout Day
+
+One day of a Plan Version: workout type (closed enum incl. rest and strength), duration, target zone, estimated TSS (authoritative TSS recomputed deterministically), Movability Flag, title, and cues. Exactly seven per week; rest is an explicit day, never a gap.
+_Avoid_: session (reserved for actual executed activity), planned ride
+
+## Attribution
+
+The recorded origin of a Plan Version: `generated`, `adapted_llm`, `adapted_deterministic`, or `user_edit`. Keeps "coach said vs user did" auditable and gives the adaptation loop its learning history.
+_Avoid_: change reason, edit log
+
 ## Athlete Snapshot
 
 The structured, canonical view of one athlete that is fed to the LLM (plan generation; weekly adaptation in v2). Assembled by a deterministic collector: fitness (FTP/wCP, 42-day CTL/ATL/TSB trend, ramp rate), load distribution, weight trend, wellness states, nutrition compliance, goals & constraints, session context. Raw daily wellness values never enter the Snapshot — only baseline-classified rolling states (normal/elevated/depressed) over rolling averages.
