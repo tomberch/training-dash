@@ -726,6 +726,10 @@ async def admin_trigger_weather_backfill(
 
     await _get_user_or_404(user_repo, user_id)
 
+    # Capture before any commit/rollback below: a rollback expires ORM objects
+    # and a later lazy refresh of `admin` would fail outside greenlet context.
+    admin_id = admin.id
+
     # Build filter for activities needing backfill
     status_filters = [
         Activity.weather_status.is_(None),
@@ -756,15 +760,23 @@ async def admin_trigger_weather_backfill(
 
     # group_key cap is user-visible (ADR 0006, decision 4): a second backfill
     # while one is active is rejected rather than silently queued behind it.
-    active_result = await db.execute(
-        text("""
-            SELECT 1 FROM saq_jobs
-            WHERE convert_from(job, 'utf8') LIKE '%batch_weather_job%'
-              AND status IN ('active', 'queued', 'new')
-            LIMIT 1
-        """)
-    )
-    if active_result.first():
+    # The saq_jobs table may not exist if the worker hasn't started yet —
+    # treat that as "no active job" (same tolerance as the status endpoint).
+    has_active_job = False
+    try:
+        active_result = await db.execute(
+            text("""
+                SELECT 1 FROM saq_jobs
+                WHERE convert_from(job, 'utf8') LIKE '%batch_weather_job%'
+                  AND status IN ('active', 'queued', 'new')
+                LIMIT 1
+            """)
+        )
+        has_active_job = active_result.first() is not None
+    except Exception:
+        await db.rollback()
+
+    if has_active_job:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="A backfill job is already running. Wait for it to finish or check the status endpoint.",
@@ -780,7 +792,7 @@ async def admin_trigger_weather_backfill(
         outcome=EventOutcome.INFO.value,
         user_id=user_id,
         payload={
-            "admin_id": admin.id,
+            "admin_id": admin_id,
             "action": "weather_backfill",
             "activities_queued": backfill_count,
             "jobs_queued": len(job_ids),
