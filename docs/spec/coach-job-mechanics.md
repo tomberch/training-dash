@@ -12,8 +12,30 @@
 |-----|--------------|---------|-------|------|
 | Nightly targets + swap | `coach_nightly_job` | daily, after wellness sync | per user | no |
 | Weekly adaptation | `coach_adaptation_job` | weekly, off-peak | per user w/ active plan | yes |
+| Plan generation | `coach_plan_job` | on-demand (API) | per request | yes |
 
-## 2. Nightly targets job
+## 2. Plan generation job (MVP)
+
+`coach_plan_job` — **on-demand, API-triggered** (initial generation *and*
+regenerate-with-feedback). Crons don't apply.
+
+- **API shape: async 202** — plan-creation returns immediately with a draft placeholder;
+  the UI polls draft status (week-chunks completed so far). Rationale: ~8 LLM calls for an
+  8-week plan (≤24 with retries, #712) means 2–10 minutes; synchronous HTTP would time out.
+- **EnqueueError class: API** (ADR-0006) — enqueue failure → 503, the only coach job in
+  this class (it is the only API-triggered one).
+- **Content:** header call → week-by-week chunks; heartbeat after every chunk; each chunk
+  ≤2 Zod retries (error-embedded), `jsonrepair` salvage, `finish_reason` gate (#712);
+  `attribution: generated`.
+- **Failure posture:** `retries: 1`; final failure → dead-letter (`coach_plan` in
+  `_RETRY_REGISTRY`, admin-retryable) and the draft remains in a failed state with a visible
+  "generation failed, retry" affordance in the UI. A week-chunk that exhausts retries may
+  escalate to kimi-k3 **for that chunk only** (#712 escalation rule) before the version
+  write; exhaustion after escalation dead-letters the job.
+- **Timeout:** 1800s (same as adaptation). Version written as one atomic INSERT at the end
+  (crash mid-run = nothing persisted; user re-generates).
+
+## 3. Nightly targets job
 
 - **Trigger:** thin-dispatch hourly cron `coach_targets_scheduler` (same pattern as
   `hourly_import_scheduler`): matches users whose `sync_hour` was scheduled **the previous
@@ -29,7 +51,7 @@
 - **EnqueueError class:** internal chains (ADR-0006) → event + notification on failure; API
   never 503s off this job.
 
-## 3. Weekly adaptation job
+## 4. Weekly adaptation job
 
 - **Trigger:** cron `coach_adaptation_scheduler`, hourly thin-dispatch, pinned inside the
   off-peak window per #707 pricing (weekend + weekday nights UTC); user's adaptation_hour
@@ -46,24 +68,25 @@
   mid-state because PlanVersions are written atomically at the end).
 - **EnqueueError class:** internal chains → event + notification.
 
-## 4. Strand handling: none needed
+## 5. Strand handling: none needed
 
 A hung coach job leaves no app-level status row to strand: targets are recomputed wholesale
 next night (idempotent), and PlanVersions are single atomic INSERTs at job end (a crash
 mid-run writes nothing). The strand-recovery cron is **unchanged**. Sweep-recovery via SAQ
 (Swept Job semantics) applies as for any job.
 
-## 5. Config surface
+## 6. Config surface
 
 - `coach.vision_model` / `coach.plan_model` / `coach.adapt_model` (AppSettings, #717) read
   at job start; pinned ids logged with every PlanVersion/attribution for auditability.
 - Cron definitions live in `worker.py` with the existing five; flags: no new tables, no new
   settings table.
 
-## 6. MVP vs v2
+## 7. MVP vs v2
 
-- **MVP:** `coach_nightly_job` (targets + swap-detection stub), plan generation jobs,
-  `_RETRY_REGISTRY` additions, crons.
+- **MVP:** `coach_nightly_job` (targets + swap-detection stub), **`coach_plan_job`
+  (async generation)**, `_RETRY_REGISTRY` additions (`coach_plan`, `coach_adaptation`),
+  crons.
 - **V2 (same plumbing):** adaptation call content switches on; daily swap becomes active;
   weekly narrative produced. No structural change — v2 is behavior behind the same job
   skeletons, which is why the map's destination can call the spec build-ready.

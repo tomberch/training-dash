@@ -27,8 +27,8 @@ full Progression-Level engine for MVP).
 ### Goals
 
 - **Targets** (one or two per plan): measurable outcome with baseline + target — FTP delta,
-  w/kg, peak-power curve position (ActivityPeakPower), weight. `base_building` is
-  direction-only (no numeric MVP target).
+  w/kg, peak-power curve position (ActivityPeakPower), weight. Numeric targets are optional
+  (direction-only goals are legal).
 - **Compatibility:** enforced at plan-creation from a static matrix (#708). Incompatible pairs
   (aggressive cut + performance focus) are rejected at creation; the UI proposes sequencing
   (cut block → ≥2 weeks energy balance → performance block). Compatible pairs are allowed but

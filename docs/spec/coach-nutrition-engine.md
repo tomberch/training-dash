@@ -19,6 +19,17 @@
   (losing faster than the 0.5%/wk target), the engine autonomously shrinks the deficit and flags it.
   No LLM involved.
 
+### Missing / stale signal policy (cold start)
+
+Principle: when a signal is absent or stale, the engine defaults to the conservative end and
+flags it — never accelerates a deficit on missing evidence.
+
+| Condition | Behavior |
+|-----------|----------|
+| No logged intake days (new user) | Maintenance targets only (deficit = 0), flagged "log meals to unlock weight-loss targets" |
+| < 14 weight samples in last 30 days | Hold last trusted slope; widen uncertainty band; **disable trend-safety shrink** (can't see) |
+| Intake stale (> 5 logged days missing in last 7) | Treat as under-logging: **raise** EA floor margin (assume unlogged intake), flag "eating more than logged?" — never deepen the deficit |
+
 ### Bounds (enforced in code, per #711)
 
 EA floor 30 kcal/kg FFM/day; max loss 1.0% BW/wk hard / 0.5% target; protein 1.8–2.4 g/kg BW;
@@ -35,6 +46,12 @@ shrink the deficit. Full formula appendix in the research doc.
    Open Food Facts barcode/brand match when packaging text is detected. USDA FDC is the primary
    DB (CC0, FNDDS household weights), OFF secondary (ODbL, provenance separated). kcal/macros
    computed in application code only — VLM calorie numbers are never stored.
+
+   **Food-DB matching infrastructure:** embeddings via **Ollama Cloud embedding models**
+   (`nomic-embed-text`-class; verify available menu at implementation); corpus = **FNDDS
+   (~9k survey foods with household weights) + curated common-brands subset (~1k)**, *not* the
+   full FDC; OFF consulted only on barcode. Index: **pgvector** in the existing Postgres — no
+   new infrastructure. (Matches #710 item-matching accuracy math: ~85–96% top-5.)
 4. **Correction UI** — per-item cards: portion slider, swap-food, add-missing-item
    (oil/dressing nudges = the hidden-calorie countermeasure), barcode scan.
 5. **Clarification** — one follow-up VLM call max, only when item confidence is low or a portion

@@ -38,6 +38,19 @@ A generated plan is **invalid** if: it contains high-intensity sessions on conse
 without a recovery day between, or violates the nutrition engine's deterministic bounds (#711).
 Shape is validated by Zod (#712), content by the deterministic engine — split of concerns.
 
+**Intensity classification (shared by fitness-floor rule and daily swap):**
+
+- **HI set (fixed):** `threshold`, `vo2`, `anaerobic`.
+- **Sweetspot is context-classified** by the deterministic engine before validation/swap —
+  counts as HI for this user when either:
+  - (a) session TSS ≥ 90 **and** previous day TSS ≥ 120 (big day stacked on big day), or
+  - (b) current 42-day TSB < −25 (deep fatigue) **and** duration ≥ 90 min,
+  
+  Otherwise sweetspot is a *medium* day: neither triggers nor violates the floor rule,
+  but is **swappable** when wellness goes red.
+- Rationale: fixed-HI-only would let a deconditioned plan stack sweetspot after VO2; always-HI
+  would cripple standard 3×/wk sweet-spot blocks. No new computations — TSS/TSB already exist.
+
 ### Daily execution layer (v2 loop hook)
 
 Workouts carry **Movability Flags** at generation time: `pinned` (hard sessions with built-in
