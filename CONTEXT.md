@@ -123,6 +123,21 @@ _Avoid_: pending entry, unlogged meal
 The 7-day averages of confirmed intake (kcal, protein, etc.) that feed the Athlete Snapshot's nutrition-compliance block and the weekly adaptation. Single bad days cannot whipsaw targets because the engine only consumes the Digest.
 _Avoid_: weekly summary, streak
 
+## Adaptation Loop
+
+The feedback-control system through which the Coach adapts targets and plans from observed outcomes: a weekly bounded LLM pass (two-pass: deterministic proposer emits the Allowed Adjustment Range, LLM picks within it and narrates, deterministic checker re-validates), a nightly deterministic pass (nutrition trend-safety shrink, wellness-driven Daily Swap), and the 4-week Re-Detection rhythm. Custom ML fitting is deliberately deferred; structured logging keeps it possible.
+_Avoid_: dynamic training (too vague), self-learning coach
+
+## Re-Detection
+
+The deterministic 4-week pass recomputing wellness baselines, prompting FTP re-tests via the existing threshold machinery, and re-checking goal velocity. No LLM participates; the loop's LLM pass first sees re-detected values at the next weekly call.
+_Avoid_: recalibration (reserved for nutrition target math), baseline reset
+
+## Allowed Adjustment Range
+
+The pre-computed bounds the deterministic proposer hands to the adaptation LLM (deficit/split range per #711; plan-change envelope per plan validation). The LLM picks within the Range and never operates outside it; violations are clamped and visibly flagged.
+_Avoid_: suggestion budget, free rein
+
 ## Goal Focus
 
 The primary emphasis of a Plan: threshold, endurance, climbing, sprint_anaerobic, or event_prep (MVP enum). One primary per Plan; weight goals ride as subordinate compliance goals. Maps deterministically to an Emphasis Vector. FTP is one focus among five, not the singular goal.
