@@ -138,6 +138,11 @@ _Avoid_: recalibration (reserved for nutrition target math), baseline reset
 The pre-computed bounds the deterministic proposer hands to the adaptation LLM (deficit/split range per #711; plan-change envelope per plan validation). The LLM picks within the Range and never operates outside it; violations are clamped and visibly flagged.
 _Avoid_: suggestion budget, free rein
 
+## Snapshot Audit Payload
+
+The exact JSON byte sequence sent to the LLM, rendered verbatim in the Coach's audit view. One deterministic collector/serializer produces it; no separate presentation model that could drift from what the model received.
+_Avoid_: snapshot preview (implies a reformatting), debug dump
+
 ## Goal Focus
 
 The primary emphasis of a Plan: threshold, endurance, climbing, sprint_anaerobic, or event_prep (MVP enum). One primary per Plan; weight goals ride as subordinate compliance goals. Maps deterministically to an Emphasis Vector. FTP is one focus among five, not the singular goal.
